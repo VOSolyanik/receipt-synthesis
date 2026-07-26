@@ -86,6 +86,8 @@ config/
 templates/                      # 24 archetypes: <slug>.html + <slug>.css
 fonts/                          # redistributable fonts only (+ fonts/LICENSES/)
 src/receipt_synth/
+  config.py                     # loaders for the four config files — read by stages at
+                                # both ends of the pipeline, so it belongs to neither
   persona_generator.py
   claim_planner.py
   content_builder.py            # + invariant validators

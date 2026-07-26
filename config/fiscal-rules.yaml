@@ -31,7 +31,9 @@ jurisdictions:
       # Vendors differ: some ПРРО print 2 500.00, others 2 500,00. Pick per
       # rendered document so the model sees both.
       decimal_separator_variants: [".", ","]
-      # Narrow no-break space between thousands.
+      # No-break space (U+00A0) between thousands. Not the narrow one (U+202F): what
+      # was verified against own receipts is "a space", and the vendored fonts cover
+      # both, so claiming the narrow variant would assert more than was observed.
       thousands_separator: " "
 
     vat_rates:
