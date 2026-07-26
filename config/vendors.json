@@ -1,0 +1,90 @@
+{
+  "$schema_note": "STUB. Structure is final; the lists are placeholders to be expanded with LLM-generated public vendor names per category and jurisdiction. Sources must stay public: publicly known retail/service brands and generated plausible ФОП names. Never a customer, employer or colleague list.",
+  "version": 1,
+
+  "banks": {
+    "UA": [
+      { "slug": "privatbank",  "display_name": "PrivatBank",  "template": "ua_privatbank_confirmation" },
+      { "slug": "monobank",    "display_name": "monobank",    "template": "ua_monobank_confirmation" },
+      { "slug": "sense",       "display_name": "Sense Bank",  "template": "ua_sense_confirmation" },
+      { "slug": "raiffeisen",  "display_name": "Raiffeisen",  "template": "ua_raiffeisen_confirmation" }
+    ],
+    "PL": [
+      { "slug": "mbank", "display_name": "mBank", "template": "pl_transfer_confirmation" },
+      { "slug": "pko",   "display_name": "PKO",   "template": "pl_transfer_confirmation" }
+    ],
+    "EU": [
+      { "slug": "sepa", "display_name": "SEPA", "template": "eu_sepa_confirmation" }
+    ]
+  },
+
+  "payment_providers": {
+    "UA": [
+      { "slug": "liqpay",     "display_name": "LiqPay",     "template": "ua_liqpay_receipt" },
+      { "slug": "wayforpay",  "display_name": "WayForPay",  "template": "ua_wayforpay_receipt" },
+      { "slug": "portmone",   "display_name": "Portmone",   "template": "ua_portmone_receipt" }
+    ]
+  },
+
+  "fiscal_software": {
+    "UA": [
+      { "slug": "checkbox", "display_name": "Checkbox" },
+      { "slug": "vchasno",  "display_name": "Vchasno.Kasa" }
+    ]
+  },
+
+  "marketplaces": {
+    "UA": [
+      { "slug": "rozetka", "display_name": "Rozetka", "template": "ua_order_screenshot" },
+      { "slug": "prom",    "display_name": "Prom.ua", "template": "ua_order_screenshot" }
+    ]
+  },
+
+  "vendors": {
+    "$note": "Category keys must match the category ids in config/policy.yaml.",
+    "UA": {
+      "medical_insurance":        [{ "name": "ARX", "legal_form": "PRAT" }],
+      "language_courses":         [{ "name": "Green Forest", "legal_form": "TOV" }],
+      "professional_development": [{ "name": "Prometheus", "legal_form": "TOV" }],
+      "sport":                    [{ "name": "Sport Life", "legal_form": "TOV" }],
+      "mental_health":            [{ "name": "Treatfield", "legal_form": "FOP" }],
+      "vitamins_nutrition":       [{ "name": "Аптека АНЦ", "legal_form": "TOV" }],
+      "hobby":                    [{ "name": "Kreativ Studio", "legal_form": "FOP" }]
+    },
+    "PL": {
+      "medical_insurance":        [{ "name": "PZU", "legal_form": "SA" }],
+      "language_courses":         [],
+      "professional_development": [],
+      "sport":                    [{ "name": "Benefit Systems", "legal_form": "SA" }],
+      "mental_health":            [],
+      "vitamins_nutrition":       [{ "name": "Apteka Gemini", "legal_form": "SP_ZOO" }],
+      "hobby":                    []
+    },
+    "DE": {
+      "medical_insurance":        [],
+      "language_courses":         [],
+      "professional_development": [],
+      "sport":                    [{ "name": "McFit", "legal_form": "GMBH" }],
+      "mental_health":            [],
+      "vitamins_nutrition":       [{ "name": "Apotheke am Markt", "legal_form": "EK" }],
+      "hobby":                    []
+    },
+    "ES": {
+      "medical_insurance":        [],
+      "language_courses":         [],
+      "professional_development": [],
+      "sport":                    [{ "name": "Basic-Fit", "legal_form": "SL" }],
+      "mental_health":            [],
+      "vitamins_nutrition":       [{ "name": "Farmacia Central", "legal_form": "SL" }],
+      "hobby":                    []
+    }
+  },
+
+  "aggregators": {
+    "$note": "Payees that break the link between payment and merchant — drives the 'paid via aggregator' imperfection (docs/architecture.md#imperfection-catalogue).",
+    "UA": [
+      { "name": "EASYPAY", "legal_form": "TOV" },
+      { "name": "Platon",  "legal_form": "TOV" }
+    ]
+  }
+}

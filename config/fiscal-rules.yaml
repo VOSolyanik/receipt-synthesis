@@ -1,0 +1,303 @@
+# Fiscal rules per jurisdiction — LAW, not policy.
+#
+# VAT rates, VAT letter codes, identifier formats and their checksums, receipt
+# layout constants and fiscal QR payloads. Derived from public sources: Ukrainian
+# cash register law (ЗУ «Про застосування РРО...»), Tax Code VAT rates, and the
+# published fiscal document formats of PL / DE / ES.
+#
+# The UA layout constants below were additionally verified against the author's
+# own ПРРО receipts — an explicitly permitted source, see the provenance rules in
+# docs/architecture.md#provenance. Confirmed facts are listed under
+# `verified_against_own_receipts`; only layout facts are carried over, never the
+# concrete values printed on a real receipt.
+#
+# Kept separate from policy.yaml on purpose: policy.yaml describes a benefit
+# plan and may be loaded by downstream consumers; this file is fiscal law and
+# concerns document generation only.
+
+version: 1
+
+jurisdictions:
+
+  # ---------------------------------------------------------------- Ukraine --
+  UA:
+    language: uk
+    currency: UAH
+    date_format: "%d.%m.%Y"
+    # ПРРО software prints the time with dashes, not colons: 11-50-17.
+    time_format: "%H-%M-%S"
+
+    number_format:
+      # Vendors differ: some ПРРО print 2 500.00, others 2 500,00. Pick per
+      # rendered document so the model sees both.
+      decimal_separator_variants: [".", ","]
+      # Narrow no-break space between thousands.
+      thousands_separator: " "
+
+    vat_rates:
+      standard: 20.0
+      reduced: 7.0      # medicines, medical devices (Tax Code art. 193.1)
+      agri: 14.0
+      zero: 0.0
+
+    # ПДВ-літера — the VAT letter printed at the end of each line item on a
+    # Ukrainian fiscal receipt, with a legend in the tax block at the bottom.
+    # The letter -> tax-group mapping is assigned by the SELLER and printed on
+    # the receipt, so this is a conventional mapping rather than a statutory one
+    # (unlike PL, where PTU letters are fixed by law).
+    vat_letters:
+      А: { rate: 20.0, name: "ПДВ" }
+      Б: { rate: 20.0, name: "ПДВ + АЗ" }   # АЗ — акцизний збір / excise duty
+      В: { rate: 7.0,  name: "ПДВ" }
+      Г: { rate: 0.0,  name: "Без ПДВ" }
+
+    # Line in the tax summary block, e.g. "ПДВ А 20% 416.67".
+    tax_line_format: "{name} {letter} {rate:g}% {amount}"
+    # The letter is appended to the line item itself, e.g.
+    # "Regular ticket    2 500.00 А".
+    line_item_letter_position: suffix
+
+    # Which VAT letter a line item takes, by item kind (policy.yaml vocabulary).
+    # Medicines and medical devices are the reduced 7% group; food supplements are
+    # standard 20%.
+    #
+    # A vitamin complex may be registered EITHER as a medicinal product or as a
+    # dietary supplement, and real receipts show both — hence a list, drawn from
+    # per document. This is what stops the VAT letter from being a shortcut to the
+    # coverage label, since vitamin complexes are covered and medicines are not.
+    item_vat_letter:
+      medicine: В
+      medical_device: В
+      vitamin_complex: [В, А]
+      mineral_supplement: А
+      sports_nutrition: А
+      probiotic: А
+      default: А
+
+    identifiers:
+      # ЄДРПОУ — legal entity registry code. Printed as "ІД".
+      edrpou: { length: 8, type: numeric, checksum: edrpou, label: "ІД" }
+      # РНОКПП (ex-ІПН) — individual taxpayer number, used by ФОП sellers.
+      rnokpp: { length: 10, type: numeric, checksum: rnokpp, label: "ІПН" }
+      # Taxpayer number of a VAT payer. Printed as "ПН".
+      vat_number: { length: 12, type: numeric, checksum: none, label: "ПН" }
+      # ФН ПРРО — fiscal number of the (software) registrar.
+      fiscal_device_number: { length: 10, type: numeric, checksum: none, label: "ФН ПРРО" }
+      # ЗН — factory/serial number of a classic hardware РРО.
+      device_serial: { pattern: "[A-Z]{2}[0-9]{8}", label: "ЗН" }
+
+    receipt:
+      title: "ФІСКАЛЬНИЙ ЧЕК"
+      # ПРРО vendors append their own tag to the title, e.g. "ФІСКАЛЬНИЙ ЧЕК WFP".
+      title_suffixes: ["", "WFP", "CB", "VCH"]
+      footer: "ДЯКУЄМО ЗА ПОКУПКУ"
+      # A non-fiscal look-alike must carry this line — classification trap
+      # (docs/architecture.md#document-archetypes, templates 12 and 13).
+      non_fiscal_marker: "НЕ ФІСКАЛЬНИЙ ЧЕК"
+      widths_mm: [58, 80]
+      # Receipt number as printed after "ЧЕК №". Modern ПРРО issue a short
+      # alphanumeric id (e.g. aB3xK9pQ2mT), NOT a sequential number — this is a
+      # field the model must extract, so the format matters.
+      receipt_number:
+        alphanumeric: { pattern: "[A-Za-z0-9]{11}" }   # ПРРО (Checkbox-style)
+        sequential: { pattern: "[0-9]{4,6}" }          # classic hardware РРО
+      # Online ПРРО print a mode marker.
+      mode_markers: ["Онлайн", "Офлайн"]
+
+    # Card acquiring block, printed between the items and the totals when the
+    # receipt was paid by card. RRN is the deduplication key
+    # (docs/architecture.md#imperfection-catalogue).
+    acquiring_block:
+      fields:
+        - { key: acquirer,      label: "Екв.",           example: "АТ «Райффайзен Банк Аваль»" }
+        - { key: terminal_id,   label: "Термінал:",      pattern: "[A-Z][0-9]{7}" }
+        - { key: operation,     label: "",               values: ["ПРОДАЖ", "ПОВЕРНЕННЯ"] }
+        - { key: card_masked,   label: "ЕПЗ",            pattern: "[0-9]{4}X{8}[0-9]{4}" }
+        - { key: auth_code,     label: "Код авт.:",      pattern: "[0-9]{6}" }
+        - { key: rrn,           label: "RRN:",           pattern: "[0-9]{12}" }
+      payment_method_labels: ["БЕЗГОТІВКОВА", "ГОТІВКА"]
+
+    # Fiscal QR: the public receipt-verification URL of the tax authority.
+    qr:
+      fiscal_payload: "https://cabinet.tax.gov.ua/cashregs/check?id={receipt_number}&date={date:%Y%m%d}&time={time:%H%M%S}&fn={fiscal_device_number}&sm={total:.2f}"
+      # Decorative / marketing QR used as a trap: a QR that is not fiscal at all.
+      decorative_payloads:
+        - "https://example.com/loyalty"
+        - "https://example.com/feedback"
+
+    # Layout facts confirmed against the author's own ПРРО receipts, 2026-07-26.
+    # Listed so the provenance of each non-obvious detail is auditable.
+    verified_against_own_receipts:
+      - "VAT letter А = 20%, printed as suffix on the line item"
+      - "tax summary line reads 'ПДВ А 20% <amount>'"
+      - "ПН is 12 digits, ІД (ЄДРПОУ) is 8 digits, ФН ПРРО is 10 digits"
+      - "receipt number is an 11-character alphanumeric id, not sequential"
+      - "time separated by dashes, not colons: 01.03.2026 09-14-22"
+      - "title may carry a provider suffix: 'ФІСКАЛЬНИЙ ЧЕК WFP'"
+      - "acquiring block: Екв. / Термінал / ПРОДАЖ / ЕПЗ / Код авт. / RRN"
+      - "amounts use a space as thousands separator; decimal separator varies by vendor"
+
+  # ----------------------------------------------------------------- Poland --
+  PL:
+    language: pl
+    currency: PLN
+    date_format: "%d.%m.%Y"
+    time_format: "%H:%M"
+
+    number_format:
+      decimal_separator_variants: [","]
+      thousands_separator: " "
+
+    vat_rates: { standard: 23.0, reduced_1: 8.0, reduced_2: 5.0, zero: 0.0 }
+
+    # PTU letters — statutory in Poland, unlike UA where the seller assigns them.
+    vat_letters:
+      A: { rate: 23.0, name: "PTU" }
+      B: { rate: 8.0,  name: "PTU" }
+      C: { rate: 5.0,  name: "PTU" }
+      D: { rate: 0.0,  name: "PTU" }
+      E: { rate: 0.0,  name: "PTU zw." }   # zwolniony — VAT exempt
+
+    tax_line_format: "{name} {letter} {rate:g}% {amount}"
+    line_item_letter_position: suffix
+
+    item_vat_letter:
+      medicine: C
+      medical_device: C
+      vitamin_complex: [C, A]
+      mineral_supplement: A
+      sports_nutrition: A
+      probiotic: A
+      default: A
+
+    identifiers:
+      nip: { length: 10, type: numeric, checksum: nip, label: "NIP" }
+      regon: { length: 9, type: numeric, checksum: regon, label: "REGON" }
+
+    receipt:
+      title: "PARAGON FISKALNY"
+      title_suffixes: [""]
+      footer: "DZIĘKUJEMY ZA ZAKUPY"
+      non_fiscal_marker: "NIEFISKALNY"
+      widths_mm: [57, 80]
+      receipt_number:
+        sequential: { pattern: "[0-9]{4,6}" }
+
+  # ---------------------------------------------------------------- Germany --
+  DE:
+    language: de
+    currency: EUR
+    date_format: "%d.%m.%Y"
+    time_format: "%H:%M"
+
+    number_format:
+      decimal_separator_variants: [","]
+      thousands_separator: "."
+
+    vat_rates: { standard: 19.0, reduced: 7.0, zero: 0.0 }
+
+    vat_letters:
+      A: { rate: 19.0, name: "MwSt" }
+      B: { rate: 7.0,  name: "MwSt" }
+
+    tax_line_format: "{name} {letter} {rate:g}% {amount}"
+    line_item_letter_position: suffix
+
+    # Note: medicines carry the STANDARD rate in Germany (19%), unlike Ukraine
+    # and Poland. Counter-intuitive next to the UA rule, but correct.
+    item_vat_letter:
+      medicine: A
+      medical_device: A
+      vitamin_complex: B      # supplements are food (7%) in Germany
+      mineral_supplement: B
+      sports_nutrition: B
+      probiotic: B
+      default: A
+
+    identifiers:
+      ust_idnr: { pattern: "DE[0-9]{9}", label: "USt-IdNr." }
+      steuernummer: { pattern: "[0-9]{2}/[0-9]{3}/[0-9]{5}", label: "Steuernummer" }
+
+    receipt:
+      title: "KASSENBON"
+      title_suffixes: [""]
+      footer: "VIELEN DANK FÜR IHREN EINKAUF"
+      non_fiscal_marker: "KEIN STEUERBELEG"
+      widths_mm: [58, 80]
+      receipt_number:
+        sequential: { pattern: "[0-9]{4,6}" }
+
+    # TSE (technische Sicherheitseinrichtung) QR mandated by KassenSichV.
+    # Simplified payload; field order follows the published DSFinV-K layout.
+    qr:
+      fiscal_payload: "V0;{device_serial};Kassenbeleg-V1;Beleg^{total:.2f}_0.00_0.00_0.00_0.00^{total:.2f}:Bar;{tx_start};{tx_end};ecdsa-plain-SHA256;{signature}"
+
+  # ------------------------------------------------------------------ Spain --
+  ES:
+    language: es
+    currency: EUR
+    date_format: "%d/%m/%Y"
+    time_format: "%H:%M"
+
+    number_format:
+      decimal_separator_variants: [","]
+      thousands_separator: "."
+
+    vat_rates: { standard: 21.0, reduced: 10.0, super_reduced: 4.0, zero: 0.0 }
+
+    # Spanish tickets normally print the rate itself rather than a letter code;
+    # letters are kept so the internal interface stays uniform.
+    vat_letters:
+      A: { rate: 21.0, name: "IVA" }
+      B: { rate: 10.0, name: "IVA" }
+      C: { rate: 4.0,  name: "IVA" }
+
+    tax_line_format: "{name} {rate:g}% {amount}"
+    line_item_letter_position: none
+
+    item_vat_letter:
+      medicine: C
+      medical_device: C
+      vitamin_complex: B
+      mineral_supplement: B
+      sports_nutrition: B
+      probiotic: B
+      default: A
+
+    identifiers:
+      nif: { pattern: "[0-9]{8}[A-Z]", checksum: nif, label: "NIF" }
+      cif: { pattern: "[A-HJNP-SUVW][0-9]{7}[0-9A-J]", checksum: cif, label: "CIF" }
+
+    receipt:
+      title: "FACTURA SIMPLIFICADA"
+      title_suffixes: [""]
+      footer: "GRACIAS POR SU COMPRA"
+      non_fiscal_marker: "SIN VALOR FISCAL"
+      widths_mm: [58, 80]
+      receipt_number:
+        sequential: { pattern: "[0-9]{4,6}" }
+
+  # ------------------------------------------------------- EU (cross-border) --
+  EU:
+    language: en
+    currency: EUR
+    date_format: "%Y-%m-%d"
+    time_format: "%H:%M"
+
+    number_format:
+      decimal_separator_variants: ["."]
+      thousands_separator: ","
+
+    vat_rates: { standard: 21.0, reduced: 9.0, zero: 0.0 }
+    tax_line_format: "VAT {rate:g}% {amount}"
+    line_item_letter_position: none
+
+    identifiers:
+      iban: { pattern: "[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}", checksum: iban, label: "IBAN" }
+      bic: { pattern: "[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?", label: "BIC" }
+
+    receipt:
+      title: "VAT INVOICE"
+      title_suffixes: [""]
+      footer: ""
+      non_fiscal_marker: "NOT A FISCAL DOCUMENT"

@@ -1,0 +1,386 @@
+# The labelling policy of this generator: the rules by which a claim's verdict and
+# covered fraction are derived. Because generation is label-first, these rules ARE
+# the ground truth — they are not applied to documents after the fact, the
+# documents are built to satisfy them.
+#
+# Deliberately a standalone declarative file rather than logic buried in code: any
+# downstream document-verification pipeline can load this same file and stay
+# consistent with the labels of the dataset it was trained on. Nothing in the
+# pipeline hardcodes the category names, limits or thresholds below.
+#
+# PROVENANCE. The benefit categories below are derived from a public industry
+# survey of benefits packages in the Ukrainian IT market, conducted and published
+# by DOU (primary source, ~10.6k respondents; 10,664 responses on the benefits
+# question):
+#   https://dou.ua/lenta/articles/benefits-package-2026/
+# Secondary summary consulted: https://scroll.media/2026/06/30/it-benefity-2026/
+# Reported adoption: medical insurance 49%, English courses 39%, internal
+# training / mentoring 33%, access to external courses 29%, gym / membership
+# compensation 27%, mental health programmes 22%, massage 8%, family medical
+# insurance 8%.
+# The seven categories are a selection from that list, chosen for *document
+# diversity* rather than popularity: each one owns a document type or an
+# imperfection mechanism the others do not produce. Limits, thresholds and the
+# verdict mix are this project's own plausible values — they describe no real
+# employer's plan.
+#
+# STRUCTURE OF A CATEGORY. `intent` is the prose rule, i.e. what a real benefit
+# policy document would say. The `*_items` maps are its machine-readable
+# specification: item kind -> line-item name templates used when rendering.
+# The item kind is the join key between three layers — content generation
+# (which name to print), this policy (covered or not) and fiscal-rules.yaml
+# (which VAT letter applies). On a real receipt no such kind is printed; it is a
+# ground-truth vocabulary, not a runtime mechanism.
+
+version: 1
+
+# Active benefit period. Documents dated outside it drive the
+# `insufficient_evidence` / reject branch of the planner
+# (docs/architecture.md#imperfection-catalogue).
+period:
+  start: "2026-01-01"
+  end: "2026-12-31"
+
+# Currency the limits are expressed in. Foreign-currency documents are converted
+# with config/fx-rates.yaml before limit checks.
+reporting_currency: UAH
+
+# --- how a persona's categories are drawn ------------------------------------
+persona_categories:
+  count_per_persona: { min: 3, max: 4 }
+  # Medical insurance is near-universal in the Ukrainian market (49% overall,
+  # and effectively the default allocation for many plans). Elsewhere in Europe
+  # it is chosen rather than granted, but still chosen by most, because private
+  # healthcare is expensive.
+  probability:
+    medical_insurance:
+      UA: 0.95
+      PL: 0.75
+      DE: 0.75
+      ES: 0.75
+  # Remaining slots are drawn uniformly from the other categories.
+
+# --- categories ---------------------------------------------------------------
+categories:
+
+  - id: medical_insurance
+    display: { uk: "Медичне страхування", en: "Medical insurance" }
+    intent: >
+      Premiums for a personal voluntary health insurance policy. Proven by a bank
+      payment confirmation whose payment purpose names the policy and the insurer.
+      The policy document itself is out of scope and is never parsed.
+    annual_limit: 16000
+    covered_items:
+      insurance_premium:
+        uk: ["Страховий платіж за договором {policy_no}", "Черговий платіж, поліс {policy_no}"]
+        en: ["Insurance premium, policy {policy_no}", "Quarterly premium {policy_no}"]
+    excluded_items:
+      property_insurance:
+        uk: ["Страхування майна", "КАСКО"]
+        en: ["Property insurance", "Motor insurance"]
+      travel_insurance:
+        uk: ["Туристичне страхування"]
+        en: ["Travel insurance"]
+    ambiguous_items:
+      family_member_premium:
+        uk: ["Страховий платіж, застрахована особа {relative}"]
+        en: ["Premium for insured person {relative}"]
+
+  - id: language_courses
+    display: { uk: "Мовні курси", en: "Language courses" }
+    intent: >
+      Tuition for language classes with a school or a private tutor, billed per
+      month or per package of lessons. Course materials bought separately are not
+      reimbursed.
+    annual_limit: 12000
+    covered_items:
+      language_lessons:
+        uk: ["Заняття з англійської, {n} год", "Абонемент {n} занять, {level}", "Навчання за {month}"]
+        en: ["English lessons, {n} hours", "Package of {n} lessons, {level}", "Tuition for {month}"]
+      placement_test:
+        uk: ["Тестування рівня"]
+        en: ["Placement test"]
+      language_exam:
+        uk: ["Складання іспиту {exam}"]
+        en: ["{exam} exam fee"]
+    excluded_items:
+      textbook:
+        uk: ["Підручник {title}", "Робочий зошит"]
+        en: ["Coursebook {title}", "Workbook"]
+      stationery:
+        uk: ["Зошит", "Ручка"]
+        en: ["Notebook", "Pen"]
+    ambiguous_items:
+      missed_lesson_fee:
+        uk: ["Пропущене заняття без попередження"]
+        en: ["Late cancellation fee"]
+
+  - id: professional_development
+    display: { uk: "Професійний розвиток", en: "Professional development" }
+    intent: >
+      Paid training that develops professional skills: online and offline courses,
+      certification exams, conference tickets and professional literature.
+      Hardware, entertainment and travel to the event are not reimbursed.
+    annual_limit: 16000
+    covered_items:
+      online_course:
+        uk: ["Онлайн-курс «{course}»", "Підписка на навчальну платформу, {period}"]
+        en: ["Online course \"{course}\"", "Learning platform subscription, {period}"]
+      certification_exam:
+        uk: ["Сертифікаційний іспит {cert}"]
+        en: ["{cert} certification exam"]
+      conference_ticket:
+        uk: ["Квиток на конференцію {event}", "Regular ticket"]
+        en: ["Conference ticket, {event}", "Regular ticket"]
+      professional_book:
+        uk: ["Книга «{title}»"]
+        en: ["Book \"{title}\""]
+    excluded_items:
+      hardware:
+        uk: ["Ноутбук {brand}", "Монітор {brand}", "Навушники {brand}"]
+        en: ["Laptop {brand}", "Monitor {brand}", "Headphones {brand}"]
+      entertainment_book:
+        uk: ["Книга «{fiction_title}»"]
+        en: ["Novel \"{fiction_title}\""]
+      travel:
+        uk: ["Квиток Київ — {city}", "Проживання, {n} діб"]
+        en: ["Ticket to {city}", "Accommodation, {n} nights"]
+    ambiguous_items:
+      workshop_materials:
+        uk: ["Роздаткові матеріали воркшопу"]
+        en: ["Workshop materials"]
+
+  - id: sport
+    display: { uk: "Спортивна програма", en: "Sports program" }
+    intent: >
+      Membership fees and paid classes at sports facilities. Goods, apparel,
+      supplements and food bought at the same venue are not reimbursed.
+    annual_limit: 12000
+    covered_items:
+      gym_membership:
+        uk: ["Абонемент {n} занять", "Клубна карта, {period}", "Разове відвідування"]
+        en: ["Membership, {n} sessions", "Club card, {period}", "Single entry"]
+      pool_membership:
+        uk: ["Абонемент басейн, {n} відвідувань", "Плавання, разове"]
+        en: ["Pool pass, {n} entries", "Swimming, single entry"]
+      group_class:
+        uk: ["Групове заняття {activity}", "Йога, {n} занять"]
+        en: ["Group class {activity}", "Yoga, {n} sessions"]
+    excluded_items:
+      sport_apparel:
+        uk: ["Футболка {brand}", "Рушник", "Шапочка для басейну"]
+        en: ["T-shirt {brand}", "Towel", "Swim cap"]
+      sports_nutrition:
+        # Same item kind is `ambiguous` under `vitamins_nutrition` — coverage is
+        # scoped to the category, not global to the kind.
+        uk: ["Протеїн {brand} {w} г", "Ізотонік {brand}"]
+        en: ["Protein {brand} {w} g", "Isotonic drink {brand}"]
+      food_drink:
+        uk: ["Вода 0,5 л", "Батончик {brand}"]
+        en: ["Water 0.5 l", "Bar {brand}"]
+    ambiguous_items:
+      personal_training:
+        uk: ["Персональне тренування, {n} шт"]
+        en: ["Personal training, {n} sessions"]
+      equipment_rent:
+        uk: ["Оренда шафки, {period}", "Оренда рушника"]
+        en: ["Locker rental, {period}", "Towel rental"]
+
+  - id: mental_health
+    display: { uk: "Ментальне здоров'я", en: "Mental health" }
+    intent: >
+      Sessions with a licensed psychotherapist or psychologist, individual or
+      family. Providers are usually private entrepreneurs who issue an act of
+      services rendered rather than a fiscal receipt — such an act alone does not
+      prove payment.
+    annual_limit: 25000
+    covered_items:
+      therapy_session:
+        uk: ["Психотерапевтична консультація, {n} год", "Сесія {date}"]
+        en: ["Psychotherapy session, {n} h", "Session {date}"]
+      family_therapy:
+        uk: ["Сімейна консультація"]
+        en: ["Family counselling session"]
+      psych_assessment:
+        uk: ["Психодіагностика"]
+        en: ["Psychological assessment"]
+    excluded_items:
+      coaching:
+        uk: ["Коуч-сесія"]
+        en: ["Coaching session"]
+      self_help_book:
+        uk: ["Книга «{title}»"]
+        en: ["Book \"{title}\""]
+    ambiguous_items:
+      group_therapy:
+        uk: ["Групова терапія, {n} занять"]
+        en: ["Group therapy, {n} sessions"]
+
+  - id: vitamins_nutrition
+    display: { uk: "Вітаміни та нутриціологія", en: "Vitamins and nutrition" }
+    intent: >
+      Vitamin and mineral complexes, and consultations with a nutritionist.
+      Prescription and over-the-counter medicines are treated as healthcare and
+      are not reimbursed here, even when bought on the same pharmacy receipt.
+    # Note that the coverage boundary deliberately does NOT coincide with the
+    # fiscal VAT boundary: medicines are non-covered but carry the reduced 7% VAT
+    # letter, while vitamin complexes are covered and may carry either letter.
+    # A consumer therefore cannot shortcut coverage from the VAT letter and has to
+    # read the line item.
+    annual_limit: 12000
+    covered_items:
+      vitamin_complex:
+        uk: ["Вітамін D3 {dose} МО табл. №{n}", "Полівітаміни {brand} капс. №{n}", "Омега-3 {dose} мг капс. №{n}"]
+        en: ["Vitamin D3 {dose} IU tabl. #{n}", "Multivitamin {brand} caps. #{n}", "Omega-3 {dose} mg caps. #{n}"]
+      mineral_supplement:
+        uk: ["Магній B6 табл. №{n}", "Залізо {dose} мг табл. №{n}", "Цинк табл. №{n}"]
+        en: ["Magnesium B6 tabl. #{n}", "Iron {dose} mg tabl. #{n}", "Zinc tabl. #{n}"]
+      nutritionist_visit:
+        uk: ["Консультація нутриціолога", "Складання плану харчування"]
+        en: ["Nutritionist consultation", "Personalised nutrition plan"]
+    excluded_items:
+      medicine:
+        uk: ["{drug} табл. №{n}", "{drug} капс. {dose} мг №{n}"]
+        en: ["{drug} tabl. #{n}", "{drug} caps. {dose} mg #{n}"]
+      medical_device:
+        uk: ["Тонометр {brand}", "Тест-смужки №{n}"]
+        en: ["Blood pressure monitor {brand}", "Test strips #{n}"]
+      cosmetics:
+        uk: ["Крем {brand} {w} мл"]
+        en: ["Cream {brand} {w} ml"]
+      hygiene:
+        uk: ["Гель для душу {brand}", "Зубна паста {brand}"]
+        en: ["Shower gel {brand}", "Toothpaste {brand}"]
+    ambiguous_items:
+      lab_test:
+        # Ordered by the nutritionist, but it is a medical service.
+        uk: ["Аналіз крові: вітамін D", "Аналіз крові: феритин"]
+        en: ["Blood test: vitamin D", "Blood test: ferritin"]
+      sports_nutrition:
+        # A supplement, but a sports one — the same kind is excluded under `sport`.
+        uk: ["Протеїн {brand} {w} г", "BCAA {brand}"]
+        en: ["Protein {brand} {w} g", "BCAA {brand}"]
+      probiotic:
+        uk: ["Пробіотик {brand} капс. №{n}"]
+        en: ["Probiotic {brand} caps. #{n}"]
+
+  - id: hobby
+    display: { uk: "Хобі", en: "Hobbies" }
+    intent: >
+      Classes, memberships and materials for a non-professional creative or
+      leisure activity. Electronics, food and alcohol bought alongside are not
+      reimbursed.
+    annual_limit: 10000
+    covered_items:
+      hobby_class:
+        uk: ["Заняття {activity}, {n} шт", "Майстер-клас {activity}"]
+        en: ["{activity} class, {n} sessions", "{activity} workshop"]
+      hobby_materials:
+        uk: ["Набір для {activity}", "Фарби акрилові, {n} шт", "Пряжа {brand}"]
+        en: ["{activity} kit", "Acrylic paints, {n} pcs", "Yarn {brand}"]
+      club_membership:
+        uk: ["Членський внесок клубу {club}, {period}"]
+        en: ["Club membership {club}, {period}"]
+      instrument_rent:
+        uk: ["Оренда {instrument}, {period}"]
+        en: ["{instrument} rental, {period}"]
+    excluded_items:
+      electronics:
+        uk: ["Планшет {brand}", "Камера {brand}"]
+        en: ["Tablet {brand}", "Camera {brand}"]
+      food_drink:
+        uk: ["Кава", "Сендвіч"]
+        en: ["Coffee", "Sandwich"]
+      alcohol:
+        uk: ["Вино {brand} 0,75 л"]
+        en: ["Wine {brand} 0.75 l"]
+    ambiguous_items:
+      hobby_tool:
+        uk: ["Мольберт", "Швейна машина {brand}"]
+        en: ["Easel", "Sewing machine {brand}"]
+
+# --- verdict derivation ------------------------------------------------------
+coverage:
+  # covered_fraction = covered amount / total amount.
+  #
+  #   covered_fraction >= full_threshold    -> covered
+  #   0 < covered_fraction < full_threshold -> partially_covered
+  #   covered_fraction == 0                 -> not_proof_of_payment / rejected
+  #
+  # STRICT semantics: ANY non-covered line item makes the claim partially
+  # covered, however small. A 3 UAH carrier bag on a 1000 UAH pharmacy receipt is
+  # not reimbursed, and the label must say so — otherwise the dataset would
+  # contain images with a visibly non-covered line labelled as fully covered, and
+  # a consumer would learn to ignore small non-covered items.
+  #
+  # The threshold therefore exists ONLY to absorb floating-point error when
+  # summing amounts, not to absorb real items. Hence 0.9999, not 0.995.
+  full_threshold: 0.9999
+
+limits:
+  # Limits bind on CUMULATIVE spend per persona per category over the period, not
+  # on a single claim. claim_planner therefore processes a persona's claims in
+  # date order and carries the remaining balance: an otherwise fully covered
+  # claim becomes `partially_covered` when it exceeds what is left.
+  #
+  # Such a verdict CANNOT be derived from the document pixels — no consumer can
+  # read a remaining balance off a receipt. Every claim therefore records
+  # `verdict_basis`:
+  #   ["documents"]                     -> derivable from the images alone
+  #   ["documents", "account_state"]    -> also needs the persona's spend history
+  # Document-understanding metrics are computed on the first subset only;
+  # end-to-end system metrics on both.
+  enforce_cumulative: true
+
+# Target distribution over claim verdicts. The assembler's balance-report checks
+# the realized distribution against this.
+#
+# This is a decision about DATASET BALANCE, not an estimate of anything: in
+# production the `covered` class would dominate heavily. Over-representing the
+# harder verdicts is what makes a per-class F1 meaningful — but it also means
+# aggregate metrics measured on this dataset do not transfer to production without
+# reweighting by the class prior expected there.
+#
+# That prior is deliberately NOT defined here. It is an assumption about a
+# particular deployment, it is consumed by whoever computes metrics, and no stage
+# of this generator reads it. It belongs to the evaluation configuration of the
+# consumer, not to the specification of the dataset.
+verdict_mix:
+  covered: 0.50
+  partially_covered: 0.20
+  not_proof_of_payment: 0.10
+  insufficient_evidence: 0.10
+  partially_paid: 0.10
+
+# Why a claim ends up partially covered. Splits the `partially_covered` bucket
+# above by cause; must sum to 1.0.
+#
+# The distinction matters because the two causes carry different `verdict_basis`:
+# a non-covered line item is visible in the image, an exhausted annual limit is
+# not. Stated explicitly rather than as a single rate, so the resulting share of
+# the whole dataset is predictable: 0.20 * 0.35 = 7% of claims exercise the limit
+# mechanism.
+partially_covered_causes:
+  mixed_items: 0.65        # a non-covered line on the document
+  limit_exhausted: 0.35    # the annual balance ran out
+
+# What each document type proves. A claim is reimbursable only when BOTH facts
+# are established — what was bought, and that it was paid for — possibly across
+# different documents. That is where linked claims come from (an order screenshot
+# plus an account statement) and where the traps come from (an invoice on its own
+# proves nothing was paid).
+#
+# A fiscal receipt is the only common document that establishes both at once.
+#
+# These are type-level defaults. A specific archetype may override them: a bank
+# payment confirmation whose payment purpose spells out what was bought does
+# prove the subject, unlike a bare transfer. The override belongs to the archetype
+# registration, not here.
+document_evidence:
+  fiscal_receipt:       { proves_subject: true,  proves_payment: true  }
+  payment_confirmation: { proves_subject: false, proves_payment: true  }
+  bank_statement:       { proves_subject: false, proves_payment: true  }
+  invoice:              { proves_subject: true,  proves_payment: false }
+  act:                  { proves_subject: true,  proves_payment: false }
+  order_screenshot:     { proves_subject: true,  proves_payment: false }
+  non_fiscal_receipt:   { proves_subject: true,  proves_payment: false }

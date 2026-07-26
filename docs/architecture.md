@@ -109,7 +109,7 @@ verdicts, currencies and languages so that skew is visible rather than discovere
 
 ## Configuration model
 
-Three files, kept apart because they have three different natures and three different rates of change.
+Four files, kept apart because they have different natures and different rates of change.
 
 | File | Nature | Changes when |
 |---|---|---|
@@ -124,11 +124,11 @@ file and stay consistent with the labels of the dataset it was trained on.
 
 ### The item-kind vocabulary
 
-Each category lists item kinds — `gym_membership`, `medicine`, `dietary_supplement` — with the line-item name
+Each category lists item kinds — `gym_membership`, `vitamin_complex`, `medicine` — with the line-item name
 templates used when rendering. The kind is the join key between three layers:
 
 ```
-                    item_kind: "medicine"
+                    item_kind: "vitamin_complex"
                    ┌────────┬───────────┬────────────┐
                    │        │           │            │
            content_builder  policy.yaml  fiscal-rules.yaml

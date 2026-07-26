@@ -1,0 +1,30 @@
+# Foreign exchange rates — reference data.
+#
+# Kept out of policy.yaml on purpose: rates are neither a benefit-plan rule nor
+# fiscal law, they are just data the generator needs to express a foreign-currency
+# document in the reporting currency before a limit check.
+#
+# STATIC BY DESIGN. A live rates API would destroy determinism — the same seed
+# would produce different labels on different days. Reproducibility outranks
+# realistic drift here (docs/architecture.md#determinism).
+
+version: 1
+
+# Rates are per 1 unit of the listed currency, expressed in the reporting
+# currency of policy.yaml (UAH). Plausible mid-2026 values.
+base: UAH
+rates:
+  UAH: 1.00
+  PLN: 10.50
+  EUR: 45.00
+  USD: 42.00
+  GBP: 53.00
+
+# Optional seeded variation, so that documents issued on different dates within
+# the period do not all convert at exactly the same rate. Deterministic: the
+# jitter is drawn from the run seed and the document date, never from wall time.
+# Disabled by default — enable only if the dataset needs rate variation as a
+# signal.
+jitter:
+  enabled: false
+  relative_amplitude: 0.03   # +/- 3% around the base rate
