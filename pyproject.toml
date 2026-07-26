@@ -1,0 +1,53 @@
+[project]
+name = "receipt-synth"
+version = "0.1.0"
+description = "Generator of a synthetic dataset of benefit-reimbursement documents (receipts, payment confirmations, invoices, statements)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    # persona data
+    "faker>=37.0.0",
+    # templating + render
+    "jinja2>=3.1.4",
+    "playwright>=1.50.0",
+    # multi-page PDF (bank statements only)
+    "reportlab>=4.2.0",
+    # QR codes: fiscal + decorative (classification trap)
+    "segno>=1.6.1",
+    # degradation
+    "augraphy>=8.2.6",
+    # MIT pin — do NOT switch to AlbumentationsX (AGPL). See docs/design.md §9.
+    "albumentations==2.0.8",
+    # schemas + config
+    "pydantic>=2.9.0",
+    "pyyaml>=6.0.2",
+]
+
+[project.scripts]
+generate-dataset = "receipt_synth.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/receipt_synth"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

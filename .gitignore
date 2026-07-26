@@ -1,0 +1,52 @@
+# --- generated dataset -------------------------------------------------------
+out/
+dataset/
+
+# --- real test set: the author's own receipts. PII. NEVER committed. ---------
+# (docs/design.md §11 — lives locally only)
+testset/
+real/
+
+# --- any real document scan/photo that may wander into the tree --------------
+# Template assets must be SVG or the fonts under fonts/; raster documents are
+# never a legitimate repo artifact.
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.heif
+*.webp
+*.tif
+*.tiff
+
+# --- working notes: local only, not part of the deliverable -------------------
+tasks/
+
+# --- internal planning documents ----------------------------------------------
+# The design spec is a planning document with a different audience and belongs
+# with the write-up, not with the tool. The public architecture reference is
+# docs/architecture.md.
+docs/design.md
+
+# --- python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- env / secrets -----------------------------------------------------------
+.env
+.env.*
+secrets/
+
+# --- os / editor -------------------------------------------------------------
+.DS_Store
+.idea/
+*.swp
