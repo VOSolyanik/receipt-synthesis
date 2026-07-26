@@ -9,10 +9,14 @@ Three groups of things live here, in this order:
    Ukraine).
 3. **The validators.** Each states one invariant as a question with a boolean answer.
 
-The validators are not defensive programming. Fraud and trap archetypes exist to break
-these invariants, so a broken invariant has to be something the generator can *state*,
-never something it can only stumble into. The same functions are what the test suite
-checks the builder against.
+The validators are not defensive programming, and their lack of callers on the honest
+path is by design rather than an oversight. A truthful document satisfies its invariants
+*by construction* — the total is computed as the sum of the line items, so the two cannot
+disagree — and there the validators serve as the specification the test suite holds the
+builder to. Their production callers arrive with the fraud and trap archetypes, which
+state amounts that do **not** follow from their lines: something then has to establish
+which invariant broke, so the imperfection can be named in the label instead of merely
+rendered. See docs/architecture.md#3-content_builder.
 
 Everything is deterministic: no function here reads a clock or an unseeded generator.
 """

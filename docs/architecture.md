@@ -81,6 +81,15 @@ dates consistent with the claimed period.
 For fraud and trap archetypes it breaks these invariants **on purpose**. A broken invariant is always an
 explicit, labelled choice — never an accident. The same invariant validators are exercised by the test suite.
 
+The validators are a deliberate second implementation, not a redundant one. An honest document satisfies its
+invariants *by construction* — the total is computed as the sum of the line items, so it cannot disagree with
+them — and on that path the validators are exercised only by the tests. They earn their place on the other
+path: a fraud archetype states an amount that does **not** follow from its lines, and something has to
+establish which invariant was broken and by how much, so that the imperfection can be named in the label
+rather than merely rendered. Read `validate_line_item_sum` and its siblings as the specification the
+generator is checked against, and as the mechanism the deliberately-broken archetypes will be built on — not
+as guards on the honest path.
+
 ### 4. `renderer`
 
 Jinja2 → HTML → Playwright screenshot.
