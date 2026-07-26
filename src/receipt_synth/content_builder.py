@@ -542,6 +542,35 @@ def _build_line_item(item_kind: str, templates: list[str], rng: random.Random) -
     )
 
 
+# How many draws to allow before accepting a shorter receipt. Reached only when a
+# category has fewer distinct renderable names than the requested line count.
+_DISTINCT_DRAW_LIMIT = 40
+
+
+def _draw_distinct_items(
+    rng: random.Random, kinds: list[str], catalogue: dict, count: int
+) -> list[LineItem]:
+    """Line items with distinct printed names.
+
+    A receipt lists a product once and says how many; the same article appearing twice on
+    one receipt at two different prices is not something a cash register produces. Kinds
+    are still drawn with replacement — a pharmacy basket really can hold two different
+    vitamins — it is the printed name that has to be unique.
+    """
+    items: list[LineItem] = []
+    seen: set[str] = set()
+
+    for _ in range(_DISTINCT_DRAW_LIMIT):
+        if len(items) == count:
+            break
+        kind = rng.choice(kinds)
+        item = _build_line_item(kind, catalogue[kind]["uk"], rng)
+        if item.name not in seen:
+            seen.add(item.name)
+            items.append(item)
+    return items
+
+
 def _build_tax_lines(items: list[LineItem]) -> list[TaxLine]:
     """One row per VAT letter present, in the order the jurisdiction declares them.
 
@@ -599,10 +628,7 @@ def build_prro_receipt(
     catalogue = category(category_id)["covered_items"]
     kinds = sorted(catalogue)
     count = item_count if item_count is not None else rng.randint(2, 4)
-    items = [
-        _build_line_item(kind, catalogue[kind]["uk"], rng)
-        for kind in (rng.choice(kinds) for _ in range(count))
-    ]
+    items = _draw_distinct_items(rng, kinds, catalogue, count)
     total = line_items_total(items)
 
     # -- who sold it
