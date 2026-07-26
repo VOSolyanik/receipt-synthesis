@@ -116,9 +116,9 @@ def test_edrpou_is_deterministic_under_seed():
     assert generate_edrpou(random.Random(42)) == generate_edrpou(random.Random(42))
 
 
-def test_edrpou_switches_weight_set_by_range():
-    """Codes in 30000000–60000000 take the rotated weight set (7,1,2,3,4,5,6); all
-    others take (1,2,3,4,5,6,7). The two sets disagree for most prefixes, so a code
+def test_edrpou_switches_weight_set_on_the_first_digit():
+    """Codes whose first digit is 3, 4 or 5 take the rotated weight set (7,1,2,3,4,5,6);
+    all others take (1,2,3,4,5,6,7). The two sets disagree for most prefixes, so a code
     valid under one is almost never valid under the other."""
     low = (1, 2, 3, 4, 5, 6, 7)
     mid = (7, 1, 2, 3, 4, 5, 6)
@@ -130,18 +130,54 @@ def test_edrpou_switches_weight_set_by_range():
     assert edrpou_check_digit("32345670") == first_pass("3234567", mid)
 
 
-def test_edrpou_reports_prefixes_that_carry_no_check_digit():
-    """When both passes yield 10 the code is not issuable. That must surface as None,
-    not silently as 0 — a fabricated 0 would produce identifiers that no register
-    would ever contain."""
-    # Step by 10: the check digit is a property of the first seven digits, so
-    # consecutive codes share a prefix and scanning codes would sample 10× less widely
-    # than it looks. Roughly 1% of prefixes are unissuable.
-    unissuable = [
-        f"{n:08d}"
-        for n in range(10_000_000, 10_020_000, 10)
-        if edrpou_check_digit(f"{n:08d}") is None
-    ]
-    assert unissuable, "expected at least one prefix with no valid check digit"
-    for code in unissuable:
-        assert not is_valid_edrpou(code)
+@pytest.mark.parametrize("code", ["60000000", "60000001", "60000004", "60000009"])
+def test_edrpou_sixty_million_takes_the_low_weight_set(code):
+    """The boundary the rule is easy to get wrong.
+
+    "30 000 000 to 60 000 000" and "first digit in 345" agree everywhere except at
+    exactly 60000000, where the first reading picks the rotated set and the second the
+    plain one. The standard keys on the digit, so 6xxxxxxx is always the plain set:
+    these prefixes have check digit 6, not 9.
+    """
+    low = (1, 2, 3, 4, 5, 6, 7)
+    expected = sum(w * int(d) for w, d in zip(low, code[:7], strict=True)) % 11
+
+    assert expected == 6
+    assert edrpou_check_digit(code) == expected
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["41761770", "25083040", "23246880", "43808820", "43328020", "43573920", "40599600"],
+)
+def test_edrpou_accepts_codes_whose_check_digit_comes_from_the_second_pass(code):
+    """Regression: both weighted passes leaving a remainder of 10 means check digit 0,
+    and the code is valid. Treating it as unissuable rejected real registry codes."""
+    assert edrpou_check_digit(code) == 0
+    assert is_valid_edrpou(code)
+
+
+def test_a_remainder_of_ten_on_both_passes_gives_check_digit_zero():
+    """Stated directly, over a scan rather than by example, so the rule is pinned rather
+    than the seven codes above.
+
+    Step by 10: the check digit is a property of the first seven digits, so consecutive
+    codes share a prefix and scanning codes would sample 10× less widely than it looks.
+    """
+    low = (1, 2, 3, 4, 5, 6, 7)
+    mid = (7, 1, 2, 3, 4, 5, 6)
+    seen = 0
+
+    for n in range(10_000_000, 10_020_000, 10):
+        code = f"{n:08d}"
+        weights = mid if code[0] in "345" else low
+        remainders = [
+            sum((w + shift) * int(d) for w, d in zip(weights, code[:7], strict=True)) % 11
+            for shift in (0, 2)
+        ]
+        if remainders == [10, 10]:
+            seen += 1
+            assert edrpou_check_digit(code) == 0
+            assert is_valid_edrpou(code[:7] + "0")
+
+    assert seen, "expected at least one prefix where both passes leave 10"

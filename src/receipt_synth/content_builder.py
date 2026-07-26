@@ -51,14 +51,20 @@ _RNOKPP_WEIGHTS = (-1, 5, 7, 9, 4, 6, 10, 5, 7)
 # ЄДРПОУ — код Єдиного державного реєстру підприємств та організацій України: the
 # registry code of a legal entity, eight digits, printed on a receipt as "ІД".
 #
-# Check digit as publicly documented for the register. Two details make it unlike the
-# РНОКПП one, and both are load-bearing:
-#   * the weight set depends on the range the whole code falls in;
-#   * when the weighted sum leaves a remainder of 10 the calculation is repeated with
-#     every weight raised by 2, and if that also leaves 10 the code carries no valid
-#     check digit and is not issued.
-_EDRPOU_WEIGHTS_LOW = (1, 2, 3, 4, 5, 6, 7)  # code < 30 000 000 or > 60 000 000
-_EDRPOU_WEIGHTS_MID = (7, 1, 2, 3, 4, 5, 6)  # 30 000 000 … 60 000 000
+# Check digit as publicly documented for the register, and as implemented by
+# python-stdnum (`stdnum/ua/edrpou.py`), which is the reference this follows. Two details
+# make it unlike the РНОКПП one, and both are load-bearing:
+#
+#   * the weight set is chosen by the FIRST DIGIT, not by a numeric range. The two
+#     readings agree everywhere except at exactly 60000000; keying on the digit is what
+#     the standard does, so 6xxxxxxx always takes the plain set.
+#   * when the weighted sum leaves a remainder of 10, the calculation is repeated with
+#     every weight raised by 2 — and the second remainder is reduced mod 10, so a
+#     remainder of 10 becomes check digit 0. Such codes are real and in the register
+#     (41761770, 25083040, …); treating them as unissuable rejects valid identifiers.
+_EDRPOU_WEIGHTS_LOW = (1, 2, 3, 4, 5, 6, 7)  # first digit not in 3, 4, 5
+_EDRPOU_WEIGHTS_MID = (7, 1, 2, 3, 4, 5, 6)  # first digit 3, 4 or 5
+_EDRPOU_MID_FIRST_DIGITS = "345"
 
 
 def _is_digits(value: str, length: int) -> bool:
@@ -107,24 +113,25 @@ def generate_rnokpp(
     return body + str(rnokpp_check_digit(body))
 
 
-def edrpou_check_digit(code: str) -> int | None:
-    """The expected eighth digit of a ЄДРПОУ, or ``None`` when the first seven digits
-    admit no valid check digit at all.
+def edrpou_check_digit(code: str) -> int:
+    """The expected eighth digit of a ЄДРПОУ, derived from its first seven.
 
-    ``None`` rather than a fabricated ``0``: such a code is not issued, and inventing
-    one would put identifiers in the dataset that no register could contain.
+    Always a digit. The second pass is reduced mod 10, so a remainder of 10 on both
+    passes yields 0 — a real and reasonably common outcome, not a sign that the code
+    cannot exist.
     """
     if not _is_digits(code, 8):
         raise ValueError(f"a ЄДРПОУ is eight digits, got {code!r}")
 
-    base = _EDRPOU_WEIGHTS_MID if 30_000_000 <= int(code) <= 60_000_000 else _EDRPOU_WEIGHTS_LOW
-    for shift in (0, 2):
-        remainder = sum(
-            (w + shift) * int(d) for w, d in zip(base, code[:7], strict=True)
-        ) % 11
-        if remainder < 10:
-            return remainder
-    return None
+    base = (
+        _EDRPOU_WEIGHTS_MID if code[0] in _EDRPOU_MID_FIRST_DIGITS else _EDRPOU_WEIGHTS_LOW
+    )
+    remainder = sum(w * int(d) for w, d in zip(base, code[:7], strict=True)) % 11
+    if remainder < 10:
+        return remainder
+
+    # Repeat with every weight raised by 2, then fold 10 down to 0.
+    return sum((w + 2) * int(d) for w, d in zip(base, code[:7], strict=True)) % 11 % 10
 
 
 def is_valid_edrpou(value: str) -> bool:
@@ -135,15 +142,17 @@ def is_valid_edrpou(value: str) -> bool:
 def generate_edrpou(rng: random.Random) -> str:
     """A valid ЄДРПОУ.
 
-    Drawn and validated rather than computed from a prefix. The range test that selects
-    the weight set reads the whole code *including* its check digit, so deriving the
-    digit from the first seven alone is circular at the range boundaries. Rejection
-    sampling keeps one algorithm — the validator — as the single definition of valid.
+    Computed directly from the drawn prefix. This used to draw whole codes and reject
+    invalid ones, on the reasoning that the weight set depended on the value of the
+    complete code and so could not be resolved from seven digits — that reasoning was
+    part of the same misreading that made `edrpou_check_digit` return None. The set
+    depends on the first digit alone, so the eighth is a pure function of the first
+    seven and there is nothing to reject.
     """
-    while True:
-        candidate = f"{rng.randint(10_000_000, 99_999_999):08d}"
-        if is_valid_edrpou(candidate):
-            return candidate
+    # Note: excludes codes with a leading zero, which the register does issue. Widening
+    # this is tracked separately — it changes which identifiers a given seed produces.
+    prefix = f"{rng.randint(1_000_000, 9_999_999):07d}"
+    return prefix + str(edrpou_check_digit(prefix + "0"))
 
 
 # =============================================================================
