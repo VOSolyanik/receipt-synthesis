@@ -1,0 +1,127 @@
+/*
+ * Ukrainian ПРРО fiscal receipt — 80 mm thermal paper.
+ *
+ * Font stack: a monospace face first, because thermal printers are monospace and the
+ * column alignment of a receipt depends on it. "Noto Sans" follows as the fallback
+ * required throughout this repository — Roboto has no ₴ glyph, so Chromium must always
+ * have a Noto face to substitute from (see fonts/README.md). The generic `monospace`
+ * last is a backstop that should never be reached: the vendored fonts are what make the
+ * same seed produce the same pixels on any machine.
+ *
+ * No @font-face rules here. They live in the template, where the renderer can point them
+ * at absolute paths into fonts/.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
+
+.receipt {
+  width: 640px;
+  box-sizing: border-box;
+  padding: 26px 30px 34px;
+  background: #ffffff;
+  color: #111111;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 15px;
+  font-weight: 400;
+  /* Thermal print is slightly loose vertically and slightly tight horizontally. */
+  line-height: 1.45;
+  letter-spacing: -0.1px;
+  font-variant-ligatures: none;
+}
+
+.block {
+  margin: 0;
+}
+
+.centered {
+  text-align: center;
+}
+
+.rule {
+  border-top: 1px dashed #444444;
+  margin: 9px 0;
+}
+
+/* A label on the left, a value hard against the right edge — the column a reader's eye
+   follows down a receipt. */
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.seller-name {
+  font-weight: 700;
+  font-size: 17px;
+  margin-bottom: 2px;
+}
+
+.item {
+  margin-bottom: 6px;
+}
+
+.item:last-child {
+  margin-bottom: 0;
+}
+
+.item-name {
+  /* Long names wrap rather than overflow the paper width, as they do in print. */
+  overflow-wrap: anywhere;
+}
+
+.item-qty {
+  padding-left: 14px;
+  white-space: nowrap;
+}
+
+.item-sum {
+  white-space: nowrap;
+}
+
+/* ПДВ-літера: the VAT rate code printed at the end of each line item, with its legend
+   in the tax block below. */
+.vat-letter {
+  display: inline-block;
+  min-width: 1.1em;
+  text-align: right;
+}
+
+.total {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.caption {
+  color: #333333;
+}
+
+.fiscal-title {
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.6px;
+  margin-top: 8px;
+}
+
+.qr {
+  margin: 12px 0 6px;
+  line-height: 0;
+}
+
+.qr svg {
+  width: 150px;
+  height: 150px;
+  /* Rendered at whole-pixel scale so the modules stay square and machine-readable
+     before degradation is applied. */
+  image-rendering: pixelated;
+}
+
+.thanks {
+  margin-top: 6px;
+  letter-spacing: 0.4px;
+}

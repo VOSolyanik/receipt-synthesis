@@ -1,0 +1,119 @@
+{#
+  Ukrainian ПРРО fiscal receipt — програмний реєстратор розрахункових операцій, the
+  software cash register that replaced hardware РРО.
+
+  Layout follows the UA block of config/fiscal-rules.yaml. Two orderings here are not
+  guesses and are listed under `verified_against_own_receipts`: the fiscal title sits
+  near the FOOT of the receipt rather than at the head, and the time is printed with
+  dashes (14-22-51), not colons.
+
+  Every element a consumer would extract carries data-field="<name>". The renderer reads
+  getBoundingClientRect() for each of them in the same pass as the screenshot, so the
+  boxes come from the browser's layout engine and are exact by construction. Repeated
+  elements are indexed — item_0_name, item_1_name — because field_bboxes is a flat map.
+#}
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# data-document marks the page root. The renderer sizes the viewport to this element,
+   so the image is the document and not the browser window around it. Every template
+   carries exactly one. #}
+<div class="receipt" data-document="fiscal_receipt">
+
+  <header class="block centered">
+    <div class="seller-name" data-field="seller_name">{{ seller_display }}</div>
+    <div data-field="seller_address">{{ seller.address }}</div>
+    <div>{{ seller.tax_code_label }} <span data-field="seller_tax_code">{{ seller.tax_code }}</span></div>
+    <div>ПН <span data-field="seller_vat_number">{{ seller.vat_number }}</span></div>
+  </header>
+
+  <div class="rule"></div>
+
+  <section class="block">
+    {% for item in items %}
+    <div class="item">
+      <div class="item-name" data-field="item_{{ loop.index0 }}_name">{{ item.name }}</div>
+      <div class="row">
+        <span class="item-qty">
+          <span data-field="item_{{ loop.index0 }}_qty">{{ item.qty }}</span>
+          &times;
+          <span data-field="item_{{ loop.index0 }}_price">{{ item.price }}</span>
+        </span>
+        <span class="item-sum">
+          <span data-field="item_{{ loop.index0 }}_sum">{{ item.sum }}</span>
+          <span class="vat-letter" data-field="item_{{ loop.index0 }}_vat_letter">{{ item.vat_letter }}</span>
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="block">
+    <div class="row total">
+      <span>СУМА ДО СПЛАТИ</span>
+      <span data-field="total">{{ total }}</span>
+    </div>
+    {% for line in tax_lines %}
+    <div class="row"><span data-field="tax_line_{{ loop.index0 }}">{{ line }}</span></div>
+    {% endfor %}
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="block">
+    <div class="row">
+      <span data-field="payment_method">{{ payment_method }}</span>
+      <span data-field="paid_amount">{{ total }}</span>
+    </div>
+    {% if acquiring %}
+    <div>{{ acquiring_labels.acquirer }} <span data-field="acquirer">{{ acquiring.acquirer }}</span></div>
+    <div>{{ acquiring_labels.terminal_id }} <span data-field="terminal_id">{{ acquiring.terminal_id }}</span></div>
+    <div data-field="operation">{{ acquiring.operation }}</div>
+    <div>{{ acquiring_labels.card_masked }} <span data-field="card_masked">{{ acquiring.card_masked }}</span></div>
+    <div>{{ acquiring_labels.auth_code }} <span data-field="auth_code">{{ acquiring.auth_code }}</span></div>
+    <div>{{ acquiring_labels.rrn }} <span data-field="rrn">{{ acquiring.rrn }}</span></div>
+    {% endif %}
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="block">
+    <div class="caption">Сума прописом:</div>
+    <div data-field="amount_in_words">{{ amount_in_words }}</div>
+  </section>
+
+  <div class="rule"></div>
+
+  {# The fiscal identity of the document. On ПРРО receipts this block sits at the foot. #}
+  <footer class="block centered">
+    <div>ЧЕК № <span data-field="receipt_number">{{ receipt_number }}</span></div>
+    <div>
+      <span data-field="date">{{ date }}</span>
+      <span data-field="time">{{ time }}</span>
+    </div>
+    <div>ФН ПРРО <span data-field="fiscal_device_number">{{ fiscal_device_number }}</span></div>
+    <div class="fiscal-title" data-field="title">{{ title }}</div>
+    <div data-field="mode_marker">{{ mode_marker }}</div>
+    <div class="qr" data-field="qr">{{ qr_svg | safe }}</div>
+    <div class="thanks" data-field="footer_text">{{ footer }}</div>
+  </footer>
+
+</div>
+</body>
+</html>
