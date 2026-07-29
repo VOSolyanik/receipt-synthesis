@@ -2,9 +2,10 @@
 
 A persona fixes the context every document of theirs inherits: which country's fiscal
 rules apply, which currency and language are natural, and which benefit categories they
-hold. Nothing here describes a real person — the names come from Faker, the identifier
-is generated to satisfy its checksum, and the two are made consistent with each other
-rather than with anybody.
+hold. Nothing here describes a real person — the given name comes from Faker and the
+surname from the narrowed pool `content_builder.personal_surname` draws, the identifier is
+generated to satisfy its checksum, and the two are made consistent with each other rather
+than with anybody.
 
 The benefit categories are drawn according to `persona_categories` in policy.yaml rather
 than uniformly, so the dataset is balanced along that axis on purpose instead of by
@@ -19,7 +20,7 @@ from datetime import date
 from faker import Faker
 
 from receipt_synth.config import load_policy
-from receipt_synth.content_builder import generate_rnokpp
+from receipt_synth.content_builder import generate_rnokpp, personal_surname
 from receipt_synth.schemas import Country, Location, Persona
 
 # Faker locale, home currency and language per jurisdiction. A persona generated for a
@@ -72,7 +73,19 @@ def generate_persona(
     fake.seed_instance(rng.getrandbits(64))
 
     female = rng.random() < 0.5
-    full_name = fake.name_female() if female else fake.name_male()
+
+    # Composed here rather than taken whole from `fake.name_*()`, because the surname comes
+    # from `content_builder.personal_surname` — the same narrowed pool a printed sole trader
+    # is drawn from. A persona's name is not printed on any document today, but it is the
+    # payer on a payment confirmation, so it carries the same exposure and gets the same
+    # mechanism rather than a second one.
+    #
+    # Composing costs the locale's own name FORMAT, which for some locales is more than a
+    # given name and one surname — a Spanish full name carries two. Whoever adds the first
+    # non-UA template decides what that jurisdiction prints; nothing renders a persona name
+    # yet, so nothing is misprinted in the meantime.
+    first = fake.first_name_female() if female else fake.first_name_male()
+    full_name = f"{first} {personal_surname(rng, fake, country.value, female=female)}"
     birth_date: date = fake.date_of_birth(minimum_age=22, maximum_age=60)
 
     tax_id = (

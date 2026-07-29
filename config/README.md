@@ -244,6 +244,18 @@ two decimal places is refused rather than rounded.
 UAH-only, honestly so: every archetype this generator has is Ukrainian. Per-jurisdiction ranges arrive with
 the first non-UA archetype.
 
+**Personal names are composed, and the surname pool is narrowed on purpose.** `personal_names.surnames`
+holds, per document language, the surnames a sole trader's printed name and a persona's own name are built
+from; the given name and the patronymic still come from `Faker`. The narrowing is not "avoid real surnames"
+— every Ukrainian surname belongs to real people, and a sole trader has to look real. It is that the name
+must not point at a *particular* person, and the property that decides is rarity together with
+recognisability: a rare, loaded surname on a published receipt points, and one carried by a hundred thousand
+people is noise. The list is therefore a published high-frequency set with a stated bearer threshold, not a
+denylist of names to avoid — a denylist would never be finished, and every surname missing from it would
+become a silent claim that it had been checked. The block in `generation.yaml` cites its source and
+threshold, and says why nothing is excluded for being iconic. A language with no entry falls back to
+`Faker`'s pool for that locale.
+
 ---
 
 ## `fx-rates.yaml` — reference data

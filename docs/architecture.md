@@ -51,7 +51,7 @@ fiscal rules apply, which currencies and languages are natural, which benefit ca
 
 ```yaml
 persona_id: p001
-full_name: <Faker, locale-appropriate>
+full_name: <given name from Faker + surname from config/generation.yaml>
 location: { country: UA|PL|DE|ES, city: <Faker> }
 home_currencies: [UAH, ...]
 languages: [uk, ...]
@@ -62,6 +62,13 @@ benefit_categories: [<drawn per config/policy.yaml>]
 
 The distribution of countries, currencies and languages is controlled rather than uniform, so the resulting
 dataset is balanced along those axes instead of accidentally skewed.
+
+A personal name — a persona here, a sole trader printed by `content_builder` — is composed rather than
+stored, and its surname is drawn from a deliberately narrow set of the most common surnames of the
+jurisdiction, listed under `personal_names` in `config/generation.yaml`. This dataset is published, and a
+rare surname on a rendered receipt points at whoever bears it however the name was produced, while a surname
+carried by tens of thousands of people does not. That block states the reasoning, its source and its
+frequency threshold in full; note that it is a property of the sample rather than a list of excluded names.
 
 ### 2. `claim_planner`
 

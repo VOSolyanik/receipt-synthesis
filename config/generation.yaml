@@ -49,8 +49,10 @@
 # Only the two name classes remain, and both are structurally safe rather than checked:
 #
 #   * public marks — public, so the question of whether they are free does not arise;
-#   * sole traders — never stored at all. A seeded `Faker` draw at build time makes no
-#     claim about anybody, so there is nothing to verify. See `content_builder.sole_trader_name`.
+#   * personal names — composed at build time from the surname pool under `personal_names`
+#     at the foot of this file. No full name is stored, and the surname is drawn from a
+#     published high-frequency set, so it is too common to point at anyone. That block
+#     states the reasoning; `content_builder.personal_surname` is the draw.
 #
 # Course titles, book titles, club names and session dates remain invented: they are works
 # and events, not marks under which a firm trades, and none of them names a company.
@@ -516,3 +518,79 @@ mixed_basket:
   # coverage off `covered_fraction` in the ground truth, never off this list.
   coverage_targets:
     ["0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90"]
+
+
+# =============================================================================
+# Personal names
+# =============================================================================
+#
+# The surnames from which a personal name is composed, keyed by document language. Used for
+# a sole trader printed on a receipt (`content_builder.sole_trader_name`) and for a
+# persona's own name (`persona_generator`), which is not printed today but will be, as the
+# payer on a payment confirmation. Given names and patronymics still come from `Faker`;
+# only the surname is drawn from here.
+#
+# WHY THE SURNAME POOL IS NARROWED. This dataset is published, so a name on a rendered
+# receipt is read as it appears, whatever mechanism produced it. `ФОП Бандера О. А.` is a
+# name this generator actually drew: the surname came from a public list, the initials were
+# drawn independently of it, and no real person was designated — and it still reads as a
+# statement, because the surname is rare and loaded, so it points.
+#
+# THE PROPERTY THAT DECIDES IS RARITY TOGETHER WITH RECOGNISABILITY — not whether a surname
+# belongs to real people. Every Ukrainian surname does, and a sole trader has to look real,
+# so "avoid real surnames" is neither achievable nor wanted. What is wanted is that the name
+# should not point at a PARTICULAR person, and a surname carried by a hundred thousand
+# people cannot: `ФОП Коваленко О. І.` points at nobody, although public Коваленки certainly
+# exist. The surname is noise rather than signal, and that is the whole mechanism.
+#
+# SO THIS IS A PROPERTY OF THE SAMPLE, NOT A REGISTER OF EXCEPTIONS. A denylist of loaded
+# names is the wrong shape twice over: any sample of Ukrainian surnames contains politicians,
+# writers and historical figures, so the list is never finished — and every surname NOT on it
+# silently becomes a claim that it was checked and found safe. A narrowed pool needs no
+# maintenance and makes no claim about any single entry. This repository removed exactly that
+# denylist construction from its vendor names; it is not reintroduced here.
+#
+# SOURCE AND THRESHOLD. The list below is the Ukrainian Wikipedia project list of the most
+# common surnames in Ukraine, whose declared inclusion threshold is at least 20,000 bearers
+# among Ukrainian citizens, compiled from the surname-distribution map of the Ukrainian
+# genealogy society «Рідні» (ridni.org):
+#   https://uk.wikipedia.org/wiki/Вікіпедія:Проєкт:Україна/Список_найпоширеніших_прізвищ_в_Україні
+# That threshold is the point, and it is why the source was chosen: it is a published lower
+# bound on frequency for EVERY entry, so the set contains nothing rare. For scale, the same
+# data puts the head of the distribution at Мельник 107,878 bearers, Шевченко 106,340,
+# Коваленко 88,632, Бондаренко 88,133, Бойко 83,195.
+#
+# THREE ENTRIES OF THAT SOURCE ARE OMITTED — Іванов/Іванова, Попов/Попова, Ковальова — for a
+# mechanical reason and not a judgement about the names: they are the only ones that inflect
+# for sex. Without them the pool is one list that can be drawn from whatever the person's
+# sex, because every surname below is identical in the masculine and feminine nominative.
+#
+# NOTHING IS EXCLUDED FOR BEING ICONIC, and the closest calls are deliberate. Шевченко,
+# Кравчук and Тимошенко are all present and all are borne by very widely known Ukrainians.
+# They stay because the criterion above is the criterion: each is carried by tens of
+# thousands of people, so none of them points the way a rare surname does. Removing them
+# would start the register this block exists to avoid, and would leave the next reader
+# obliged to read every remaining entry as vetted, which none of them is.
+#
+# LANGUAGES WITH NO ENTRY HERE fall back to `Faker`'s own surname pool for that locale —
+# see `content_builder.personal_surname`. Only Ukrainian documents are rendered today, and
+# a narrowed set for pl/de/es arrives with the templates that print those names.
+
+personal_names:
+  surnames:
+    uk:
+      ["Бабенко", "Білоус", "Бойко", "Бондар", "Бондаренко", "Василенко",
+       "Власенко", "Вовк", "Гаврилюк", "Герасименко", "Гончар", "Гончаренко",
+       "Гордієнко", "Гуменюк", "Демченко", "Дяченко", "Жук", "Зінченко",
+       "Іщенко", "Карпенко", "Кириченко", "Клименко", "Коваленко", "Коваль",
+       "Ковальчук", "Ковтун", "Козак", "Колесник", "Коломієць", "Корнієнко",
+       "Костенко", "Костюк", "Кравець", "Кравченко", "Кравчук", "Кузьменко",
+       "Кулик", "Кушнір", "Левченко", "Лисенко", "Литвиненко", "Мазур",
+       "Макаренко", "Мартиненко", "Мартинюк", "Марченко", "Марчук", "Мельник",
+       "Мельничук", "Міщенко", "Мороз", "Москаленко", "Назаренко", "Нестеренко",
+       "Олійник", "Павленко", "Павлюк", "Панченко", "Петренко", "Пилипенко",
+       "Поліщук", "Пономаренко", "Попович", "Приходько", "Радченко", "Романенко",
+       "Романюк", "Руденко", "Савченко", "Савчук", "Семенюк", "Сергієнко",
+       "Сидоренко", "Тарасенко", "Терещенко", "Тимошенко", "Тищенко", "Ткач",
+       "Ткаченко", "Ткачук", "Федоренко", "Харченко", "Хоменко", "Швець",
+       "Шевченко", "Шевчук", "Юрченко", "Яковенко", "Яценко"]

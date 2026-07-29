@@ -38,6 +38,7 @@ from receipt_synth.config import (
     acquirers,
     category,
     excluded_line_counts,
+    high_frequency_surnames,
     jurisdiction,
     placeholder_values,
     price_range,
@@ -602,13 +603,37 @@ def _faker_locale(country: str) -> str:
     return f"{jurisdiction(country)['language']}_{country}"
 
 
-def sole_trader_name(rng: random.Random, country: str = "UA") -> str:
-    """The printed name of a sole trader — drawn, never stored.
+def personal_surname(rng: random.Random, fake: Faker, country: str, *, female: bool) -> str:
+    """The surname of a person named on a document of this jurisdiction.
 
-    A curated list of invented personal names is a standing liability: every entry is an
-    unverified claim that no real person trades under that name, and it has to be
-    re-checked as the world changes. A seeded draw makes no claim at all, which is why this
-    is a function and not a column in `config/vendors.json`.
+    Drawn from the narrowed high-frequency set in `config/generation.yaml` where the
+    jurisdiction's language declares one, and from Faker's own pool where it does not. The
+    reasoning is stated under `personal_names` in that file; the short form is that this
+    dataset is published, and a rare surname on a rendered receipt points at whoever bears
+    it while a surname carried by a hundred thousand people does not.
+
+    ONE mechanism for both places a personal name is composed — a sole trader below, and a
+    persona in `persona_generator`, whose name is not printed yet but will be as the payer
+    on a payment confirmation. The exposure is the same in both, so the narrowing is not
+    built twice.
+
+    Takes the caller's `Faker` rather than making one, because both callers already have a
+    seeded instance for the given name and a second instance would draw from a second seed.
+    """
+    pool = high_frequency_surnames(jurisdiction(country)["language"])
+    if pool:
+        return rng.choice(pool)
+    return fake.last_name_female() if female else fake.last_name_male()
+
+
+def sole_trader_name(rng: random.Random, country: str = "UA") -> str:
+    """The printed name of a sole trader — composed, never stored.
+
+    A curated list of personal names is a standing liability: every entry is an unverified
+    claim about who trades under that name, and it has to be re-checked as the world
+    changes. So the name is composed at build time rather than kept as a column in
+    `config/vendors.json` — the surname by `personal_surname` above, the given name and
+    patronymic by Faker, neither of which identifies anybody on its own.
 
     Ukrainian documents print a sole trader as surname plus initials — ``Ковальчук О. С.`` —
     which is both the convention and what a receipt shows; elsewhere the full name is
@@ -622,7 +647,7 @@ def sole_trader_name(rng: random.Random, country: str = "UA") -> str:
 
     female = rng.random() < 0.5
     first = fake.first_name_female() if female else fake.first_name_male()
-    last = fake.last_name_female() if female else fake.last_name_male()
+    last = personal_surname(rng, fake, country, female=female)
     if country not in _SURNAME_AND_INITIALS:
         return f"{first} {last}"
 

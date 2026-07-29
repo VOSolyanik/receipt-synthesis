@@ -165,6 +165,22 @@ def excluded_line_counts() -> tuple[int, ...]:
 
 
 @cache
+def high_frequency_surnames(language: str) -> tuple[str, ...]:
+    """The surname pool a personal name is composed from, by document language.
+
+    EMPTY when the language declares none, and that is a meaningful answer rather than a
+    missing one: only Ukrainian documents are rendered today, so only `uk` has a narrowed
+    set, and the caller falls back to Faker's own pool for the rest. See `personal_names`
+    in config/generation.yaml for why the Ukrainian pool is narrowed at all.
+
+    Unlike `placeholder_values`, an absent entry does not raise. A missing vocabulary there
+    means a template cannot be printed; here it means the surname is drawn the way it was
+    drawn before this pool existed.
+    """
+    return tuple(load_generation()["personal_names"]["surnames"].get(language, ()))
+
+
+@cache
 def coverage_targets() -> tuple[Decimal, ...]:
     """The covered fractions a mixed basket may aim at.
 

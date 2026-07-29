@@ -30,7 +30,7 @@ from receipt_synth.claim_planner import (
     why_no_claim,
 )
 from receipt_synth.cli import main
-from receipt_synth.config import load_policy
+from receipt_synth.config import high_frequency_surnames, load_policy
 from receipt_synth.content_builder import MAX_LINE_ITEMS, is_valid_rnokpp
 from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
@@ -61,6 +61,18 @@ def test_persona_is_deterministic_under_seed():
 def test_personas_differ_between_seeds():
     names = {persona(seed).full_name for seed in range(20)}
     assert len(names) > 1
+
+
+def test_a_persona_surname_comes_from_the_narrowed_pool():
+    """A persona is not printed on any document today — but it is the payer on a payment
+    confirmation, so it draws its surname from the same narrowed pool a printed sole trader
+    does. Asserted here so that the mechanism cannot quietly serve only one of the two.
+
+    See `personal_names` in config/generation.yaml for why the pool is narrowed.
+    """
+    pool = set(high_frequency_surnames("uk"))
+    drawn = {persona(seed).full_name.split()[-1] for seed in range(200)}
+    assert drawn <= pool, sorted(drawn - pool)
 
 
 def test_ukrainian_persona_carries_a_valid_rnokpp():

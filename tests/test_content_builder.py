@@ -14,12 +14,14 @@ from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
+from faker import Faker
 
 from receipt_synth import config
 from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.config import (
     acquirers,
     category,
+    high_frequency_surnames,
     jurisdiction,
     load_generation,
     load_policy,
@@ -36,6 +38,7 @@ from receipt_synth.content_builder import (
     is_valid_edrpou,
     is_valid_rnokpp,
     legal_name,
+    personal_surname,
     resolve_vendor,
     sellable_kinds,
     sole_trader_name,
@@ -265,6 +268,39 @@ def test_a_sole_trader_name_is_drawn_in_the_printed_form():
     for seed in range(30):
         name = sole_trader_name(random.Random(seed), "UA")
         assert SOLE_TRADER_NAME.fullmatch(name), name
+
+
+def test_a_drawn_surname_comes_from_the_narrowed_pool_and_not_from_faker():
+    """🔴 The positive test for the path taken, not the absence of a symptom.
+
+    `personal_surname` falls back to Faker where a language declares no pool, and a fallback
+    that silently swallowed the Ukrainian pool would still produce a plausible ФОП name —
+    nothing downstream would notice. So this asserts that every surname drawn for UA is IN
+    the configured set, which the fallback cannot satisfy: Faker's uk_UA pool and this set
+    overlap only partly, and its 524 surnames include the rare ones the narrowing removed.
+
+    Asserting a specific surname is absent would be the weaker test. It would only fail to
+    find the one name it names, while this fails for any surname from outside the pool.
+    """
+    pool = set(high_frequency_surnames("uk"))
+    assert pool, "config/generation.yaml declares no Ukrainian surname pool"
+
+    drawn = {sole_trader_name(random.Random(seed), "UA").split()[0] for seed in range(300)}
+    assert drawn <= pool, sorted(drawn - pool)
+
+
+def test_the_faker_fallback_stands_for_a_language_with_no_pool():
+    """The other side of the branch, so the fallback is a tested path and not dead code.
+
+    Only `uk` declares a pool today. A jurisdiction without one must still get a surname —
+    `generate_persona` accepts PL, DE and ES — and it comes from Faker's own locale pool.
+    """
+    assert high_frequency_surnames("pl") == ()
+
+    fake = Faker("pl_PL")
+    fake.seed_instance(7)
+    surname = personal_surname(random.Random(7), fake, "PL", female=False)
+    assert surname and surname not in set(high_frequency_surnames("uk"))
 
 
 def test_drawn_sole_trader_names_are_deterministic_and_varied():
