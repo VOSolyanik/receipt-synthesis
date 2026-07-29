@@ -23,25 +23,37 @@
 # learn nothing it could use and might mistake an aspiration for a label. It therefore
 # belongs with the generator's own draw inputs, which is this file.
 #
-# CLEAN ROOM, on three axes. No name here comes from any private source — see
-# docs/architecture.md#provenance. A real brand appears only where it verifiably makes the
-# article the template pairs it with: this repository is published, so printing "Планшет
-# Canon" would put an unverifiable claim about a named company into every copy of the
-# dataset, whatever the label says. And where no real pool can satisfy every template of a
-# kind — `hygiene` pairs one pool with a shower gel and a toothpaste, `electronics` with a
-# tablet and a camera — the names are invented instead.
+# CLEAN ROOM. No name here comes from any private source — see
+# docs/architecture.md#provenance.
 #
-# THE THIRD AXIS IS THE ONE THAT IS EASY TO MISS, and it was missed once here. Inventing a
-# name does not make it invented: two names added under that word turned out to be active
-# companies in the very trade they were printed in — a skincare line, and a maker of camera
-# accessories. A plausible-sounding brand name is plausible-sounding because the space is
-# already occupied. So every invented brand below was SEARCHED against its own trade before
-# it was kept, and a name that returned a company in that trade was discarded rather than
-# argued for. What that check establishes is bounded and worth stating: it finds a brand
-# with a web presence, and it cannot prove that no small or regional one exists. It is the
-# strongest check available here, not a guarantee.
+# EVERY MARK BELOW IS A PUBLICLY KNOWN ONE, and there is no third option. A brand appears
+# only where it verifiably makes the article the template pairs it with: this repository is
+# published, so printing "Планшет Canon" would put an unverifiable claim about a named
+# company into every copy of the dataset, whatever the label says.
 #
-# Course titles, book titles, club names and session dates are invented throughout.
+# INVENTING A MARK IS NOT THE SAFE FALLBACK IT LOOKS LIKE, and this file learned it the
+# hard way. A public brand printed as a product is ordinary commerce. An invented mark that
+# turns out to belong to a real small firm is a claim about that firm — and a name invented
+# to sound plausible is plausible precisely because it is drawn from the space of real
+# firms, so the better it reads, the likelier it is already taken. Two marks added here
+# under the word "invented" turned out to be active companies in the very trade they were
+# printed in. The intuition that inventing is the more polite choice is wrong: publicness is
+# verifiable and inventedness is not. So there is no invented-mark class in this file, and
+# nothing here needs a verification note, because nothing here rests on a check that a name
+# is free.
+#
+# WHERE NO PUBLIC POOL FITS, THE KIND IS DECLARED UNPRINTABLE rather than filled with
+# something made up — see `unprintable_item_kinds` at the foot of this block. That is a
+# statement about the TEMPLATE, not about the vocabulary.
+#
+# Only the two name classes remain, and both are structurally safe rather than checked:
+#
+#   * public marks — public, so the question of whether they are free does not arise;
+#   * sole traders — never stored at all. A seeded `Faker` draw at build time makes no
+#     claim about anybody, so there is nothing to verify. See `content_builder.sole_trader_name`.
+#
+# Course titles, book titles, club names and session dates remain invented: they are works
+# and events, not marks under which a firm trades, and none of them names a company.
 #
 # DETERMINISM. Every list is a list, never a set, and every list is drawn from with the
 # seeded generator. Reordering a list changes what a given seed produces — that is expected
@@ -180,14 +192,7 @@ line_item_placeholders:
     cosmetics:
       brand: ["Nivea", "Bioderma", "La Roche-Posay", "CeraVe", "Eveline", "Green Pharm"]
       w: ["50", "75", "100", "200", "250"]
-    hygiene:
-      # INVENTED, and each name searched against this trade before it was accepted — see
-      # the clean-room note at the head of this file for why inventing alone is not enough.
-      # This kind pairs one pool with both "Гель для душу {brand}" and "Зубна паста
-      # {brand}", and no house that makes a shower gel verifiably makes a toothpaste as
-      # well, so a real pool cannot serve it without attributing a product to a company
-      # that does not make it.
-      brand: ["Свіжа Роса", "Джерельна", "Білоцвіт", "Світанок", "Первоцвіт", "Росяний Ранок"]
+    # `hygiene` has NO brand vocabulary and cannot get one — see `unprintable_item_kinds`.
     probiotic:
       # Capsule probiotics sold over the counter. BioGaia was dropped: its range is drops,
       # tablets and chewables, and the template prints capsules.
@@ -201,13 +206,7 @@ line_item_placeholders:
       brand: ["YarnArt", "Alize", "Himalaya", "Nako", "Drops"]
     hobby_class:
       n: ["4", "5", "6", "8", "10"]
-    electronics:
-      # INVENTED and searched, for the same reason as `hygiene`: one pool serves "Планшет
-      # {brand}" and "Камера {brand}", and the houses known for one are not the houses
-      # known for the other — "Планшет Canon" and "Камера Apple" were both untrue of the
-      # company named. Short Latin tech-sounding names are exactly the space real brands
-      # occupy, so every one of these was searched in this trade before it was kept.
-      brand: ["Norvex", "Krayevyd", "Lumico", "Verion", "Tavrix"]
+    # `electronics` has NO brand vocabulary and cannot get one — see `unprintable_item_kinds`.
     alcohol:
       # Ukrainian wineries with a public presence.
       brand: ["Shabo", "Koblevo", "Chateau Chizay", "Beykush"]
@@ -322,6 +321,59 @@ line_item_placeholders:
       club: ["\"Bookshelf\"", "\"Chess Tower\"", "\"Photoframe\"", "\"The Hill\""]
     instrument_rent:
       instrument: ["a guitar", "a piano", "a violin", "a drum kit", "a synthesizer"]
+
+
+# =============================================================================
+# Item kinds that cannot be printed
+# =============================================================================
+#
+# A DECLARED HOLE, not a silent one. Skipping a template for want of a vocabulary is exactly
+# what this file was written to end — so a kind that cannot be printed is named here, with
+# the reason, and the test suite checks BOTH directions: every template of every other kind
+# fills, and every kind named here genuinely cannot be filled. A stale entry hiding a kind
+# that works fails just as loudly as a missing one.
+#
+# THE CAUSE IS THE KEYING, NOT THE MARKET. A vocabulary is keyed by item kind and then by
+# placeholder name, so a draw cannot see which of the kind's templates it is filling. When
+# one kind carries templates for different articles, a mark drawn for one is printed on the
+# other, whoever makes what:
+#
+#   `Гель для душу {brand}` and `Зубна паста {brand}` — one pool, two articles;
+#   `Планшет {brand}` and `Камера {brand}` — likewise.
+#
+# Note what this reasoning deliberately does NOT rest on. "No public house makes both" would
+# be an appeal to the market, and it would be false — houses selling a toothpaste and a
+# shower gel, or a tablet and a camera, do exist. The objection stands without it: this file
+# cannot express which article a mark was chosen for.
+#
+# THE FIX IS A BRANDLESS TEMPLATE FORM — `Гель для душу 250 мл` rather than
+# `Гель для душу {brand}` — which is also how Ukrainian receipts most often print such
+# lines. Templates live in config/policy.yaml, which is the label space and is not edited
+# from here, so the gap is recorded rather than closed.
+#
+# CONSEQUENCE, stated plainly because it changes the dataset: `hygiene` is one of the four
+# excluded kinds of `vitamins_nutrition`, the one category with an archetype, so the
+# non-covered vocabulary of every document drops from four kinds to three. That deepens the
+# limitation recorded as KL-02 in config/labelling-schema.yaml, and KL-02 says so.
+# `electronics` reaches no dataset today — `hobby` has no archetype.
+
+# WHY THESE CANNOT BE FILLED — a property of this file, not a claim about the market.
+# Vocabularies here are keyed by item kind and then by placeholder name, so a draw does not
+# know which of the kind's templates it is filling. When one kind carries templates for
+# different articles, a mark drawn for one is printed on the other. That is the whole of the
+# reason, it is checkable by reading the two keys, and it needs no assertion about who
+# manufactures what — an appeal to the market would be both unverifiable and, as it happens,
+# wrong: houses making a toothpaste and a shower gel, or a tablet and a camera, do exist.
+
+unprintable_item_kinds:
+  hygiene: >
+    One pool, keyed by kind, must serve both "Гель для душу {brand}" and "Зубна паста
+    {brand}" — so any mark drawn for one is also printed on the other. Needs a brandless
+    template form in policy.yaml.
+  electronics: >
+    One pool, keyed by kind, must serve both "Планшет {brand}" and "Камера {brand}" — so any
+    mark drawn for one is also printed on the other. Needs a brandless template form in
+    policy.yaml.
 
 
 # =============================================================================

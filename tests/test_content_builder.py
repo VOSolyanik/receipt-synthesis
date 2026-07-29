@@ -7,6 +7,7 @@ between two individually-correct pieces shows up.
 
 from __future__ import annotations
 
+import inspect
 import random
 import re
 from datetime import date, datetime
@@ -24,6 +25,7 @@ from receipt_synth.config import (
     load_policy,
     load_vendors,
     price_range,
+    unprintable_item_kinds,
     vendor_profile,
 )
 from receipt_synth.content_builder import (
@@ -34,7 +36,9 @@ from receipt_synth.content_builder import (
     is_valid_edrpou,
     is_valid_rnokpp,
     legal_name,
+    resolve_vendor,
     sellable_kinds,
+    sole_trader_name,
     validate_amount_in_words,
     validate_line_item_sum,
     validate_vat_letter,
@@ -45,11 +49,20 @@ from receipt_synth.schemas import Capture, DocType, Verdict
 
 ISSUED_AT = datetime(2026, 8, 3, 14, 22, 51)
 VENDOR = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy"}
-SOLE_TRADER = {"name": "Ковальчук О. С.", "legal_form": "FOP", "profile": "nutrition_practice"}
+# Sole-trader names are drawn, never written down — so the fixtures resolve one instead of
+# stating it, exactly as the assembler does when it picks a vendor for a claim.
+SOLE_TRADER = resolve_vendor(
+    random.Random(11), {"legal_form": "FOP", "profile": "nutrition_practice"}, "UA"
+)
 # A profile that sells nothing its category excludes. `private_tutor` is one on purpose —
 # a tutor sells lessons and no goods — and it is the residual leak recorded under
 # `known_limitations` in config/labelling-schema.yaml.
-COVERED_ONLY = {"name": "Дорошенко І. М.", "legal_form": "FOP", "profile": "private_tutor"}
+COVERED_ONLY = resolve_vendor(
+    random.Random(12), {"legal_form": "FOP", "profile": "private_tutor"}, "UA"
+)
+
+# ФОП Прізвище І. П. — surname, then two initials, as a Ukrainian document prints it.
+SOLE_TRADER_NAME = re.compile(r"[А-ЯЇІЄҐ][а-яїієґ'’\-]+ [А-ЯЇІЄҐ]\. [А-ЯЇІЄҐ]\.")
 
 
 def build(seed: int, vendor: dict = VENDOR, **kwargs):
@@ -106,7 +119,8 @@ def test_a_sole_trader_prints_a_rnokpp_and_no_quotes(seed):
 
     assert receipt.seller.tax_code_label == "ІПН"
     assert is_valid_rnokpp(receipt.seller.tax_code)
-    assert legal_name(receipt.seller) == "ФОП Ковальчук О. С."
+    assert legal_name(receipt.seller) == f"ФОП {SOLE_TRADER['name']}"
+    assert SOLE_TRADER_NAME.fullmatch(SOLE_TRADER["name"]), SOLE_TRADER["name"]
     assert legal_name(build(seed).seller) == "ТОВ «Аптека АНЦ»"
 
 
@@ -243,6 +257,103 @@ def test_a_basket_can_be_sized_up_to_the_cap():
     assert len({item.name for item in receipt.line_items}) == MAX_LINE_ITEMS
 
 
+# ----------------------------------------------------- sole-trader identity --
+
+
+def test_a_sole_trader_name_is_drawn_in_the_printed_form():
+    """Surname plus two initials, which is how a Ukrainian document prints a ФОП."""
+    for seed in range(30):
+        name = sole_trader_name(random.Random(seed), "UA")
+        assert SOLE_TRADER_NAME.fullmatch(name), name
+
+
+def test_drawn_sole_trader_names_are_deterministic_and_varied():
+    """Deterministic, or a seed stops reproducing a run. Varied, or the draw has replaced a
+    stored constant with a computed one."""
+    assert sole_trader_name(random.Random(5), "UA") == sole_trader_name(random.Random(5), "UA")
+    assert len({sole_trader_name(random.Random(s), "UA") for s in range(40)}) > 30
+
+
+def test_a_sole_trader_name_is_drawn_once_per_vendor_instance_and_carried():
+    """🔴 The constraint that lost its guarantee when the name stopped being a constant.
+
+    Two documents of one claim are issued by one seller, so they must print one name. While
+    the name was a stored string this held by the nature of the type — a constant cannot
+    differ from itself — and nothing had to enforce it or test it. A drawn name can differ,
+    and the requirement did not change, so the guarantee has to be built and checked.
+
+    The vendor instance is resolved ONCE by the assembler when it picks a vendor for the
+    claim, and carried into every document; here the same instance is asked for two receipts
+    with different generators, which is what a second document of the claim would do.
+    """
+    vendor = resolve_vendor(random.Random(3), {"legal_form": "FOP", "profile": "pharmacy"}, "UA")
+
+    first = build(1, vendor=vendor)
+    second = build(2, vendor=vendor)
+
+    assert first.seller.name == second.seller.name
+    assert first.receipt_number != second.receipt_number, "otherwise this proves nothing"
+    truths = [
+        r.ground_truth(doc_id=f"d{i}", source_file=f"d{i}.png",
+                       capture=Capture.SCREENSHOT, field_bboxes={})
+        for i, r in enumerate((first, second))
+    ]
+    assert truths[0].counterparty == truths[1].counterparty
+
+
+def test_the_document_builder_cannot_choose_a_vendor_of_its_own():
+    """The other half of the constraint, and the half a unit test cannot reach by building.
+
+    A claim yields one document today, so no test can catch a per-document redraw by
+    comparing two of them through the assembler — the second document does not exist yet.
+    What can be stated now is that `_build_document` is unable to pick a vendor at all: it
+    takes one, and `_pick_vendor` is not in its code. Whoever adds the second document is
+    then forced to decide where the vendor comes from instead of getting a fresh one by
+    default, which is exactly how this guarantee was lost the first time.
+    """
+    from receipt_synth import assembler
+
+    assert "vendor" in inspect.signature(assembler._build_document).parameters
+    assert "_pick_vendor" not in assembler._build_document.__code__.co_names
+
+
+def test_resolving_a_vendor_twice_is_what_would_break_it():
+    """The failure the constraint above guards against, shown rather than described: resolve
+    the same entry twice and the two names differ. That is why the resolve happens where the
+    vendor is chosen and not where a document is built."""
+    entry = {"legal_form": "FOP", "profile": "pharmacy"}
+    names = {resolve_vendor(random.Random(s), dict(entry), "UA")["name"] for s in range(10)}
+    assert len(names) > 1
+
+
+def test_a_firm_keeps_the_name_it_states():
+    """Only entries without a name are drawn for. A ТОВ trades under a mark, and resolving
+    it must not overwrite it."""
+    assert resolve_vendor(random.Random(1), VENDOR, "UA") == VENDOR
+
+
+def test_a_nameless_entry_that_is_not_a_person_is_refused():
+    """Absence of a name means "trades under a person's name". A limited company with no
+    name is a hole in the catalogue, not an instruction to invent a person."""
+    with pytest.raises(ValueError, match="trades under a mark"):
+        resolve_vendor(random.Random(1), {"legal_form": "TOV", "profile": "pharmacy"}, "UA")
+
+
+def test_no_personal_name_is_stored_in_the_vendor_catalogue():
+    """The liability this replaced. A stored invented personal name is an unverified claim
+    that no real person trades under it, and it has to be re-checked as the world changes;
+    a drawn one makes no claim at all. `EK` is excluded: a German registered sole merchant
+    may trade under a business designation, so for that form a stated name is legitimate.
+    """
+    drawn_forms = {"FOP", "JDG", "AUTONOMO"}
+    stored = [
+        f"{country}/{category_id}: {vendor['name']}"
+        for country, category_id, vendor in every_vendor()
+        if vendor["legal_form"] in drawn_forms and "name" in vendor
+    ]
+    assert not stored, f"sole-trader names must be drawn, not written down: {stored}"
+
+
 # ------------------------------------------------------- vocabulary coverage --
 
 
@@ -256,6 +367,14 @@ def every_template():
                         yield spec["id"], bucket, kind, language, template
 
 
+def fills(template: str, kind: str, language: str) -> bool:
+    try:
+        _fill_placeholders(template, kind, random.Random(0), language)
+    except KeyError:
+        return False
+    return True
+
+
 def test_every_name_template_in_the_policy_can_be_filled():
     """The gate that stops the vocabulary narrowing again.
 
@@ -264,15 +383,55 @@ def test_every_name_template_in_the_policy_can_be_filled():
     with nothing anywhere saying which subset. Filling every template is now the invariant,
     and a new template naming a new placeholder fails here rather than at generation time
     on a machine nobody is watching.
-    """
-    unfillable = []
-    for category_id, bucket, kind, language, template in every_template():
-        try:
-            _fill_placeholders(template, kind, random.Random(0), language)
-        except KeyError as exc:
-            unfillable.append(f"{category_id}.{bucket}.{kind}[{language}]: {exc}")
 
+    The exception is enumerated, not open: `unprintable_item_kinds` in generation.yaml names
+    the kinds that cannot be filled and why, and the test below holds that list to being
+    true. A kind may therefore be absent from the dataset, but never quietly.
+    """
+    declared = unprintable_item_kinds()
+    unfillable = [
+        f"{category_id}.{bucket}.{kind}[{language}]: {template}"
+        for category_id, bucket, kind, language, template in every_template()
+        if kind not in declared and not fills(template, kind, language)
+    ]
     assert not unfillable, "\n".join(unfillable)
+
+
+def test_every_kind_declared_unprintable_really_cannot_be_printed():
+    """The other direction, and the one that stops the declaration becoming a dumping
+    ground. An entry that has quietly become printable — because somebody filled its
+    vocabulary — would go on excluding a kind from every dataset for a reason that no longer
+    holds, and the exclusion would look deliberate. Each entry must also carry its reason,
+    because a bare list of kinds records what was done and not why."""
+    reasons = load_generation()["unprintable_item_kinds"]
+    templates: dict[str, list[str]] = {}
+    for _, _, kind, language, template in every_template():
+        if language == "uk":
+            templates.setdefault(kind, []).append(template)
+
+    for kind, reason in reasons.items():
+        assert kind in templates, f"{kind!r} declared unprintable, but policy.yaml has no such kind"
+        assert len(reason.split()) > 5, f"{kind!r} is declared unprintable with no reason"
+        assert not all(fills(t, kind, "uk") for t in templates[kind]), (
+            f"{kind!r} is declared unprintable but every template of it now fills — remove "
+            "it from unprintable_item_kinds in config/generation.yaml"
+        )
+
+
+def test_an_unprintable_kind_is_never_offered_to_a_draw():
+    """Declaring a kind unprintable and then drawing it would raise mid-run. The filter is
+    in `sellable_kinds`, so it holds for every bucket and every vendor at once."""
+    declared = unprintable_item_kinds()
+    assert declared, "this test asserts nothing if nothing is declared"
+
+    for spec in load_policy()["categories"]:
+        for bucket in ("covered_items", "excluded_items"):
+            for country, category_id, vendor in every_vendor():
+                if category_id != spec["id"]:
+                    continue
+                resolved = vendor if "name" in vendor else {**vendor, "name": "x"}
+                offered = set(sellable_kinds(spec[bucket], resolved))
+                assert not offered & declared, f"{country}/{category_id}: {offered & declared}"
 
 
 def test_a_placeholder_with_no_vocabulary_fails_loudly():
@@ -284,7 +443,10 @@ def test_a_placeholder_with_no_vocabulary_fails_loudly():
 
 
 def test_a_filled_name_carries_no_leftover_brace():
+    declared = unprintable_item_kinds()
     for _, _, kind, language, template in every_template():
+        if kind in declared:
+            continue
         name = _fill_placeholders(template, kind, random.Random(1), language)
         assert "{" not in name and "}" not in name, name
 
@@ -552,9 +714,14 @@ def test_every_covered_kind_can_appear_on_a_partially_covered_document():
     Stated over profiles rather than over vendors because it is a property of the affinity
     data. Whether a given jurisdiction has a vendor with that profile is a separate
     question, asked below for the jurisdictions that can actually generate.
+
+    Kinds declared unprintable are removed from the profiles first: a seller whose only
+    excluded article cannot be printed is a covered-only seller in practice, and counting it
+    as mixed-capable would hide the leak behind a line that never appears.
     """
+    declared = unprintable_item_kinds()
     profiles = {
-        slug: set(kinds)
+        slug: set(kinds) - declared
         for slug, kinds in load_vendors()["vendor_profiles"].items()
         if not slug.startswith("$")
     }

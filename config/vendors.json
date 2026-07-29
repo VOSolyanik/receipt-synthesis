@@ -91,7 +91,8 @@
 
   "vendors": {
     "$note": "Category keys must match the category ids in config/policy.yaml. `name` is the bare name; the legal form is prefixed at render time — a ТОВ prints ТОВ «Name», a ФОП prints ФОП Surname I. B. without quotes, because a sole trader's name is a person's name and not a firm's. Naming patterns are covered on purpose: legal entity vs sole trader, Cyrillic vs Latin vs mixed, chain vs single outlet.",
-    "$note_ua_provenance": "Public chains named here: Аптека АНЦ, Подорожник, Бажаємо здоров'я, Аптека D.S., Аптека 911, Green Forest, Speak Up, Prometheus, Hillel IT School, Beetroot Academy, Книгарня Є, IT Arena, Rozetka, Prom.ua, Sport Life, 5 елемент, FitCurves, Treatfield, ARX, УНІКА, ІНГО, ТАС, Універсальна, Княжа. Everything else in the UA lists is invented, including every ФОП. A public name is used only for a trade the company is publicly in — the same rule the brand vocabulary in config/generation.yaml follows.",
+    "$note_names": "AN ENTRY WITH NO `name` TRADES UNDER A PERSON'S NAME, AND THAT NAME IS DRAWN, NEVER STORED. `content_builder.resolve_vendor` fills it with a seeded Faker draw in the jurisdiction's locale, once per vendor instance, when the vendor is chosen for a claim — every document of that claim then names the same seller. A stored list of invented personal names would be a standing liability instead: each entry is an unverified claim that no real person trades under it, and it has to be re-checked as the world changes. A seeded draw makes no claim at all, so there is nothing to verify and nothing to re-check. Entries that DO state a name are firms trading under a mark; absence is the signal rather than the legal form, because a German EK may trade under either. Several entries in one category are identical once the name is gone — that is not duplication, it is how many independent sole traders of that profile the draw may pick from, and it keeps their share against the named firms beside them.",
+    "$note_ua_provenance": "Public chains named here: Аптека АНЦ, Подорожник, Бажаємо здоров'я, Аптека D.S., Аптека 911, Green Forest, Speak Up, Prometheus, Hillel IT School, Beetroot Academy, Книгарня Є, IT Arena, Rozetka, Prom.ua, Sport Life, 5 елемент, FitCurves, Treatfield, ARX, УНІКА, ІНГО, ТАС, Універсальна, Княжа. A public name is used only for a trade the company is publicly in — the same rule the brand vocabulary in config/generation.yaml follows. No ФОП is named here at all any more; those names are drawn, see `$note_names`. The remaining named entries are invented legal-entity names, which are a class of their own and carry no verification claim in this file — settling how they are assured is recorded as its own step.",
 
     "UA": {
       "medical_insurance": [
@@ -107,8 +108,8 @@
         { "name": "Speak Up",         "legal_form": "TOV", "profile": "language_school" },
         { "name": "Контекст",         "legal_form": "TOV", "profile": "language_school" },
         { "name": "Kyiv Exam Centre", "legal_form": "TOV", "profile": "exam_centre" },
-        { "name": "Дорошенко І. М.",  "legal_form": "FOP", "profile": "private_tutor" },
-        { "name": "Левчук А. В.",     "legal_form": "FOP", "profile": "private_tutor" }
+        { "legal_form": "FOP", "profile": "private_tutor" },
+        { "legal_form": "FOP", "profile": "private_tutor" }
       ],
       "professional_development": [
         { "name": "Prometheus",       "legal_form": "TOV", "profile": "online_learning_platform" },
@@ -116,7 +117,7 @@
         { "name": "Beetroot Academy", "legal_form": "TOV", "profile": "training_centre" },
         { "name": "Книгарня Є",       "legal_form": "TOV", "profile": "bookstore" },
         { "name": "IT Arena",         "legal_form": "TOV", "profile": "conference_organizer" },
-        { "name": "Бондаренко С. О.", "legal_form": "FOP", "profile": "training_centre" },
+        { "legal_form": "FOP", "profile": "training_centre" },
         { "name": "Rozetka",          "legal_form": "TOV", "profile": "general_retailer" },
         { "name": "Prom.ua",          "legal_form": "TOV", "profile": "general_retailer" }
       ],
@@ -125,14 +126,14 @@
         { "name": "5 елемент",      "legal_form": "TOV", "profile": "pool" },
         { "name": "FitCurves",      "legal_form": "TOV", "profile": "fitness_studio" },
         { "name": "Простір",        "legal_form": "TOV", "profile": "fitness_studio" },
-        { "name": "Марченко Д. В.", "legal_form": "FOP", "profile": "fitness_studio" }
+        { "legal_form": "FOP", "profile": "fitness_studio" }
       ],
       "mental_health": [
         { "name": "Treatfield",     "legal_form": "TOV", "profile": "mental_health_clinic" },
         { "name": "Опора",          "legal_form": "TOV", "profile": "mental_health_clinic" },
-        { "name": "Гнатюк О. П.",   "legal_form": "FOP", "profile": "therapy_practice" },
-        { "name": "Савчук М. І.",   "legal_form": "FOP", "profile": "therapy_practice" },
-        { "name": "Тимченко В. А.", "legal_form": "FOP", "profile": "therapy_practice" }
+        { "legal_form": "FOP", "profile": "therapy_practice" },
+        { "legal_form": "FOP", "profile": "therapy_practice" },
+        { "legal_form": "FOP", "profile": "therapy_practice" }
       ],
       "vitamins_nutrition": [
         { "name": "Аптека АНЦ",        "legal_form": "TOV", "profile": "pharmacy" },
@@ -141,8 +142,8 @@
         { "name": "Аптека D.S.",       "legal_form": "TOV", "profile": "pharmacy" },
         { "name": "Аптека 911",        "legal_form": "TOV", "profile": "pharmacy" },
         { "name": "Vitamin Shop",      "legal_form": "TOV", "profile": "supplement_shop" },
-        { "name": "Ковальчук О. С.",   "legal_form": "FOP", "profile": "nutrition_practice" },
-        { "name": "Гриценко Н. В.",    "legal_form": "FOP", "profile": "nutrition_practice" }
+        { "legal_form": "FOP", "profile": "nutrition_practice" },
+        { "legal_form": "FOP", "profile": "nutrition_practice" }
       ],
       "hobby": [
         { "name": "Kreativ Studio",   "legal_form": "TOV", "profile": "art_studio" },
@@ -150,11 +151,11 @@
         { "name": "Ключ",             "legal_form": "TOV", "profile": "music_school" },
         { "name": "Хід",              "legal_form": "TOV", "profile": "hobby_club" },
         { "name": "Ракурс",           "legal_form": "TOV", "profile": "photo_school" },
-        { "name": "Остапенко Л. В.",  "legal_form": "FOP", "profile": "art_studio" }
+        { "legal_form": "FOP", "profile": "art_studio" }
       ]
     },
 
-    "$note_non_ua": "PL / DE / ES are SEEDED, not filled. No non-UA archetype is registered and the price ranges in config/generation.yaml are UAH-only, so nothing renders from these lists yet; they carry enough entries to keep the structure honest and to be extended when the first non-UA template lands. Public brands below: PZU, Warta, Allianz, Speak Up, Empik, Devoxx Poland, Benefit Systems, Zdrofit, CityFit, Apteka Gemini, DOZ Apteka, AXA, Debeka, Goethe-Institut, Thalia, McFit, FitX, DocMorris, Sanitas, Adeslas, Mapfre, Casa del Libro, Codemotion, Basic-Fit, Metropolitan. Everything else is invented.",
+    "$note_non_ua": "PL / DE / ES are SEEDED, not filled. No non-UA archetype is registered and the price ranges in config/generation.yaml are UAH-only, so nothing renders from these lists yet; they carry enough entries to keep the structure honest and to be extended when the first non-UA template lands. Public brands below: PZU, Warta, Allianz, Speak Up, Empik, Devoxx Poland, Benefit Systems, Zdrofit, CityFit, Apteka Gemini, DOZ Apteka, AXA, Debeka, Goethe-Institut, Thalia, McFit, FitX, DocMorris, Sanitas, Adeslas, Mapfre, Casa del Libro, Codemotion, Basic-Fit, Metropolitan. The JDG, EK and AUTONOMO entries that stated a personal name no longer do: those names are drawn like the Ukrainian ones. Everything else still named is an invented legal-entity name.",
 
     "PL": {
       "medical_insurance": [
@@ -165,7 +166,7 @@
       "language_courses": [
         { "name": "Speak Up",       "legal_form": "SP_ZOO", "profile": "language_school" },
         { "name": "Kontekst",       "legal_form": "SP_ZOO", "profile": "language_school" },
-        { "name": "Anna Zielinska", "legal_form": "JDG",    "profile": "private_tutor" }
+        { "legal_form": "JDG",    "profile": "private_tutor" }
       ],
       "professional_development": [
         { "name": "Akademia IT Krakow", "legal_form": "SP_ZOO", "profile": "training_centre" },
@@ -180,12 +181,12 @@
       "mental_health": [
         { "name": "Centrum Terapii Spokoj", "legal_form": "SP_ZOO", "profile": "mental_health_clinic" },
         { "name": "Poradnia Nurt",          "legal_form": "SP_ZOO", "profile": "mental_health_clinic" },
-        { "name": "Marta Wojcik",           "legal_form": "JDG",    "profile": "therapy_practice" }
+        { "legal_form": "JDG",    "profile": "therapy_practice" }
       ],
       "vitamins_nutrition": [
         { "name": "Apteka Gemini", "legal_form": "SP_ZOO", "profile": "pharmacy" },
         { "name": "DOZ Apteka",    "legal_form": "SP_ZOO", "profile": "pharmacy" },
-        { "name": "Piotr Nowicki", "legal_form": "JDG",    "profile": "nutrition_practice" }
+        { "legal_form": "JDG",    "profile": "nutrition_practice" }
       ],
       "hobby": [
         { "name": "Pracownia Ceramiki Glina", "legal_form": "SP_ZOO", "profile": "art_studio" },
@@ -203,7 +204,7 @@
       "language_courses": [
         { "name": "Goethe-Institut",    "legal_form": "EV",   "profile": "language_school" },
         { "name": "Sprachschule Bruecke", "legal_form": "GMBH", "profile": "language_school" },
-        { "name": "Anja Hoffmann",      "legal_form": "EK",   "profile": "private_tutor" }
+        { "legal_form": "EK",   "profile": "private_tutor" }
       ],
       "professional_development": [
         { "name": "Thalia",              "legal_form": "GMBH", "profile": "bookstore" },
@@ -218,7 +219,7 @@
       "mental_health": [
         { "name": "Zentrum fuer Psychotherapie Nord", "legal_form": "GMBH", "profile": "mental_health_clinic" },
         { "name": "Praxis Ruhe",                      "legal_form": "UG",   "profile": "therapy_practice" },
-        { "name": "Lena Vogt",                        "legal_form": "EK",   "profile": "therapy_practice" }
+        { "legal_form": "EK",   "profile": "therapy_practice" }
       ],
       "vitamins_nutrition": [
         { "name": "Apotheke am Markt", "legal_form": "EK",   "profile": "pharmacy" },
@@ -241,7 +242,7 @@
       "language_courses": [
         { "name": "Escuela de Idiomas Puente", "legal_form": "SL",        "profile": "language_school" },
         { "name": "Centro de Examenes Madrid", "legal_form": "SL",        "profile": "exam_centre" },
-        { "name": "Lucia Fernandez",           "legal_form": "AUTONOMO",  "profile": "private_tutor" }
+        { "legal_form": "AUTONOMO",  "profile": "private_tutor" }
       ],
       "professional_development": [
         { "name": "Casa del Libro",         "legal_form": "SA", "profile": "bookstore" },
@@ -256,7 +257,7 @@
       "mental_health": [
         { "name": "Centro Psicologico Calma", "legal_form": "SL",       "profile": "mental_health_clinic" },
         { "name": "Instituto de Terapia Norte", "legal_form": "SL",     "profile": "mental_health_clinic" },
-        { "name": "Marta Ruiz",               "legal_form": "AUTONOMO", "profile": "therapy_practice" }
+        { "legal_form": "AUTONOMO", "profile": "therapy_practice" }
       ],
       "vitamins_nutrition": [
         { "name": "Farmacia Central", "legal_form": "SL", "profile": "pharmacy" },

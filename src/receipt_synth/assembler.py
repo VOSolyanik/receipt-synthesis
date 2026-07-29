@@ -28,7 +28,11 @@ from receipt_synth.claim_planner import (
     why_no_claim,
 )
 from receipt_synth.config import load_vendors
-from receipt_synth.content_builder import build_prro_receipt, vendor_can_carry
+from receipt_synth.content_builder import (
+    build_prro_receipt,
+    resolve_vendor,
+    vendor_can_carry,
+)
 from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
@@ -122,6 +126,11 @@ def _pick_vendor(
     nutrition practice sells consultations and lab tests and nothing else. Choosing one of
     those for a mixed plan would fail inside the builder, one stage away from the choice
     that caused it. The filter preserves file order, so the draw stays reproducible.
+
+    Returns a RESOLVED vendor: a sole trader's name is drawn here, once, and the same
+    instance is then carried to every document of the claim. Called from the claim loop and
+    never from `_build_document`, because a per-document call would redraw the name and put
+    two different sellers on two documents of one purchase.
     """
     vendors = load_vendors()["vendors"][country.value].get(category, [])
     if not vendors:
@@ -134,7 +143,7 @@ def _pick_vendor(
             f"{'mixed' if mixed else 'fully covered'} basket needs — check the profiles in "
             "config/vendors.json against the item buckets of config/policy.yaml"
         )
-    return rng.choice(candidates)
+    return resolve_vendor(rng, rng.choice(candidates), country.value)
 
 
 def _build_document(
@@ -142,13 +151,16 @@ def _build_document(
     *,
     persona: Persona,
     plan: ClaimPlan,
+    vendor: dict,
     doc_id: str,
     renderer: Renderer,
     out_dir: Path,
 ) -> DocGroundTruth:
-    vendor = _pick_vendor(
-        rng, persona.location.country, plan.category, mixed=plan.coverage_target is not None
-    )
+    """One document of a claim.
+
+    `vendor` is passed in rather than chosen here. It is the claim's vendor instance, and
+    every document of the claim has to name the same seller.
+    """
     receipt = build_prro_receipt(
         rng,
         category_id=plan.category,
@@ -229,10 +241,21 @@ def generate_dataset(
             for plan in plan_claims(
                 rng, persona=persona, count=claims_per_persona, ledger=ledger
             ):
+                # The claim's vendor instance, chosen once here and carried into every
+                # document of the claim. One document today; the loop that adds the second
+                # must reuse this value rather than call `_pick_vendor` again, or the two
+                # documents of one purchase will name two different sole traders.
+                vendor = _pick_vendor(
+                    rng,
+                    persona.location.country,
+                    plan.category,
+                    mixed=plan.coverage_target is not None,
+                )
                 document = _build_document(
                     rng,
                     persona=persona,
                     plan=plan,
+                    vendor=vendor,
                     doc_id=f"{plan.claim_id}_d1",
                     renderer=renderer,
                     out_dir=out_dir,

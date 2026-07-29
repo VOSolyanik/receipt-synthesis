@@ -32,6 +32,8 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from string import Formatter
 
+from faker import Faker
+
 from receipt_synth.config import (
     acquirers,
     category,
@@ -40,6 +42,7 @@ from receipt_synth.config import (
     placeholder_values,
     price_range,
     quantity_choices,
+    unprintable_item_kinds,
     vendor_profile,
 )
 from receipt_synth.schemas import Capture, DocGroundTruth, DocType, LineItem
@@ -521,6 +524,20 @@ _ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 _LEGAL_FORM_PREFIX = {"TOV": "ТОВ", "FOP": "ФОП", "PRAT": "ПрАТ"}
 _SOLE_TRADER = "FOP"
 
+# Jurisdictions that print a sole trader as surname plus initials — "Ковальчук О. С." —
+# rather than as a full name.
+#
+# Legal forms whose holder trades under a natural person's name, so that no name is stored
+# for them and one is drawn per vendor instance. A German `EK` is deliberately absent: it is
+# a registered sole merchant who may equally trade under a business designation, so for that
+# form the presence or absence of a stored name is what decides, not the form itself.
+#
+# Both belong beside `_LEGAL_FORM_PREFIX` above: all three are jurisdiction rules living in
+# code, and they move out together when the non-UA templates land. Kept adjacent so the set
+# is found at once rather than one member at a time.
+_SURNAME_AND_INITIALS = frozenset({"UA"})
+_PERSONAL_NAME_FORMS = frozenset({"FOP", "JDG", "EK", "AUTONOMO"})
+
 # The longest receipt this builder will print. A cap rather than a preference: the planner
 # sizes a basket upward when it needs one large enough to overrun an annual limit, and
 # without a bound a large enough remaining balance would ask for a receipt no shop issues.
@@ -556,18 +573,90 @@ def _fill_placeholders(
 
 
 def sellable_kinds(catalogue: dict, vendor: dict) -> list[str]:
-    """The item kinds of a bucket that this vendor actually sells.
+    """The item kinds of a bucket that this vendor sells AND this generator can print.
 
-    A pharmacy does not sell "Складання плану харчування", and until the affinity existed
-    nothing stopped it from printing one. The affinity is vendor data — a property of the
-    trade, declared per profile in `config/vendors.json` — so this function only intersects
-    it with the bucket and never decides what a shop stocks.
+    Two filters, and they answer different questions. A pharmacy does not sell "Складання
+    плану харчування": that is affinity, vendor data, declared per profile in
+    `config/vendors.json`, and this function only intersects it with the bucket rather than
+    deciding what a shop stocks. A pharmacy does sell shower gel, and this generator still
+    cannot print one, because the template asks for a brand and no publicly known house
+    makes both articles the kind's templates name: that is `unprintable_item_kinds` in
+    `config/generation.yaml`, a declared and tested hole rather than a silent skip.
 
     Sorted, because the result is drawn from: iterating the profile's own set would order
     the draws by a hash that varies between interpreter runs.
     """
     sells = vendor_profile(vendor["profile"])
-    return sorted(kind for kind in catalogue if kind in sells)
+    unprintable = unprintable_item_kinds()
+    return sorted(kind for kind in catalogue if kind in sells and kind not in unprintable)
+
+
+def _faker_locale(country: str) -> str:
+    """The Faker locale of a jurisdiction, e.g. ``UA -> uk_UA``.
+
+    Composed rather than tabulated: a Faker locale identifier is ``language_COUNTRY``, and
+    both halves are already in fiscal-rules.yaml — the block's own key and its `language`.
+    A second table would be the same two facts written down again, and the copy is the one
+    that goes stale.
+    """
+    return f"{jurisdiction(country)['language']}_{country}"
+
+
+def sole_trader_name(rng: random.Random, country: str = "UA") -> str:
+    """The printed name of a sole trader — drawn, never stored.
+
+    A curated list of invented personal names is a standing liability: every entry is an
+    unverified claim that no real person trades under that name, and it has to be
+    re-checked as the world changes. A seeded draw makes no claim at all, which is why this
+    is a function and not a column in `config/vendors.json`.
+
+    Ukrainian documents print a sole trader as surname plus initials — ``Ковальчук О. С.`` —
+    which is both the convention and what a receipt shows; elsewhere the full name is
+    printed. That branch is jurisdiction law living in code, like `_LEGAL_FORM_PREFIX`, and
+    the two move out together.
+    """
+    # Faker carries its own generator, so it is seeded from ours rather than left to start
+    # from a clock — the same arrangement `persona_generator` uses.
+    fake = Faker(_faker_locale(country))
+    fake.seed_instance(rng.getrandbits(64))
+
+    female = rng.random() < 0.5
+    first = fake.first_name_female() if female else fake.first_name_male()
+    last = fake.last_name_female() if female else fake.last_name_male()
+    if country not in _SURNAME_AND_INITIALS:
+        return f"{first} {last}"
+
+    # По батькові — the patronymic, the second initial on a Ukrainian document.
+    middle = fake.middle_name_female() if female else fake.middle_name_male()
+    return f"{last} {first[0]}. {middle[0]}."
+
+
+def resolve_vendor(rng: random.Random, vendor: dict, country: str = "UA") -> dict:
+    """A vendor entry with its printed name settled, ready to be carried.
+
+    An entry that STATES a name keeps it — that is a firm trading under a mark. An entry
+    with NO name is one that trades under a natural person's, and the name is drawn here.
+    Absence is the signal rather than the legal form, because the two do not coincide: a
+    German `EK` is a registered sole merchant who may trade under a business designation
+    ("Sonnen-Apotheke e.K.") just as readily as under their own name.
+
+    Called ONCE per vendor instance — when the vendor is chosen for a claim — and the result
+    is passed to every document of that claim. That ordering is the whole design: a personal
+    name is now a draw rather than a constant, and a draw repeated per document would print
+    two different sellers on two documents of one purchase. The constraint is older than the
+    draw; what changed is that the type no longer enforces it, since a constant string could
+    not differ from itself and a drawn one can.
+    """
+    if "name" in vendor:
+        return vendor
+    if vendor["legal_form"] not in _PERSONAL_NAME_FORMS:
+        raise ValueError(
+            f"vendor entry {vendor!r} states no name, but {vendor['legal_form']!r} is a "
+            "legal form that trades under a mark rather than under a person's name. Only "
+            f"{sorted(_PERSONAL_NAME_FORMS)} have their name drawn; everything else states "
+            "one in config/vendors.json."
+        )
+    return {**vendor, "name": sole_trader_name(rng, country)}
 
 
 def vendor_can_carry(vendor: dict, category_id: str, *, mixed: bool) -> bool:

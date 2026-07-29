@@ -112,6 +112,20 @@ def placeholder_values(item_kind: str, name: str, language: str) -> tuple[str, .
 
 
 @cache
+def unprintable_item_kinds() -> frozenset[str]:
+    """Item kinds config/generation.yaml declares it cannot print, and why — see the block
+    of that name for the reasons.
+
+    A DECLARED hole rather than a silent one. Skipping a template because nobody filled its
+    vocabulary is what the loud failure in `placeholder_values` exists to stop; this is the
+    opposite — an enumerated, tested statement that a kind cannot be printed, with the cause
+    written down. The test suite checks both directions, so an entry that has quietly become
+    printable fails as loudly as a kind that is missing one.
+    """
+    return frozenset(load_generation().get("unprintable_item_kinds", {}))
+
+
+@cache
 def price_range(item_kind: str) -> tuple[Decimal, Decimal]:
     """The inclusive retail price range of an item kind, in whole currency units.
 
