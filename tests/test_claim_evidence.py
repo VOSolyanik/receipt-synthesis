@@ -211,6 +211,41 @@ def test_adding_the_payment_to_the_invoice_would_double_the_claim():
     assert result.reimbursable * 2 == naive_sum
 
 
+def test_a_payment_document_carrying_lines_does_not_double_the_claim():
+    """Decision A's guard, pinned on an input the design does not admit.
+
+    Taking the lines from `subject_documents` rather than from every document is what keeps
+    a payment document's lines out of the claim's amount — and NO set of documents this
+    generator can build exercises it. The types that prove payment without proving the
+    subject are `payment_confirmation` and `bank_statement`: the statement is refused
+    outright by `resolve_evidence`, and the confirmation carries no line items, which the
+    requirements state and the labelling contract records. A `fiscal_receipt` proves both
+    facts, so in a self-contained claim `subject_documents` and `documents` are the same
+    tuple. Every remaining mixture is refused. The branch is therefore unreachable BY
+    CONSTRUCTION, not merely unexercised today.
+
+    Which is why it is asserted here on a hand-built record instead of being waited for, the
+    same way `test_a_verdict_the_planner_cannot_draw_is_still_given_a_row` asserts a report
+    row nothing yet emits. The alternative was a comment saying the branch is defence in
+    depth, and a comment does not go red when someone deletes what it describes — this file
+    exists partly because that failure mode has already cost this project a day.
+
+        invoice d1  1 x 1200.00 covered, lines total 1200.00
+        payment d2  amount 1200.00, AND lines of its own worth 1200.00
+        claim       total 1200.00, reimbursable 1200.00 — never 2400.00
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")])
+    payment = doc(
+        "c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00", items=[item("1200.00")]
+    )
+
+    result = evaluate([invoice, payment])
+
+    assert result.reimbursable == Decimal("1200.00")
+    assert result.covered_fraction == Decimal(1)
+    assert result.verdict is Verdict.COVERED
+
+
 def test_two_fiscal_receipts_are_two_transactions_and_the_money_does_add():
     """The other side of A. Each fiscal receipt proves its own payment, so they are two
     movements of money and summing them is right.
@@ -826,7 +861,14 @@ def test_the_vendor_is_chosen_once_per_claim_however_many_documents_it_has(tmp_p
 
 def test_document_ids_are_numbered_from_the_plan_and_not_fixed_at_one(tmp_path):
     """Inventory item 6. `_d1` was hardcoded; the id now comes from the position of the
-    document in the plan, and the claim label points at exactly the documents written."""
+    document in the plan, and the claim label points at exactly the documents written.
+
+    NOT ADDRESSABLE UNTIL A SECOND ARCHETYPE REGISTERS, and that is expected rather than a
+    weakness here. With one document per plan the expected list is `["<claim>_d1"]`, which a
+    hardcoded `_d1` also produces — so reverting the fix does not turn this red. It starts
+    discriminating the moment a plan carries two documents. Do not "strengthen" it by
+    asserting something a single-document plan can distinguish; there is nothing.
+    """
     from receipt_synth.assembler import generate_dataset
 
     result = generate_dataset(seed=20260803, out_dir=tmp_path, personas=2, claims_per_persona=3)
