@@ -256,14 +256,22 @@ not bind is not mentioned, and a claim rejected for its date says so without arg
 |---|---|
 | `covered` | Fully reimbursable |
 | `partially_covered` | Some of the amount qualifies — mixed items, or an exhausted limit |
-| `rejected` | Nothing bought is covered by the category. Decided from the line items |
-| `not_proof_of_payment` | The evidence does not establish that money changed hands. A property of the document type, not of what was bought |
+| `rejected` | Nothing bought is covered by the category |
+| `not_proof_of_payment` | The evidence does not establish that money changed hands |
 | `insufficient_evidence` | A required fact is missing entirely |
 | `partially_paid` | Payment was made in installments; only part has been paid |
 
-`rejected` and `not_proof_of_payment` answer different questions and must not be collapsed into one
-another. A pharmacy receipt listing nothing but medicines proves its payment perfectly well — it is
-`rejected`, never a failure of proof of payment.
+`rejected` and `not_proof_of_payment` are easy to merge and must not be, in either direction. They answer
+different questions, and each reads a different part of the labelling policy to answer it.
+
+**`rejected` answers what was bought.** The category covers none of it. That is decided from the line
+items, by resolving each item kind against the category's covered and excluded vocabularies, so the answer
+is visible on the document itself.
+
+**`not_proof_of_payment` answers whether money moved.** That is a property of the document *type*, read
+from `proves_payment` in the `document_evidence` block, and it has nothing to do with what was bought. A
+fiscal receipt proves its payment whatever its basket was — so a pharmacy receipt listing nothing but
+medicines is `rejected`, and is not, on any reading, a failure of proof of payment.
 
 ---
 
