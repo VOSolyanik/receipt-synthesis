@@ -28,7 +28,7 @@ from receipt_synth.claim_planner import (
     why_no_claim,
 )
 from receipt_synth.config import load_vendors
-from receipt_synth.content_builder import build_prro_receipt
+from receipt_synth.content_builder import build_prro_receipt, vendor_can_carry
 from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
@@ -112,11 +112,29 @@ def _draw_documentable_persona(
     )
 
 
-def _pick_vendor(rng: random.Random, country: Country, category: str) -> dict:
+def _pick_vendor(
+    rng: random.Random, country: Country, category: str, *, mixed: bool
+) -> dict:
+    """A vendor that can issue the receipt this plan needs.
+
+    Filtered by what the vendor sells, not only by its category. A mixed basket needs a
+    non-covered line, and honest vendors exist that sell nothing the plan excludes — a
+    nutrition practice sells consultations and lab tests and nothing else. Choosing one of
+    those for a mixed plan would fail inside the builder, one stage away from the choice
+    that caused it. The filter preserves file order, so the draw stays reproducible.
+    """
     vendors = load_vendors()["vendors"][country.value].get(category, [])
     if not vendors:
         raise ValueError(f"config/vendors.json lists no vendor for {category!r} in {country.value}")
-    return rng.choice(vendors)
+
+    candidates = [v for v in vendors if vendor_can_carry(v, category, mixed=mixed)]
+    if not candidates:
+        raise ValueError(
+            f"no vendor for {category!r} in {country.value} sells what a "
+            f"{'mixed' if mixed else 'fully covered'} basket needs — check the profiles in "
+            "config/vendors.json against the item buckets of config/policy.yaml"
+        )
+    return rng.choice(candidates)
 
 
 def _build_document(
@@ -128,7 +146,9 @@ def _build_document(
     renderer: Renderer,
     out_dir: Path,
 ) -> DocGroundTruth:
-    vendor = _pick_vendor(rng, persona.location.country, plan.category)
+    vendor = _pick_vendor(
+        rng, persona.location.country, plan.category, mixed=plan.coverage_target is not None
+    )
     receipt = build_prro_receipt(
         rng,
         category_id=plan.category,

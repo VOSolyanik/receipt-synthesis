@@ -442,26 +442,31 @@ def test_the_threshold_is_never_consulted_when_a_line_is_not_covered():
 
 
 def test_the_cheapest_real_article_is_still_absorbed_by_a_numeric_branch():
-    """Why the structural rule is not merely tidier. 90.00 is the cheapest line
-    `content_builder` can print — the low end of `mineral_supplement` — so it is a real
-    non-covered article a human would see on the paper.
+    """Why the structural rule is not merely tidier. The cheapest line the generator can
+    print is a real article a human would see on the paper — a 15 UAH pen, at the low end
+    of `stationery` in config/generation.yaml — and at that size the ratio is swallowed:
 
         covered  1000000.00
-        not covered    90.00
-        total    1000090.00
-        fraction   0.999910008…
-        full_threshold × total = 0.9999 × 1000090.00 = 999989.99100
-        1000000.00 >= 999989.99100
+        not covered    15.00
+        total    1000015.00
+        fraction   0.999985000…
+        full_threshold × total = 0.9999 × 1000015.00 = 999914.99850
+        1000000.00 >= 999914.99850
 
     A numeric branch reads that as fully covered. The rule policy.yaml states does not,
-    and this asserts the difference on `verdict_for` itself, with no ledger involved.
+    and this asserts the difference on `verdict_for` itself, with no ledger involved. The
+    price is read from config rather than restated: it is data, and pinning it here would
+    make an unrelated price edit fail this test instead of the rule it is about.
     """
-    from receipt_synth.content_builder import _PRICE_RANGE_KOPIYKAS
+    from receipt_synth.config import load_generation, price_range
 
-    cheapest = Decimal(min(low for low, _ in _PRICE_RANGE_KOPIYKAS.values())) / 100
-    assert cheapest == Decimal("90.00")
+    kinds = load_generation()["price_ranges"]["ranges"]
+    cheapest = min(price_range(kind)[0] for kind in kinds)
+    # Read from config rather than restated, so the worked example above stays an
+    # illustration and this stays an assertion about `verdict_for`.
+    assert Decimal(0) < cheapest < Decimal("100.00")
 
-    covered, total = Decimal("1000000.00"), Decimal("1000090.00")
+    covered, total = Decimal("1000000.00"), Decimal("1000000.00") + cheapest
     assert covered >= full_threshold() * total, "the numeric branch would say covered"
     assert verdict_for(covered, total, every_line_covered=True) is Verdict.COVERED
     assert verdict_for(covered, total, every_line_covered=False) is Verdict.PARTIALLY_COVERED

@@ -124,18 +124,29 @@ verdicts, currencies and languages so that skew is visible rather than discovere
 
 ## Configuration model
 
-Four files, kept apart because they have different natures and different rates of change.
+Six files, kept apart because they have different natures and different rates of change.
+`config/README.md` is the authoritative description of the model; this table is a summary of it.
 
 | File | Nature | Changes when |
 |---|---|---|
 | `config/policy.yaml` | **Policy.** What a benefit plan reimburses, up to what limit, in what period | The plan being modelled changes |
+| `config/labelling-schema.yaml` | **Contract.** What is labelled, how a value is compared, and the dataset's known limitations | A field, a type or a comparison rule changes |
 | `config/fiscal-rules.yaml` | **Law.** VAT rates and letter codes, identifier formats and checksums, receipt layout constants, fiscal QR payloads | Legislation changes |
+| `config/generation.yaml` | **Generation input.** The vocabulary that fills the placeholders of a name template, retail price ranges, basket shape, mixed-basket coverage targets | You want more variety, different prices or a different basket shape |
 | `config/fx-rates.yaml` | **Reference data.** Static exchange rates | Rarely; static on purpose, see [Determinism](#determinism) |
-| `config/vendors.json` | **Data.** Vendor, bank and payment-provider names per category and jurisdiction | You want different merchants |
+| `config/vendors.json` | **Data.** Vendor, bank and payment-provider names per category and jurisdiction, and which item kinds each sort of outlet sells | You want different merchants |
 
 `policy.yaml` is declarative rather than embedded in code for a specific reason: because generation is
 label-first, that file *is* the ground truth. Any downstream document-verification pipeline can load the same
 file and stay consistent with the labels of the dataset it was trained on.
+
+Five of the six are read by the generator. `labelling-schema.yaml` is not: it describes the output to whoever
+consumes it — field names, comparison rules, and the dataset's `known_limitations` — and adding a loader for
+it in `src/` would be inventing a caller.
+
+Nothing in `src/` carries merchandise data of its own. A name a document prints, a price it charges and a
+merchant that issued it are all read from configuration — the one thing deliberately left in code is
+`MAX_LINE_ITEMS`, which is a bound the planner needs a name for rather than a knob anyone tunes.
 
 ### The item-kind vocabulary
 
@@ -381,7 +392,10 @@ payment, or both).
 
 **A new benefit category.** Add an entry to `config/policy.yaml` with `intent`, an annual limit and the three
 item buckets — `covered_items`, `excluded_items`, `ambiguous_items` — each mapping an item kind to line-item
-name templates per language. Add vendors for it in `config/vendors.json`.
+name templates per language. Give each new item kind a price range in `config/generation.yaml`, and a
+vocabulary there for every placeholder its templates name; a placeholder with no vocabulary raises rather
+than being skipped. Add vendors for it in `config/vendors.json`, each with a profile that sells at least one
+of its covered kinds.
 
 **A new jurisdiction.** Add a block to `config/fiscal-rules.yaml`: VAT rates, VAT letter codes, identifier
 formats with their checksum algorithms, receipt layout constants and the fiscal QR payload. Add matching

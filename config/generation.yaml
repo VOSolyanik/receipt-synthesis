@@ -1,0 +1,466 @@
+# Generation inputs — the vocabulary and the distributions the draws use.
+#
+# Nothing here is a label, and nothing here is law. This file answers three questions the
+# generator has to answer before it can print a line on a document:
+#
+#   * what word goes where a name template has a placeholder — `{brand}`, `{dose}`, `{n}`;
+#   * what such an article plausibly costs, and how many of it a basket holds;
+#   * what coverage ratio a deliberately mixed basket aims at.
+#
+# WHY THIS IS NOT IN policy.yaml. `policy.yaml` is the labelling policy: it states what a
+# benefit plan reimburses, and a downstream consumer loads it to stay consistent with the
+# labels. A plan document says nothing about what a vitamin pack costs or which brands a
+# pharmacy stocks — those are properties of the merchandise, not of the plan. The item
+# kinds and the name templates stay in policy.yaml because they ARE the label space; this
+# file only fills the holes those templates leave.
+#
+# WHY THE COVERAGE TARGETS ARE HERE TOO, AND NOT WITH `verdict_mix`. They shape a label
+# distribution, which makes them a relative of `verdict_mix` rather than of a price range —
+# but they are an ASPIRATION the builder aims at, never a value that reaches a label.
+# `covered_fraction` in the ground truth is measured from the document that was actually
+# built, and `content_builder._repriced` clamps prices into each item kind's own range, so
+# the realized ratio only approaches the target. A consumer that loaded the target would
+# learn nothing it could use and might mistake an aspiration for a label. It therefore
+# belongs with the generator's own draw inputs, which is this file.
+#
+# CLEAN ROOM, on three axes. No name here comes from any private source — see
+# docs/architecture.md#provenance. A real brand appears only where it verifiably makes the
+# article the template pairs it with: this repository is published, so printing "Планшет
+# Canon" would put an unverifiable claim about a named company into every copy of the
+# dataset, whatever the label says. And where no real pool can satisfy every template of a
+# kind — `hygiene` pairs one pool with a shower gel and a toothpaste, `electronics` with a
+# tablet and a camera — the names are invented instead.
+#
+# THE THIRD AXIS IS THE ONE THAT IS EASY TO MISS, and it was missed once here. Inventing a
+# name does not make it invented: two names added under that word turned out to be active
+# companies in the very trade they were printed in — a skincare line, and a maker of camera
+# accessories. A plausible-sounding brand name is plausible-sounding because the space is
+# already occupied. So every invented brand below was SEARCHED against its own trade before
+# it was kept, and a name that returned a company in that trade was discarded rather than
+# argued for. What that check establishes is bounded and worth stating: it finds a brand
+# with a web presence, and it cannot prove that no small or regional one exists. It is the
+# strongest check available here, not a guarantee.
+#
+# Course titles, book titles, club names and session dates are invented throughout.
+#
+# DETERMINISM. Every list is a list, never a set, and every list is drawn from with the
+# seeded generator. Reordering a list changes what a given seed produces — that is expected
+# and is the reason lists are edited deliberately rather than sorted by a tool.
+
+version: 1
+
+# =============================================================================
+# Line-item placeholder vocabulary
+# =============================================================================
+#
+# The name templates in policy.yaml carry placeholders: "Вітамін D3 {dose} МО табл. №{n}".
+# This block says what may be substituted, keyed by ITEM KIND and then by placeholder name.
+#
+# Keyed by item kind because one placeholder means different things in different kinds:
+# `{brand}` on `hardware` wants a laptop maker and on `cosmetics` wants a skincare house,
+# and `{dose}` is 400–5000 IU for a vitamin but 14–45 mg for an iron tablet. A single global
+# pool per placeholder would print "Крем Dell 250 мл" and "Залізо 2000 мг".
+#
+# Lookup order for (language, item kind, placeholder):
+#   1. <language> -> <item kind> -> <placeholder>
+#   2. shared     -> <item kind> -> <placeholder>
+#   3. <language> -> default     -> <placeholder>
+#   4. shared     -> default     -> <placeholder>
+#   5. nothing found -> the builder RAISES, naming the kind, the language and the
+#      placeholder. It does not skip the template. Skipping is what this file was written
+#      to end: a template quietly dropped for want of a vocabulary narrows the printed
+#      vocabulary of the whole dataset, and nothing says so.
+#
+# `shared` holds values that read identically in every document language — numbers, doses,
+# Latin brand names, exam and certification codes. `default` holds the few placeholders
+# whose meaning does not depend on the item kind at all.
+#
+# ONE POOL SERVES EVERY TEMPLATE OF A KIND, so a brand in it has to fit all of them. That
+# is a real constraint, not a technicality: `hardware` prints a laptop, a monitor and a pair
+# of headphones from one pool, `hygiene` a shower gel and a toothpaste, `electronics` a
+# tablet and a camera. Where a real pool cannot satisfy every template, the names are
+# invented rather than paired wrongly — see the clean-room note at the head of this file.
+# Splitting such a kind would mean editing policy.yaml, which is the label space.
+
+line_item_placeholders:
+
+  # ---------------------------------------------------------------- shared --
+  shared:
+
+    default:
+      # CEFR levels and pack counts read the same in any language.
+      level: ["A1", "A2", "B1", "B2", "C1"]
+
+    # --- medical_insurance
+    insurance_premium:
+      # Invented policy numbers. Shaped like the several conventions Ukrainian insurers
+      # use, so a consumer extracting a policy number sees more than one format.
+      policy_no: ["ДМС-2026/0148", "VHI-0247-26", "МС/2026/03318", "ДМС-114520", "PA-2026-00937"]
+
+    # --- language_courses
+    language_lessons:
+      # Hours in one template, lessons in another. Kept at 5 and above: Ukrainian numerals
+      # 2–4 take a different noun form ("2 заняття", not "2 занять"), and the templates in
+      # policy.yaml spell the genitive plural.
+      n: ["8", "10", "12", "16", "20", "24"]
+    language_exam:
+      # Publicly published examinations.
+      exam: ["IELTS", "TOEFL iBT", "Cambridge B2 First", "Cambridge C1 Advanced", "Goethe-Zertifikat B1", "DELE B2"]
+    textbook:
+      # Publicly known English-language coursebook series; the titles print in Latin in
+      # a Ukrainian receipt as well.
+      title: ["English File Intermediate", "Headway Pre-Intermediate", "Outcomes Upper-Intermediate", "Speakout Elementary", "Empower B1"]
+
+    # --- professional_development
+    certification_exam:
+      # Publicly published certification programmes.
+      cert: ["AWS Certified Solutions Architect - Associate", "AZ-900", "Certified Kubernetes Administrator", "PMP", "ISTQB Foundation Level", "Professional Scrum Master I"]
+    conference_ticket:
+      # Publicly announced conference series.
+      event: ["PyCon", "DevOpsDays", "KubeCon", "JSConf", "Data Science UA", "IT Arena"]
+    hardware:
+      # One pool serves "Ноутбук {brand}", "Монітор {brand}" and "Навушники {brand}", so
+      # every brand here has to make all three. Logitech was dropped for that reason: it
+      # makes headphones and no laptops or monitors, and a receipt printing "Ноутбук
+      # Logitech" would state something untrue about a named company.
+      brand: ["Dell", "Lenovo", "HP", "ASUS", "Acer", "Samsung"]
+    travel:
+      # Nights. 5 and above for the same numeral-agreement reason as above: policy.yaml
+      # prints "{n} діб", the genitive plural.
+      n: ["5", "6", "7"]
+
+    # --- sport
+    gym_membership:
+      n: ["8", "10", "12", "16", "20"]
+    pool_membership:
+      n: ["8", "10", "12", "16", "20"]
+    group_class:
+      n: ["8", "10", "12", "16", "20"]
+    personal_training:
+      # Counted in "шт", which does not decline, so small numbers are safe here.
+      n: ["1", "2", "4", "5", "8", "10"]
+    sport_apparel:
+      brand: ["Nike", "Adidas", "Puma", "Reebok", "Under Armour", "Decathlon"]
+    sports_nutrition:
+      # The same item kind appears under `sport` (excluded) and `vitamins_nutrition`
+      # (ambiguous). One entry serves both — coverage is scoped to the category, the
+      # merchandise is not.
+      brand: ["Optimum Nutrition", "MyProtein", "BioTech USA", "Scitec Nutrition", "Olimp Sport Nutrition"]
+      w: ["500", "700", "900", "2000"]
+    food_drink:
+      # `{brand}` is used by the `sport` templates ("Батончик {brand}"); the `hobby`
+      # templates of the same kind print no brand at all.
+      brand: ["Corny", "Nature Valley", "Nutrend", "Power Pro"]
+
+    # --- mental_health
+    therapy_session:
+      n: ["1", "2"]
+    group_therapy:
+      n: ["6", "8", "10", "12"]
+
+    # --- vitamins_nutrition
+    vitamin_complex:
+      # IU for vitamin D3, mg for omega-3 — both templates live in this kind and both
+      # ranges overlap in the same numbers.
+      dose: ["400", "500", "1000", "2000", "5000"]
+      n: ["20", "30", "60", "90", "120"]
+      brand: ["Solgar", "Now Foods", "Doppelherz", "Jarrow Formulas", "Nature's Bounty", "Orzax"]
+    mineral_supplement:
+      # Elemental iron per tablet, in mg. Deliberately NOT the vitamin dose pool: the same
+      # placeholder name means a different quantity here.
+      dose: ["14", "20", "25", "28", "45"]
+      n: ["30", "50", "60", "90", "100"]
+    medicine:
+      # Milligrams per capsule, and pack sizes.
+      dose: ["100", "200", "400", "500", "850"]
+      n: ["10", "20", "30", "50", "60"]
+    medical_device:
+      brand: ["Microlife", "Omron", "Beurer", "Longevita", "Gamma"]
+      n: ["25", "50", "100"]
+    cosmetics:
+      brand: ["Nivea", "Bioderma", "La Roche-Posay", "CeraVe", "Eveline", "Green Pharm"]
+      w: ["50", "75", "100", "200", "250"]
+    hygiene:
+      # INVENTED, and each name searched against this trade before it was accepted — see
+      # the clean-room note at the head of this file for why inventing alone is not enough.
+      # This kind pairs one pool with both "Гель для душу {brand}" and "Зубна паста
+      # {brand}", and no house that makes a shower gel verifiably makes a toothpaste as
+      # well, so a real pool cannot serve it without attributing a product to a company
+      # that does not make it.
+      brand: ["Свіжа Роса", "Джерельна", "Білоцвіт", "Світанок", "Первоцвіт", "Росяний Ранок"]
+    probiotic:
+      # Capsule probiotics sold over the counter. BioGaia was dropped: its range is drops,
+      # tablets and chewables, and the template prints capsules.
+      brand: ["Lactiale", "Linex", "Enterol", "Bifiform"]
+      n: ["10", "14", "20", "30"]
+
+    # --- hobby
+    hobby_materials:
+      n: ["3", "4", "6", "12"]
+      # Yarn manufacturers, publicly sold in Ukrainian craft shops.
+      brand: ["YarnArt", "Alize", "Himalaya", "Nako", "Drops"]
+    hobby_class:
+      n: ["4", "5", "6", "8", "10"]
+    electronics:
+      # INVENTED and searched, for the same reason as `hygiene`: one pool serves "Планшет
+      # {brand}" and "Камера {brand}", and the houses known for one are not the houses
+      # known for the other — "Планшет Canon" and "Камера Apple" were both untrue of the
+      # company named. Short Latin tech-sounding names are exactly the space real brands
+      # occupy, so every one of these was searched in this trade before it was kept.
+      brand: ["Norvex", "Krayevyd", "Lumico", "Verion", "Tavrix"]
+    alcohol:
+      # Ukrainian wineries with a public presence.
+      brand: ["Shabo", "Koblevo", "Chateau Chizay", "Beykush"]
+    hobby_tool:
+      # Sewing-machine makers.
+      brand: ["Singer", "Brother", "Janome", "Minerva"]
+
+  # ------------------------------------------------------------ Ukrainian --
+  uk:
+
+    default:
+      period: ["1 місяць", "3 місяці", "6 місяців", "12 місяців"]
+
+    # --- medical_insurance
+    family_member_premium:
+      relative: ["дружина", "чоловік", "дитина", "мати", "батько"]
+
+    # --- language_courses
+    language_lessons:
+      month: ["січень", "лютий", "березень", "квітень", "травень", "вересень", "жовтень", "листопад"]
+
+    # --- professional_development
+    online_course:
+      # Invented course titles. Descriptive rather than copied from any catalogue.
+      course: ["Основи хмарної архітектури", "Docker і Kubernetes на практиці", "Проєктування розподілених систем", "Аналіз даних мовою Python", "Тестування API"]
+    professional_book:
+      # Invented titles.
+      title: ["Проєктування систем під навантаженням", "Практика рефакторингу", "Алгоритми для інженерів", "Основи мережевої безпеки", "Керування технічним боргом"]
+    entertainment_book:
+      # Invented titles.
+      fiction_title: ["Тіні над затокою", "Останній потяг на північ", "Сад із каменю", "Літо без телефону", "Сім листів з півдня"]
+    travel:
+      city: ["Львів", "Одеса", "Харків", "Дніпро", "Вінниця", "Ужгород"]
+
+    # --- sport
+    group_class:
+      # Nominative: policy.yaml prints "Групове заняття {activity}".
+      activity: ["йога", "пілатес", "аеробіка", "функціональне тренування", "стретчинг"]
+    equipment_rent:
+      period: ["добу", "місяць", "3 місяці"]
+
+    # --- mental_health
+    therapy_session:
+      # A session date, drawn independently of the document's own date. A fidelity gap
+      # rather than a hidden rule: no archetype prints this kind yet, and when the
+      # mental-health templates land the value has to be derived from the document date
+      # instead of drawn, or the receipt will contradict its own ground truth.
+      date: ["12.02.2026", "05.03.2026", "19.04.2026", "07.05.2026", "23.09.2026", "11.11.2026"]
+    self_help_book:
+      # Invented titles.
+      title: ["Спокій щодня", "Як домовитися із собою", "Межі без провини", "Тиша всередині"]
+
+    # --- vitamins_nutrition
+    medicine:
+      # International non-proprietary names — the public pharmacopoeial names of the
+      # substances, not manufacturer brands.
+      drug: ["Парацетамол", "Ібупрофен", "Німесулід", "Лоратадин", "Омепразол", "Дротаверин", "Амброксол", "Ацетилцистеїн", "Метформін", "Аторвастатин", "Цетиризин", "Панкреатин"]
+
+    # --- hobby
+    hobby_class:
+      # Genitive: policy.yaml prints "Заняття {activity}, {n} шт" and "Майстер-клас {activity}".
+      activity: ["гончарства", "малювання", "каліграфії", "фотографії", "вокалу"]
+    hobby_materials:
+      # Genitive: "Набір для {activity}".
+      activity: ["малювання", "вишивання", "ліплення", "скрапбукінгу", "мозаїки"]
+    club_membership:
+      # Invented club names.
+      club: ["«Книжкова полиця»", "«Шахова вежа»", "«Фотокадр»", "«Пагорб»"]
+    instrument_rent:
+      # Genitive: "Оренда {instrument}, {period}".
+      instrument: ["гітари", "піаніно", "скрипки", "ударної установки", "синтезатора"]
+
+  # --------------------------------------------------------------- English --
+  en:
+
+    default:
+      period: ["1 month", "3 months", "6 months", "12 months"]
+
+    family_member_premium:
+      relative: ["spouse", "child", "mother", "father"]
+
+    language_lessons:
+      month: ["January", "February", "March", "April", "May", "September", "October", "November"]
+
+    online_course:
+      course: ["Cloud architecture fundamentals", "Docker and Kubernetes in practice", "Designing distributed systems", "Data analysis with Python", "API testing"]
+    professional_book:
+      title: ["Designing systems under load", "Refactoring in practice", "Algorithms for engineers", "Network security fundamentals", "Managing technical debt"]
+    entertainment_book:
+      fiction_title: ["Shadows over the bay", "The last train north", "A garden of stone", "A summer without a phone", "Seven letters from the south"]
+    travel:
+      city: ["Lviv", "Odesa", "Kharkiv", "Dnipro", "Vinnytsia", "Uzhhorod"]
+
+    group_class:
+      activity: ["yoga", "pilates", "aerobics", "functional training", "stretching"]
+    equipment_rent:
+      period: ["a day", "1 month", "3 months"]
+
+    therapy_session:
+      date: ["12.02.2026", "05.03.2026", "19.04.2026", "07.05.2026", "23.09.2026", "11.11.2026"]
+    self_help_book:
+      title: ["Calm every day", "Negotiating with yourself", "Boundaries without guilt", "The quiet inside"]
+
+    medicine:
+      drug: ["Paracetamol", "Ibuprofen", "Nimesulide", "Loratadine", "Omeprazole", "Drotaverine", "Ambroxol", "Acetylcysteine", "Metformin", "Atorvastatin", "Cetirizine", "Pancreatin"]
+
+    hobby_class:
+      activity: ["pottery", "drawing", "calligraphy", "photography", "singing"]
+    hobby_materials:
+      activity: ["drawing", "embroidery", "modelling", "scrapbooking", "mosaic"]
+    club_membership:
+      club: ["\"Bookshelf\"", "\"Chess Tower\"", "\"Photoframe\"", "\"The Hill\""]
+    instrument_rent:
+      instrument: ["a guitar", "a piano", "a violin", "a drum kit", "a synthesizer"]
+
+
+# =============================================================================
+# Retail prices
+# =============================================================================
+#
+# Inclusive range per item kind, in whole currency units — hryvnias, the same scale
+# `annual_limit` uses in policy.yaml. One scale across both files on purpose: the two are
+# read and edited by the same person in the same sitting, and a second scale distinguished
+# only by a field name is a two-order-of-magnitude error that breaks nothing. It prints an
+# implausible receipt and waits. The storage unit is the code's business — `content_builder`
+# converts to whole kopiykas for the draw — and it must not leak into the file a human edits.
+#
+# Written as strings so the values reach `Decimal` as decimal text. A `Decimal` built from
+# "2000.00" is exactly as precise as a count of minor units, which is the whole of what the
+# integers were there to protect; a bare YAML `2000.00` would be parsed as a binary double
+# first and the precision would already be gone. The loader refuses a value with more than
+# two decimal places rather than truncating it.
+#
+# Plausible Ukrainian retail levels — general knowledge of the market, not a catalogue.
+# UAH-only for now, and honestly so: every archetype this generator has is Ukrainian. Per
+# jurisdiction ranges arrive with the first non-UA archetype; adding an empty PL/DE/ES
+# structure now would be a shape nobody had filled.
+#
+# The RANGE matters more than the midpoint: `content_builder._repriced` clamps a non-covered
+# line into its kind's range when steering a basket toward a coverage target, so a range
+# that is too narrow makes the target unreachable and a range that is too wide prints an
+# implausible article.
+
+price_ranges:
+  currency: UAH
+
+  # Fallback for a kind with no entry of its own. Present so that adding an item kind to
+  # policy.yaml does not immediately break generation — but a kind that stays on the
+  # default is a kind whose prices nobody thought about.
+  default: ["100.00", "500.00"]
+
+  ranges:
+    # --- medical_insurance
+    insurance_premium:     ["2000.00", "8000.00"]
+    family_member_premium: ["2000.00", "7000.00"]
+    property_insurance:    ["800.00", "4000.00"]
+    travel_insurance:      ["300.00", "1500.00"]
+
+    # --- language_courses
+    language_lessons:  ["1500.00", "6000.00"]
+    placement_test:    ["200.00", "500.00"]
+    language_exam:     ["6000.00", "9000.00"]
+    missed_lesson_fee: ["300.00", "800.00"]
+    textbook:          ["400.00", "1200.00"]
+    stationery:        ["15.00", "80.00"]
+
+    # --- professional_development
+    online_course:       ["1000.00", "9000.00"]
+    certification_exam:  ["4000.00", "12000.00"]
+    conference_ticket:   ["2500.00", "12000.00"]
+    professional_book:   ["450.00", "1500.00"]
+    workshop_materials:  ["200.00", "800.00"]
+    hardware:            ["15000.00", "60000.00"]
+    entertainment_book:  ["250.00", "600.00"]
+    travel:              ["800.00", "5000.00"]
+
+    # --- sport
+    gym_membership:    ["1200.00", "6000.00"]
+    pool_membership:   ["900.00", "4500.00"]
+    group_class:       ["200.00", "1500.00"]
+    personal_training: ["500.00", "1200.00"]
+    equipment_rent:    ["50.00", "400.00"]
+    sport_apparel:     ["400.00", "2000.00"]
+    sports_nutrition:  ["600.00", "2500.00"]
+    food_drink:        ["20.00", "120.00"]
+
+    # --- mental_health
+    therapy_session:  ["900.00", "2500.00"]
+    family_therapy:   ["1500.00", "3500.00"]
+    psych_assessment: ["800.00", "2000.00"]
+    group_therapy:    ["600.00", "1500.00"]
+    coaching:         ["1000.00", "3000.00"]
+    self_help_book:   ["300.00", "900.00"]
+
+    # --- vitamins_nutrition
+    vitamin_complex:    ["180.00", "950.00"]
+    mineral_supplement: ["90.00", "420.00"]
+    nutritionist_visit: ["600.00", "1500.00"]
+    medicine:           ["40.00", "600.00"]
+    medical_device:     ["120.00", "1800.00"]
+    cosmetics:          ["150.00", "700.00"]
+    hygiene:            ["50.00", "250.00"]
+    probiotic:          ["200.00", "600.00"]
+    lab_test:           ["250.00", "900.00"]
+
+    # --- hobby
+    hobby_class:      ["400.00", "2000.00"]
+    hobby_materials:  ["150.00", "1200.00"]
+    club_membership:  ["200.00", "1000.00"]
+    instrument_rent:  ["300.00", "1500.00"]
+    hobby_tool:       ["1000.00", "12000.00"]
+    electronics:      ["8000.00", "40000.00"]
+    alcohol:          ["250.00", "900.00"]
+
+
+# =============================================================================
+# Basket shape
+# =============================================================================
+
+basket:
+  # How many of an article a receipt lists, as a weighted pool drawn from directly. An
+  # assumption, not a measurement: nothing here was fitted to observed baskets, and the
+  # weighting toward one is ordinary shopping knowledge — a shopper buying two identical
+  # packs is less common than buying one. It affects how a document looks, never what a
+  # label says.
+  #
+  # `content_builder.estimated_line_value` sizes a basket from the MEAN of this pool, so
+  # editing it moves the planner's estimate of how many lines overrun an annual balance.
+  quantity_choices: [1, 1, 1, 2]
+
+  # How many non-covered lines a mixed basket carries. Usually one — the carrier bag, the
+  # tube of cream — because that is what the imperfection catalogue describes: a
+  # non-qualifying item inside an otherwise qualifying purchase. A floor, not a ceiling:
+  # a low coverage target needs more non-covered money than one line can plausibly hold,
+  # and the builder adds lines until the target is reachable.
+  excluded_line_counts: [1, 1, 2]
+
+
+# =============================================================================
+# Mixed-basket coverage targets
+# =============================================================================
+
+mixed_basket:
+  # What fraction of a mixed basket is meant to be covered, drawn uniformly.
+  #
+  # Bounded away from both ends. At 1.0 there would be no non-covered line and the claim
+  # would not be partially covered at all; at 0 there would be no covered line, which
+  # `policy_engine` labels `rejected` — a different verdict from the one being planned.
+  #
+  # Strings, not YAML floats: 0.35 in YAML is a binary double, and these are converted to
+  # `Decimal` for money arithmetic. Parsing the decimal text keeps the value exact.
+  #
+  # An ASPIRATION, not a dial — see the note at the head of this file. Read the realized
+  # coverage off `covered_fraction` in the ground truth, never off this list.
+  coverage_targets:
+    ["0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90"]

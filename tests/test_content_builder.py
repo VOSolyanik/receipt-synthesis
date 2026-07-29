@@ -14,30 +14,50 @@ from decimal import Decimal
 
 import pytest
 
-from receipt_synth.config import category, jurisdiction
+from receipt_synth import config
+from receipt_synth.claim_planner import ARCHETYPES
+from receipt_synth.config import (
+    acquirers,
+    category,
+    jurisdiction,
+    load_generation,
+    load_policy,
+    load_vendors,
+    price_range,
+    vendor_profile,
+)
 from receipt_synth.content_builder import (
     MAX_LINE_ITEMS,
+    _fill_placeholders,
     build_prro_receipt,
     estimated_line_value,
     is_valid_edrpou,
-    renderable_kinds,
+    is_valid_rnokpp,
+    legal_name,
+    sellable_kinds,
     validate_amount_in_words,
     validate_line_item_sum,
     validate_vat_letter,
+    vendor_can_carry,
 )
 from receipt_synth.policy_engine import covered_total, resolved_coverage, verdict_for
 from receipt_synth.schemas import Capture, DocType, Verdict
 
 ISSUED_AT = datetime(2026, 8, 3, 14, 22, 51)
-VENDOR = {"name": "Аптека АНЦ", "legal_form": "TOV"}
+VENDOR = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy"}
+SOLE_TRADER = {"name": "Ковальчук О. С.", "legal_form": "FOP", "profile": "nutrition_practice"}
+# A profile that sells nothing its category excludes. `private_tutor` is one on purpose —
+# a tutor sells lessons and no goods — and it is the residual leak recorded under
+# `known_limitations` in config/labelling-schema.yaml.
+COVERED_ONLY = {"name": "Дорошенко І. М.", "legal_form": "FOP", "profile": "private_tutor"}
 
 
-def build(seed: int, **kwargs):
+def build(seed: int, vendor: dict = VENDOR, **kwargs):
     return build_prro_receipt(
         random.Random(seed),
         category_id="vitamins_nutrition",
         issued_at=ISSUED_AT,
-        vendor=VENDOR,
+        vendor=vendor,
         **kwargs,
     )
 
@@ -70,12 +90,24 @@ def test_all_invariants_hold(seed):
 
     assert validate_line_item_sum(receipt.line_items, receipt.total)
     assert validate_amount_in_words(receipt.amount_in_words, receipt.total)
-    # A ТОВ seller is identified by its ЄДРПОУ, printed as "ІД"; a ФОП seller would
-    # carry a РНОКПП printed as "ІПН", which is why the field is not named after either.
+    # A ТОВ seller is identified by its ЄДРПОУ, printed as "ІД".
     assert receipt.seller.tax_code_label == "ІД"
     assert is_valid_edrpou(receipt.seller.tax_code)
     for item in receipt.line_items:
         assert validate_vat_letter(item.item_kind, item.vat_letter, "UA")
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_a_sole_trader_prints_a_rnokpp_and_no_quotes(seed):
+    """The identifier follows the legal form. A ФОП has no ЄДРПОУ at all, so an eight-digit
+    code under the "ІД" label would name the seller with an identifier no register could
+    resolve to them — and a sole trader's name is a person's, printed without quotes."""
+    receipt = build(seed, vendor=SOLE_TRADER)
+
+    assert receipt.seller.tax_code_label == "ІПН"
+    assert is_valid_rnokpp(receipt.seller.tax_code)
+    assert legal_name(receipt.seller) == "ФОП Ковальчук О. С."
+    assert legal_name(build(seed).seller) == "ТОВ «Аптека АНЦ»"
 
 
 @pytest.mark.parametrize("seed", range(30))
@@ -94,9 +126,7 @@ def test_covered_only_receipt_contains_no_excluded_item(seed):
 
 
 def mixed(seed: int, coverage_target: str = "0.7", **kwargs):
-    return build(
-        seed, covered_only=False, coverage_target=Decimal(coverage_target), **kwargs
-    )
+    return build(seed, covered_only=False, coverage_target=Decimal(coverage_target), **kwargs)
 
 
 @pytest.mark.parametrize("seed", range(30))
@@ -213,17 +243,105 @@ def test_a_basket_can_be_sized_up_to_the_cap():
     assert len({item.name for item in receipt.line_items}) == MAX_LINE_ITEMS
 
 
-def test_only_printable_item_kinds_are_offered():
-    """`medicine` and `cosmetics` templates all carry `{drug}` or `{brand}`, and neither
-    has a vocabulary yet. They must be skipped, not raise: an item kind that cannot be
-    printed today is a gap in `config/vendors.json`, not a bug in the draw."""
-    excluded = category("vitamins_nutrition")["excluded_items"]
-    printable = renderable_kinds(excluded)
+# ------------------------------------------------------- vocabulary coverage --
 
-    assert "medical_device" in printable
-    assert "medicine" not in printable
-    assert "cosmetics" not in printable
-    assert set(printable) < set(excluded)
+
+def every_template():
+    """(category id, bucket, item kind, language, template) for the whole policy."""
+    for spec in load_policy()["categories"]:
+        for bucket in ("covered_items", "excluded_items", "ambiguous_items"):
+            for kind, by_language in spec.get(bucket, {}).items():
+                for language, templates in by_language.items():
+                    for template in templates:
+                        yield spec["id"], bucket, kind, language, template
+
+
+def test_every_name_template_in_the_policy_can_be_filled():
+    """The gate that stops the vocabulary narrowing again.
+
+    A template whose placeholder had no vocabulary used to be skipped, silently, which
+    made the printed vocabulary of the dataset a subset of the one policy.yaml declares —
+    with nothing anywhere saying which subset. Filling every template is now the invariant,
+    and a new template naming a new placeholder fails here rather than at generation time
+    on a machine nobody is watching.
+    """
+    unfillable = []
+    for category_id, bucket, kind, language, template in every_template():
+        try:
+            _fill_placeholders(template, kind, random.Random(0), language)
+        except KeyError as exc:
+            unfillable.append(f"{category_id}.{bucket}.{kind}[{language}]: {exc}")
+
+    assert not unfillable, "\n".join(unfillable)
+
+
+def test_a_placeholder_with_no_vocabulary_fails_loudly():
+    """The other half of the same rule: unfilled must raise, not skip. If this ever
+    returned a value or silently dropped the template, the sweep above would pass on a
+    dataset whose vocabulary had quietly shrunk."""
+    with pytest.raises(KeyError, match="unheard_of"):
+        _fill_placeholders("Товар {unheard_of}", "vitamin_complex", random.Random(0))
+
+
+def test_a_filled_name_carries_no_leftover_brace():
+    for _, _, kind, language, template in every_template():
+        name = _fill_placeholders(template, kind, random.Random(1), language)
+        assert "{" not in name and "}" not in name, name
+
+
+# ---------------------------------------------------------- vendor affinity --
+
+
+def test_a_pharmacy_does_not_sell_a_nutrition_plan():
+    """The affinity this step exists for. `nutritionist_visit` is a covered kind of the
+    same category, so nothing but the vendor profile keeps it off a pharmacy receipt."""
+    covered = category("vitamins_nutrition")["covered_items"]
+
+    assert "nutritionist_visit" in covered
+    assert "nutritionist_visit" not in sellable_kinds(covered, VENDOR)
+    assert sellable_kinds(covered, SOLE_TRADER) == ["nutritionist_visit"]
+
+    for seed in range(30):
+        kinds = {item.item_kind for item in build(seed).line_items}
+        assert "nutritionist_visit" not in kinds
+
+
+def test_a_covered_only_vendor_cannot_carry_a_mixed_basket():
+    """It sells nothing the category excludes, so there is no non-covered line to print.
+    The assembler asks this before choosing a vendor; the builder refuses if asked anyway,
+    because a mixed basket without a non-covered line would be labelled a verdict it does
+    not realize."""
+    assert vendor_can_carry(COVERED_ONLY, "language_courses", mixed=False)
+    assert not vendor_can_carry(COVERED_ONLY, "language_courses", mixed=True)
+
+    with pytest.raises(ValueError, match="mixed basket"):
+        build_prro_receipt(
+            random.Random(1),
+            category_id="language_courses",
+            issued_at=ISSUED_AT,
+            vendor=COVERED_ONLY,
+            covered_only=False,
+            coverage_target=Decimal("0.7"),
+        )
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_a_nutrition_practice_can_print_a_non_covered_line(seed):
+    """Otherwise its receipts would be fully covered by construction, and the counterparty
+    would foretell the label for every document it issued.
+
+    A nutritionist stocking a home blood-pressure monitor and glucose test strips is
+    ordinary practice — both are over-the-counter retail devices a patient is asked to
+    self-monitor with — and `medical_device` is already an excluded kind of this category
+    with templates for exactly those two articles. No policy change was needed to close
+    the leak, only an honest reading of what such a practice sells.
+    """
+    assert vendor_can_carry(SOLE_TRADER, "vitamins_nutrition", mixed=True)
+    assert vendor_can_carry(VENDOR, "vitamins_nutrition", mixed=True)
+
+    receipt = mixed(seed, vendor=SOLE_TRADER)
+    kinds = {item.item_kind for item in receipt.line_items if not item.covered}
+    assert kinds == {"medical_device"}
 
 
 def test_estimated_line_value_is_inside_the_price_ranges_it_summarizes():
@@ -369,6 +487,206 @@ def test_a_fiscal_receipt_declares_a_fiscal_qr_and_a_fiscal_number():
     assert truth.has_qr
     assert truth.qr_is_fiscal
     assert truth.has_fiscal_number
+
+
+# ------------------------------------------------ configuration integrity ----
+
+
+def all_item_kinds() -> set[str]:
+    return {kind for _, _, kind, _, _ in every_template()}
+
+
+def every_vendor():
+    """(country, category id, vendor) over config/vendors.json."""
+    for country, by_category in load_vendors()["vendors"].items():
+        if country.startswith("$"):
+            continue
+        for category_id, vendors in by_category.items():
+            for vendor in vendors:
+                yield country, category_id, vendor
+
+
+def test_every_vendor_profile_names_item_kinds_the_policy_declares():
+    """A profile is a list of item kinds, and a typo in one silently narrows what the
+    vendor sells instead of failing — the shop would simply never stock the misspelled
+    kind, and the receipt would look fine."""
+    known = all_item_kinds()
+    profiles = load_vendors()["vendor_profiles"]
+
+    for slug, kinds in profiles.items():
+        if slug.startswith("$"):
+            continue
+        assert set(kinds) <= known, f"profile {slug!r} names unknown kinds: {set(kinds) - known}"
+
+
+def test_every_item_kind_the_policy_declares_is_sold_by_some_profile():
+    """The other direction of the profile check above, and the one that catches content
+    disappearing rather than misspelled.
+
+    A kind no profile sells cannot be printed by anybody. It keeps its templates, its brand
+    vocabulary and its price range, all of them dead — and every run comes out missing it
+    with nothing anywhere saying which kind went. That is the same failure the `{brand}`
+    skip was removed to end, one layer further out: `hardware` was declared with three
+    templates and sold by no profile, and a run printed it zero times without a word.
+    """
+    sold = set().union(
+        *(
+            set(kinds)
+            for slug, kinds in load_vendors()["vendor_profiles"].items()
+            if not slug.startswith("$")
+        )
+    )
+    orphans = sorted(all_item_kinds() - sold)
+    assert not orphans, f"declared by policy.yaml, sold by no profile: {orphans}"
+
+
+def test_every_covered_kind_can_appear_on_a_partially_covered_document():
+    """Item-kind leakage: a covered kind sold only by profiles that stock nothing the
+    category excludes can never share a document with a non-covered line.
+
+    The tell is then the LINE ITEM rather than the counterparty, which is worse — a
+    consumer picks it up without ever looking at the seller. `online_course` had exactly
+    this shape: both profiles selling it were covered-only, so an online course on a
+    receipt guaranteed a fully covered claim.
+
+    Stated over profiles rather than over vendors because it is a property of the affinity
+    data. Whether a given jurisdiction has a vendor with that profile is a separate
+    question, asked below for the jurisdictions that can actually generate.
+    """
+    profiles = {
+        slug: set(kinds)
+        for slug, kinds in load_vendors()["vendor_profiles"].items()
+        if not slug.startswith("$")
+    }
+    unreachable = []
+    for spec in load_policy()["categories"]:
+        excluded = set(spec["excluded_items"])
+        for kind in spec["covered_items"]:
+            if not any(kind in sells and sells & excluded for sells in profiles.values()):
+                unreachable.append(f"{spec['id']}.{kind}")
+    assert not unreachable, (
+        "no profile sells these covered kinds alongside anything the category excludes, so "
+        f"the line item alone foretells a fully covered claim: {unreachable}"
+    )
+
+
+def test_a_generating_jurisdiction_leaves_no_covered_kind_out_or_unmixable():
+    """The same two invariants where they bite: the vendor lists of a jurisdiction that has
+    a registered archetype, and therefore actually produces documents.
+
+    Read from `ARCHETYPES` rather than hardcoded, so a jurisdiction whose first template
+    lands is held to this the same day. PL, DE and ES are seeded rather than filled and
+    generate nothing, so holding their three-entry lists to it now would fail on data that
+    reaches no dataset.
+    """
+    countries = {archetype.country.value for archetype in ARCHETYPES.values()}
+    assert countries, "no archetype registered — this test would assert nothing"
+
+    for country in sorted(countries):
+        for spec in load_policy()["categories"]:
+            vendors = load_vendors()["vendors"][country].get(spec["id"], [])
+            for kind in sorted(spec["covered_items"]):
+                sellers = [v for v in vendors if kind in vendor_profile(v["profile"])]
+                assert sellers, f"{country}/{spec['id']}: no vendor sells {kind!r}"
+                assert any(
+                    vendor_can_carry(v, spec["id"], mixed=True) for v in sellers
+                ), (
+                    f"{country}/{spec['id']}: every vendor selling {kind!r} is covered-only, "
+                    "so that line item foretells the label"
+                )
+
+
+def test_every_vendor_can_sell_something_its_category_covers():
+    """Otherwise the vendor is unusable: every receipt this generator builds carries at
+    least one covered line, whatever the verdict."""
+    for country, category_id, vendor in every_vendor():
+        assert vendor_can_carry(vendor, category_id, mixed=False), (
+            f"{country}/{category_id}: {vendor['name']!r} sells nothing the category covers"
+        )
+
+
+def test_every_category_has_a_vendor_that_can_carry_a_mixed_basket():
+    """`partially_covered` by `mixed_items` is a fifth of the target verdict mix. A
+    category whose vendors all sell services only could never realize it, and the failure
+    would surface as an assembler exception mid-run rather than as a gap in the data."""
+    seen = {(country, category_id) for country, category_id, _ in every_vendor()}
+    for country, category_id in sorted(seen):
+        assert any(
+            vendor_can_carry(vendor, category_id, mixed=True)
+            for c, cat, vendor in every_vendor()
+            if (c, cat) == (country, category_id)
+        ), f"{country}/{category_id}: no vendor sells anything the category excludes"
+
+
+def test_price_ranges_are_ordered_and_within_a_coarse_sanity_band():
+    """Ordering, and an outer band no article this generator prints leaves.
+
+    NOT a guard against a range written in minor units by habit, and it was described as
+    one until a reviewer wrote `stationery: ["1500.00", "8000.00"]` and watched the suite
+    stay green. A hundredfold slip on a cheap kind lands inside the band, so the band
+    cannot see it; a third of the kinds are priced under 1000 UAH and are invisible to it
+    entirely. The only assertion that would catch every case is a per-kind band, which is
+    this file restated in a test — two copies of the prices, and the copy in the test is
+    the one nobody updates.
+
+    What actually removes that class of error is upstream: prices are stated on the same
+    scale as `annual_limit` in policy.yaml, so there is no second scale to slip into. The
+    next test adds the one independent check that exists.
+    """
+    for kind in sorted(all_item_kinds() | {"default"}):
+        low, high = price_range(kind)
+        assert Decimal(0) < low < high, f"{kind}: {low}..{high}"
+        assert Decimal("1.00") <= low and high <= Decimal("100000.00"), f"{kind}: {low}..{high}"
+
+
+def test_no_covered_article_costs_more_in_one_line_than_a_year_of_the_benefit():
+    """The one price check with an anchor outside config/generation.yaml: `annual_limit`.
+
+    A covered kind whose CHEAPEST form already exceeds what the plan allows for a whole year
+    is wrong on its own terms — no claim in that category could ever be fully reimbursed,
+    and every document would be `partially_covered` by an exhausted limit. It also happens
+    to catch a hundredfold slip on 20 of the 21 covered kinds, which is where the previous
+    test's claim should have lived. It says nothing about excluded or ambiguous kinds: the
+    plan sets no limit on what it does not pay for.
+    """
+    for spec in load_policy()["categories"]:
+        limit = Decimal(str(spec["annual_limit"]))
+        for kind in sorted(spec["covered_items"]):
+            low, _ = price_range(kind)
+            assert low < limit, (
+                f"{spec['id']}.{kind}: cheapest line {low} exceeds the annual limit {limit}"
+            )
+
+
+def test_a_price_finer_than_the_currency_is_refused(monkeypatch):
+    """Truncating the third decimal place silently would be the same class of mistake the
+    single scale exists to prevent — a price quietly other than the one that was written."""
+    monkeypatch.setattr(
+        config,
+        "load_generation",
+        lambda: {"price_ranges": {"default": ["1.00", "2.00"],
+                                  "ranges": {"vitamin_complex": ["1.005", "2.00"]}}},
+    )
+    config.price_range.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="two decimal places"):
+            config.price_range("vitamin_complex")
+    finally:
+        config.price_range.cache_clear()
+
+
+def test_every_item_kind_has_a_price_range_of_its_own():
+    """The `default` exists so that adding a kind to policy.yaml does not break generation
+    — not so that a kind can stay on it. A kind priced by the fallback is a kind whose
+    prices nobody chose."""
+    priced = set(load_generation()["price_ranges"]["ranges"])
+    assert all_item_kinds() <= priced, f"no price range for {sorted(all_item_kinds() - priced)}"
+
+
+def test_acquirer_names_are_distinct():
+    names = acquirers("UA")
+    assert len(names) > 1, "one acquirer would put the same bank on every receipt"
+    assert len(set(names)) == len(names)
 
 
 def test_line_item_names_carry_no_unresolved_placeholders():

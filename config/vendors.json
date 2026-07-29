@@ -1,6 +1,6 @@
 {
-  "$schema_note": "STUB. Structure is final; the lists are placeholders to be expanded with LLM-generated public vendor names per category and jurisdiction. Sources must stay public: publicly known retail/service brands and generated plausible ФОП names. Never a customer, employer or colleague list.",
-  "version": 1,
+  "$schema_note": "Merchant, bank and provider names. CLEAN ROOM: every name here is either a publicly known retail or service brand, or an invented one — invented sole-trader names use the ФОП/JDG/EK/AUTONOMO convention with a made-up surname and initials and denote no real person. Never a customer, employer or colleague list. The brand-shaped blocks (banks, payment_providers, fiscal_software, marketplaces) determine the LAYOUT of an archetype and must stay recognizable; the vendors and aggregators blocks are only the counterparty string printed on a document, where naming-pattern coverage matters more than fame.",
+  "version": 2,
 
   "banks": {
     "UA": [
@@ -15,6 +15,20 @@
     ],
     "EU": [
       { "slug": "sepa", "display_name": "SEPA", "template": "eu_sepa_confirmation" }
+    ]
+  },
+
+  "acquirers": {
+    "$note": "Printed in the 'Екв.' field of the card-acquiring block on a Ukrainian fiscal receipt. Public bank names, in the legal form a receipt spells them out in. Kept apart from `banks` above: an acquirer is a string on someone else's receipt and determines no layout, whereas a `banks` entry owns a template.",
+    "UA": [
+      "АТ КБ «ПриватБанк»",
+      "АТ «Райффайзен Банк»",
+      "АТ «Універсал Банк»",
+      "АТ «ОТП Банк»",
+      "АТ «ПУМБ»",
+      "АТ «Ощадбанк»",
+      "АТ «А-БАНК»",
+      "АТ «КРЕДОБАНК»"
     ]
   },
 
@@ -40,51 +54,231 @@
     ]
   },
 
+  "vendor_profiles": {
+    "$note": "Vendor -> item-kind affinity. A pharmacy does not sell a personalised nutrition plan, and until this block existed nothing stopped it from printing one. Each profile lists every item kind an outlet of that sort can put on a line, across all three policy buckets; the item kinds are the vocabulary of config/policy.yaml and a profile naming one that no category declares is a typo the test suite catches. A vendor carries a profile slug rather than its own list because outlets of the same sort sell the same things — the affinity is a property of the trade, not of the shop.",
+    "$note_coverage": "A profile that intersects a category's covered_items can issue a receipt for that category at all; one that also intersects its excluded_items can carry a MIXED basket. The assembler picks a vendor that can carry the plan rather than letting the builder fail on a vendor that never could.",
+    "$note_reachability": "Two invariants the test suite enforces, both about content that would otherwise vanish or leak without saying so. FIRST: every item kind policy.yaml declares must be sold by some profile, or it is silently absent from every dataset this generator produces. SECOND: every COVERED kind must be sold by at least one profile that also sells something the same category excludes — otherwise a line printing that kind is guaranteed never to appear on a partially-covered document, and the line item alone foretells the label. Some profiles are still covered-only on their own (`private_tutor`, `online_learning_platform`); that is a residual leak on the counterparty, recorded under `known_limitations` in config/labelling-schema.yaml.",
+
+    "insurer": ["insurance_premium", "family_member_premium", "property_insurance", "travel_insurance"],
+
+    "language_school": ["language_lessons", "placement_test", "language_exam", "missed_lesson_fee", "textbook", "stationery"],
+    "private_tutor": ["language_lessons", "placement_test", "missed_lesson_fee"],
+    "exam_centre": ["language_exam", "placement_test", "textbook"],
+
+    "online_learning_platform": ["online_course", "certification_exam"],
+    "training_centre": ["online_course", "certification_exam", "conference_ticket", "workshop_materials", "travel"],
+    "conference_organizer": ["conference_ticket", "workshop_materials", "travel"],
+    "bookstore": ["professional_book", "entertainment_book"],
+    "general_retailer": ["professional_book", "entertainment_book", "hardware"],
+
+    "gym": ["gym_membership", "group_class", "personal_training", "equipment_rent", "sport_apparel", "sports_nutrition", "food_drink"],
+    "pool": ["pool_membership", "group_class", "equipment_rent", "sport_apparel", "food_drink"],
+    "fitness_studio": ["group_class", "personal_training", "equipment_rent", "sport_apparel"],
+
+    "therapy_practice": ["therapy_session", "family_therapy", "psych_assessment", "group_therapy", "coaching"],
+    "mental_health_clinic": ["therapy_session", "family_therapy", "psych_assessment", "group_therapy", "coaching", "self_help_book"],
+
+    "pharmacy": ["vitamin_complex", "mineral_supplement", "probiotic", "sports_nutrition", "medicine", "medical_device", "cosmetics", "hygiene"],
+    "supplement_shop": ["vitamin_complex", "mineral_supplement", "probiotic", "sports_nutrition", "cosmetics", "hygiene"],
+    "nutrition_practice": ["nutritionist_visit", "lab_test", "medical_device"],
+
+    "craft_shop": ["hobby_materials", "hobby_tool", "food_drink"],
+    "art_studio": ["hobby_class", "hobby_materials", "hobby_tool", "food_drink"],
+    "photo_school": ["hobby_class", "hobby_materials", "electronics"],
+    "music_school": ["hobby_class", "instrument_rent", "club_membership", "food_drink"],
+    "hobby_club": ["club_membership", "hobby_class", "food_drink", "alcohol"]
+  },
+
   "vendors": {
-    "$note": "Category keys must match the category ids in config/policy.yaml.",
+    "$note": "Category keys must match the category ids in config/policy.yaml. `name` is the bare name; the legal form is prefixed at render time — a ТОВ prints ТОВ «Name», a ФОП prints ФОП Surname I. B. without quotes, because a sole trader's name is a person's name and not a firm's. Naming patterns are covered on purpose: legal entity vs sole trader, Cyrillic vs Latin vs mixed, chain vs single outlet.",
+    "$note_ua_provenance": "Public chains named here: Аптека АНЦ, Подорожник, Бажаємо здоров'я, Аптека D.S., Аптека 911, Green Forest, Speak Up, Prometheus, Hillel IT School, Beetroot Academy, Книгарня Є, IT Arena, Rozetka, Prom.ua, Sport Life, 5 елемент, FitCurves, Treatfield, ARX, УНІКА, ІНГО, ТАС, Універсальна, Княжа. Everything else in the UA lists is invented, including every ФОП. A public name is used only for a trade the company is publicly in — the same rule the brand vocabulary in config/generation.yaml follows.",
+
     "UA": {
-      "medical_insurance":        [{ "name": "ARX", "legal_form": "PRAT" }],
-      "language_courses":         [{ "name": "Green Forest", "legal_form": "TOV" }],
-      "professional_development": [{ "name": "Prometheus", "legal_form": "TOV" }],
-      "sport":                    [{ "name": "Sport Life", "legal_form": "TOV" }],
-      "mental_health":            [{ "name": "Treatfield", "legal_form": "FOP" }],
-      "vitamins_nutrition":       [{ "name": "Аптека АНЦ", "legal_form": "TOV" }],
-      "hobby":                    [{ "name": "Kreativ Studio", "legal_form": "FOP" }]
+      "medical_insurance": [
+        { "name": "ARX",           "legal_form": "PRAT", "profile": "insurer" },
+        { "name": "УНІКА",         "legal_form": "PRAT", "profile": "insurer" },
+        { "name": "ІНГО",          "legal_form": "PRAT", "profile": "insurer" },
+        { "name": "ТАС",           "legal_form": "PRAT", "profile": "insurer" },
+        { "name": "Універсальна",  "legal_form": "PRAT", "profile": "insurer" },
+        { "name": "Княжа",         "legal_form": "PRAT", "profile": "insurer" }
+      ],
+      "language_courses": [
+        { "name": "Green Forest",     "legal_form": "TOV", "profile": "language_school" },
+        { "name": "Speak Up",         "legal_form": "TOV", "profile": "language_school" },
+        { "name": "Контекст",         "legal_form": "TOV", "profile": "language_school" },
+        { "name": "Kyiv Exam Centre", "legal_form": "TOV", "profile": "exam_centre" },
+        { "name": "Дорошенко І. М.",  "legal_form": "FOP", "profile": "private_tutor" },
+        { "name": "Левчук А. В.",     "legal_form": "FOP", "profile": "private_tutor" }
+      ],
+      "professional_development": [
+        { "name": "Prometheus",       "legal_form": "TOV", "profile": "online_learning_platform" },
+        { "name": "Hillel IT School", "legal_form": "TOV", "profile": "training_centre" },
+        { "name": "Beetroot Academy", "legal_form": "TOV", "profile": "training_centre" },
+        { "name": "Книгарня Є",       "legal_form": "TOV", "profile": "bookstore" },
+        { "name": "IT Arena",         "legal_form": "TOV", "profile": "conference_organizer" },
+        { "name": "Бондаренко С. О.", "legal_form": "FOP", "profile": "training_centre" },
+        { "name": "Rozetka",          "legal_form": "TOV", "profile": "general_retailer" },
+        { "name": "Prom.ua",          "legal_form": "TOV", "profile": "general_retailer" }
+      ],
+      "sport": [
+        { "name": "Sport Life",     "legal_form": "TOV", "profile": "gym" },
+        { "name": "5 елемент",      "legal_form": "TOV", "profile": "pool" },
+        { "name": "FitCurves",      "legal_form": "TOV", "profile": "fitness_studio" },
+        { "name": "Простір",        "legal_form": "TOV", "profile": "fitness_studio" },
+        { "name": "Марченко Д. В.", "legal_form": "FOP", "profile": "fitness_studio" }
+      ],
+      "mental_health": [
+        { "name": "Treatfield",     "legal_form": "TOV", "profile": "mental_health_clinic" },
+        { "name": "Опора",          "legal_form": "TOV", "profile": "mental_health_clinic" },
+        { "name": "Гнатюк О. П.",   "legal_form": "FOP", "profile": "therapy_practice" },
+        { "name": "Савчук М. І.",   "legal_form": "FOP", "profile": "therapy_practice" },
+        { "name": "Тимченко В. А.", "legal_form": "FOP", "profile": "therapy_practice" }
+      ],
+      "vitamins_nutrition": [
+        { "name": "Аптека АНЦ",        "legal_form": "TOV", "profile": "pharmacy" },
+        { "name": "Подорожник",        "legal_form": "TOV", "profile": "pharmacy" },
+        { "name": "Бажаємо здоров'я",  "legal_form": "TOV", "profile": "pharmacy" },
+        { "name": "Аптека D.S.",       "legal_form": "TOV", "profile": "pharmacy" },
+        { "name": "Аптека 911",        "legal_form": "TOV", "profile": "pharmacy" },
+        { "name": "Vitamin Shop",      "legal_form": "TOV", "profile": "supplement_shop" },
+        { "name": "Ковальчук О. С.",   "legal_form": "FOP", "profile": "nutrition_practice" },
+        { "name": "Гриценко Н. В.",    "legal_form": "FOP", "profile": "nutrition_practice" }
+      ],
+      "hobby": [
+        { "name": "Kreativ Studio",   "legal_form": "TOV", "profile": "art_studio" },
+        { "name": "Клубок",           "legal_form": "TOV", "profile": "craft_shop" },
+        { "name": "Ключ",             "legal_form": "TOV", "profile": "music_school" },
+        { "name": "Хід",              "legal_form": "TOV", "profile": "hobby_club" },
+        { "name": "Ракурс",           "legal_form": "TOV", "profile": "photo_school" },
+        { "name": "Остапенко Л. В.",  "legal_form": "FOP", "profile": "art_studio" }
+      ]
     },
+
+    "$note_non_ua": "PL / DE / ES are SEEDED, not filled. No non-UA archetype is registered and the price ranges in config/generation.yaml are UAH-only, so nothing renders from these lists yet; they carry enough entries to keep the structure honest and to be extended when the first non-UA template lands. Public brands below: PZU, Warta, Allianz, Speak Up, Empik, Devoxx Poland, Benefit Systems, Zdrofit, CityFit, Apteka Gemini, DOZ Apteka, AXA, Debeka, Goethe-Institut, Thalia, McFit, FitX, DocMorris, Sanitas, Adeslas, Mapfre, Casa del Libro, Codemotion, Basic-Fit, Metropolitan. Everything else is invented.",
+
     "PL": {
-      "medical_insurance":        [{ "name": "PZU", "legal_form": "SA" }],
-      "language_courses":         [],
-      "professional_development": [],
-      "sport":                    [{ "name": "Benefit Systems", "legal_form": "SA" }],
-      "mental_health":            [],
-      "vitamins_nutrition":       [{ "name": "Apteka Gemini", "legal_form": "SP_ZOO" }],
-      "hobby":                    []
+      "medical_insurance": [
+        { "name": "PZU",     "legal_form": "SA", "profile": "insurer" },
+        { "name": "Warta",   "legal_form": "SA", "profile": "insurer" },
+        { "name": "Allianz", "legal_form": "SA", "profile": "insurer" }
+      ],
+      "language_courses": [
+        { "name": "Speak Up",       "legal_form": "SP_ZOO", "profile": "language_school" },
+        { "name": "Kontekst",       "legal_form": "SP_ZOO", "profile": "language_school" },
+        { "name": "Anna Zielinska", "legal_form": "JDG",    "profile": "private_tutor" }
+      ],
+      "professional_development": [
+        { "name": "Akademia IT Krakow", "legal_form": "SP_ZOO", "profile": "training_centre" },
+        { "name": "Empik",              "legal_form": "SA",     "profile": "bookstore" },
+        { "name": "Devoxx Poland",      "legal_form": "SP_ZOO", "profile": "conference_organizer" }
+      ],
+      "sport": [
+        { "name": "Benefit Systems", "legal_form": "SA",     "profile": "gym" },
+        { "name": "Zdrofit",         "legal_form": "SP_ZOO", "profile": "gym" },
+        { "name": "CityFit",         "legal_form": "SP_ZOO", "profile": "fitness_studio" }
+      ],
+      "mental_health": [
+        { "name": "Centrum Terapii Spokoj", "legal_form": "SP_ZOO", "profile": "mental_health_clinic" },
+        { "name": "Poradnia Nurt",          "legal_form": "SP_ZOO", "profile": "mental_health_clinic" },
+        { "name": "Marta Wojcik",           "legal_form": "JDG",    "profile": "therapy_practice" }
+      ],
+      "vitamins_nutrition": [
+        { "name": "Apteka Gemini", "legal_form": "SP_ZOO", "profile": "pharmacy" },
+        { "name": "DOZ Apteka",    "legal_form": "SP_ZOO", "profile": "pharmacy" },
+        { "name": "Piotr Nowicki", "legal_form": "JDG",    "profile": "nutrition_practice" }
+      ],
+      "hobby": [
+        { "name": "Pracownia Ceramiki Glina", "legal_form": "SP_ZOO", "profile": "art_studio" },
+        { "name": "Rekodzielo Nitka",         "legal_form": "SP_ZOO", "profile": "craft_shop" },
+        { "name": "Szkola Muzyczna Klucz",    "legal_form": "SP_ZOO", "profile": "music_school" }
+      ]
     },
+
     "DE": {
-      "medical_insurance":        [],
-      "language_courses":         [],
-      "professional_development": [],
-      "sport":                    [{ "name": "McFit", "legal_form": "GMBH" }],
-      "mental_health":            [],
-      "vitamins_nutrition":       [{ "name": "Apotheke am Markt", "legal_form": "EK" }],
-      "hobby":                    []
+      "medical_insurance": [
+        { "name": "Allianz", "legal_form": "AG", "profile": "insurer" },
+        { "name": "AXA",     "legal_form": "AG", "profile": "insurer" },
+        { "name": "Debeka",  "legal_form": "AG", "profile": "insurer" }
+      ],
+      "language_courses": [
+        { "name": "Goethe-Institut",    "legal_form": "EV",   "profile": "language_school" },
+        { "name": "Sprachschule Bruecke", "legal_form": "GMBH", "profile": "language_school" },
+        { "name": "Anja Hoffmann",      "legal_form": "EK",   "profile": "private_tutor" }
+      ],
+      "professional_development": [
+        { "name": "Thalia",              "legal_form": "GMBH", "profile": "bookstore" },
+        { "name": "IT-Akademie Nord",    "legal_form": "GMBH", "profile": "training_centre" },
+        { "name": "Developer Days Berlin", "legal_form": "GMBH", "profile": "conference_organizer" }
+      ],
+      "sport": [
+        { "name": "McFit",        "legal_form": "GMBH", "profile": "gym" },
+        { "name": "FitX",         "legal_form": "GMBH", "profile": "gym" },
+        { "name": "Aquadrom Nord", "legal_form": "GMBH", "profile": "pool" }
+      ],
+      "mental_health": [
+        { "name": "Zentrum fuer Psychotherapie Nord", "legal_form": "GMBH", "profile": "mental_health_clinic" },
+        { "name": "Praxis Ruhe",                      "legal_form": "UG",   "profile": "therapy_practice" },
+        { "name": "Lena Vogt",                        "legal_form": "EK",   "profile": "therapy_practice" }
+      ],
+      "vitamins_nutrition": [
+        { "name": "Apotheke am Markt", "legal_form": "EK",   "profile": "pharmacy" },
+        { "name": "DocMorris",         "legal_form": "GMBH", "profile": "pharmacy" },
+        { "name": "Sonnen-Apotheke",   "legal_form": "EK",   "profile": "pharmacy" }
+      ],
+      "hobby": [
+        { "name": "Bastelstube Nord",  "legal_form": "GMBH", "profile": "craft_shop" },
+        { "name": "Musikschule Ton",   "legal_form": "GMBH", "profile": "music_school" },
+        { "name": "Werkstatt Ton und Form", "legal_form": "UG", "profile": "art_studio" }
+      ]
     },
+
     "ES": {
-      "medical_insurance":        [],
-      "language_courses":         [],
-      "professional_development": [],
-      "sport":                    [{ "name": "Basic-Fit", "legal_form": "SL" }],
-      "mental_health":            [],
-      "vitamins_nutrition":       [{ "name": "Farmacia Central", "legal_form": "SL" }],
-      "hobby":                    []
+      "medical_insurance": [
+        { "name": "Sanitas", "legal_form": "SA", "profile": "insurer" },
+        { "name": "Adeslas", "legal_form": "SA", "profile": "insurer" },
+        { "name": "Mapfre",  "legal_form": "SA", "profile": "insurer" }
+      ],
+      "language_courses": [
+        { "name": "Escuela de Idiomas Puente", "legal_form": "SL",        "profile": "language_school" },
+        { "name": "Centro de Examenes Madrid", "legal_form": "SL",        "profile": "exam_centre" },
+        { "name": "Lucia Fernandez",           "legal_form": "AUTONOMO",  "profile": "private_tutor" }
+      ],
+      "professional_development": [
+        { "name": "Casa del Libro",         "legal_form": "SA", "profile": "bookstore" },
+        { "name": "Academia Tech Barcelona", "legal_form": "SL", "profile": "training_centre" },
+        { "name": "Codemotion Madrid",      "legal_form": "SL", "profile": "conference_organizer" }
+      ],
+      "sport": [
+        { "name": "Basic-Fit",              "legal_form": "SL", "profile": "gym" },
+        { "name": "Metropolitan",           "legal_form": "SL", "profile": "gym" },
+        { "name": "Piscina Municipal Delta", "legal_form": "SL", "profile": "pool" }
+      ],
+      "mental_health": [
+        { "name": "Centro Psicologico Calma", "legal_form": "SL",       "profile": "mental_health_clinic" },
+        { "name": "Instituto de Terapia Norte", "legal_form": "SL",     "profile": "mental_health_clinic" },
+        { "name": "Marta Ruiz",               "legal_form": "AUTONOMO", "profile": "therapy_practice" }
+      ],
+      "vitamins_nutrition": [
+        { "name": "Farmacia Central", "legal_form": "SL", "profile": "pharmacy" },
+        { "name": "Farmacia del Sol", "legal_form": "SL", "profile": "pharmacy" },
+        { "name": "Nutricion Vital",  "legal_form": "SL", "profile": "supplement_shop" }
+      ],
+      "hobby": [
+        { "name": "Taller de Ceramica Barro", "legal_form": "SL", "profile": "art_studio" },
+        { "name": "Merceria La Aguja",        "legal_form": "SL", "profile": "craft_shop" },
+        { "name": "Escuela de Musica Clave",  "legal_form": "SL", "profile": "music_school" }
+      ]
     }
   },
 
   "aggregators": {
-    "$note": "Payees that break the link between payment and merchant — drives the 'paid via aggregator' imperfection (docs/architecture.md#imperfection-catalogue).",
+    "$note": "Payees that break the link between payment and merchant — drives the 'paid via aggregator' imperfection (docs/architecture.md#imperfection-catalogue). Public Ukrainian payment intermediaries.",
     "UA": [
-      { "name": "EASYPAY", "legal_form": "TOV" },
-      { "name": "Platon",  "legal_form": "TOV" }
+      { "name": "EASYPAY",  "legal_form": "TOV" },
+      { "name": "Platon",   "legal_form": "TOV" },
+      { "name": "iPay.ua",  "legal_form": "TOV" },
+      { "name": "City24",   "legal_form": "TOV" },
+      { "name": "Fondy",    "legal_form": "TOV" }
     ]
   }
 }

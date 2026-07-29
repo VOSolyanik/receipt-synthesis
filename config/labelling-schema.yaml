@@ -31,12 +31,17 @@
 # adding one would be inventing a caller. It is consumed by downstream tooling; its
 # accuracy is maintained by being re-checked against a freshly generated label file.
 
-version: 3
+# Bumped to 4 by the addition of section 9, `known_limitations`. A consumer that vendors
+# this file compares versions before diffing it, so a new top-level section under an
+# unchanged number would be a change nobody looked for.
+version: 4
 
-# One status vocabulary. Every section carries a `status`, and wherever anything below says
-# whether a thing exists yet or is disputed it uses these four words and no others — there
-# is no second spelling of the distinction anywhere in this file. Individual fields carry a
-# `status` only where they differ from their section, or inside a `divergence` block.
+# One status vocabulary. Every section that describes a LABEL carries a `status`, and
+# wherever anything below says whether a thing exists yet or is disputed it uses these four
+# words and no others — there is no second spelling of the distinction anywhere in this
+# file. Individual fields carry a `status` only where they differ from their section, or
+# inside a `divergence` block. Section 9 describes the DATASET rather than a label: nothing
+# in it exists or fails to exist, so it carries measurements instead of a status.
 status_vocabulary:
   emitted: >
     Observed in the output of a real run, checked field by field. A consumer may rely on
@@ -1312,7 +1317,154 @@ artifacts:
 
 
 # =============================================================================
-# 9. Required changes to src/ — NONE OF THEM MADE
+# 9. Known limitations of the dataset
+# =============================================================================
+#
+# Where a label is recoverable from something other than reading the document properly.
+# Sections 1–8 say what the labels ARE; this one says where measuring against them will
+# flatter a consumer, so that nobody discovers it from a production regression instead.
+#
+# WHY IT IS IN THE CONTRACT AND NOT IN A CODE COMMENT. A consumer reads this file. It does
+# not read `content_builder.py`, and it should not have to: a limitation recorded only in
+# the generator's internals is a limitation nobody downstream will ever meet.
+#
+# TWO KINDS OF CONSUMER, HURT IN DIFFERENT WAYS, and the difference decides which entry
+# below matters to whom:
+#
+#   A consumer that TRAINS on this dataset accumulates a shortcut across examples. Given a
+#   predictor that correlates with the label, it can reach a good score without learning the
+#   rule at all, and the loss shows up only on data where the correlation does not hold.
+#   Every entry below is a live risk for such a consumer.
+#
+#   A consumer that PROMPTS a language model accumulates nothing: it sees one document per
+#   call and carries no state between them, so it cannot learn "this seller means fully
+#   covered". The leak does not reach the model — it reaches the SCORECARD, and through it
+#   the human tuning prompts and thresholds against these numbers. A metric measured here is
+#   then an estimate of behaviour on this dataset's distribution and not on an open world,
+#   and the person adjusting a prompt until the number rises is the channel by which the
+#   bias arrives. Entries marked `hurts: evaluation` are the ones that reach this consumer.
+#
+# This is the same obligation policy.yaml states for `verdict_mix`, applied to predictors
+# rather than to class shares: report what was measured, and say on what.
+#
+# REFERENCE RUN for every share below — one archetype is registered, so the whole dataset is
+# Ukrainian pharmacy-and-nutrition receipts:
+#   generate-dataset --seed 20260803 --personas 30 --claims-per-persona 5
+#   -> 137 documents, 137 claims, 8 distinct counterparties,
+#      23 documents carrying a visible non-covered line.
+
+known_limitations:
+
+  - id: KL-01
+    name: the counterparty can foretell full coverage
+    predictor: counterparty
+    hurts: training
+    subset: >
+      Documents issued by a vendor whose profile in config/vendors.json sells nothing the
+      claimed category excludes. Such a vendor cannot produce a non-covered line, so every
+      document it issues is fully covered by construction and its name alone settles the
+      question.
+    share_in_reference_run: >
+      TWO FIGURES, AND THEY DIFFER. Structurally 0 of 137: the one category with a
+      registered archetype has no covered-only vendor left, because `nutrition_practice`
+      sells `medical_device` and the two sole traders in it issue mixed receipts like any
+      pharmacy — 9 of their 34 documents carry a non-covered line.
+
+      Empirically 9 of 137, on 1 of the 8 counterparties. `Аптека 911` drew 9 documents in
+      this run and every one of them came out fully covered, so a consumer applying the
+      stratification below finds a hit where the structural figure says none.
+
+      The difference is the whole point of stating both. A vendor that CANNOT sell an
+      excluded kind is a permanent property of the data: it will never appear on a
+      partially covered document, at any size, under any seed. A vendor that simply DID NOT
+      is a sampling artifact of one run: it can and does appear on one at another seed or a
+      larger sample. The first is leakage; the second is small-sample noise that looks
+      identical in a single run's cross-tabulation. A consumer cannot tell them apart from
+      the labels alone — the vendor profiles in config/vendors.json are what distinguishes
+      them, and that is why both numbers are here rather than the flattering one.
+    still_open_where: >
+      `private_tutor` under language_courses and `online_learning_platform` under
+      professional_development are covered-only today. Neither category has an archetype, so
+      neither reaches a dataset yet; both must gain a vendor that can carry a mixed basket
+      before their first template lands, or this entry stops being empty.
+    how_to_stratify: >
+      Group documents by `counterparty` and check whether any value occurs only with
+      `covered_fraction == 1.0`. Expect hits that are noise rather than leakage — see the
+      two figures above — so before acting on one, check the sample size behind it and,
+      where it matters, whether that vendor's profile in config/vendors.json sells anything
+      the category excludes. Report the genuinely covered-only counterparties separately, or
+      drop them from coverage metrics; a counterparty that CANNOT appear on a partially
+      covered document is not evidence that coverage was read correctly.
+    fixed_by: >
+      An affinity invariant enforced in the test suite: for every jurisdiction that has a
+      registered archetype, every covered item kind must be sold by a vendor that also sells
+      something the same category excludes.
+
+  - id: KL-02
+    name: every non-covered line comes from one of four item kinds
+    predictor: the line item itself
+    hurts: training, evaluation
+    subset: >
+      The whole dataset. One archetype is registered, so every claim is
+      `vitamins_nutrition`, whose `excluded_items` in policy.yaml holds exactly four kinds:
+      medicine, medical_device, cosmetics, hygiene. Every non-covered line in every document
+      is therefore a medicine, a blood-pressure monitor or test strips, a face cream, or a
+      shower gel or toothpaste.
+    share_in_reference_run: >
+      100% of non-covered lines, on the 23 of 137 documents that carry one — 26 distinct
+      printed strings, out of the 410 the vocabulary can produce for those four kinds.
+    why_it_is_not_a_defect: >
+      It IS the coverage rule of that category, not an accident of the vendor data: those
+      four kinds are what the policy excludes. No configuration change widens it. The real
+      fix is more categories with archetypes, which is a later wave of work.
+    consequence: >
+      Coverage metrics measured here are OPTIMISTIC relative to a real flow, where the
+      non-covered item is drawn from an open world rather than from four families. A system
+      that has learned four head nouns and a system that has learned to resolve an arbitrary
+      article against a policy score the same on this dataset and do not score the same in
+      production.
+    how_to_stratify: >
+      Report coverage metrics together with the inventory of non-covered item kinds they
+      were measured over, and treat them as conditional on it. Do not quote a single
+      coverage F1 as an estimate of open-world behaviour. If an open-world estimate is
+      needed, it has to come from documents this generator did not produce.
+
+  - id: KL-03
+    name: an item kind can foretell full coverage without the seller being read
+    predictor: the line item itself
+    hurts: training
+    subset: >
+      A covered item kind sold only by profiles that stock nothing the same category
+      excludes. A line printing that kind then guarantees a fully covered document, and —
+      unlike KL-01 — a consumer picks the shortcut up without ever looking at the
+      counterparty.
+    share_in_reference_run: >
+      0 of 137. `online_course` and `certification_exam` had this shape (both selling
+      profiles were covered-only) and `instrument_rent` likewise; the affinity data was
+      changed so that a training centre also sells travel and a music school also sells
+      refreshments. Neither kind reaches a dataset yet in any case.
+    still_open_where: >
+      Nowhere, on this entry's own mechanism. The PL, DE and ES vendor lists do fail the
+      enforced test, but for the SIBLING reason rather than this one: three covered kinds
+      have no seller at all in those lists — `sport.pool_membership` in PL, and
+      `vitamins_nutrition.nutritionist_visit` in DE and in ES. That is a kind missing from
+      the dataset, which is the failure KL-01's invariant also guards against, and not a
+      kind whose every seller is covered-only. There is no genuine covered-only-seller case
+      in any non-UA list.
+
+      Both must be closed before those jurisdictions get their first archetype, because the
+      test is enforced only where one is registered. Recorded here rather than left to the
+      test output because a reader of this section would otherwise attribute the failure to
+      the leak this entry describes, which would be the wrong repair.
+    how_to_stratify: >
+      Cross-tabulate `item_kind` against `covered_fraction` over the whole dataset. Any kind
+      appearing only on fully covered documents is a shortcut; exclude it, or report on it
+      separately, before quoting a coverage metric.
+    fixed_by: same invariant as KL-01, stated over item kinds rather than over vendors
+
+
+# =============================================================================
+# 10. Required changes to src/ — NONE OF THEM MADE
 # =============================================================================
 #
 # Every divergence above that can only be closed by editing this repository, collected in one

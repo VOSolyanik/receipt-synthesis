@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from receipt_synth.config import load_policy
+from receipt_synth.config import coverage_targets, load_policy
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
     ClaimEvaluation,
@@ -118,19 +118,17 @@ _NO_REASON_RECORDED = (
     "no mechanism registered — whoever added it owes both"
 )
 
-# What fraction of a mixed basket is meant to be covered. Bounded away from both ends: at
-# 1.0 there would be no non-covered line and the claim would not be partially covered at
-# all, and at 0 there would be no covered line — which `policy_engine` labels `rejected`, a
-# different verdict from the one being planned here.
+# What fraction of a mixed basket is meant to be covered comes from
+# `config/generation.yaml`, because it is a decision about the shape of the dataset's
+# `covered_fraction` and not a mechanism this module implements. The reasoning for putting
+# it in that file rather than beside `verdict_mix` in policy.yaml is stated at its head.
 #
 # An ASPIRATION, not a dial. `content_builder._repriced` clamps every non-covered line
 # into its item kind's own price range, so a target the range cannot reach is not reached:
-# with the excluded vocabulary `config/vendors.json` currently offers, a 0.90 target on a
-# small covered side realizes nearer 0.64, because the non-covered line cannot be priced
-# below its floor. What the target *does* guarantee is the verdict — any non-covered line
-# at all makes the claim partially covered — and that is the only thing a label depends
-# on. Read the realized coverage off `covered_fraction`, never off this tuple.
-_MIXED_COVERAGE_TARGETS = tuple(Decimal(f"0.{percent}") for percent in range(30, 95, 5))
+# a high target on a small covered side realizes lower, because the non-covered line cannot
+# be priced below its floor. What the target *does* guarantee is the verdict — any
+# non-covered line at all makes the claim partially covered — and that is the only thing a
+# label depends on. Read the realized coverage off `covered_fraction`, never off the list.
 
 
 def unrealizable_verdicts() -> list[Verdict]:
@@ -371,7 +369,7 @@ def plan_claim(
     if verdict is Verdict.PARTIALLY_COVERED:
         cause = cause or draw_partially_covered_cause(rng)
         if cause == "mixed_items":
-            coverage_target = rng.choice(_MIXED_COVERAGE_TARGETS)
+            coverage_target = rng.choice(coverage_targets())
         elif cause == "limit_exhausted":
             # Realized by a basket the remaining balance cannot absorb. The engine decides
             # whether it actually did; nothing here assumes it.

@@ -32,7 +32,16 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from string import Formatter
 
-from receipt_synth.config import category, jurisdiction
+from receipt_synth.config import (
+    acquirers,
+    category,
+    excluded_line_counts,
+    jurisdiction,
+    placeholder_values,
+    price_range,
+    quantity_choices,
+    vendor_profile,
+)
 from receipt_synth.schemas import Capture, DocGroundTruth, DocType, LineItem
 
 KOPIYKA = Decimal("0.01")
@@ -499,43 +508,26 @@ class PrroReceipt:
 
 # --- item content ------------------------------------------------------------
 
-# Values for the placeholders in the line-item name templates of policy.yaml. Plausible
-# over-the-counter strengths and pack sizes — general product knowledge, not taken from
-# any particular vendor's catalogue.
-#
-# `{brand}` is deliberately absent: brand vocabulary belongs in vendors.json, which is
-# still a stub. Templates carrying a placeholder that cannot be filled are skipped
-# rather than rendered with a literal brace.
-_PLACEHOLDER_VALUES: dict[str, tuple[str, ...]] = {
-    "dose": ("400", "500", "1000", "2000", "5000"),
-    "n": ("20", "30", "60", "90", "120"),
-    "w": ("250", "500", "900"),
-}
-
-# Retail price ranges in kopiykas, per item kind. Plausible Ukrainian pharmacy prices;
-# like the placeholder values, these are a property of the merchandise rather than of
-# any one seller, and they move to vendors.json when it carries real catalogues.
-_PRICE_RANGE_KOPIYKAS: dict[str, tuple[int, int]] = {
-    "vitamin_complex": (18_000, 95_000),
-    "mineral_supplement": (9_000, 42_000),
-    "nutritionist_visit": (60_000, 150_000),
-    "default": (10_000, 50_000),
-}
+# Everything a line item is made of — the vocabulary that fills `{brand}` and `{dose}`,
+# what an article costs, how many of it a basket holds — is data and lives in
+# `config/generation.yaml`. It used to live here, and it was the only Ukraine-and-pharmacy
+# assumption left in the codebase.
 
 _ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
+# The legal form as printed before the name. A ФОП is printed WITHOUT quotes: a sole
+# trader trades under a person's name, not under a firm name, and «ФОП «Прізвище І. Б.»»
+# is not a form any Ukrainian document uses.
 _LEGAL_FORM_PREFIX = {"TOV": "ТОВ", "FOP": "ФОП", "PRAT": "ПрАТ"}
-
-# How many of an article a receipt lists. An assumption, not a measurement: nothing here
-# was fitted to observed baskets, and the weighting toward one is ordinary shopping
-# knowledge — a shopper buying two identical packs is less common than buying one. It
-# affects how a document looks, never what a label says. Kept as a constant because
-# `estimated_line_value` sizes a basket from its mean, and the two must not drift apart.
-_QTY_CHOICES = (1, 1, 1, 2)
+_SOLE_TRADER = "FOP"
 
 # The longest receipt this builder will print. A cap rather than a preference: the planner
 # sizes a basket upward when it needs one large enough to overrun an annual limit, and
 # without a bound a large enough remaining balance would ask for a receipt no shop issues.
+#
+# Stays in code deliberately, unlike the item vocabulary next to it. It is a bound the
+# planner needs a name for — `claim_planner._overrun_item_count` clamps to it — not a knob
+# anyone tunes to change what a dataset looks like.
 MAX_LINE_ITEMS = 20
 
 
@@ -545,49 +537,78 @@ def _placeholders(template: str) -> list[str]:
     return sorted({name for _, name, _, _ in Formatter().parse(template) if name})
 
 
-def _is_renderable(template: str) -> bool:
-    return set(_placeholders(template)) <= _PLACEHOLDER_VALUES.keys()
+def _fill_placeholders(
+    template: str, item_kind: str, rng: random.Random, language: str = "uk"
+) -> str:
+    """A line-item name with its placeholders resolved.
 
-
-def _fill_placeholders(template: str, rng: random.Random) -> str | None:
-    """A line-item name with its placeholders resolved, or ``None`` if some placeholder
-    has no vocabulary yet."""
-    if not _is_renderable(template):
-        return None
-    names = _placeholders(template)
-    return template.format(**{name: rng.choice(_PLACEHOLDER_VALUES[name]) for name in names})
-
-
-def renderable_kinds(catalogue: dict, language: str = "uk") -> list[str]:
-    """The item kinds of a bucket that can currently be printed at all.
-
-    A kind whose every name template carries a placeholder with no vocabulary yet — the
-    `{brand}` and `{drug}` families, which wait on `config/vendors.json` — is not a bug and
-    must not raise: it simply cannot appear on a document until the vocabulary lands. This
-    is where that is decided, once, instead of at each draw.
+    Raises ``KeyError`` through `config.placeholder_values` when a placeholder has no
+    vocabulary. This used to return ``None`` and the caller skipped the template, which
+    meant a name template nobody had filled in silently left the dataset's vocabulary
+    narrower than the policy declares — and nothing anywhere said so.
     """
-    return sorted(
-        kind
-        for kind, names in catalogue.items()
-        if any(_is_renderable(template) for template in names[language])
+    return template.format(
+        **{
+            name: rng.choice(placeholder_values(item_kind, name, language))
+            for name in _placeholders(template)
+        }
     )
+
+
+def sellable_kinds(catalogue: dict, vendor: dict) -> list[str]:
+    """The item kinds of a bucket that this vendor actually sells.
+
+    A pharmacy does not sell "Складання плану харчування", and until the affinity existed
+    nothing stopped it from printing one. The affinity is vendor data — a property of the
+    trade, declared per profile in `config/vendors.json` — so this function only intersects
+    it with the bucket and never decides what a shop stocks.
+
+    Sorted, because the result is drawn from: iterating the profile's own set would order
+    the draws by a hash that varies between interpreter runs.
+    """
+    sells = vendor_profile(vendor["profile"])
+    return sorted(kind for kind in catalogue if kind in sells)
+
+
+def vendor_can_carry(vendor: dict, category_id: str, *, mixed: bool) -> bool:
+    """Whether this vendor can issue the receipt a plan asks for.
+
+    Asked by the assembler before a vendor is chosen, so that a plan needing a non-covered
+    line is never handed to a vendor that sells nothing non-covered. Honest profiles exist
+    that cannot — a nutrition practice sells services and nothing the plan excludes — and
+    the alternative to filtering here is a builder that fails on a vendor which never could.
+    """
+    spec = category(category_id)
+    if not sellable_kinds(spec["covered_items"], vendor):
+        return False
+    return not mixed or bool(sellable_kinds(spec["excluded_items"], vendor))
+
+
+def _minor(amount: Decimal) -> int:
+    """An amount in hryvnias as a whole number of kopiykas.
+
+    Configuration states prices on the same scale as `annual_limit` in policy.yaml, which
+    is the scale a human reads. Whole minor units are what the price draw and the reprice
+    clamp need, and converting here is what keeps that a detail of this module rather than
+    something the file's reader has to hold in their head. Exact: `config.price_range`
+    refuses a range finer than two decimal places, so nothing is rounded away.
+    """
+    return int(amount.scaleb(2))
 
 
 def _build_line_item(
     item_kind: str, templates: list[str], rng: random.Random, *, covered: bool
 ) -> LineItem:
-    usable = [name for name in (_fill_placeholders(t, rng) for t in templates) if name]
-    if not usable:
-        raise ValueError(f"no renderable name template for item kind {item_kind!r}")
+    names = [_fill_placeholders(template, item_kind, rng) for template in templates]
 
-    low, high = _PRICE_RANGE_KOPIYKAS.get(item_kind, _PRICE_RANGE_KOPIYKAS["default"])
+    low, high = price_range(item_kind)
     return LineItem(
-        name=rng.choice(usable),
+        name=rng.choice(names),
         item_kind=item_kind,
-        qty=Decimal(rng.choice(_QTY_CHOICES)),
+        qty=Decimal(rng.choice(quantity_choices())),
         # Drawn in whole ten-kopiyka steps: retail prices do not end in arbitrary
         # kopiykas, and an exact integer keeps the sum exact.
-        price=Decimal(rng.randrange(low, high, 10)) / 100,
+        price=Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100,
         covered=covered,
         vat_letter=vat_letter_for_kind(item_kind, "UA", rng),
     )
@@ -633,21 +654,22 @@ def estimated_line_value(category_id: str) -> Decimal:
     enough to exceed a remaining annual balance. An estimate and nothing else: no label is
     ever derived from it, and a basket that misses the balance is reported as a miss
     rather than relabelled.
+
+    Averaged over every covered kind of the category rather than over the ones the vendor
+    sells, because the planner runs before a vendor is chosen. That widens the error — a
+    pharmacy sells none of the four-figure service kinds the average includes — and the
+    error is absorbed the same way as every other: a basket that fails to overrun the
+    balance is labelled by what it turned out to be.
     """
-    kinds = renderable_kinds(category(category_id)["covered_items"])
+    kinds = sorted(category(category_id)["covered_items"])
     if not kinds:
-        raise ValueError(f"category {category_id!r} has no printable covered item")
+        raise ValueError(f"category {category_id!r} declares no covered item")
 
-    ranges = [_PRICE_RANGE_KOPIYKAS.get(kind, _PRICE_RANGE_KOPIYKAS["default"]) for kind in kinds]
-    mean_price = Decimal(sum((low + high) for low, high in ranges)) / (2 * len(ranges) * 100)
-    mean_qty = Decimal(sum(_QTY_CHOICES)) / len(_QTY_CHOICES)
+    ranges = [price_range(kind) for kind in kinds]
+    mean_price = sum((low + high) for low, high in ranges) / (2 * len(ranges))
+    quantities = quantity_choices()
+    mean_qty = Decimal(sum(quantities)) / len(quantities)
     return (mean_price * mean_qty).quantize(KOPIYKA)
-
-
-# Non-covered lines per mixed basket. Usually one — the carrier bag, the tube of cream —
-# because that is what the imperfection catalogue describes: a non-qualifying item inside
-# an otherwise qualifying purchase.
-_EXCLUDED_LINE_COUNTS = (1, 1, 2)
 
 
 def _repriced(item: LineItem, line_total: Decimal) -> LineItem:
@@ -658,9 +680,9 @@ def _repriced(item: LineItem, line_total: Decimal) -> LineItem:
     realized coverage only approaches the target — which is enough, because the target
     only has to land the claim on the right side of `full_threshold`.
     """
-    low, high = _PRICE_RANGE_KOPIYKAS.get(item.item_kind, _PRICE_RANGE_KOPIYKAS["default"])
+    low, high = price_range(item.item_kind)
     kopiykas = int((line_total / item.qty * 100).to_integral_value(rounding=ROUND_HALF_UP))
-    kopiykas = min(max(kopiykas - kopiykas % 10, low), high)
+    kopiykas = min(max(kopiykas - kopiykas % 10, _minor(low)), _minor(high))
     return item.model_copy(update={"price": Decimal(kopiykas) / 100})
 
 
@@ -670,13 +692,11 @@ def _excluded_ceiling(kinds: list[str]) -> Decimal:
     The sizing bound for the loop below: at qty 1 no non-covered line can be repriced
     above this without leaving the range its item kind is plausible in.
     """
-    return Decimal(
-        max(_PRICE_RANGE_KOPIYKAS.get(kind, _PRICE_RANGE_KOPIYKAS["default"])[1] for kind in kinds)
-    ) / 100
+    return max(price_range(kind)[1] for kind in kinds)
 
 
 def _build_mixed_basket(
-    rng: random.Random, *, category_id: str, count: int, coverage_target: Decimal
+    rng: random.Random, *, category_id: str, vendor: dict, count: int, coverage_target: Decimal
 ) -> list[LineItem]:
     """A basket drawn from both the covered and the excluded bucket of a category.
 
@@ -694,16 +714,17 @@ def _build_mixed_basket(
     excluded_catalogue = spec["excluded_items"]
 
     covered = _draw_distinct_items(
-        rng, renderable_kinds(covered_catalogue), covered_catalogue, count, covered=True
+        rng, sellable_kinds(covered_catalogue, vendor), covered_catalogue, count, covered=True
     )
     if not covered:
         raise ValueError(f"category {category_id!r} produced no covered line")
 
-    excluded_kinds = renderable_kinds(excluded_catalogue)
+    excluded_kinds = sellable_kinds(excluded_catalogue, vendor)
     if not excluded_kinds:
         raise ValueError(
-            f"category {category_id!r} has no non-covered item this generator can print "
-            "yet — every excluded name template still needs a placeholder vocabulary"
+            f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
+            f"category {category_id!r} excludes, so it cannot carry a mixed basket — ask "
+            "`vendor_can_carry` before choosing the vendor"
         )
 
     # covered / (covered + excluded) = target  =>  excluded = covered × (1 − target) / target
@@ -711,7 +732,7 @@ def _build_mixed_basket(
         return line_items_total(items) * (1 - coverage_target) / coverage_target
 
     ceiling = _excluded_ceiling(excluded_kinds)
-    wanted = max(rng.choice(_EXCLUDED_LINE_COUNTS), math.ceil(budget(covered) / ceiling))
+    wanted = max(rng.choice(excluded_line_counts()), math.ceil(budget(covered) / ceiling))
     excluded = _draw_distinct_items(
         rng, excluded_kinds, excluded_catalogue,
         min(wanted, MAX_LINE_ITEMS - len(covered)), covered=False,
@@ -719,12 +740,12 @@ def _build_mixed_basket(
     if not excluded:
         raise ValueError(f"category {category_id!r} produced no non-covered line")
 
-    # A low coverage target asks for more non-covered money than the category's excluded
-    # bucket can plausibly carry — today most of those name templates cannot be printed at
-    # all, because `config/vendors.json` is still a stub and `{brand}` and `{drug}` have no
-    # vocabulary. Shrinking the covered side is the honest way to reach the ratio; the
+    # A low coverage target can ask for more non-covered money than the kinds this vendor
+    # sells will plausibly carry: every non-covered line is clamped into its own price
+    # range, so a pharmacy basket of vitamins cannot be balanced by one 4 UAH tube of
+    # cream. Shrinking the covered side is the honest way to reach the ratio; the
     # alternative, one absurdly priced non-covered line, would be a visible artifact in
-    # the image. This loop stops firing as the vocabulary lands.
+    # the image.
     while len(covered) > 1 and budget(covered) > ceiling * len(excluded):
         covered.pop()
 
@@ -781,6 +802,10 @@ def build_prro_receipt(
     and the builder realizes it. For ``covered`` the basket is drawn from the category's
     covered items alone; for ``partially_covered`` by ``mixed_items`` the caller clears
     the flag and states the ``coverage_target`` the basket should come to.
+
+    ``vendor`` is an entry of `config/vendors.json`: its ``profile`` decides which item
+    kinds may appear on the receipt, and its ``legal_form`` decides which identifier the
+    seller block prints. Ask `vendor_can_carry` before choosing one for a mixed basket.
     """
     rules = jurisdiction("UA")
     receipt_rules = rules["receipt"]
@@ -797,9 +822,13 @@ def build_prro_receipt(
                 "means every line is covered"
             )
         catalogue = category(category_id)["covered_items"]
-        items = _draw_distinct_items(
-            rng, renderable_kinds(catalogue), catalogue, count, covered=True
-        )
+        kinds = sellable_kinds(catalogue, vendor)
+        if not kinds:
+            raise ValueError(
+                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
+                f"category {category_id!r} covers"
+            )
+        items = _draw_distinct_items(rng, kinds, catalogue, count, covered=True)
     else:
         if coverage_target is None:
             raise ValueError(
@@ -811,17 +840,27 @@ def build_prro_receipt(
                 f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
             )
         items = _build_mixed_basket(
-            rng, category_id=category_id, count=count, coverage_target=coverage_target
+            rng,
+            category_id=category_id,
+            vendor=vendor,
+            count=count,
+            coverage_target=coverage_target,
         )
     total = line_items_total(items)
 
     # -- who sold it
+    #
+    # Which identifier is printed follows the legal form, and it is not cosmetic: a ФОП has
+    # no ЄДРПОУ at all, so printing one under the "ІД" label would put an identifier on the
+    # document that no register could resolve to the seller named beside it.
+    is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
+    identifier = rules["identifiers"]["rnokpp" if is_sole_trader else "edrpou"]
     seller = Seller(
         name=vendor["name"],
         legal_form=vendor["legal_form"],
         address=address,
-        tax_code=generate_edrpou(rng),
-        tax_code_label=rules["identifiers"]["edrpou"]["label"],
+        tax_code=generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng),
+        tax_code_label=identifier["label"],
         vat_number=f"{rng.randint(0, 10**12 - 1):012d}",
     )
 
@@ -829,7 +868,10 @@ def build_prro_receipt(
     acquiring_rules = rules["acquiring_block"]
     acquiring_examples = {f["key"]: f for f in acquiring_rules["fields"]}
     acquiring = Acquiring(
-        acquirer=acquiring_examples["acquirer"]["example"],
+        # Drawn rather than fixed. The acquirer used to be the single `example` string of
+        # fiscal-rules.yaml, which put the same bank name on every receipt in the dataset —
+        # a printed field with one value teaches a consumer the value, not the field.
+        acquirer=rng.choice(acquirers("UA")),
         terminal_id=f"{rng.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{rng.randint(0, 10**7 - 1):07d}",
         operation=acquiring_examples["operation"]["values"][0],
         card_masked=f"{rng.randint(0, 9999):04d}XXXXXXXX{rng.randint(0, 9999):04d}",
@@ -910,6 +952,12 @@ def validate_vat_letter(item_kind: str, letter: str | None, country: str) -> boo
 
 
 def legal_name(seller: Seller) -> str:
-    """The seller's name as printed, with its legal form."""
+    """The seller's name as printed, with its legal form.
+
+    A sole trader is printed without quotes — ``ФОП Ковальчук О. С.`` — because the name is
+    a person's, not a firm's. Every other form takes the Ukrainian quotation marks.
+    """
     prefix = _LEGAL_FORM_PREFIX.get(seller.legal_form, seller.legal_form)
+    if seller.legal_form == _SOLE_TRADER:
+        return f"{prefix} {seller.name}"
     return f"{prefix} «{seller.name}»"

@@ -138,9 +138,11 @@ See [config/README.md](config/README.md) for the full model.
 | File | Role |
 |---|---|
 | `config/policy.yaml` | Categories, limits, coverage thresholds, active period. The labelling policy — because generation is label-first, this file *is* the ground truth. Declarative on purpose, so any downstream document-verification pipeline can load the same file and stay consistent with the labels it was trained on. |
+| `config/labelling-schema.yaml` | The contract: what is labelled, how each value is compared, and the dataset's known limitations. Read by consumers, not by the generator. |
 | `config/fiscal-rules.yaml` | VAT rates and letter codes, identifier formats and checksums, receipt layout constants, fiscal QR payloads per jurisdiction. Law, not policy. |
+| `config/generation.yaml` | The vocabulary that fills the placeholders of a line-item name template, retail price ranges, basket shape, mixed-basket coverage targets. Generation input — not a label and not law. |
 | `config/fx-rates.yaml` | Static exchange rates. Static by design — a live rates API would break determinism. |
-| `config/vendors.json` | Vendor, bank and payment-provider names per category and jurisdiction. |
+| `config/vendors.json` | Vendor, bank and payment-provider names per category and jurisdiction, and which item kinds each sort of outlet sells. |
 
 Nothing in the pipeline hardcodes category names, limits or thresholds; replacing `config/policy.yaml`
 retargets the generator at a different plan.
@@ -150,7 +152,8 @@ retargets the generator at a different plan.
 - **A document archetype** — add `templates/<slug>.html` and `.css`, mark extractable fields with
   `data-field="<name>"`, and register the archetype with its document class.
 - **A benefit category** — add an entry to `config/policy.yaml` with `intent`, an annual limit and the three
-  item buckets, plus vendors in `config/vendors.json`.
+  item buckets; prices and placeholder vocabulary in `config/generation.yaml`; vendors in
+  `config/vendors.json`.
 - **A jurisdiction** — add a block to `config/fiscal-rules.yaml` (VAT rates and letters, identifier formats
   and checksums, layout constants, fiscal QR payload), matching templates, and a font covering the script.
 
@@ -172,7 +175,8 @@ and thresholds are this project's own plausible values and describe no real empl
 ## Repository layout
 
 ```text
-config/                 labelling policy, fiscal rules, exchange rates, vendors
+config/                 labelling policy, labelling contract, fiscal rules, generation input,
+                        exchange rates, vendors
 templates/              document archetypes (HTML + CSS)
 fonts/                  redistributable fonts (OFL) + license texts
 src/receipt_synth/      the generator

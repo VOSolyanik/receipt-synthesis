@@ -33,7 +33,7 @@ def make_receipt(seed: int = 20260803):
         random.Random(seed),
         category_id="vitamins_nutrition",
         issued_at=datetime(2026, 8, 3, 14, 22, 51),
-        vendor={"name": "Аптека АНЦ", "legal_form": "TOV"},
+        vendor={"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy"},
         address="м. Київ, вул. Хрещатик, 22",
     )
 

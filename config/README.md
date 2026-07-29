@@ -1,6 +1,6 @@
 # Configuration
 
-Five files, split by **nature** rather than by convenience. The split is deliberate and worth preserving:
+Six files, split by **nature** rather than by convenience. The split is deliberate and worth preserving:
 each file changes for a different reason, and two of them are meaningful outside this repository.
 
 | File | Nature | Changes when | Meaningful to consumers |
@@ -8,10 +8,11 @@ each file changes for a different reason, and two of them are meaningful outside
 | `policy.yaml` | **Policy** — what a benefit plan reimburses | The plan being modelled changes | **Yes** |
 | `labelling-schema.yaml` | **Contract** — what is labelled, and how a value is compared | A field, a type or a comparison rule changes | **Yes** |
 | `fiscal-rules.yaml` | **Law** — VAT, identifiers, receipt layout | Legislation changes | No |
+| `generation.yaml` | **Generation input** — the vocabulary and distributions the draws use | You want more variety, different prices or a different basket shape | No |
 | `fx-rates.yaml` | **Reference data** — exchange rates | Rarely; static on purpose | No |
-| `vendors.json` | **Data** — merchant names | You want different merchants | No |
+| `vendors.json` | **Data** — merchant names, and what each sort of outlet sells | You want different merchants | No |
 
-Four of the five are read by the generator. `labelling-schema.yaml` is not: it describes the generator's
+Five of the six are read by the generator. `labelling-schema.yaml` is not: it describes the generator's
 output to whoever consumes it, and there is deliberately no loader for it in `src/`.
 
 ---
@@ -164,15 +165,22 @@ requirements demand. Where the two disagree it names both and picks neither — 
 divergence quietly would hide it rather than fix it. Every `src/` change those divergences imply is collected
 in a `required_changes` block at the foot of the file; none has been made.
 
-Read the file itself for the field lists and rules. Three things about it belong here:
+Read the file itself for the field lists and rules. Four things about it belong here:
 
 - **One model serves all seven document types.** Nothing in `schemas.py` varies the label shape by
   `doc_type`, while the consumer's requirements are stated per type. That gap is recorded in the file rather
   than closed, because a per-type label shape would make the label depend on the classification answer — one
   of the things being evaluated.
-- **Every section is marked `emitted`, `forward_contract`, `divergent` or `undecided`.** One archetype ships
-  so far, so much of the file is contract rather than observation, and the two are never mixed in one
-  section. Each `emitted` statement was verified field by field against a freshly generated label file.
+- **Every section describing a label is marked `emitted`, `forward_contract`, `divergent` or `undecided`.**
+  One archetype ships so far, so much of the file is contract rather than observation, and the two are never
+  mixed in one section. Each `emitted` statement was verified field by field against a freshly generated
+  label file.
+- **`known_limitations` names every place a label is recoverable without reading the document properly** —
+  which predictor leaks, on which subset, what share of a stated reference run, and how a consumer should
+  stratify to avoid being flattered by it. It is here rather than in a code comment because a consumer reads
+  the contract and not `content_builder.py`, and it distinguishes the two kinds of consumer: one that trains
+  on the dataset absorbs the shortcut, one that prompts a language model does not — but its scorecard, and
+  the human tuning against it, still do.
 - **Nothing in `src/` reads it.** It describes this generator's output to its consumers; adding a loader
   would be inventing a caller.
 
@@ -198,6 +206,46 @@ document — never the concrete values printed on it.
 
 ---
 
+## `generation.yaml` — generation input
+
+The vocabulary and the distributions the draws use: what fills a `{brand}` or a `{dose}` in the name
+templates of `policy.yaml`, what an article of each item kind plausibly costs, how many of it a basket
+holds, and what coverage ratio a deliberately mixed basket aims at.
+
+**Why it is not part of `policy.yaml`.** A benefit plan document states what is reimbursed; it says nothing
+about what a vitamin pack costs or which brands a pharmacy stocks. Those are properties of the merchandise.
+The item kinds and the name templates stay in `policy.yaml` because they *are* the label space — this file
+only fills the holes those templates leave.
+
+**Why the coverage targets are here and not beside `verdict_mix`.** They shape a label distribution, which
+makes them a relative of `verdict_mix` rather than of a price range. But they are an *aspiration*: the
+builder clamps every non-covered line into its item kind's own price range, so the realized ratio only
+approaches the target, and `covered_fraction` in the ground truth is measured from the document that was
+actually built. A consumer that loaded the target would learn nothing it could use and might mistake an
+aspiration for a label — so it belongs with the generator's own draw inputs.
+
+**Placeholder vocabularies are keyed by item kind**, then by language, with a language-neutral `shared`
+scope and a kind-independent `default` scope. Keyed by kind because one placeholder means different things
+in different kinds: `{brand}` on `hardware` wants a laptop maker and on `cosmetics` wants a skincare house,
+and `{dose}` is 400–5000 IU for a vitamin but 14–45 mg for an iron tablet.
+
+**A placeholder with no vocabulary raises.** It used to make the builder skip the template silently, which
+left the printed vocabulary of the dataset a subset of the one `policy.yaml` declares, with nothing saying
+which subset. The test suite sweeps every template of every category in both languages, so a new template
+naming a new placeholder fails there rather than at generation time.
+
+**Prices are stated on the same scale as `policy.yaml`** — hryvnias, as decimal text, matching
+`annual_limit`. One scale across both files, because they are read together and a second scale carried only
+by a suffix in a field name is a two-order-of-magnitude error that breaks nothing: it prints an implausible
+receipt and waits. Strings rather than YAML numbers so the value reaches `Decimal` as decimal text and stays
+exact to the kopiyka; converting to minor units for the draw is the code's job. A range stated to more than
+two decimal places is refused rather than rounded.
+
+UAH-only, honestly so: every archetype this generator has is Ukrainian. Per-jurisdiction ranges arrive with
+the first non-UA archetype.
+
+---
+
 ## `fx-rates.yaml` — reference data
 
 Static rates, per unit of foreign currency, in the reporting currency of `policy.yaml`.
@@ -213,15 +261,34 @@ disabled by default, for datasets that need rate variation as a signal.
 Merchant, bank, payment-provider and marketplace names, per category and jurisdiction. Category keys must
 match the category ids in `policy.yaml`.
 
+Two blocks besides the names themselves:
+
+- **`vendor_profiles`** — vendor ↔ item-kind affinity. A pharmacy does not sell a personalised nutrition
+  plan, and until this block existed nothing stopped it from printing one. Each profile lists every item
+  kind an outlet of that sort can put on a line; a vendor carries a profile slug rather than its own list,
+  because outlets of the same sort sell the same things — the affinity is a property of the trade. A profile
+  that intersects a category's `covered_items` can issue a receipt for it at all; one that also intersects
+  its `excluded_items` can carry a mixed basket. Honest profiles exist that cannot, so the assembler picks a
+  vendor that can carry the plan instead of letting the builder fail on one that never could.
+- **`acquirers`** — the bank name printed in the card-acquiring block of someone else's receipt. Kept apart
+  from `banks`, whose entries own a template and therefore decide a layout.
+
 The `aggregators` block holds payment intermediaries — payees that break the visible link between a payment
 and the merchant, which drives the "paid through an aggregator" imperfection.
+
+`legal_form` decides how the name is printed and which identifier the seller block carries: a ТОВ prints
+`ТОВ «Name»` with its ЄДРПОУ, a ФОП prints `ФОП Surname I. B.` without quotes and with its РНОКПП. The
+names cover naming patterns on purpose — legal entity vs sole trader, Cyrillic vs Latin vs mixed, chain vs
+single outlet — because that is what counterparty extraction is trained on.
 
 ---
 
 ## Adding to the configuration
 
 **A benefit category** — add an entry to `policy.yaml` with `intent`, an annual limit and the three item
-buckets, then add vendors for it under each jurisdiction in `vendors.json`.
+buckets; a price range and any placeholder vocabulary its templates need in `generation.yaml`; then vendors
+for it under each jurisdiction in `vendors.json`, each with a profile that sells at least one of its covered
+kinds.
 
 **A jurisdiction** — add a block to `fiscal-rules.yaml` (VAT rates and letters, identifier formats and
 checksums, number and date formats, layout constants, fiscal QR payload), then add matching templates and a
