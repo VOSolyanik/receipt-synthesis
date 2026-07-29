@@ -98,7 +98,9 @@ src/receipt_synth/
   persona_generator.py
   claim_planner.py
   policy_engine.py              # the oracle: derives a claim's verdict from policy.yaml.
-                                # Independent of any consumer's engine by design (Ф-107)
+                                # Never shares interpretation code with a consumer's engine.
+                                # The policy is committed before any engine is scored against
+                                # it, so the labels cannot have been fitted to that engine
   content_builder.py            # + invariant validators
   renderer.py                   # Jinja2 + Playwright + bbox
   degrader.py                   # Augraphy + Albumentations
