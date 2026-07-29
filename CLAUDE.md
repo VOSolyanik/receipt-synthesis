@@ -82,14 +82,23 @@ config/
   fiscal-rules.yaml             # VAT letters, identifier formats, receipt layout per jurisdiction — law
   fx-rates.yaml                 # static exchange rates — reference data, static for determinism
   vendors.json                  # public vendor lists per category and jurisdiction
+  generation.yaml               # placeholder vocabulary, price ranges, basket draw inputs.
+                                # Merchandise, not plan — nothing here reaches a label
+  labelling-schema.yaml         # the contract: field names, types, comparison rules.
+                                # NOTHING IN src/ READS IT — consumed downstream, and a
+                                # loader here would be inventing a caller
   README.md                     # the configuration model
 templates/                      # 24 archetypes: <slug>.html + <slug>.css
 fonts/                          # redistributable fonts only (+ fonts/LICENSES/)
 src/receipt_synth/
-  config.py                     # loaders for the four config files — read by stages at
-                                # both ends of the pipeline, so it belongs to neither
+  config.py                     # loaders for the config files the generator itself reads —
+                                # policy, fiscal rules, fx, vendors, generation. NOT the
+                                # labelling contract. Read by stages at both ends of the
+                                # pipeline, so it belongs to neither
   persona_generator.py
   claim_planner.py
+  policy_engine.py              # the oracle: derives a claim's verdict from policy.yaml.
+                                # Independent of any consumer's engine by design (Ф-107)
   content_builder.py            # + invariant validators
   renderer.py                   # Jinja2 + Playwright + bbox
   degrader.py                   # Augraphy + Albumentations
