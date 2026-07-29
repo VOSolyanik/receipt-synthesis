@@ -62,13 +62,17 @@ sources:
     is not repeated in this file: every label record carries its own `generator_version`,
     and a copy here would be a second thing to keep in step.
   consumer: >
-    The neighbouring product requirements document — §4.3 (extraction fields per document
-    type and the entity model), Ф-301 (classifier classes and metric), Ф-303 (extraction
-    thresholds and field names), Ф-310 to Ф-312 (QR, fiscality markers, fiscal scheme),
-    Ф-401 to Ф-403 (validation and line-item guards), Ф-406 (duplicates), Ф-407
-    (cross-document checks) — together with the concept note on the open language and
-    currency scope. Requirements are cited by their identifier and never quoted at length;
-    that document is authoritative for its own contents and is never edited from here.
+    The neighbouring product requirements document — its extraction fields per document
+    type and its entity model (§4.3), its classifier classes and metric, its extraction
+    thresholds and field names, its rules for QR content, fiscality markers and fiscal
+    schemes, its validation and line-item guards, its duplicate detection and its
+    cross-document checks — together with the concept note on the open language and
+    currency scope. THAT DOCUMENT IS NOT IN THIS REPOSITORY AND NEVER WILL BE. Individual
+    requirements are therefore restated below in substance and on their own authority,
+    never cited by requirement number: a number an outside reader cannot resolve carries
+    nothing, and it goes on looking authoritative while pointing at something else the
+    first time that document is renumbered. That document remains authoritative for its
+    own contents and is never edited from here.
 
 
 # =============================================================================
@@ -79,7 +83,8 @@ sources:
 # `document_evidence` in policy.yaml. What each type PROVES — subject, payment, or both —
 # is that block in policy.yaml and is not copied here.
 #
-# `classifier_role` follows Ф-301, which settles it. There is no per-type narrative below:
+# `classifier_role` follows the consumer's classifier vocabulary — four target classes plus
+# an `other` catch-all — which settles it. There is no per-type narrative below:
 # what each document class is belongs to docs/architecture.md#document-archetypes.
 #
 # `prd_required_fields` is §4.3's required-field table for the type, EXPRESSED IN THE SHAPE
@@ -119,14 +124,15 @@ document_types:
         generator: has_fiscal_number (boolean)
         status: divergent
         note: >
-          Ф-312 requires the jurisdiction, on the reasoning that UA ПРРО, PL paragon, AR
-          Factura, PT ATCUD, SK eKasa and HR fiskalizacija are all fiscal in their own
-          systems by different requisites, and it forbids a boolean `is_fiscal` in the
-          model. The generator emits no jurisdiction at all; `has_fiscal_number` is a
-          boolean about one requisite of one scheme. TWO SEPARATE PROBLEMS — the shape, and
-          the fact that the requirement's own vocabulary has NO member for Germany or
-          Spain, whose archetypes this generator plans to build. A DE Kassenbon could only
-          be labelled `unknown`, which Ф-312 routes to `in_review`. See RC-02.
+          The consuming system requires the jurisdiction of the fiscal scheme rather than a
+          boolean, on the reasoning that UA ПРРО, PL paragon, AR Factura, PT ATCUD, SK
+          eKasa and HR fiskalizacija are all fiscal in their own systems by different
+          requisites; a boolean `is_fiscal` is forbidden in that model. The generator emits
+          no jurisdiction at all; `has_fiscal_number` is a boolean about one requisite of
+          one scheme. TWO SEPARATE PROBLEMS — the shape, and the fact that the requirement's
+          own vocabulary has NO member for Germany or Spain, whose archetypes this generator
+          plans to build. A DE Kassenbon could only be labelled `unknown`, and an unknown
+          fiscal scheme is routed to `in_review`. See RC-02.
       - prd: VAT amounts per letter — TaxAmount(letter, rate, amount), explicitly not a scalar tax
         generator: none
         status: forward_contract
@@ -141,18 +147,21 @@ document_types:
         generator: has_qr, qr_is_fiscal (two booleans)
         status: divergent
         note: >
-          Ф-310 requires the decoded payload and its type, and states that presence is
-          unusable as a fiscality signal because bank confirmations routinely carry
-          promotional QR codes. `qr_is_fiscal` is a boolean collapse of a four-value type
-          and cannot express `payment` or `unknown`. `PrroReceipt.qr_payload` already holds
-          the decoded string and `ground_truth()` discards it. See RC-03.
+          The consuming system requires the decoded payload and its type, on the ground
+          that mere presence is unusable as a fiscality signal — bank confirmations
+          routinely carry promotional QR codes, so a document with a QR code says nothing
+          about whether it is fiscal. `qr_is_fiscal` is a boolean collapse of a four-value
+          type and cannot express `payment` or `unknown`. `PrroReceipt.qr_payload` already
+          holds the decoded string and `ground_truth()` discards it. See RC-03.
       - prd: fiscality markers found in the text, positive and negative, with their position
         generator: none
         status: forward_contract
         note: >
-          Ф-311 — a negative marker («НЕ ФІСКАЛЬНИЙ ЧЕК», «KOPIA DLA SPRZEDAWCY», an empty
-          receipt-number field) OVERRIDES every positive fiscality signal. No generator
-          field records one and no archetype prints one yet. See RC-08.
+          A rule of the consuming system: a NEGATIVE marker («НЕ ФІСКАЛЬНИЙ ЧЕК», «KOPIA
+          DLA SPRZEDAWCY», an empty receipt-number field) OVERRIDES every positive
+          fiscality signal, however many of those a document carries — a slip may hold a
+          QR code, a tax number and a total and still declare itself not a fiscal receipt.
+          No generator field records a marker and no archetype prints one yet. See RC-08.
 
   payment_confirmation:
     classifier_role: target_class
@@ -183,12 +192,17 @@ document_types:
         status: forward_contract
         note: >
           `content_builder.Acquiring` already holds both and `ground_truth()` discards them.
-          Ф-406 makes RRN and authorization code DECISIVE duplicate keys, so until they
-          carry values the dataset can exercise deduplication but cannot score it. See RC-06.
+          The consumer's duplicate detection treats RRN and authorization code as DECISIVE
+          keys — two documents carrying the same one are the same transaction, whatever
+          else differs — so until they carry values the dataset can exercise deduplication
+          but cannot score it. See RC-06.
       - prd: payment form (cash / card)
         generator: none — `payment_method` is a bbox key with no labelled value
         status: forward_contract
-        note: Ф-407 cross-checks payment form between linked documents.
+        note: >
+          The consumer cross-checks payment form between linked documents — a confirmation
+          of a card payment against an invoice that says it was settled in cash is a
+          mismatch worth flagging — so the field is scored, not merely extracted.
 
   bank_statement:
     classifier_role: target_class
@@ -242,32 +256,35 @@ document_types:
     classifier_role: other
     status: forward_contract
     note: >
-      Ф-301 folds the act of services rendered into `other` explicitly. §4.3 gives it no
-      required-field row of its own.
+      The consumer's classifier vocabulary folds the act of services rendered into `other`
+      explicitly. §4.3 gives it no required-field row of its own.
 
   order_screenshot:
     classifier_role: other
     status: forward_contract
     note: >
-      Ф-301's `other` is "contract, act and everything else", which absorbs this type. It
-      still matters for linking: it establishes the subject and never the payment.
+      The consumer's `other` class is "contract, act and everything else", which absorbs
+      this type. It still matters for linking: it establishes the subject and never the
+      payment.
 
   non_fiscal_receipt:
     classifier_role: undecided
     status: forward_contract
     undecided: >
-      Ф-301's `other` is defined as "everything else", which mechanically absorbs this
-      type — but §4.3's `other` row says such a document gets classification only and the
-      claim goes straight to `in_review`, while Ф-311 requires exactly these documents (a
-      sales slip with full requisites marked non-fiscal, a terminal slip with an RRN and an
-      empty receipt-number field) to be DETECTED AND REASONED ABOUT: a negative marker must
-      override positive fiscality signals, and the stated test is that such a document is
-      not classified as a fiscal receipt. Being reasoned about specifically and being routed
+      The consumer's `other` class is defined as "everything else", which mechanically
+      absorbs this type — but §4.3's `other` row says such a document gets classification
+      only and the claim goes straight to `in_review`, while the consumer's fiscality-marker
+      rule requires exactly these documents (a sales slip with full requisites marked
+      non-fiscal, a terminal slip with an RRN and an empty receipt-number field) to be
+      DETECTED AND REASONED ABOUT: a negative marker must override positive fiscality
+      signals, and the stated test is that such a document is not classified as a fiscal
+      receipt. Being reasoned about specifically and being routed
       to manual review as an unrecognized type are different outcomes, and no source names a
       class for this one. Left open.
 
-# Ф-301, stated here because a consumer that computes a different metric than the one being
-# reported has no way to discover the difference from the field lists alone.
+# The consumer's classification metric, stated here because a consumer that computes a
+# different metric than the one being reported has no way to discover the difference from
+# the field lists alone.
 classifier_metric:
   status: forward_contract
   target_classes: [fiscal_receipt, payment_confirmation, bank_statement, invoice]
@@ -283,8 +300,8 @@ classifier_metric:
     amount; exploratory extraction, no threshold) and `other` as the catch-all. The
     generator therefore cannot label a document as either. See RC-14.
 
-# Ф-303, for the same reason: a threshold applied to the wrong slice is not a smaller
-# number, it is a different measurement.
+# The consumer's per-field extraction thresholds, for the same reason: a threshold applied
+# to the wrong slice is not a smaller number, it is a different measurement.
 extraction_thresholds:
   status: forward_contract
   scope: printed documents of the four target classes; handwritten reported separately
@@ -561,11 +578,12 @@ document_label:
           One image is one document; `source_file` and `doc_id` are 1:1, and no label
           describes a region of a file.
         consumer: >
-          Ф-309 makes file-to-document segmentation a pipeline step in its own right, on the
-          ground that one file may hold up to twelve separate receipts, and it names THIS
-          GENERATOR as the source of ground truth for the boundaries. It separates
-          `ClaimFile` (the binary, with a `medium` and a content hash) from `ClaimDocument`
-          (a logical document, with a page or region reference into the file).
+          The consuming system makes file-to-document segmentation a pipeline step in its
+          own right, on the ground that one file may hold up to twelve separate receipts,
+          and it names THIS GENERATOR as the source of ground truth for the boundaries. It
+          separates `ClaimFile` (the binary, with a `medium` and a content hash) from
+          `ClaimDocument` (a logical document, with a page or region reference into the
+          file).
         note: nothing in the generator models a multi-document file. See RC-12.
 
     - name: doc_type
@@ -609,11 +627,11 @@ document_label:
         note: >
           THERE IS NO NET SUBTOTAL FIELD, and on a VAT-inclusive Ukrainian receipt no net
           subtotal is printed either — the tax block states the VAT contained within the
-          gross. Ф-401 checks `subtotal + Σtax ≈ total` and Ф-403 checks
-          `abs(Σline_items − subtotal)`, which require `subtotal` to be net in the first and
-          gross in the second. The two cannot both hold in a VAT-inclusive jurisdiction, and
-          this file cannot reconcile them. Raised as a question for the requirement, not as a
-          generator change.
+          gross. The consumer's arithmetic guard checks `subtotal + Σtax ≈ total` and its
+          line-item guard checks `abs(Σline_items − subtotal)`, which require `subtotal` to
+          be net in the first and gross in the second. The two cannot both hold in a
+          VAT-inclusive jurisdiction, and this file cannot reconcile them. Raised as a
+          question for the requirement, not as a generator change.
 
     - name: date
       type: string
@@ -632,8 +650,8 @@ document_label:
         note: >
           THREE NAMES FOR ONE THING — the failure this file exists to prevent, found live:
             `counterparty` — the field the generator emits in every document label;
-            `seller_name`  — the field Ф-303 named, and the one the F1 >= 0.75 threshold was
-                             stated against;
+            `seller_name`  — the field the consumer's extraction metric names, and the one
+                             the F1 >= 0.75 threshold was stated against;
             `seller_name`  — the `data-field` bbox key in templates/ua_prro_receipt.html,
                              covering the printed string WITH its legal form.
           The second and third are spelled the same and mean different things: the metric
@@ -643,7 +661,7 @@ document_label:
           this generator. `seller_name` is semantically wrong for half of the four target
           classes: on a `payment_confirmation` the party is a payer or a payee, and on a
           `bank_statement` a payee — neither is a seller. `counterparty` is the only one of
-          the two words that is true of all four. The threshold in Ф-303 therefore applies
+          the two words that is true of all four. The F1 >= 0.75 threshold therefore applies
           to `counterparty`, under whatever name the requirement spells it.
         bbox_key_unchanged: >
           The `seller_name` bbox key stays as it is. Printed keys are a separate vocabulary
@@ -662,10 +680,12 @@ document_label:
           an empty array as wrong: `validate_line_item_sum` returns False for it, and
           `policy_engine` raises on a claim whose total is zero. See RC-09 and RC-10.
         consumer_interaction: >
-          Ф-403 routes a claim to `in_review` with reason `line_items_unreliable` when the
-          line-item array is empty while `total > 0`. Read together with §4.3, THAT GUARD
-          MUST BE TYPE-AWARE or every payment confirmation and every bank statement lands in
-          manual review. This is the consumer's to fix, not the generator's; it is recorded
+          The consumer's line-item guard routes a claim to `in_review` with reason
+          `line_items_unreliable` when the line-item array is empty while `total > 0`, on
+          the ground that a document with a total and no lines is more likely to have been
+          read badly than to have no lines. Read together with §4.3, THAT GUARD MUST BE
+          TYPE-AWARE or every payment confirmation and every bank statement lands in manual
+          review. This is the consumer's to fix, not the generator's; it is recorded
           here because the two requirements only contradict each other when read side by
           side, which is what this file is for.
 
@@ -678,8 +698,8 @@ document_label:
         status: divergent
         generator: two booleans — `has_qr` and `qr_is_fiscal`
         consumer: >
-          Ф-310 requires the DECODED CONTENT and a four-value type (fiscal_link /
-          promotional / payment / unknown), and states that presence is unusable as a
+          The consuming system requires the DECODED CONTENT and a four-value type
+          (fiscal_link / promotional / payment / unknown), presence being unusable as a
           fiscality signal. See `document_types.fiscal_receipt` and RC-03.
 
     - name: qr_is_fiscal
@@ -696,9 +716,9 @@ document_label:
         name: divergence_fiscal_scheme
         status: divergent
         consumer: >
-          Ф-312 requires the fiscal SCHEME JURISDICTION plus that scheme's requisites, and
-          forbids a boolean `is_fiscal` in the model. See `document_types.fiscal_receipt`
-          and RC-02.
+          The consuming system requires the fiscal SCHEME JURISDICTION plus that scheme's
+          requisites, and forbids a boolean `is_fiscal` in the model. See
+          `document_types.fiscal_receipt` and RC-02.
 
     - name: capture
       type: enum
@@ -783,8 +803,8 @@ document_label:
       - terminal_id
       - operation
       - card_masked                      # ЕПЗ — електронний платіжний засіб, the masked card
-      - auth_code                        # §4.3 requires it; Ф-406 makes it a decisive dedup key
-      - rrn                              # §4.3 requires it; Ф-406 makes it a decisive dedup key
+      - auth_code                        # §4.3 requires it; a decisive duplicate key
+      - rrn                              # §4.3 requires it; a decisive duplicate key
       - amount_in_words
       - receipt_number
       - time
@@ -944,10 +964,11 @@ verdicts:
       but medicines establishes payment perfectly well — it is about the wrong subject, which
       is a coverage failure and not an evidence failure. The consumer's own `Decision`
       vocabulary carries BOTH `rejected` ("the policy plainly does not cover it", example:
-      paid for the wrong subject) and `not_proof_of_payment`, and Ф-507 states explicitly
-      that collapsing any of the finer verdicts into `rejected` is a defect. Two names on
-      both sides, for two outcomes: the generator was missing one of them, and the slash in
-      policy.yaml was the symptom.
+      paid for the wrong subject) and `not_proof_of_payment`, and the requirements state
+      explicitly that collapsing any of the finer verdicts into `rejected` is a defect —
+      "the claim failed" is not a decision a claimant can act on. Two names on both sides,
+      for two outcomes: the generator was missing one of them, and the slash in policy.yaml
+      was the symptom.
 
       WHAT DID NOT CHANGE: `_reimbursable` still raises for a claim wholly beyond an
       exhausted annual limit (`policy_engine._reimbursable`). `rejected` does not close that
@@ -1029,8 +1050,8 @@ verdict_decision_mapping:
   consumer_only:
     in_review: >
       NO GENERATOR COUNTERPART, AND THERE SHOULD NOT BE ONE. `in_review` is the runtime
-      outcome of a guard firing — Ф-401 arithmetic, Ф-403 line items unreliable, Ф-309
-      segmentation uncertain, Ф-312 an unknown fiscal scheme — i.e. a statement about the
+      outcome of a guard firing — arithmetic inconsistent, line items unreliable,
+      segmentation uncertain, an unknown fiscal scheme — i.e. a statement about the
       consumer's own confidence, not about the claim. Generation is label-first: the verdict
       is chosen and then documents are built to realize it, and there is nothing in a chosen
       ground truth from which "a human should look at this" could be derived. A dataset
@@ -1153,13 +1174,13 @@ claim_label:
         status: divergent
         note: >
           DIFFERENT ARITHMETIC FOR THE SAME QUANTITY. The generator computes Σ(covered
-          lines). Ф-402 requires the consumer to compute `total − Σ(excluded lines)`,
+          lines). The consuming system is required to compute `total − Σ(excluded lines)`,
           deliberately, so that a MISSED line surfaces as a discrepancy instead of a silent
           underestimate. THE TWO AGREE EXACTLY ON THIS DATASET, because the ground truth
           satisfies Σ(all lines) = total by construction; they diverge only when extraction
-          loses a line, which is the case Ф-402 exists for. No generator change follows —
-          this is recorded so a consumer does not read the agreement as a licence to compute
-          it the generator's way.
+          loses a line, which is the case that subtraction exists for. No generator change
+          follows — this is recorded so a consumer does not read the agreement as a licence
+          to compute it the generator's way.
       absence: same as `covered_fraction`. Present on every record written so far.
 
     - name: linked
@@ -1325,17 +1346,17 @@ required_changes:
     file: src/receipt_synth/schemas.py, content_builder.py
     change: >
       Replace `has_fiscal_number: bool` with a fiscal-scheme structure — jurisdiction plus
-      that scheme's requisites. Ф-312 forbids a boolean fiscality flag. The requirement's own
-      jurisdiction vocabulary has no member for DE or ES, whose archetypes are planned here,
-      so this cannot be closed by copying the enum.
+      that scheme's requisites. The consumer forbids a boolean fiscality flag. The
+      requirement's own jurisdiction vocabulary has no member for DE or ES, whose archetypes
+      are planned here, so this cannot be closed by copying the enum.
     blocked_on: decision
 
   - id: RC-03
     file: src/receipt_synth/schemas.py, content_builder.py
     change: >
       Replace `has_qr` / `qr_is_fiscal` with the decoded payload and a four-value type
-      (fiscal_link / promotional / payment / unknown), per Ф-310. `PrroReceipt.qr_payload`
-      already holds the payload and `ground_truth()` drops it.
+      (fiscal_link / promotional / payment / unknown), as the consumer requires.
+      `PrroReceipt.qr_payload` already holds the payload and `ground_truth()` drops it.
     blocked_on: none
 
   - id: RC-04
@@ -1359,7 +1380,7 @@ required_changes:
       Carry the payment-confirmation fields as values: RRN, authorization code, payer, payee,
       payment purpose, payment form. `Acquiring` already holds rrn, auth_code, terminal_id,
       card_masked and operation and drops them. Until RRN carries a value the dataset can
-      exercise deduplication (Ф-406) but cannot score it.
+      exercise deduplication but cannot score it.
     blocked_on: >
       none for the acquiring fields; decision for payer / payee / purpose, which need a
       payment archetype first
@@ -1372,8 +1393,8 @@ required_changes:
   - id: RC-08
     file: src/receipt_synth/schemas.py, templates/
     change: >
-      Record positive and negative fiscality markers with their position in the text
-      (Ф-311). Needs both a field and archetypes that print such a marker.
+      Record positive and negative fiscality markers with their position in the text.
+      Needs both a field and archetypes that print such a marker.
     blocked_on: decision
 
   - id: RC-09
@@ -1404,9 +1425,9 @@ required_changes:
   - id: RC-12
     file: src/receipt_synth/assembler.py, schemas.py
     change: >
-      Model multi-document files. Ф-309 makes file-to-document segmentation a pipeline step
-      and names this generator as the source of ground truth for the boundaries; today one
-      image is one document and no label describes a region of a file.
+      Model multi-document files. The consumer makes file-to-document segmentation a
+      pipeline step and names this generator as the source of ground truth for the
+      boundaries; today one image is one document and no label describes a region of a file.
     blocked_on: decision
 
   - id: RC-13
@@ -1451,12 +1472,14 @@ required_changes:
 
 # Two items belong on the consumer's side and are recorded so they are not lost:
 #
-#   * Ф-403 routes a claim to `in_review` when the line-item array is empty while
-#     `total > 0`, while §4.3 makes an empty array correct for `payment_confirmation` and
-#     `bank_statement`. The guard has to be type-aware or those two types always land in
-#     manual review. Recorded under `document_label.line_items.cardinality`.
+#   * The consumer's line-item guard routes a claim to `in_review` when the line-item array
+#     is empty while `total > 0`, while §4.3 makes an empty array correct for
+#     `payment_confirmation` and `bank_statement`. The guard has to be type-aware or those
+#     two types always land in manual review. Recorded under
+#     `document_label.line_items.cardinality`.
 #
-#   * Ф-401 checks `subtotal + Σtax ≈ total` and Ф-403 checks `abs(Σline_items − subtotal)`,
-#     which require `subtotal` to be net in one and gross in the other. On a VAT-inclusive
-#     Ukrainian receipt only the gross is printed, and the generator emits no subtotal at
-#     all. Recorded under `document_label.amount.no_subtotal`.
+#   * The consumer's arithmetic guard checks `subtotal + Σtax ≈ total` and its line-item
+#     guard checks `abs(Σline_items − subtotal)`, which require `subtotal` to be net in one
+#     and gross in the other. On a VAT-inclusive Ukrainian receipt only the gross is
+#     printed, and the generator emits no subtotal at all. Recorded under
+#     `document_label.amount.no_subtotal`.
