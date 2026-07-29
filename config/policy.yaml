@@ -305,7 +305,26 @@ coverage:
   #
   #   covered_fraction >= full_threshold    -> covered
   #   0 < covered_fraction < full_threshold -> partially_covered
-  #   covered_fraction == 0                 -> not_proof_of_payment / rejected
+  #   covered_fraction == 0                 -> rejected
+  #
+  # `rejected`, and NOT `not_proof_of_payment`. The two are easy to merge and are
+  # not the same outcome: they answer different questions, and a claim earns one
+  # of them for reasons the other knows nothing about.
+  #
+  # `rejected` answers WHAT WAS BOUGHT: the policy plainly does not cover it. A
+  # basket drawn wholly from the `excluded_items` of the claimed category is
+  # exactly that case, and it is decided from the line items, so it is visible on
+  # the document.
+  #
+  # `not_proof_of_payment` answers WHETHER MONEY MOVED, and that is a property of
+  # the DOCUMENT TYPE — `proves_payment` in the `document_evidence` block below —
+  # not of item coverage. A fiscal receipt proves its payment whatever its basket
+  # was, so a pharmacy receipt listing nothing but medicines is `rejected` and is
+  # not, on any reading, a failure of proof of payment.
+  #
+  # The two must not be collapsed into one another in either direction. Each is a
+  # verdict a consumer is expected to reach on its own, and merging them destroys
+  # a distinction this policy draws deliberately.
   #
   # STRICT semantics: ANY non-covered line item makes the claim partially
   # covered, however small. A 3 UAH carrier bag on a 1000 UAH pharmacy receipt is
@@ -351,6 +370,19 @@ verdict_mix:
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
   partially_paid: 0.10
+  # NO SHARE YET, AND DELIBERATELY SO. `rejected` — the policy plainly does not cover what
+  # was bought — belongs to the vocabulary because the `coverage` block above needs a name
+  # for a covered fraction of zero. What share of the dataset should carry it is a separate
+  # decision, taken together with the mechanism that builds a wholly non-covered basket. No
+  # such mechanism exists yet, so any number here would be a balance decision nobody has
+  # made.
+  #
+  # `null`, not 0. A 0 share is itself a decision — "never draw this" — and it behaves like
+  # any other weight: it sums, it renormalizes, and nothing downstream could tell it from a
+  # share somebody chose. `null` is not a weight, so it cannot be summed or drawn with and
+  # every reader of this map has to say what it does with an undecided share. The five
+  # shares above therefore still sum to 1.0, and remain the whole of the declared mix.
+  rejected: null
 
 # Why a claim ends up partially covered. Splits the `partially_covered` bucket
 # above by cause; must sum to 1.0.

@@ -31,7 +31,7 @@
 # adding one would be inventing a caller. It is consumed by downstream tooling; its
 # accuracy is maintained by being re-checked against a freshly generated label file.
 
-version: 2
+version: 3
 
 # One status vocabulary. Every section carries a `status`, and wherever anything below says
 # whether a thing exists yet or is disputed it uses these four words and no others — there
@@ -883,9 +883,10 @@ line_item:
 # =============================================================================
 #
 # `verdicts` keys are the `Verdict` members in schemas.py. The consumer's `Decision` enum is
-# wider and names two of the shared concepts differently; each entry records its
-# counterpart. The notes that follow are a SIBLING block so that a consumer generating an
-# enum from these keys gets five values.
+# wider and names one of the shared concepts differently; each entry records its
+# counterpart, and `verdict_decision_mapping` below states the whole correspondence in one
+# table. The notes that follow are a SIBLING block so that a consumer generating an enum
+# from these keys gets six values.
 
 verdicts:
 
@@ -897,8 +898,9 @@ verdicts:
       status: divergent
       note: >
         SAME CONCEPT, DIFFERENT WORD. The consumer's `Decision` verdict for a claim that
-        passed with no flags is `auto_approved`. Nothing maps the two, and a scorecard
-        comparing verdict strings scores every correct decision as wrong. See RC-13.
+        passed with no flags is `auto_approved`, and a scorecard comparing verdict strings
+        would score every correct decision as wrong. `verdict_decision_mapping` below now
+        states the correspondence; neither name is changed. See RC-13.
 
   partially_covered:
     status: emitted
@@ -920,25 +922,39 @@ verdicts:
       docs/architecture.md, and the consumer's own definition, whose canonical example is an
       invoice reading "Zapłacono: 0,00".
     consumer_counterpart: not_proof_of_payment
+    built_only_through_the_document_type: >
+      The one mechanism, and it is now the only one: a document type whose
+      `document_evidence` entry in policy.yaml says `proves_payment: false`. The route
+      through item coverage is closed — that case is `rejected`, a separate member — so
+      nothing competes for this name any more.
     # -----------------------------------------------------------------------
-    # DELIBERATELY UNDECIDED. THIS FILE DOES NOT DECIDE IT.
+    # WAS UNDECIDED. NOW DECIDED — recorded here so the reasoning survives the decision.
     # -----------------------------------------------------------------------
-    undecided: >
-      What a claim with ZERO covered amount is called — a basket bought wholly outside the
-      claimed category. policy.yaml's `coverage` block writes that case as
-      `not_proof_of_payment / rejected`, which is two different answers: `rejected` is not a
-      member of the `Verdict` enum, and `not_proof_of_payment` is defined above as evidence
-      that does not establish payment — which a fiscal receipt does establish, whatever the
-      basket was. `policy_engine.verdict_for` therefore RAISES rather than choosing, as does
-      `_reimbursable` for a claim wholly beyond an exhausted limit. No such claim is planned
-      and no such label exists in any dataset produced so far.
-    new_evidence_not_a_resolution: >
-      The consumer's `Decision` enum DOES carry a `rejected` verdict, defined as "the policy
-      plainly does not cover it", with the example of paying for the wrong subject — which is
-      the zero-coverage case. That makes the disagreement sharper rather than settling it:
-      adopting `rejected` means adding a member to `Verdict` and deciding that zero coverage
-      is a policy rejection rather than an evidence failure. THAT IS A POLICY DECISION
-      BELONGING TO THE AUTHOR. Recorded, not taken. See RC-13.
+    decided: >
+      THE QUESTION: what a claim with ZERO covered amount is called — a basket bought wholly
+      outside the claimed category. policy.yaml's `coverage` block wrote that case as
+      `not_proof_of_payment / rejected`, which is two different answers, and `rejected` was
+      not a member of the `Verdict` enum at all, so `policy_engine.verdict_for` RAISED rather
+      than choosing.
+
+      THE DECISION: the policy was right and the enum was incomplete. `rejected` is now a
+      member of `Verdict` and a zero covered amount maps to it; see `verdicts.rejected`.
+
+      WHY: the two are different outcomes and always were. A pharmacy receipt listing nothing
+      but medicines establishes payment perfectly well — it is about the wrong subject, which
+      is a coverage failure and not an evidence failure. The consumer's own `Decision`
+      vocabulary carries BOTH `rejected` ("the policy plainly does not cover it", example:
+      paid for the wrong subject) and `not_proof_of_payment`, and Ф-507 states explicitly
+      that collapsing any of the finer verdicts into `rejected` is a defect. Two names on
+      both sides, for two outcomes: the generator was missing one of them, and the slash in
+      policy.yaml was the symptom.
+
+      WHAT DID NOT CHANGE: `_reimbursable` still raises for a claim wholly beyond an
+      exhausted annual limit (`policy_engine._reimbursable`). `rejected` does not close that
+      gap — there the policy DOES cover the purchase, in part or in full, and the persona has
+      simply drawn the annual maximum already, which is a different state and still has no
+      name in policy.yaml. It stays open, and the planner still refuses to produce such a
+      claim.
 
   insufficient_evidence:
     status: forward_contract
@@ -958,22 +974,92 @@ verdicts:
       The invoice payment-status and amount-due fields, which no model field carries. See
       `document_types.invoice` and RC-07.
 
+  rejected:
+    status: forward_contract
+    means: >
+      The documents prove payment perfectly well, and NOTHING on them is covered by the
+      claimed category — the covered amount is zero. A property of the LINE ITEMS, resolved
+      against the category's `covered_items` and `excluded_items` in policy.yaml, which is
+      why `verdict_basis` is `["documents"]`: it is entirely visible in the image.
+    consumer_counterpart: rejected
+    not_to_be_confused_with:
+      not_proof_of_payment: >
+        A property of the DOCUMENT TYPE (`proves_payment: false`), not of item coverage. The
+        canonical separating case is a pharmacy receipt listing nothing but medicines: it
+        establishes payment, so it is not `not_proof_of_payment`, and it covers nothing, so
+        it is `rejected`.
+      exhausted_annual_limit: >
+        A claim that covers something and is paid nothing because the persona has already
+        drawn the annual maximum is NOT this verdict — the policy covers that purchase.
+        policy.yaml names no verdict for it and `policy_engine._reimbursable` still raises.
+      in_review: >
+        The consumer's catch-all for a guard firing. A runtime outcome, not a label; see
+        `verdict_decision_mapping`.
+    emitted: >
+      NOT YET. `policy_engine.verdict_for` labels such a claim today, and nothing builds one:
+      `content_builder` always draws at least one covered line, so no dataset produced so far
+      contains this verdict. `claim_planner._UNREALIZABLE_REASONS` records what it waits for.
+    share: >
+      `verdict_mix` in policy.yaml declares this member with NO SHARE — `null`, which the
+      loader returns as `None` and never as 0. The share is decided together with the
+      mechanism that builds a wholly non-covered basket; a number set before then would size
+      a bucket nothing can fill. A consumer reading `verdict_mix` as weights must treat an
+      undeclared share as absent rather than as zero, and the assembler's balance report
+      therefore reports the absent fraction of the mix as a LOWER BOUND.
+
+# The two enums, side by side. Stated as a table because the alternative is a consumer
+# comparing verdict strings and scoring every correct decision as wrong — the exact failure
+# `divergence_counterparty_name` was found live for, one field over.
+verdict_decision_mapping:
+  status: divergent
+  mapping:
+    covered: auto_approved
+    partially_covered: partially_covered
+    not_proof_of_payment: not_proof_of_payment
+    insufficient_evidence: insufficient_evidence
+    partially_paid: partially_paid
+    rejected: rejected
+  renamed:
+    covered_vs_auto_approved: >
+      THE ONLY RENAMING. Same concept, different word: the consumer's decision for a claim
+      that passed with no flags is `auto_approved`, and the generator's label for a claim
+      every line of which qualifies is `covered`. Neither name is wrong for its own side —
+      `covered` is a statement about the claim, `auto_approved` about what was done with it —
+      so this file maps them rather than choosing. See RC-13.
+  consumer_only:
+    in_review: >
+      NO GENERATOR COUNTERPART, AND THERE SHOULD NOT BE ONE. `in_review` is the runtime
+      outcome of a guard firing — Ф-401 arithmetic, Ф-403 line items unreliable, Ф-309
+      segmentation uncertain, Ф-312 an unknown fiscal scheme — i.e. a statement about the
+      consumer's own confidence, not about the claim. Generation is label-first: the verdict
+      is chosen and then documents are built to realize it, and there is nothing in a chosen
+      ground truth from which "a human should look at this" could be derived. A dataset
+      cannot label a claim `in_review`; it can only contain claims that a given system's
+      guards happen to route there, which is a measurement of that system.
+    consequence_for_scoring: >
+      An `in_review` decision matches no label. Score it as its own outcome — the rate at
+      which the system defers, reported against the true verdict it deferred on — never as a
+      miss on the verdict axis, or a system that correctly refuses to guess reads as one that
+      guessed wrong.
+  see: verdicts, for what each generator-side member means
+
 verdict_notes:
 
   missing_from_the_generator:
     status: divergent
     note: >
-      The consumer's `Decision` enum has two members with no counterpart in `Verdict`:
-      `rejected` (the policy plainly does not cover it) and `in_review` (a guard fired and a
-      human is required). `in_review` is arguably not a ground-truth label at all — it is the
-      runtime outcome of a guard such as Ф-401, Ф-403 or Ф-309, so a label-first generator
-      has nothing to derive it from. `rejected` is a genuine gap. See RC-13.
+      One member of the consumer's `Decision` enum has no counterpart in `Verdict`, and only
+      one: `in_review`. `rejected` used to be the other and no longer is — it was added to
+      `Verdict`; see `verdicts.not_proof_of_payment.decided`. The full correspondence, and
+      why `in_review` is not a gap to be closed, are in `verdict_decision_mapping`. What is
+      left of RC-13 is the `covered` / `auto_approved` naming and the two-axis question under
+      `verdicts.partially_covered`.
 
   realizability:
     status: emitted
     note: >
       Only `covered` and `partially_covered` can be built today
-      (`claim_planner.REALIZABLE_VERDICTS`); the other three are refused rather than
+      (`claim_planner.REALIZABLE_VERDICTS`); the other four are refused rather than
       approximated. A realized distribution from a current run is therefore CONDITIONAL on
       that subset, and the assembler's balance report says so. Do not read it as this
       dataset's balance against `verdict_mix`.
@@ -1326,13 +1412,25 @@ required_changes:
   - id: RC-13
     file: src/receipt_synth/schemas.py
     change: >
-      Reconcile `Verdict` with the consumer's `Decision` enum: `covered` and `auto_approved`
-      are the same concept under different words; `rejected` has no counterpart and its
-      definition matches the zero-coverage case the sources currently disagree about;
-      `in_review` has no counterpart and is arguably a runtime outcome rather than a label.
-      Also, the consumer treats `partially_paid` and `partially_covered` as independent axes
-      that may hold at once, which a single-valued `Verdict` cannot express.
-    blocked_on: decision — the same open question as `verdicts.not_proof_of_payment.undecided`
+      Reconcile `Verdict` with the consumer's `Decision` enum. PARTLY DONE, and what is done
+      is recorded rather than removed, because the rest is a different question.
+
+      DONE: `rejected` had no counterpart, and its definition matched the zero-coverage case
+      the sources disagreed about. It is now a member of `Verdict`, `policy_engine` labels
+      that case with it, and `verdict_mix` carries it with the share still undecided. See
+      `verdicts.rejected` and `verdicts.not_proof_of_payment.decided`.
+
+      NOT DONE, and needing no `src/` change: `covered` and `auto_approved` are the same
+      concept under different words, mapped in `verdict_decision_mapping` rather than
+      renamed; `in_review` has no counterpart and should not acquire one, being a runtime
+      outcome of a guard rather than a ground-truth label.
+
+      STILL OPEN and needing a decision: the consumer treats `partially_paid` and
+      `partially_covered` as independent axes that may hold at once, which a single-valued
+      `Verdict` cannot express.
+    blocked_on: >
+      decision — for the two-axis question only. The `rejected` half is closed and the naming
+      half is settled by the mapping table.
 
   - id: RC-14
     file: src/receipt_synth/schemas.py

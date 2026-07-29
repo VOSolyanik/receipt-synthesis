@@ -256,9 +256,14 @@ not bind is not mentioned, and a claim rejected for its date says so without arg
 |---|---|
 | `covered` | Fully reimbursable |
 | `partially_covered` | Some of the amount qualifies — mixed items, or an exhausted limit |
-| `not_proof_of_payment` | The evidence does not establish that money changed hands |
+| `rejected` | Nothing bought is covered by the category. Decided from the line items |
+| `not_proof_of_payment` | The evidence does not establish that money changed hands. A property of the document type, not of what was bought |
 | `insufficient_evidence` | A required fact is missing entirely |
 | `partially_paid` | Payment was made in installments; only part has been paid |
+
+`rejected` and `not_proof_of_payment` answer different questions and must not be collapsed into one
+another. A pharmacy receipt listing nothing but medicines proves its payment perfectly well — it is
+`rejected`, never a failure of proof of payment.
 
 ---
 
@@ -312,7 +317,7 @@ short. Each mechanism is a parameter of `claim_planner`, combined with a target 
 | Mixed covered and non-covered items | Gym membership plus a supplement on one receipt | `partially_covered` |
 | Non-covered addition to an order | A non-qualifying item inside a qualifying order | `partially_covered` |
 | Annual limit exhausted | Fourth claim exceeds what remains | `partially_covered` |
-| Category does not match the policy | A purchase outside the claimed category | `not_proof_of_payment` |
+| Category does not match the policy | A purchase outside the claimed category | `rejected` |
 | Date outside the active period | Transaction before or after the window | `insufficient_evidence` |
 | Document does not prove payment | Invoice marked "paid: 0"; sales slip; booking confirmation | `not_proof_of_payment` |
 | Paid in installments | Part of the amount settled | `partially_paid` |

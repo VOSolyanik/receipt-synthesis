@@ -255,11 +255,16 @@ def generate_dataset(
 def balance_report(dataset: Dataset) -> str:
     """The realized verdict distribution against `verdict_mix` — and what is missing from it.
 
-    Deliberately not a tidy table. Only two of the five verdicts in `verdict_mix` can be
+    Deliberately not a tidy table. Only two of the six verdicts in `verdict_mix` can be
     built yet, so the draw is renormalized over those two and the realized shares are
     conditional on that subset. A report that renormalized silently would print a
     balanced-looking dataset while a third of the target mix was absent, which is worse
     than printing nothing: it answers the question nobody would then think to ask.
+
+    One of those six carries no share yet — `verdict_mix` may declare a member as `null`,
+    and `rejected` is one today. Such a member is named without a percentage and excluded
+    from every sum, and the absent fraction is then reported as a lower bound: it is what
+    the share-carrying verdicts account for, not the whole of what is missing.
 
     The full report — document classes, currencies, languages, the train/validation split
     — is a later step. This is the verdict axis, the claim count and the exclusion note,
@@ -267,7 +272,16 @@ def balance_report(dataset: Dataset) -> str:
     """
     mix = verdict_mix()
     missing = unrealizable_verdicts()
-    realizable_share = sum(share for verdict, share in mix.items() if verdict not in missing)
+    # A member declared with no share is not a zero-weight member: its share is undecided,
+    # so it can be neither summed nor printed as a target. Kept out of the arithmetic and
+    # named separately, because a `None` folded in as 0 would leave the shares below
+    # looking like a complete account of the mix.
+    undeclared = [verdict for verdict, share in mix.items() if share is None]
+    realizable_share = sum(
+        share
+        for verdict, share in mix.items()
+        if verdict not in missing and share is not None
+    )
 
     realized = Counter(claim.verdict for claim in dataset.claims)
     total = sum(realized.values())
@@ -308,17 +322,20 @@ def balance_report(dataset: Dataset) -> str:
     lines += _cause_lines(dataset)
 
     if missing:
-        named = ", ".join(
-            f"{verdict.value} ({mix[verdict]:.1%})" if verdict in mix
-            else f"{verdict.value} (not in verdict_mix)"
-            for verdict in missing
-        )
+        named = ", ".join(_target_share(verdict, mix) for verdict in missing)
         lines += [
             f"NOT GENERATED IN THIS RUN: {named}",
             f"  {1 - realizable_share:.1%} of the target mix is absent, so the shares above are",
             "  CONDITIONAL on the realizable subset and are not this dataset's balance",
             "  against verdict_mix. Do not read them as one.",
         ]
+        if undeclared:
+            lines += [
+                "  verdict_mix declares no share for "
+                + ", ".join(verdict.value for verdict in undeclared)
+                + ", so the figure above is a LOWER BOUND",
+                "  on what is absent rather than the whole of it.",
+            ]
 
     lines += _drift_lines(dataset)
     return "\n".join(lines)
@@ -435,6 +452,22 @@ def _drift_lines(dataset: Dataset) -> list[str]:
 
 def _share(count: int, total: int) -> str:
     return f"{count / total:.1%}" if total else "—"
+
+
+def _target_share(verdict: Verdict, mix: dict[Verdict, float | None]) -> str:
+    """A verdict and its target share, for a verdict this run did not generate.
+
+    Three cases, kept apart because they mean different things to whoever reads the report:
+    a declared share, a member policy.yaml lists with the share still undecided, and a
+    member of the enum that `verdict_mix` does not mention at all. Printing `0.0%` for
+    either of the last two would state a decision nobody made.
+    """
+    if verdict not in mix:
+        return f"{verdict.value} (not in verdict_mix)"
+    share = mix[verdict]
+    if share is None:
+        return f"{verdict.value} (no share declared yet)"
+    return f"{verdict.value} ({share:.1%})"
 
 
 def _write_labels(dataset: Dataset, out_dir: Path) -> None:

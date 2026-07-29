@@ -35,9 +35,10 @@ Four rules, in the order they are applied:
    non-covered line makes the claim `partially_covered`, however small — the fraction is
    reported, never used as a tolerance. Everything covered is `covered`, and
    `full_threshold` is kept alive as a **self-check** on that case (see `verdict_for`),
-   which is the role its own comment gives it. A claim whose covered amount is 0 gets no
-   verdict at all: the sources disagree about what that outcome is called, and the engine
-   refuses rather than picking (see `verdict_for`).
+   which is the role its own comment gives it. A claim whose covered amount is 0 is
+   `rejected`, which is the third branch that block declares and is about coverage alone —
+   not `not_proof_of_payment`, which is a property of the document type and lives in
+   `document_evidence`.
 5. **The cumulative annual limit.** Claims are processed per persona per category in date
    order, carrying the balance. When what remains is less than what the document covers,
    the claim is `partially_covered`, and the verdict then also depends on the persona's
@@ -71,10 +72,9 @@ class PolicyGapError(Exception):
     """Raised where policy.yaml specifies no answer and guessing one would corrupt the
     ground truth.
 
-    Four cases reach it, all of them narrow and all of them deliberate:
+    Three cases reach it, all of them narrow and all of them deliberate:
     `coverage_of_kind` for an `ambiguous_items` kind and for a kind foreign to the claimed
-    category, `verdict_for` for a claim whose covered amount is zero, and `_reimbursable`
-    for a claim wholly beyond an exhausted annual limit.
+    category, and `_reimbursable` for a claim wholly beyond an exhausted annual limit.
     """
 
 
@@ -108,9 +108,21 @@ def active_period() -> tuple[date, date]:
     return date.fromisoformat(str(period["start"])), date.fromisoformat(str(period["end"]))
 
 
-def verdict_mix() -> dict[Verdict, float]:
-    """The target distribution over verdicts, in the order policy.yaml declares them."""
-    return {Verdict(name): float(share) for name, share in load_policy()["verdict_mix"].items()}
+def verdict_mix() -> dict[Verdict, float | None]:
+    """The target distribution over verdicts, in the order policy.yaml declares them.
+
+    A member may be declared with **no share** — `null` in the file — and it comes back as
+    `None` rather than as a weight. policy.yaml uses that for a verdict whose place in the
+    vocabulary is settled while its share of the dataset is not, and the distinction is
+    load-bearing: a `0` share is a decision that behaves like any other weight, so it would
+    sum, renormalize and print as a target, and nothing downstream could tell it apart from
+    a number somebody chose. `None` cannot be summed or drawn with, so every caller has to
+    say what it does with an undecided share instead of quietly assuming one.
+    """
+    return {
+        Verdict(name): None if share is None else float(share)
+        for name, share in load_policy()["verdict_mix"].items()
+    }
 
 
 def partially_covered_causes() -> dict[str, float]:
@@ -141,9 +153,9 @@ def coverage_of_kind(category_id: str, item_kind: str) -> bool:
       instead of being a convention the builder happens to follow.
     * a kind that belongs to no bucket of this category — a line from some other
       category's vocabulary. The policy simply does not say what such a line is worth
-      here, so there is no fraction to compute over it. What verdict a basket bought in
-      the wrong category ought to receive is a separate and currently undecided question;
-      see `verdict_for`.
+      here, so there is no fraction to compute over it. Distinct from a basket of lines the
+      category *does* name and does not cover, which is `rejected`: there the policy has an
+      answer for every line and the answer is no, whereas here it has no answer at all.
     """
     spec = category(category_id)
     if item_kind in spec["covered_items"]:
@@ -226,25 +238,22 @@ def verdict_for(covered: Decimal, total: Decimal, *, every_line_covered: bool) -
     with no non-covered line must come to the full amount — and a failure raises rather
     than being rounded away.
 
-    A covered amount of zero gets no verdict. The sources this generator is built from do
-    not agree on what that outcome is called, and the disagreement is not one an
-    implementation may settle — see the `PolicyGapError` raised below.
+    A covered amount of zero is `rejected` — the third branch the `coverage` block
+    declares. It is checked before the strict rule because it is the stronger statement:
+    every line of such a claim is non-covered, so `partially_covered` would be true of the
+    lines and false about the claim, which qualifies for nothing.
+
+    `rejected` is emphatically NOT `not_proof_of_payment`, and the two are easy to merge by
+    accident. This branch sees amounts and nothing else, and amounts cannot say whether the
+    evidence proves a payment: that is a property of the document type, declared by
+    `proves_payment: false` in `document_evidence`, and it is decided nowhere near here. A
+    pharmacy receipt listing nothing but medicines proves its payment perfectly well and is
+    still about the wrong subject.
     """
     if total <= 0:
         raise ValueError(f"a claim with a total of {total} has no verdict")
     if covered <= 0:
-        raise PolicyGapError(
-            "no line of this claim is covered by its category, so the covered amount is "
-            "zero — and the policy names no verdict for that. `coverage` in policy.yaml "
-            "writes the case as `not_proof_of_payment / rejected`, which is two different "
-            "answers: `rejected` is not a member of the Verdict enum at all, and "
-            "`not_proof_of_payment` is defined by the `document_evidence` block, and by "
-            "the verdict table in docs/architecture.md, as evidence that does not "
-            "establish that money changed hands. A fiscal receipt does establish that, "
-            "whatever the basket was. Rejected on coverage and not proof of payment are "
-            "different outcomes and the enum carries only one of them, so the engine "
-            "refuses instead of choosing. Deciding this is a policy change."
-        )
+        return Verdict.REJECTED
     if not every_line_covered:
         return Verdict.PARTIALLY_COVERED
 
@@ -403,12 +412,14 @@ def _reimbursable(
         raise PolicyGapError(
             f"persona {persona_id} has no {category_id} balance left "
             f"(limit {annual_limit(category_id)} {reporting_currency()} fully reimbursed), "
-            "and policy.yaml assigns no verdict to a claim that reimburses nothing: "
+            "and policy.yaml assigns no verdict to a claim that covers something and is "
+            "still paid nothing. None of the candidates fits: `rejected` is the policy not "
+            "covering the purchase, and here it covers part or all of it; "
             "`not_proof_of_payment` says the evidence does not establish that money "
-            "changed hands, which a receipt does, and `partially_covered` says some of "
-            "the amount qualifies, which none of it does. Deciding this means changing "
-            "the policy, so the planner does not plan such a claim and the engine will "
-            "not invent a label for one."
+            "changed hands, which a receipt does; and `partially_covered` says some of the "
+            "amount is payable, which none of it is. Deciding this means changing the "
+            "policy, so the planner does not plan such a claim and the engine will not "
+            "invent a label for one."
         )
     return min(covered, remaining)
 

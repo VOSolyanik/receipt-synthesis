@@ -15,6 +15,10 @@ The policy values these tests are derived from, as of policy.yaml version 1:
     categories[mental_health].annual_limit      25000
     period                                      2026-01-01 .. 2026-12-31
     reporting_currency                          UAH
+    verdict_mix                                 covered 0.50, partially_covered 0.20,
+                                                not_proof_of_payment 0.10,
+                                                insufficient_evidence 0.10,
+                                                partially_paid 0.10, rejected null
 
 and, for the item-kind vocabulary:
 
@@ -47,6 +51,7 @@ from receipt_synth.policy_engine import (
     reporting_currency,
     resolved_coverage,
     verdict_for,
+    verdict_mix,
 )
 from receipt_synth.schemas import (
     Capture,
@@ -138,6 +143,27 @@ def test_the_constants_this_file_was_written_against():
     spec = category("vitamins_nutrition")
     assert COVERED_KIND in spec["covered_items"]
     assert EXCLUDED_KIND in spec["excluded_items"]
+
+
+def test_verdict_mix_names_every_verdict_and_leaves_rejected_without_a_share():
+    """policy.yaml puts `rejected` in the vocabulary before it decides its share, and
+    writes the undecided share as `null`, which comes back as `None`.
+
+    `None` rather than 0, and the difference is the whole point: a 0 share is a decision —
+    "this verdict is deliberately never drawn" — it sums like any other weight, it
+    renormalizes like any other weight, and nothing downstream could tell it apart from a
+    share somebody chose. `None` is not a weight at all, so every reader has to say what it
+    does with an undecided share.
+
+        0.50 + 0.20 + 0.10 + 0.10 + 0.10 = 1.00 over the five that carry one
+    """
+    mix = verdict_mix()
+    assert set(mix) == set(Verdict), "every verdict is named in the mix"
+    assert mix[Verdict.REJECTED] is None
+
+    declared = [share for share in mix.values() if share is not None]
+    assert len(declared) == len(Verdict) - 1
+    assert sum(declared) == pytest.approx(1.0)
 
 
 # ------------------------------------------- coverage resolved from the policy --
@@ -330,37 +356,66 @@ def test_a_non_covered_line_cannot_be_diluted_away_by_adding_documents():
     assert result.policy_trace[-1] == "coverage 99.99% (1 of 11 line items not covered)"
 
 
-def test_a_wholly_non_covered_basket_has_no_verdict_in_the_policy():
+def test_a_wholly_non_covered_basket_is_rejected():
     """    covered   0.00
         total   500.00
-        fraction    0  ->  no verdict
+        fraction    0  ->  rejected
 
-    The second gap this engine refuses to paper over. policy.yaml's `coverage` block
-    writes the case as `not_proof_of_payment / rejected`, which is two answers rather than
-    one: `rejected` is not a member of the `Verdict` enum, and `not_proof_of_payment` is
-    defined by the `document_evidence` block — and by the verdict table of
-    docs/architecture.md — as evidence that does not establish that money changed hands.
+    policy.yaml's `coverage` block sends a zero covered fraction to `rejected`, and the
+    enum now carries that member, so there is one answer where there used to be a slash.
 
-    A pharmacy receipt listing nothing but medicines establishes payment perfectly well.
-    It is about the wrong subject, which is a different outcome, and the enum has no
-    member for it. Hence the slash in policy.yaml, and hence the refusal here.
+    The whole claim, hand-derived:
+        verdict             rejected — nothing on the document belongs to the category
+        covered_fraction    0.00 / 500.00 = 0
+        reimbursable        0.00 — the plan pays out on the covered amount, and there is none
+        verdict_basis       ["documents"] — coverage is resolved from the line items alone,
+                            which policy.yaml's `limits` block defines as the documents-only
+                            basis; no ledger was consulted
+        imperfection        () — `imperfection` says why a partially_covered claim is
+                            partial, and this claim is not partially anything
     """
-    with pytest.raises(PolicyGapError, match="rejected"):
-        evaluate([item("100.00", False), item("400.00", False)])
+    result = evaluate([item("100.00", False), item("400.00", False)])
+    assert result.verdict is Verdict.REJECTED
+    assert result.covered_fraction == Decimal(0)
+    assert result.reimbursable == Decimal("0.00")
+    assert result.imperfection == ()
+    assert result.verdict_basis == (VerdictBasis.DOCUMENTS,)
+    assert result.policy_trace == (
+        "category=vitamins_nutrition ok",
+        "period ok",
+        "coverage 0% (2 of 2 line items not covered)",
+    )
 
-    # The arithmetic itself is still well defined; it is the naming that is not.
     assert covered_fraction(
         "vitamins_nutrition", [item("100.00", False), item("400.00", False)]
     ) == Decimal(0)
 
 
-def test_no_verdict_is_emitted_for_a_zero_coverage_claim():
-    """`Verdict.NOT_PROOF_OF_PAYMENT` remains in the enum — `claim_planner` lists it among
-    the verdicts it cannot build, and `document_evidence` describes the mechanism that
-    will produce it. What this asserts is that the *engine* never invents one."""
+def test_rejected_is_not_not_proof_of_payment():
+    """Two outcomes, two members, and the pharmacy receipt is the case that separates them.
+
+    A receipt listing nothing but medicines establishes payment perfectly well — it is
+    about the wrong subject, which is `rejected`. `not_proof_of_payment` is a property of
+    the document type, declared by `proves_payment: false` in `document_evidence`, and
+    `verdict_for` sees only amounts, so it could not decide that question even if asked.
+    """
+    assert verdict_for(
+        Decimal(0), Decimal("500.00"), every_line_covered=False
+    ) is Verdict.REJECTED
+    assert Verdict.REJECTED is not Verdict.NOT_PROOF_OF_PAYMENT
     assert Verdict.NOT_PROOF_OF_PAYMENT in Verdict
-    with pytest.raises(PolicyGapError):
-        verdict_for(Decimal(0), Decimal("500.00"), every_line_covered=False)
+
+
+def test_a_rejected_claim_consumes_no_balance():
+    """policy.yaml binds annual limits on cumulative *spend*, and the ledger records what a
+    claim was reimbursed. A rejected claim is reimbursed nothing, so it cannot move the
+    balance — and a persona is not punished for filing a claim the plan turned down."""
+    ledger = Ledger()
+    result = evaluate([item("500.00", False)], ledger=ledger)
+    ledger.record("p001", "vitamins_nutrition", result.reimbursable)
+
+    assert result.verdict is Verdict.REJECTED
+    assert ledger.remaining("p001", "vitamins_nutrition") == Decimal("12000")
 
 
 def test_the_threshold_is_a_self_check_on_a_fully_covered_claim():
@@ -486,11 +541,15 @@ def test_a_claim_beyond_a_fully_exhausted_limit_has_no_verdict_in_the_policy():
     """The gap this engine refuses to paper over.
 
     With 12000 of 12000 already reimbursed, a further claim reimburses nothing.
-    policy.yaml assigns no verdict to that state: `not_proof_of_payment` is a statement
+    policy.yaml assigns no verdict to that state, and `rejected` does not close it:
+    `rejected` is the policy plainly not covering the purchase, and here it covers it
+    completely — every line qualifies, and the only reason nothing is paid out is that the
+    persona has already drawn the annual maximum. `not_proof_of_payment` is a statement
     about the evidence ("the evidence does not establish that money changed hands") and a
     receipt does establish it, while `partially_covered` would say some of the amount
-    qualifies when none of it does. Inventing either would put a label in the dataset
-    that nothing specified, so the engine raises and `claim_planner` never plans one.
+    qualifies when none of it is payable. Inventing any of the three would put a label in
+    the dataset that nothing specified, so the engine raises and `claim_planner` never
+    plans one.
     """
     ledger = Ledger()
     ledger.record("p001", "vitamins_nutrition", Decimal("12000.00"))
@@ -500,16 +559,20 @@ def test_a_claim_beyond_a_fully_exhausted_limit_has_no_verdict_in_the_policy():
         evaluate([item("500.00", True)], ledger=ledger)
 
 
-def test_the_coverage_gap_is_reported_before_the_limit_gap():
-    """A wholly non-covered basket filed against a spent balance hits two gaps at once.
-    policy.yaml is silent on which to name, so the engine names the coverage one: it is a
-    property of the documents and would hold at any balance, whereas the limit gap only
-    exists because this persona happens to have spent theirs."""
+def test_a_wholly_non_covered_basket_is_rejected_whatever_the_balance():
+    """Coverage is decided from the documents, so a spent balance cannot change the answer.
+
+    The limit gap in `_reimbursable` needs a positive covered amount to bind — a claim
+    covering nothing asks nothing of the limit — so there is no second condition to weigh
+    and no ambiguity about which of the two to report.
+    """
     ledger = Ledger()
     ledger.record("p001", "vitamins_nutrition", Decimal("12000.00"))
 
-    with pytest.raises(PolicyGapError, match="covered amount is zero"):
-        evaluate([item("500.00", False)], ledger=ledger)
+    result = evaluate([item("500.00", False)], ledger=ledger)
+    assert result.verdict is Verdict.REJECTED
+    assert result.reimbursable == Decimal("0.00")
+    assert result.verdict_basis == (VerdictBasis.DOCUMENTS,)
 
 
 def test_a_mixed_basket_beyond_the_limit_carries_both_causes():
@@ -743,13 +806,17 @@ def test_the_trace_does_not_round_a_partial_verdict_up_to_a_hundred_percent():
     assert result.policy_trace[-1] == "coverage 99.999% (1 of 2 line items not covered)"
 
 
-def test_no_trace_is_written_for_a_claim_that_gets_no_verdict():
-    """The trace justifies a verdict. A claim the engine refuses to label has none to
-    justify, so the verdict is decided before the coverage line is appended rather than
-    after — otherwise a `PolicyGapError` would be raised over a half-built justification
-    for an answer that was never given."""
-    with pytest.raises(PolicyGapError):
-        evaluate([item("500.00", False)])
+def test_the_trace_justifies_a_rejected_verdict_with_the_coverage_line():
+    """The trace states what the verdict rested on, and for `rejected` that is coverage and
+    nothing else — the period passed, and the limit was never asked anything."""
+    result = evaluate([item("500.00", False)])
+    assert result.verdict is Verdict.REJECTED
+    assert result.policy_trace == (
+        "category=vitamins_nutrition ok",
+        "period ok",
+        "coverage 0% (1 of 1 line items not covered)",
+    )
+    assert not any("limit" in line for line in result.policy_trace)
 
 
 # ------------------------------------------------------------------- ledger --

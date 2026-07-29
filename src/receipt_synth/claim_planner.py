@@ -13,7 +13,7 @@ and from the persona's ledger. The two agree on almost every claim; where they d
 the engine is right and the difference is reported, because a planner that overruled the
 oracle would be writing labels nothing derived.
 
-Three of the five verdicts are still refused rather than faked — see
+Four of the six verdicts are still refused rather than faked — see
 `_UNREALIZABLE_REASONS`.
 """
 
@@ -88,10 +88,9 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
     Verdict.NOT_PROOF_OF_PAYMENT: (
         "needs a document type that establishes no payment — an invoice, an act, a sales "
         "slip — via the `proves_payment: false` entries of `document_evidence` in "
-        "policy.yaml. No template in ARCHETYPES carries one yet. Note that a basket "
-        "bought in the wrong category is NOT this verdict by any settled reading: "
-        "`policy_engine.verdict_for` refuses to label a wholly non-covered basket at all, "
-        "because the sources disagree about what that outcome is called"
+        "policy.yaml. No template in ARCHETYPES carries one yet. This verdict is reached "
+        "ONLY that way: a basket bought in the wrong category is `rejected`, which is a "
+        "separate member of the enum, so the two mechanisms no longer compete for one name"
     ),
     Verdict.INSUFFICIENT_EVIDENCE: (
         "needs a document dated outside the active period of policy.yaml, or a claim "
@@ -101,6 +100,14 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
     Verdict.PARTIALLY_PAID: (
         "needs document types that do not exist yet: an invoice or a statement that "
         "shows part of the amount settled. No template in ARCHETYPES can carry it"
+    ),
+    Verdict.REJECTED: (
+        "needs a basket drawn wholly from the `excluded_items` of the claimed category, so "
+        "that the covered amount comes to zero. `policy_engine.verdict_for` already labels "
+        "such a claim, but nothing builds one: `content_builder` always draws at least one "
+        "covered line, and `verdict_mix` in policy.yaml sets no share for this verdict yet. "
+        "Both arrive together — a share invented before the mechanism would size a bucket "
+        "nothing can fill"
     ),
 }
 
@@ -113,8 +120,8 @@ _NO_REASON_RECORDED = (
 
 # What fraction of a mixed basket is meant to be covered. Bounded away from both ends: at
 # 1.0 there would be no non-covered line and the claim would not be partially covered at
-# all, and at 0 there would be no covered line — a claim `policy_engine` refuses to label,
-# because the policy names no verdict for one.
+# all, and at 0 there would be no covered line — which `policy_engine` labels `rejected`, a
+# different verdict from the one being planned here.
 #
 # An ASPIRATION, not a dial. `content_builder._repriced` clamps every non-covered line
 # into its item kind's own price range, so a target the range cannot reach is not reached:
@@ -151,7 +158,20 @@ def draw_verdict(rng: random.Random) -> Verdict:
     told which verdicts were excluded, or the conditioning is invisible.
     """
     mix = verdict_mix()
-    weights = [mix[verdict] for verdict in REALIZABLE_VERDICTS]
+    weights: list[float] = []
+    for verdict in REALIZABLE_VERDICTS:
+        share = mix[verdict]
+        if share is None:
+            # policy.yaml may declare a verdict with no share yet — see `verdict_mix`. That
+            # is only coherent while nothing draws it, so the combination is named here
+            # rather than left to surface as `None` inside `random.choices`.
+            raise ValueError(
+                f"verdict_mix declares {verdict.value!r} with no share, and this planner "
+                "lists it as realizable. A verdict that can be built needs a share to be "
+                "built at: either give it one in policy.yaml or take it out of "
+                "REALIZABLE_VERDICTS."
+            )
+        weights.append(share)
     return rng.choices(REALIZABLE_VERDICTS, weights=weights, k=1)[0]
 
 
@@ -336,8 +356,8 @@ def plan_claim(
     if ledger.remaining(persona.persona_id, category) <= 0:
         raise ValueError(
             f"persona {persona.persona_id} has no {category!r} balance left; policy.yaml "
-            "assigns no verdict to a claim that reimburses nothing, so there is nothing "
-            "to plan here"
+            "assigns no verdict to a claim that covers something and is still paid nothing "
+            "(see `policy_engine._reimbursable`), so there is nothing to plan here"
         )
 
     candidates = archetypes_for(persona.location.country, category)

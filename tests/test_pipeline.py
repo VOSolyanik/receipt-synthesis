@@ -177,13 +177,16 @@ def test_a_category_the_persona_does_not_hold_is_refused():
         Verdict.NOT_PROOF_OF_PAYMENT,
         Verdict.INSUFFICIENT_EVIDENCE,
         Verdict.PARTIALLY_PAID,
+        Verdict.REJECTED,
     ],
 )
 def test_verdicts_no_archetype_can_carry_are_refused_not_faked(verdict):
     """Explicit over silent. A planner that accepted one of these and produced an ordinary
     basket would write a wrong label rather than fail. The message has to say what each
     actually needs, because the reason differs: two are content mechanisms, one needs
-    document types that do not exist."""
+    document types that do not exist, and `rejected` needs a basket builder that draws no
+    covered line at all — which `policy_engine` can already label and nothing can yet
+    build."""
     with pytest.raises(NotImplementedError) as raised:
         plan_claim(
             random.Random(1), persona=persona(), claim_id="c1",
@@ -199,6 +202,7 @@ def test_the_planner_realizes_exactly_the_verdicts_the_engine_can_be_asked_for()
         Verdict.NOT_PROOF_OF_PAYMENT,
         Verdict.INSUFFICIENT_EVIDENCE,
         Verdict.PARTIALLY_PAID,
+        Verdict.REJECTED,
     }
 
 
@@ -207,12 +211,35 @@ def test_a_drawn_verdict_is_always_one_that_can_be_built():
     assert drawn == set(REALIZABLE_VERDICTS), "both realizable verdicts must be reachable"
 
 
+def test_a_realizable_verdict_with_no_share_cannot_be_drawn_from():
+    """The combination policy.yaml and this planner must never be in at once. `rejected`
+    is declared with no share, so the day something builds one, whoever adds it to
+    `REALIZABLE_VERDICTS` has to give it a share too — otherwise `random.choices` would be
+    handed `None` as a weight. Named here rather than left to surface as a TypeError inside
+    the standard library.
+    """
+    from receipt_synth import claim_planner
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            claim_planner,
+            "REALIZABLE_VERDICTS",
+            (*REALIZABLE_VERDICTS, Verdict.REJECTED),
+        )
+        with pytest.raises(ValueError, match="no share"):
+            claim_planner.draw_verdict(random.Random(1))
+
+
 def test_the_drawn_mix_is_the_target_mix_renormalized_over_the_realizable_subset():
-    """verdict_mix gives covered 0.50 and partially_covered 0.20; the other three are
-    0.30 in total and cannot be built. Renormalized over the two that can:
+    """verdict_mix gives covered 0.50 and partially_covered 0.20; of the four that cannot
+    be built, three carry 0.10 each and `rejected` carries no share at all. Renormalized
+    over the two that can:
 
         covered            0.50 / 0.70 = 0.714…
         partially_covered  0.20 / 0.70 = 0.286…
+
+    A member with no share must not touch that arithmetic — the draw is over the
+    realizable subset, and `rejected` is not in it.
 
     Over 4000 draws the realized share of `covered` should sit near 0.714. The window is
     wide (±0.04) on purpose: this asserts the weights are the policy's, not that a
@@ -671,6 +698,28 @@ def test_the_balance_report_names_the_verdicts_it_could_not_generate(multi_claim
     for verdict in REALIZABLE_VERDICTS:
         assert verdict.value in report
     assert "mixed_items" in report and "limit_exhausted" in report
+
+
+def test_a_verdict_with_no_share_is_named_and_does_not_enter_the_arithmetic(
+    multi_claim_dataset,
+):
+    """`rejected` is in `verdict_mix` with no share yet, and the report has to survive that
+    twice over.
+
+    It must not print a percentage for it — there is none, and `0.0%` would read as a
+    decision. And the 30% it reports as absent is now only what the THREE share-carrying
+    unrealizable verdicts account for, so the report has to say that the figure is a lower
+    bound. Silently summing a `None` as zero would leave the same 30% on the page as a
+    complete answer.
+    """
+    result, _ = multi_claim_dataset
+    report = balance_report(result)
+
+    assert "rejected (no share declared yet)" in report
+    assert "rejected (0.0%)" not in report
+    assert "30.0% of the target mix is absent" in report
+    assert "LOWER BOUND" in report
+    assert "no share for rejected" in report
 
 
 def test_the_cause_table_counts_claims_and_says_so(multi_claim_dataset):

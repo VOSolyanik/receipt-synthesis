@@ -92,6 +92,7 @@ verdict_mix:                   # target distribution; the balance report checks 
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
   partially_paid: 0.10
+  rejected: null               # share decided together with the mechanism that builds one
 
 partially_covered_causes:      # splits the bucket above by cause; must sum to 1.0
   mixed_items: 0.65

@@ -62,11 +62,29 @@ class Capture(StrEnum):
 
 
 class Verdict(StrEnum):
+    """The answer a claim gets. Values match the keys of ``verdict_mix`` in policy.yaml.
+
+    ``REJECTED`` and ``NOT_PROOF_OF_PAYMENT`` are the pair that is easiest to collapse into
+    one, and they are not the same outcome:
+
+    * ``REJECTED`` — the documents prove payment perfectly well, and nothing on them is
+      covered by the claimed category. It is a property of the LINE ITEMS, resolved against
+      ``covered_items`` / ``excluded_items``; policy.yaml's ``coverage`` block sends a
+      covered fraction of zero here.
+    * ``NOT_PROOF_OF_PAYMENT`` — the evidence does not establish that money changed hands.
+      It is a property of the DOCUMENT TYPE, declared by ``proves_payment: false`` in
+      policy.yaml's ``document_evidence``, and it says nothing about what was bought.
+
+    Appended to rather than reordered: the member order is the row order of the assembler's
+    balance report, so reordering would change output that a seed is supposed to determine.
+    """
+
     COVERED = "covered"
     PARTIALLY_COVERED = "partially_covered"
     NOT_PROOF_OF_PAYMENT = "not_proof_of_payment"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
     PARTIALLY_PAID = "partially_paid"
+    REJECTED = "rejected"
 
 
 class VerdictBasis(StrEnum):
