@@ -55,3 +55,6 @@ secrets/
 # The list of terms that must never be published cannot itself be published.
 # tools/check_redaction.py reads this file; see its docstring.
 tools/redaction-terms.local.txt
+
+# Local Claude Code settings — machine-specific permissions, never published.
+.claude/settings.local.json
