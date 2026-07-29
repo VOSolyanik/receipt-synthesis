@@ -32,9 +32,17 @@ for the full design.
 Requires Python 3.12.
 
 ```bash
-uv sync
-uv run playwright install chromium
+make install    # uv sync + the Chromium build the renderer needs
 ```
+
+Before calling any change done, run the project's gate — lint, tests and the redaction check, in that
+order:
+
+```bash
+make check
+```
+
+`make` on its own lists the targets.
 
 ## Usage
 

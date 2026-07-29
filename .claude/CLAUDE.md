@@ -133,7 +133,8 @@ a downstream consumer ever ships a modified library. Never relax this pin withou
   rate, amount-in-words = numeric amount, line-item sum = total, date inside/outside period ↔ verdict.
   Fraud and trap archetypes break these **deliberately** — a broken invariant must be an explicit, labelled
   choice, never an accident.
-- Run tests and the linter before calling anything done.
+- Run `make check` before calling anything done — lint, tests and the redaction gate, in that order. That
+  one command is what "the checks are green" means here; do not substitute your own invocation.
 
 ## Notes
 
