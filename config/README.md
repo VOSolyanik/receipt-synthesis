@@ -1,14 +1,18 @@
 # Configuration
 
-Four files, split by **nature** rather than by convenience. The split is deliberate and worth preserving:
+Five files, split by **nature** rather than by convenience. The split is deliberate and worth preserving:
 each file changes for a different reason, and two of them are meaningful outside this repository.
 
 | File | Nature | Changes when | Meaningful to consumers |
 |---|---|---|---|
 | `policy.yaml` | **Policy** — what a benefit plan reimburses | The plan being modelled changes | **Yes** |
+| `labelling-schema.yaml` | **Contract** — what is labelled, and how a value is compared | A field, a type or a comparison rule changes | **Yes** |
 | `fiscal-rules.yaml` | **Law** — VAT, identifiers, receipt layout | Legislation changes | No |
 | `fx-rates.yaml` | **Reference data** — exchange rates | Rarely; static on purpose | No |
 | `vendors.json` | **Data** — merchant names | You want different merchants | No |
+
+Four of the five are read by the generator. `labelling-schema.yaml` is not: it describes the generator's
+output to whoever consumes it, and there is deliberately no loader for it in `src/`.
 
 ---
 
@@ -144,6 +148,32 @@ either: real receipts establish how well documents are read, not how often claim
 Worth being precise about what gets calibrated to this distribution: the evaluator, and whoever tunes prompts
 and thresholds against the dataset — not a set of model weights. The effect is real, but it runs through the
 human in the loop, so it applies just as much to a pipeline that trains nothing at all.
+
+---
+
+## `labelling-schema.yaml` — the contract
+
+`policy.yaml` says what the plan reimburses. This file settles the **names, types and comparison rules** of
+everything the generator labels, so that a consumer's extraction schema and its scorecard are derived from
+one agreement instead of two. Without it a system that reads every field correctly can score zero because it
+returns `merchant` where the label says `counterparty`.
+
+It is the only file here that carries **both sides**: what the generator emits today, and what the consumer's
+requirements demand. Where the two disagree it names both and picks neither — a contract that resolved a
+divergence quietly would hide it rather than fix it. Every `src/` change those divergences imply is collected
+in a `required_changes` block at the foot of the file; none has been made.
+
+Read the file itself for the field lists and rules. Three things about it belong here:
+
+- **One model serves all seven document types.** Nothing in `schemas.py` varies the label shape by
+  `doc_type`, while the consumer's requirements are stated per type. That gap is recorded in the file rather
+  than closed, because a per-type label shape would make the label depend on the classification answer — one
+  of the things being evaluated.
+- **Every section is marked `emitted`, `forward_contract`, `divergent` or `undecided`.** One archetype ships
+  so far, so much of the file is contract rather than observation, and the two are never mixed in one
+  section. Each `emitted` statement was verified field by field against a freshly generated label file.
+- **Nothing in `src/` reads it.** It describes this generator's output to its consumers; adding a loader
+  would be inventing a caller.
 
 ---
 

@@ -1,0 +1,1364 @@
+# What this generator labels, what the consumer requires, and where the two disagree.
+# A CONTRACT, not documentation.
+#
+# WHY IT EXISTS. A consumer of this dataset has an extraction step, which needs a
+# structured-output schema, and a scorecard, which needs comparison rules. Agree the two
+# separately and they disagree: this generator emits `counterparty`, the consumer's
+# requirement names the field `seller_name`, and the scorecard reports zero accuracy on a
+# system that works. Worse, it reports a plausible 40% on a system that reads every field
+# correctly and writes dates the other way round — indistinguishable from a real
+# regression. So name, type and comparison rule are settled here, once.
+#
+# TWO SIDES, AND THIS FILE CARRIES BOTH.
+#
+#   generator side — what `src/receipt_synth` emits today, verified against a real run.
+#   consumer side  — what the extraction and evaluation requirements demand. This is the
+#                    SOURCE OF TRUTH for what the dataset must eventually contain.
+#
+# A contract that documented only the generator would silently inherit every divergence
+# instead of recording it. So wherever the two disagree, both names appear, marked
+# `status: divergent`, and THIS FILE PICKS NEITHER. Resolving a divergence means either a
+# change in `src/` or an amendment to the requirement, and both are the author's call.
+# Every `src/` change a divergence implies is collected in `required_changes` at the foot
+# of this file. None of them has been made.
+#
+# IT DUPLICATES NOTHING. Coverage rules, limits, the category vocabulary and the evidence
+# matrix stay in policy.yaml; pipeline narrative stays in docs/architecture.md; the
+# consumer's requirements stay in the consumer's own repository. All are referenced by
+# name. Two copies of a rule become two rules the first time one is edited.
+#
+# NOTHING IN THIS REPOSITORY READS THIS FILE. There is no loader for it in `src/`, and
+# adding one would be inventing a caller. It is consumed by downstream tooling; its
+# accuracy is maintained by being re-checked against a freshly generated label file.
+
+version: 2
+
+# One status vocabulary. Every section carries a `status`, and wherever anything below says
+# whether a thing exists yet or is disputed it uses these four words and no others — there
+# is no second spelling of the distinction anywhere in this file. Individual fields carry a
+# `status` only where they differ from their section, or inside a `divergence` block.
+status_vocabulary:
+  emitted: >
+    Observed in the output of a real run, checked field by field. A consumer may rely on
+    it being in the dataset today.
+  forward_contract: >
+    Required by the consumer side, or called for by the design, and NOT produced by any
+    template yet. A consumer may build against it; a consumer may not conclude that the
+    current dataset contains it.
+  divergent: >
+    Both sides exist and disagree — on a name, a type, or a definition. Neither is chosen
+    here. See `required_changes`.
+  undecided: >
+    Neither side settles it, and guessing would be indistinguishable from a decision.
+
+sources:
+  generator: >
+    src/receipt_synth/schemas.py (the label models), content_builder.py (the values),
+    policy_engine.py (the derived claim labels), claim_planner.py (the archetype registry),
+    degrader.py (capture modes), and config/policy.yaml (the labelling policy).
+  reference_run: >
+    Every `status: emitted` statement below was verified against
+    `generate-dataset --seed 42 --personas 2 --claims-per-persona 4`. The generator version
+    is not repeated in this file: every label record carries its own `generator_version`,
+    and a copy here would be a second thing to keep in step.
+  consumer: >
+    The neighbouring product requirements document — §4.3 (extraction fields per document
+    type and the entity model), Ф-301 (classifier classes and metric), Ф-303 (extraction
+    thresholds and field names), Ф-310 to Ф-312 (QR, fiscality markers, fiscal scheme),
+    Ф-401 to Ф-403 (validation and line-item guards), Ф-406 (duplicates), Ф-407
+    (cross-document checks) — together with the concept note on the open language and
+    currency scope. Requirements are cited by their identifier and never quoted at length;
+    that document is authoritative for its own contents and is never edited from here.
+
+
+# =============================================================================
+# 1. The document-type vocabulary
+# =============================================================================
+#
+# `document_types` keys are the `DocType` members in schemas.py, which are also the keys of
+# `document_evidence` in policy.yaml. What each type PROVES — subject, payment, or both —
+# is that block in policy.yaml and is not copied here.
+#
+# `classifier_role` follows Ф-301, which settles it. There is no per-type narrative below:
+# what each document class is belongs to docs/architecture.md#document-archetypes.
+#
+# `prd_required_fields` is §4.3's required-field table for the type, EXPRESSED IN THE SHAPE
+# THE REQUIREMENT DEMANDS rather than in the generator's current shape, with the generator's
+# counterpart named beside it. That is what makes a divergence visible instead of inherited.
+
+document_types:
+
+  fiscal_receipt:
+    classifier_role: target_class
+    status: emitted
+    emitted_archetypes:
+      # The registry is `ARCHETYPES` in claim_planner.py.
+      - slug: ua_prro_receipt
+        jurisdiction: UA
+        language: uk
+        categories: [vitamins_nutrition]
+    prd_required_fields:
+      - prd: total
+        generator: amount
+        status: emitted
+      - prd: date
+        generator: date
+        status: emitted
+      - prd: seller_name
+        generator: counterparty
+        status: divergent
+        see: divergence_counterparty_name
+      - prd: seller tax / fiscal number
+        generator: none — `seller_tax_code` exists as a bbox key with no labelled value
+        status: forward_contract
+        note: >
+          `content_builder.Seller.tax_code` already holds a checksum-correct ЄДРПОУ or
+          РНОКПП and `ground_truth()` discards it. Mechanical to add; see RC-04.
+      - prd: FiscalScheme — the JURISDICTION of the fiscal scheme plus that scheme's own requisites
+        prd_vocabulary: [ua_prro, pl_paragon, ar_factura, pt_atcud, sk_ekasa, hr_fiskalizacija, none, unknown]
+        generator: has_fiscal_number (boolean)
+        status: divergent
+        note: >
+          Ф-312 requires the jurisdiction, on the reasoning that UA ПРРО, PL paragon, AR
+          Factura, PT ATCUD, SK eKasa and HR fiskalizacija are all fiscal in their own
+          systems by different requisites, and it forbids a boolean `is_fiscal` in the
+          model. The generator emits no jurisdiction at all; `has_fiscal_number` is a
+          boolean about one requisite of one scheme. TWO SEPARATE PROBLEMS — the shape, and
+          the fact that the requirement's own vocabulary has NO member for Germany or
+          Spain, whose archetypes this generator plans to build. A DE Kassenbon could only
+          be labelled `unknown`, which Ф-312 routes to `in_review`. See RC-02.
+      - prd: VAT amounts per letter — TaxAmount(letter, rate, amount), explicitly not a scalar tax
+        generator: none
+        status: forward_contract
+        note: >
+          `content_builder._build_tax_lines` computes exactly this — `TaxLine(letter, rate,
+          gross, vat)`, one row per letter present — and `DocGroundTruth` has no field to
+          put it in, so it is rendered and thrown away. Mechanical; see RC-05.
+      - prd: line items, required only where the category carries exception rules
+        generator: line_items
+        status: emitted
+      - prd: DECODED QR CONTENT plus its type (fiscal_link / promotional / payment / unknown)
+        generator: has_qr, qr_is_fiscal (two booleans)
+        status: divergent
+        note: >
+          Ф-310 requires the decoded payload and its type, and states that presence is
+          unusable as a fiscality signal because bank confirmations routinely carry
+          promotional QR codes. `qr_is_fiscal` is a boolean collapse of a four-value type
+          and cannot express `payment` or `unknown`. `PrroReceipt.qr_payload` already holds
+          the decoded string and `ground_truth()` discards it. See RC-03.
+      - prd: fiscality markers found in the text, positive and negative, with their position
+        generator: none
+        status: forward_contract
+        note: >
+          Ф-311 — a negative marker («НЕ ФІСКАЛЬНИЙ ЧЕК», «KOPIA DLA SPRZEDAWCY», an empty
+          receipt-number field) OVERRIDES every positive fiscality signal. No generator
+          field records one and no archetype prints one yet. See RC-08.
+
+  payment_confirmation:
+    classifier_role: target_class
+    status: forward_contract
+    line_items: >
+      EMPTY BY DESIGN. §4.3 states plainly that this type has no line items — it is proof
+      of one transaction. Settled by the requirement, not an open question.
+    prd_required_fields:
+      - prd: amount
+        generator: amount
+        status: forward_contract
+      - prd: date
+        generator: date
+        status: forward_contract
+      - prd: payer / payee
+        generator: none — `counterparty` is a single party and cannot carry two
+        status: forward_contract
+      - prd: payment purpose
+        generator: none
+        status: forward_contract
+        note: >
+          Load-bearing rather than incidental: policy.yaml's `document_evidence` gives this
+          type `proves_subject: false`, and the one documented override is a confirmation
+          whose payment purpose spells out what was bought. Without the field that override
+          cannot be labelled.
+      - prd: RRN / authorization code
+        generator: none — `rrn` and `auth_code` are bbox keys with no labelled value
+        status: forward_contract
+        note: >
+          `content_builder.Acquiring` already holds both and `ground_truth()` discards them.
+          Ф-406 makes RRN and authorization code DECISIVE duplicate keys, so until they
+          carry values the dataset can exercise deduplication but cannot score it. See RC-06.
+      - prd: payment form (cash / card)
+        generator: none — `payment_method` is a bbox key with no labelled value
+        status: forward_contract
+        note: Ф-407 cross-checks payment form between linked documents.
+
+  bank_statement:
+    classifier_role: target_class
+    status: forward_contract
+    line_items: "EMPTY BY DESIGN, per §4.3. Settled."
+    prd_required_fields:
+      - prd: amount
+        generator: amount
+        status: forward_contract
+      - prd: date
+        generator: date
+        status: forward_contract
+      - prd: payee
+        generator: counterparty
+        status: divergent
+        see: divergence_counterparty_name
+      - prd: payment purpose
+        generator: none
+        status: forward_contract
+    undecided: >
+      Whether a multi-page statement produces one label for the statement or one per
+      transaction, and how `amount` and `date` are then defined. Neither side settles it.
+
+  invoice:
+    classifier_role: target_class
+    status: forward_contract
+    prd_required_fields:
+      - prd: total
+        generator: amount
+        status: forward_contract
+      - prd: date
+        generator: date
+        status: forward_contract
+      - prd: seller plus tax number
+        generator: counterparty (name only)
+        status: divergent
+        see: divergence_counterparty_name
+      - prd: subject / line items
+        generator: line_items
+        status: forward_contract
+      - prd: PAYMENT STATUS (e.g. "Оплачено" / "Zapłacono") and amount due
+        generator: none
+        status: forward_contract
+        note: >
+          No counterpart of any kind exists in `DocGroundTruth`. This is the field the
+          `not_proof_of_payment` verdict turns on for this type — an invoice reading
+          "Zapłacono: 0,00" is the canonical example — and also what `partially_paid` would
+          be read from. See RC-07.
+
+  act:
+    classifier_role: other
+    status: forward_contract
+    note: >
+      Ф-301 folds the act of services rendered into `other` explicitly. §4.3 gives it no
+      required-field row of its own.
+
+  order_screenshot:
+    classifier_role: other
+    status: forward_contract
+    note: >
+      Ф-301's `other` is "contract, act and everything else", which absorbs this type. It
+      still matters for linking: it establishes the subject and never the payment.
+
+  non_fiscal_receipt:
+    classifier_role: undecided
+    status: forward_contract
+    undecided: >
+      Ф-301's `other` is defined as "everything else", which mechanically absorbs this
+      type — but §4.3's `other` row says such a document gets classification only and the
+      claim goes straight to `in_review`, while Ф-311 requires exactly these documents (a
+      sales slip with full requisites marked non-fiscal, a terminal slip with an RRN and an
+      empty receipt-number field) to be DETECTED AND REASONED ABOUT: a negative marker must
+      override positive fiscality signals, and the stated test is that such a document is
+      not classified as a fiscal receipt. Being reasoned about specifically and being routed
+      to manual review as an unrecognized type are different outcomes, and no source names a
+      class for this one. Left open.
+
+# Ф-301, stated here because a consumer that computes a different metric than the one being
+# reported has no way to discover the difference from the field lists alone.
+classifier_metric:
+  status: forward_contract
+  target_classes: [fiscal_receipt, payment_confirmation, bank_statement, invoice]
+  target: macro-F1 >= 0.90 over those four classes
+  other_class: >
+    `other` IS REPORTED SEPARATELY AS A PER-CLASS F1 AND DOES NOT ENTER THE TARGET
+    MACRO-F1. It is a catch-all with blurred edges, so failing the threshold through it
+    would say nothing about the system. A consumer that folds `other` into the macro average
+    computes a different number than the one being reported.
+  missing_from_doctype: >
+    `DocType` in schemas.py has NO `contract` member and NO `other` member, while §4.3 names
+    both — `contract` with its own required-field row (subject, parties, validity period,
+    amount; exploratory extraction, no threshold) and `other` as the catch-all. The
+    generator therefore cannot label a document as either. See RC-14.
+
+# Ф-303, for the same reason: a threshold applied to the wrong slice is not a smaller
+# number, it is a different measurement.
+extraction_thresholds:
+  status: forward_contract
+  scope: printed documents of the four target classes; handwritten reported separately
+  per_field:
+    amount: F1 >= 0.85
+    date: F1 >= 0.85
+    seller_name: F1 >= 0.75
+  contract_extraction: exploratory, no target threshold — `contract` is not a target class
+  line_item_extraction: >
+    Reported without a target threshold, as three separate numbers: extraction F1, the
+    accuracy of the covered / not-covered call per line, and the error on the final
+    reimbursable amount.
+  language_slice: >
+    TARGET THRESHOLDS ARE SET ONLY ON THE UKRAINIAN-LANGUAGE PART OF THE SET. Every other
+    language is reported separately as an exploratory slice. A consumer that averages over
+    all languages is not measuring against these thresholds. See `normalization.open_enum`
+    for why the set is wider than the plan.
+
+
+# =============================================================================
+# 2. Normalization rules
+# =============================================================================
+#
+# The rules a scorecard applies to BOTH sides before comparing. Named here and referenced by
+# `normalize:` on each field, so a rule is written once and no field acquires a variant.
+#
+# `decided_here` marks a rule that is this file's own decision rather than something
+# determined by the generator or by a requirement. A consumer may disagree with one, but
+# then it has to say so too.
+
+normalization:
+
+  identity:
+    status: emitted
+    applies_to: opaque dataset keys — doc_id, claim_id, persona_id, source_file
+    rule: exact byte-for-byte comparison, no folding
+    why: >
+      Not extractable content. Nothing prints them and no extractor produces them; they
+      exist so a label can be joined to an image and a claim to its documents.
+
+  closed_enum:
+    status: emitted
+    applies_to: doc_type, capture, verdict, verdict_basis members, imperfection members
+    form: lower_snake_case ASCII
+    rule: exact match against the closed vocabulary declared in this file
+    why: a value outside the vocabulary is an error, not a near miss to be scored partially
+
+  policy_vocabulary:
+    status: emitted
+    applies_to: item_kind, category, benefit_categories
+    form: lower_snake_case ASCII
+    rule: exact match against the vocabulary policy.yaml declares
+    why: >
+      Open in the same sense policy.yaml is: replacing that file retargets the generator at
+      a different benefit plan and the vocabulary changes with it. Not copied here for that
+      reason.
+
+  open_enum:
+    status: divergent
+    applies_to: language, currency, home_currencies, languages
+    label_side: >
+      Always a concrete code. The generator builds the document, so it knows the language
+      and the currency exactly and never needs a fallback. Today: `uk` and `UAH` only. Both
+      fields are plain `str` in schemas.py, not enums, so the type already permits any code.
+    extraction_side: >
+      THE ENUM IS OPEN. It carries an `other` value with a free-text qualifier, and amount
+      normalization accepts an ARBITRARY currency code.
+    why: >
+      The consumer's concept note records that the real flow is wider than the plan. Planned
+      languages were uk/pl/de/es/en; also observed are Portuguese, Bulgarian, Slovak,
+      Croatian, Montenegrin, Italian and Russian. Planned currencies were UAH/PLN/EUR/USD;
+      also observed are BGN, GEL, BRL, GBP and ARS. Closing either enum would make a correct
+      extraction unrepresentable.
+    form: >
+      `language` is ISO 639-1 where one exists. It does not always exist — Montenegrin has
+      no two-letter code — which is itself an argument for the free-text qualifier rather
+      than a longer closed list. `currency` is ISO 4217, three uppercase letters.
+    rule: >
+      Compare case-sensitively after trimming; `currency` uppercase, `language` lowercase.
+      An extraction of `other` never matches a concrete label code — score it as a miss and
+      read the qualifier only when investigating one.
+    metric_consequence: see `extraction_thresholds.language_slice`; the slice is not the whole set
+
+  iso_date:
+    status: emitted
+    applies_to: DocGroundTruth.date
+    label_form: "YYYY-MM-DD"
+    printed_form: >
+      Per jurisdiction, from `date_format` in fiscal-rules.yaml: DD.MM.YYYY in UA, PL and
+      DE; DD/MM/YYYY in ES; YYYY-MM-DD in the EU block. An extractor reads the printed form,
+      the label carries the ISO one.
+    rule: parse both sides to a calendar date and compare dates, never strings
+    timezone: >
+      None, and no time component. The label is a naive calendar date. A ПРРО receipt does
+      print a time beside the date, but no ground-truth field carries it, so a time cannot
+      be scored.
+    why: DD.MM versus MM/DD is the most common way for a correct extraction to score zero.
+
+  money:
+    status: emitted
+    applies_to: DocGroundTruth.amount, LineItem.price, ClaimGroundTruth.reimbursable_amount
+    label_form: >
+      A JSON number. Amounts are exact `Decimal` inside the generator and are serialized
+      through `float()`, so TRAILING ZEROS ARE LOST: 2607.80 is written 2607.8 and 1139.10
+      is written 1139.1. Never a fixed-width string.
+    precision: two decimal places (`KOPIYKA` in content_builder.py)
+    rule: >
+      Round both sides half-up to two decimal places and compare numerically. Never compare
+      serialized text, never compare floats for exact equality.
+    printed_form: >
+      Grouped by the jurisdiction's `thousands_separator` — a NO-BREAK SPACE (U+00A0) in UA
+      and PL, a full stop in DE and ES — with the jurisdiction's decimal separator. In UA
+      the separator is drawn PER DOCUMENT from ["." , ","], because real ПРРО vendors print
+      both, so a parser must accept either within one jurisdiction. No currency symbol is
+      printed beside an amount.
+    currency: >
+      Never part of the amount; the `currency` field carries the code, and per `open_enum`
+      that code may be one the generator has never emitted.
+    decided_here: half-up rounding. The generator never rounds a comparison, because it never compares.
+
+  quantity:
+    status: emitted
+    applies_to: LineItem.qty
+    label_form: a JSON number, serialized as money is
+    printed_form: "formatted with %g — an integral quantity prints as `1`, not `1.0`"
+    rule: compare numerically
+    observed: >
+      Every quantity produced so far is integral; the draw is from (1, 1, 1, 2). Fractional
+      quantities are not generated and this file promises no precision for them.
+
+  text_name:
+    status: emitted
+    applies_to: LineItem.name
+    rule: >
+      Unicode NFC, trim, collapse internal whitespace runs to one space, then compare
+      exactly and CASE-SENSITIVELY.
+    why: >
+      The name is printed verbatim from its template, so the only differences a correct
+      extraction can introduce are whitespace and composition. Folding case would hide a
+      real transcription error.
+
+  party_name:
+    status: emitted
+    applies_to: DocGroundTruth.counterparty
+    rule: >
+      Unicode NFC, trim, collapse internal whitespace, strip the legal-form prefix and any
+      enclosing quotation marks, then compare case-insensitively (Unicode casefold).
+    why: >
+      THE LABEL AND THE PRINTED FORM ARE NOT THE SAME STRING. `counterparty` carries the
+      bare trading name; the document prints the name with its legal form inside guillemets.
+      An invented example of the pair:
+        printed on the document:   ТОВ «Вітамін Плюс»
+        counterparty in the label: Вітамін Плюс
+      `_LEGAL_FORM_PREFIX` in content_builder.py SUPPORTS three Ukrainian forms — ТОВ, ФОП,
+      ПрАТ. Only ТОВ has ever been PRODUCED: the one registered archetype carries one
+      category and vendors.json lists one vendor for it. Non-Ukrainian forms in vendors.json
+      (SA, SL, SP_ZOO, GMBH, EK) have no prefix mapping and would render as the raw key.
+    decided_here: >
+      Which side is authoritative. This file makes the bare name authoritative and requires
+      the comparison to strip the legal form, because the legal form is a property of the
+      seller's registration rather than of the merchant identity a claim is about. Scoring
+      the legal form needs a separate field, and none exists.
+    see: divergence_counterparty_name
+
+  vat_letter:
+    status: emitted
+    applies_to: LineItem.vat_letter
+    rule: compare code points exactly, after NFC. Do not fold case, do not transliterate.
+    why: >
+      The Ukrainian VAT letters are Cyrillic, and two of the four are homoglyphs of Latin
+      letters — А is U+0410, not U+0041; В is U+0412, not U+0042. (Б and Г have no Latin
+      twin.) The Polish PTU letters A–E and the German A–B genuinely are Latin. A pipeline
+      that normalizes Cyrillic to Latin turns a correct read of А into a mismatch; one that
+      does the reverse turns a wrong read into a match. Hence code points.
+    nullability: >
+      `null` where the jurisdiction prints no per-line letter — `line_item_letter_position:
+      none`, the ES and EU case. On a UA receipt a null letter is a builder bug and
+      content_builder raises rather than emitting one.
+
+  identifier:
+    status: forward_contract
+    applies_to: >
+      The registration and transaction identifiers a document prints — tax code, VAT number,
+      receipt number, RRN, authorization code, terminal id. NONE HAS A LABELLED VALUE TODAY:
+      they appear in `field_bboxes` as geometry only, so this rule has nothing to normalize
+      yet. §4.3 makes several of them required fields; see `required_changes`.
+    rule: >
+      Strip everything outside [0-9A-Za-z], then compare case-insensitively. Separators,
+      spacing and the label printed beside an identifier (ІД / ІПН on a Ukrainian receipt,
+      the leading country letters of a VAT number) are formatting, not identity.
+    decided_here: all of it. Nothing emits an identifier value yet.
+
+  fraction:
+    status: emitted
+    applies_to: ClaimGroundTruth.covered_fraction
+    label_form: >
+      A JSON number in [0, 1], quantized to SIX decimal places before serialization
+      (`ClaimEvaluation.fraction_as_label`). Observed: 1.0, 0.600109, 0.500048.
+    rule: compare with an absolute tolerance of 1e-6
+
+  bbox:
+    status: emitted
+    applies_to: DocGroundTruth.field_bboxes values
+    label_form: "[x, y, width, height] in image pixels — the COCO convention"
+    frame_of_reference: >
+      The SHIPPED image, after degradation. Geometric transforms carry the boxes with them,
+      so a box aligns with the artifact on disk and not with the clean intermediate render,
+      which is never written out.
+    rule: >
+      No matching rule is stated here. IoU thresholds, and whether boxes are scored at all,
+      are the consumer's evaluation decision; the boxes come from the browser's layout engine
+      rather than from OCR, so there is no annotation noise for a threshold to absorb.
+
+  string_list_unordered:
+    status: emitted
+    applies_to: ClaimGroundTruth.imperfection, ClaimGroundTruth.verdict_basis
+    rule: compare as SETS
+    why: >
+      The emitted order is stable because it is append order in policy_engine.py, but
+      nothing makes that order meaningful and a consumer must not score it.
+
+  prose_not_comparable:
+    status: emitted
+    applies_to: ClaimGroundTruth.policy_trace
+    rule: >
+      DO NOT COMPARE LITERALLY, in whole or line by line. The trace is prose, its wording is
+      free to change between generator versions, and an exact-match score over it measures
+      nothing.
+    intended_use: >
+      A reference for judging EXPLANATION quality against a system's own justification —
+      which is the shape the consumer's `DecisionTrace` takes.
+
+
+# =============================================================================
+# 3. The document label
+# =============================================================================
+#
+# One record per rendered document, written to `labels/<doc_id>.json` and repeated in the
+# `documents` array of `ground_truth.json`. Model: `DocGroundTruth`.
+#
+# ONE MODEL FOR EVERY DOCUMENT TYPE. Nothing in schemas.py varies the field set by
+# `doc_type`, so the list below is the field list for all seven types. The consumer's §4.3
+# is per type; this is not, and that gap is what `document_types.*.prd_required_fields`
+# records above. A per-type label shape would make the label depend on the answer to the
+# classification question, which is one of the things being evaluated — so the divergence is
+# recorded rather than resolved.
+#
+# EVERY KEY IS PRESENT IN EVERY RECORD. `required: false` means the VALUE may be null or an
+# empty container, never that the key is missing.
+
+document_label:
+  status: emitted
+  file: "labels/<doc_id>.json"
+
+  fields:
+
+    - name: doc_id
+      type: string
+      required: true
+      normalize: identity
+      note: >
+        Unique within a dataset, formed today as `<claim_id>_d<n>`. Treat it as opaque:
+        joining on a parsed substring depends on a format that is the assembler's business.
+
+    - name: source_file
+      type: string
+      required: true
+      normalize: identity
+      note: the image file name, relative to the run's `images/` directory
+      divergence:
+        name: divergence_one_file_one_document
+        status: divergent
+        generator: >
+          One image is one document; `source_file` and `doc_id` are 1:1, and no label
+          describes a region of a file.
+        consumer: >
+          Ф-309 makes file-to-document segmentation a pipeline step in its own right, on the
+          ground that one file may hold up to twelve separate receipts, and it names THIS
+          GENERATOR as the source of ground truth for the boundaries. It separates
+          `ClaimFile` (the binary, with a `medium` and a content hash) from `ClaimDocument`
+          (a logical document, with a page or region reference into the file).
+        note: nothing in the generator models a multi-document file. See RC-12.
+
+    - name: doc_type
+      type: enum
+      required: true
+      normalize: closed_enum
+      vocabulary: see `document_types`
+      note: the classification target; see `classifier_metric` for how it is scored
+
+    - name: language
+      type: string
+      required: true
+      normalize: open_enum
+      observed: ["uk"]
+
+    - name: currency
+      type: string
+      required: true
+      normalize: open_enum
+      observed: ["UAH"]
+      note: >
+        Every archetype emits `reporting_currency` from policy.yaml, and the policy engine
+        REFUSES a document in anything else rather than converting it — a converted amount
+        would be a number in the ground truth that nothing in the dataset can prove. The
+        consumer converts to a base currency at approval time using the transaction date,
+        which is why the original amount, currency and date are all kept per document.
+
+    - name: amount
+      type: number
+      required: true
+      normalize: money
+      meaning: the total payable, gross, VAT inclusive
+      invariant: >
+        Equals Σ(qty × price) over `line_items`, exactly. Fraud and trap archetypes will
+        break this deliberately, and the break is then named in the claim's `imperfection`.
+      printed_twice: >
+        A ПРРО receipt prints this value as the total due and again as the amount paid
+        (`total` and `paid_amount` among the printed fields). One value, two boxes.
+      no_subtotal:
+        status: undecided
+        note: >
+          THERE IS NO NET SUBTOTAL FIELD, and on a VAT-inclusive Ukrainian receipt no net
+          subtotal is printed either — the tax block states the VAT contained within the
+          gross. Ф-401 checks `subtotal + Σtax ≈ total` and Ф-403 checks
+          `abs(Σline_items − subtotal)`, which require `subtotal` to be net in the first and
+          gross in the second. The two cannot both hold in a VAT-inclusive jurisdiction, and
+          this file cannot reconcile them. Raised as a question for the requirement, not as a
+          generator change.
+
+    - name: date
+      type: string
+      required: true
+      normalize: iso_date
+      meaning: the calendar date of the transaction
+
+    - name: counterparty
+      type: string
+      required: true
+      normalize: party_name
+      meaning: the other party to the transaction — the seller on a receipt
+      divergence:
+        name: divergence_counterparty_name
+        status: resolved
+        note: >
+          THREE NAMES FOR ONE THING — the failure this file exists to prevent, found live:
+            `counterparty` — the field the generator emits in every document label;
+            `seller_name`  — the field Ф-303 named, and the one the F1 >= 0.75 threshold was
+                             stated against;
+            `seller_name`  — the `data-field` bbox key in templates/ua_prro_receipt.html,
+                             covering the printed string WITH its legal form.
+          The second and third are spelled the same and mean different things: the metric
+          field is the merchant identity, the bbox key is the rendered text.
+        resolution: >
+          RESOLVED IN FAVOUR OF `counterparty`, and the requirement is amended rather than
+          this generator. `seller_name` is semantically wrong for half of the four target
+          classes: on a `payment_confirmation` the party is a payer or a payee, and on a
+          `bank_statement` a payee — neither is a seller. `counterparty` is the only one of
+          the two words that is true of all four. The threshold in Ф-303 therefore applies
+          to `counterparty`, under whatever name the requirement spells it.
+        bbox_key_unchanged: >
+          The `seller_name` bbox key stays as it is. Printed keys are a separate vocabulary
+          from label field names — that is stated once, for every field, and this is an
+          instance of it rather than an exception to it.
+
+    - name: line_items
+      type: array of line_item
+      required: true
+      normalize: see `line_item`
+      cardinality:
+        emitted: at least one on every document produced so far
+        forward_contract: >
+          EMPTY for `payment_confirmation` and `bank_statement`, per §4.3. Settled by the
+          requirement — this is not an open question. Two places in `src/` currently treat
+          an empty array as wrong: `validate_line_item_sum` returns False for it, and
+          `policy_engine` raises on a claim whose total is zero. See RC-09 and RC-10.
+        consumer_interaction: >
+          Ф-403 routes a claim to `in_review` with reason `line_items_unreliable` when the
+          line-item array is empty while `total > 0`. Read together with §4.3, THAT GUARD
+          MUST BE TYPE-AWARE or every payment confirmation and every bank statement lands in
+          manual review. This is the consumer's to fix, not the generator's; it is recorded
+          here because the two requirements only contradict each other when read side by
+          side, which is what this file is for.
+
+    - name: has_qr
+      type: boolean
+      required: true
+      observed: always true
+      divergence:
+        name: divergence_qr
+        status: divergent
+        generator: two booleans — `has_qr` and `qr_is_fiscal`
+        consumer: >
+          Ф-310 requires the DECODED CONTENT and a four-value type (fiscal_link /
+          promotional / payment / unknown), and states that presence is unusable as a
+          fiscality signal. See `document_types.fiscal_receipt` and RC-03.
+
+    - name: qr_is_fiscal
+      type: boolean
+      required: true
+      observed: always true
+      see: divergence_qr
+
+    - name: has_fiscal_number
+      type: boolean
+      required: true
+      observed: always true
+      divergence:
+        name: divergence_fiscal_scheme
+        status: divergent
+        consumer: >
+          Ф-312 requires the fiscal SCHEME JURISDICTION plus that scheme's requisites, and
+          forbids a boolean `is_fiscal` in the model. See `document_types.fiscal_receipt`
+          and RC-02.
+
+    - name: capture
+      type: enum
+      required: true
+      normalize: closed_enum
+      vocabulary: [screenshot, photo, scan]
+      meaning: how the document reached the verifier
+      observed: >
+        `screenshot` ONLY, and the other two are not merely unused: `degrader.degrade`
+        RAISES `NotImplementedError` for any capture mode other than `screenshot`. The
+        vocabulary exists; the recipes do not.
+      label_invariance: >
+        Capture mode changes pixels and boxes, never content — so one rendered document may
+        yield several examples sharing every other field of this record.
+      divergence:
+        status: divergent
+        consumer: >
+          The requirement calls this `medium` and puts it on `ClaimFile` (the binary) rather
+          than on the logical document, with FOUR values: digital_pdf / screenshot / photo /
+          scan. `digital_pdf` has no counterpart in `Capture`, and a natively generated PDF
+          is not a degradation mode at all — it is the absence of one. See RC-11.
+
+    - name: field_bboxes
+      type: map<string, [number, number, number, number]>
+      required: true
+      normalize: bbox
+      keys: see `printed_fields`
+      note: >
+        A key is present only when its element was rendered. Every key listed below appears
+        on every document produced so far.
+
+    - name: synthetic
+      type: boolean
+      required: true
+      value: always true
+      note: >
+        With `generator_version`, this is what keeps the provenance of an individual file
+        unambiguous once it leaves this repository.
+
+    - name: generator_version
+      type: string
+      required: true
+      normalize: identity
+
+  # ---------------------------------------------------------------------------
+  # Printed fields: geometry without a value
+  # ---------------------------------------------------------------------------
+  #
+  # The keys of `field_bboxes` are a DIFFERENT VOCABULARY from the label field names, and
+  # they are not the same names for the same things:
+  #
+  #   printed `total`        <->  label `amount`
+  #   printed `seller_name`  <->  label `counterparty`, and the printed string carries the
+  #                               legal form while the label string does not
+  #   printed `date`         <->  label `date`, in the jurisdiction's format
+  #
+  # Most printed keys have NO corresponding label field. They carry a box and nothing else,
+  # so a scorecard can measure whether a system located them and cannot measure whether it
+  # read them. Several are REQUIRED FIELDS on the consumer side — see
+  # `document_types.*.prd_required_fields` and `required_changes`.
+  printed_fields:
+    status: emitted
+    archetype: ua_prro_receipt
+    with_a_labelled_value:
+      seller_name: counterparty          # differs by legal form and quotation marks
+      total: amount
+      paid_amount: amount                # the same value, printed a second time
+      date: date                         # printed DD.MM.YYYY, labelled YYYY-MM-DD
+      item_<i>_name: line_items[i].name
+      item_<i>_qty: line_items[i].qty
+      item_<i>_price: line_items[i].price
+      item_<i>_vat_letter: line_items[i].vat_letter
+    bbox_only:
+      # No ground-truth value exists for any of these. Indices are zero-based and dense.
+      - seller_address
+      - seller_tax_code                  # ЄДРПОУ or РНОКПП, checksum-correct; §4.3 requires it
+      - seller_vat_number                # ПН — the VAT payer number
+      - item_<i>_sum                     # qty × price
+      - tax_line_<i>                     # one row per VAT letter; §4.3 requires the amounts
+      - payment_method                   # §4.3 requires payment form on payment_confirmation
+      - acquirer
+      - terminal_id
+      - operation
+      - card_masked                      # ЕПЗ — електронний платіжний засіб, the masked card
+      - auth_code                        # §4.3 requires it; Ф-406 makes it a decisive dedup key
+      - rrn                              # §4.3 requires it; Ф-406 makes it a decisive dedup key
+      - amount_in_words
+      - receipt_number
+      - time
+      - fiscal_device_number             # ФН ПРРО
+      - title
+      - mode_marker                      # Онлайн / Офлайн
+      - qr
+      - footer_text
+    acquiring_block_is_conditional:
+      status: forward_contract
+      note: >
+        The template omits `acquirer`, `terminal_id`, `operation`, `card_masked`,
+        `auth_code` and `rrn` when a document was not paid by card. NO SUCH DOCUMENT IS
+        PRODUCIBLE: `build_prro_receipt` constructs the acquiring block unconditionally, so
+        all six keys appear on every document today. The conditional is a forward contract,
+        not an observation.
+
+
+# =============================================================================
+# 4. The line item
+# =============================================================================
+#
+# Coverage is decided PER LINE, which is why a line item is a labelled structure rather than
+# a string. Model: `LineItem`. The consumer persists the same thing as `ReceiptLineItem`,
+# normalized rather than inside a JSON blob, so it can be re-scored after a rule change.
+
+line_item:
+  status: emitted
+
+  fields:
+
+    - name: name
+      type: string
+      required: true
+      normalize: text_name
+      meaning: the line as printed
+
+    - name: item_kind
+      type: string
+      required: true
+      normalize: policy_vocabulary
+      vocabulary: >
+        The item-kind keys of the CLAIMED CATEGORY in policy.yaml — the union of its
+        `covered_items`, `excluded_items` and `ambiguous_items`. Not copied here.
+      never_printed: >
+        NO SUCH KIND APPEARS ON ANY DOCUMENT. The receipt prints a product name and
+        something has to decide whether that name is reimbursable; the kind is the
+        ground-truth label space that decision lands in. An extractor predicts it and can
+        never read it.
+      scoped_to_the_category: >
+        The same kind is classified differently in different categories —
+        `sports_nutrition` is excluded under `sport` and ambiguous under
+        `vitamins_nutrition`. A name-to-kind mapping that ignores the claimed category is
+        wrong.
+
+    - name: qty
+      type: number
+      required: true
+      normalize: quantity
+
+    - name: price
+      type: number
+      required: true
+      normalize: money
+      meaning: >
+        THE UNIT PRICE. The line total is qty × price and the document prints it
+        (`item_<i>_sum`), but no label field carries it — a scorecard comparing line totals
+        computes them.
+
+    - name: covered
+      type: boolean
+      required: true
+      meaning: >
+        Whether this line is reimbursable in the claimed category, per policy.yaml. The
+        policy engine resolves the answer from the category's buckets and treats this flag as
+        an assertion to check against that resolution.
+      ambiguous_bucket: >
+        Kinds from `ambiguous_items` never appear with this flag set either way; both the
+        builder and the engine refuse to invent an answer policy.yaml declines to give.
+
+    - name: vat_letter
+      type: string or null
+      required: false
+      normalize: vat_letter
+      meaning: ПДВ-літера — the VAT rate code printed at the end of the line
+      not_a_shortcut_to_coverage: >
+        The coverage boundary deliberately does not coincide with the VAT boundary, so a
+        consumer cannot derive `covered` from this field and has to read the line.
+      aggregate_is_missing: >
+        Per-line letters are labelled; the per-letter VAT AMOUNTS §4.3 requires are not. See
+        `document_types.fiscal_receipt` and RC-05.
+
+
+# =============================================================================
+# 5. The verdict vocabulary
+# =============================================================================
+#
+# `verdicts` keys are the `Verdict` members in schemas.py. The consumer's `Decision` enum is
+# wider and names two of the shared concepts differently; each entry records its
+# counterpart. The notes that follow are a SIBLING block so that a consumer generating an
+# enum from these keys gets five values.
+
+verdicts:
+
+  covered:
+    status: emitted
+    means: fully reimbursable — every line qualifies and the annual limit absorbs it
+    consumer_counterpart: auto_approved
+    divergence:
+      status: divergent
+      note: >
+        SAME CONCEPT, DIFFERENT WORD. The consumer's `Decision` verdict for a claim that
+        passed with no flags is `auto_approved`. Nothing maps the two, and a scorecard
+        comparing verdict strings scores every correct decision as wrong. See RC-13.
+
+  partially_covered:
+    status: emitted
+    means: >
+      Part of the amount qualifies. Two causes, kept apart in `imperfection` because they
+      differ in what a consumer can possibly know.
+    consumer_counterpart: partially_covered
+    note: >
+      The consumer treats `partially_paid` and `partially_covered` as DIFFERENT AXES — part
+      of the amount versus part of the lines — which may hold at once, each carrying its own
+      reimbursable amount. The generator's `Verdict` is single-valued and cannot express both
+      on one claim.
+
+  not_proof_of_payment:
+    status: forward_contract
+    means: >
+      The evidence does not establish that money changed hands. Both sides agree on this
+      reading: policy.yaml's `document_evidence`, the verdict table in
+      docs/architecture.md, and the consumer's own definition, whose canonical example is an
+      invoice reading "Zapłacono: 0,00".
+    consumer_counterpart: not_proof_of_payment
+    # -----------------------------------------------------------------------
+    # DELIBERATELY UNDECIDED. THIS FILE DOES NOT DECIDE IT.
+    # -----------------------------------------------------------------------
+    undecided: >
+      What a claim with ZERO covered amount is called — a basket bought wholly outside the
+      claimed category. policy.yaml's `coverage` block writes that case as
+      `not_proof_of_payment / rejected`, which is two different answers: `rejected` is not a
+      member of the `Verdict` enum, and `not_proof_of_payment` is defined above as evidence
+      that does not establish payment — which a fiscal receipt does establish, whatever the
+      basket was. `policy_engine.verdict_for` therefore RAISES rather than choosing, as does
+      `_reimbursable` for a claim wholly beyond an exhausted limit. No such claim is planned
+      and no such label exists in any dataset produced so far.
+    new_evidence_not_a_resolution: >
+      The consumer's `Decision` enum DOES carry a `rejected` verdict, defined as "the policy
+      plainly does not cover it", with the example of paying for the wrong subject — which is
+      the zero-coverage case. That makes the disagreement sharper rather than settling it:
+      adopting `rejected` means adding a member to `Verdict` and deciding that zero coverage
+      is a policy rejection rather than an evidence failure. THAT IS A POLICY DECISION
+      BELONGING TO THE AUTHOR. Recorded, not taken. See RC-13.
+
+  insufficient_evidence:
+    status: forward_contract
+    means: >
+      A required fact is missing entirely — an out-of-period document, no proof of payment,
+      or no statement of what was bought.
+    consumer_counterpart: insufficient_evidence
+    note: >
+      The policy engine already labels an out-of-period claim correctly; what is missing is a
+      planner path that produces one.
+
+  partially_paid:
+    status: forward_contract
+    means: payment was made in installments and only part of the amount has been settled
+    consumer_counterpart: partially_paid
+    depends_on: >
+      The invoice payment-status and amount-due fields, which no model field carries. See
+      `document_types.invoice` and RC-07.
+
+verdict_notes:
+
+  missing_from_the_generator:
+    status: divergent
+    note: >
+      The consumer's `Decision` enum has two members with no counterpart in `Verdict`:
+      `rejected` (the policy plainly does not cover it) and `in_review` (a guard fired and a
+      human is required). `in_review` is arguably not a ground-truth label at all — it is the
+      runtime outcome of a guard such as Ф-401, Ф-403 or Ф-309, so a label-first generator
+      has nothing to derive it from. `rejected` is a genuine gap. See RC-13.
+
+  realizability:
+    status: emitted
+    note: >
+      Only `covered` and `partially_covered` can be built today
+      (`claim_planner.REALIZABLE_VERDICTS`); the other three are refused rather than
+      approximated. A realized distribution from a current run is therefore CONDITIONAL on
+      that subset, and the assembler's balance report says so. Do not read it as this
+      dataset's balance against `verdict_mix`.
+
+  distribution:
+    status: emitted
+    note: >
+      `verdict_mix` in policy.yaml is a DATASET-BALANCE decision, not an estimate of any
+      real-world distribution, and no production class prior is defined anywhere in this
+      repository — that assumption belongs to a consumer's evaluation configuration. The full
+      reasoning, and the obligation it places on anyone measuring against this dataset, is in
+      policy.yaml above `verdict_mix` and in config/README.md; it is not repeated here.
+
+
+# =============================================================================
+# 6. The claim label
+# =============================================================================
+#
+# One record per claim, written to `labels/<claim_id>.claim.json` and repeated in the
+# `claims` array of `ground_truth.json`. Model: `ClaimGroundTruth`; the derived values come
+# from `policy_engine.evaluate_claim`. Every key is present in every record.
+
+claim_label:
+  status: emitted
+  file: "labels/<claim_id>.claim.json"
+
+  fields:
+
+    - name: claim_id
+      type: string
+      required: true
+      normalize: identity
+
+    - name: persona_id
+      type: string
+      required: true
+      normalize: identity
+      note: >
+        The only link from a claim to the person who filed it; document labels carry no
+        persona reference. The join is document -> claim -> persona. See `persona_record`.
+
+    - name: category
+      type: string
+      required: true
+      normalize: policy_vocabulary
+      vocabulary: the `id` of a category in policy.yaml
+      answers: which benefit the claim is made against — the scope every coverage answer is relative to
+
+    - name: documents
+      type: array of string
+      required: true
+      normalize: identity per element
+      answers: which document labels make up the evidence
+      cardinality: at least one; exactly one in every run so far
+
+    - name: verdict
+      type: enum
+      required: true
+      normalize: closed_enum
+      vocabulary: see `verdicts`
+      authority: >
+        Derived by `policy_engine` from the documents actually built and the persona's
+        ledger — not the verdict the planner aimed at. Where the two differ the engine wins
+        and the balance report says so, so no label reaches the dataset that nothing derived.
+
+    - name: covered_fraction
+      type: number or null
+      required: false
+      normalize: fraction
+      answers: HOW MUCH OF THE DOCUMENT BELONGS TO THE CATEGORY
+      definition: covered amount over total amount, from the line items and nothing else
+      note: >
+        Reported, never used as a tolerance — the coverage rule is strict. A claim held back
+        only by an exhausted limit reads 1.0 alongside `verdict: partially_covered`, which is
+        two facts kept apart rather than a contradiction. The reasoning is in
+        docs/architecture.md#ground-truth.
+      absence: >
+        `null` means nothing derived a fraction — what an undecided claim looks like, not
+        what a claim should look like. Present on every record written so far.
+
+    - name: reimbursable_amount
+      type: number or null
+      required: false
+      normalize: money
+      answers: HOW MUCH THE PLAN ACTUALLY PAYS OUT
+      definition: >
+        The covered amount, capped by what is left of the annual limit, in policy.yaml's
+        `reporting_currency`. It is the only field that distinguishes a limit-bound claim
+        numerically.
+      divergence:
+        status: divergent
+        note: >
+          DIFFERENT ARITHMETIC FOR THE SAME QUANTITY. The generator computes Σ(covered
+          lines). Ф-402 requires the consumer to compute `total − Σ(excluded lines)`,
+          deliberately, so that a MISSED line surfaces as a discrepancy instead of a silent
+          underestimate. THE TWO AGREE EXACTLY ON THIS DATASET, because the ground truth
+          satisfies Σ(all lines) = total by construction; they diverge only when extraction
+          loses a line, which is the case Ф-402 exists for. No generator change follows —
+          this is recorded so a consumer does not read the agreement as a licence to compute
+          it the generator's way.
+      absence: same as `covered_fraction`. Present on every record written so far.
+
+    - name: linked
+      type: boolean
+      required: true
+      answers: whether the evidence is split across more than one document
+      definition: "`len(documents) > 1`, exactly"
+      observed: always false — linked claims need archetypes that do not exist yet
+      note: >
+        The consumer models this richly: `DocumentLink` carries the result of named
+        cross-checks (amount, date order, counterparty tax number, payment form, contract
+        party against payee, date within period), and each `ClaimDocument` carries its role
+        in the link (`proof_of_subject` / `proof_of_payment`). The generator has the role
+        information at TYPE level in policy.yaml's `document_evidence` and records nothing
+        per document. See RC-15.
+
+    - name: imperfection
+      type: array of string
+      required: false
+      normalize: string_list_unordered
+      answers: WHY a `partially_covered` claim is partial
+      vocabulary:
+        mixed_items: a non-covered line is on the document — VISIBLE IN THE IMAGE
+        limit_exhausted: the annual balance ran out — NOT VISIBLE IN THE IMAGE
+      cardinality: >
+        Empty on a `covered` claim; both causes may appear on one claim, for which
+        policy.yaml declares no share.
+      narrower_than_the_catalogue: >
+        docs/architecture.md#imperfection-catalogue names fifteen mechanisms; only these two
+        reach a label, because only these two are causes of `partially_covered`. Where the
+        others will be recorded is not decided. The consumer's counterpart is
+        `ValidationFlag` plus the guard reasons (`line_items_unreliable`,
+        `arithmetic_inconsistent`, `segmentation_uncertain`), which are runtime outcomes
+        rather than labels.
+
+    - name: verdict_basis
+      type: array of string
+      required: false
+      normalize: string_list_unordered
+      answers: WHAT THE VERDICT DEPENDS ON
+      vocabulary:
+        documents: derivable from the images alone
+        account_state: also requires the persona's spending history
+      how_to_use_it: >
+        No model can read a remaining annual balance off a receipt, so document-understanding
+        metrics belong on the `["documents"]` subset only and end-to-end metrics on both.
+      absence: an empty array means nothing derived a basis, not that the verdict rests on nothing
+
+    - name: policy_trace
+      type: array of string
+      required: false
+      normalize: prose_not_comparable
+      answers: WHY the verdict is what it is, in human-readable form
+      contents: >
+        Only what the verdict rested on: a limit that did not bind is not mentioned, and a
+        claim rejected for its date says so without arguing about coverage. An invented
+        example of the limit-bound shape:
+          - "category=<category id> ok"
+          - "period ok"
+          - "coverage 100% (all line items covered)"
+          - "annual limit <category id> 9000.00 UAH: 8100.00 already reimbursed, 900.00 remaining"
+          - "reimbursable 900.00 UAH of 2400.00 covered — annual limit exhausted"
+
+
+# =============================================================================
+# 7. The persona record
+# =============================================================================
+#
+# `claim_label.persona_id` sends a consumer here, so the shape is documented rather than
+# left to be discovered. Model: `Persona`. Personas appear ONLY in the `personas` array of
+# `ground_truth.json` — there is no per-persona label file.
+#
+# NOT AN EXTRACTION TARGET. Nothing about a persona is printed on a document and none of
+# these fields is scored. The record exists so that `verdict_basis: account_state` is
+# auditable: a limit-bound verdict can be re-derived only if the person it belongs to is
+# identifiable.
+#
+# Every value is invented. `full_name` and `city` come from Faker; `tax_id` is a
+# checksum-correct РНОКПП generated from a drawn birth date — a well-formed identifier
+# belonging to nobody.
+
+persona_record:
+  status: emitted
+  location: "ground_truth.json -> personas[]"
+  fields:
+    - name: persona_id
+      type: string
+      normalize: identity
+    - name: full_name
+      type: string
+    - name: location
+      type: "object { country, city }"
+      note: "`country` is the `Country` enum — UA, PL, DE, ES. `city` is free text."
+    - name: home_currencies
+      type: array of string
+      normalize: open_enum
+    - name: languages
+      type: array of string
+      normalize: open_enum
+    - name: tax_id
+      type: string
+      note: РНОКПП in UA — the individual taxpayer number, checksum-correct
+    - name: family
+      type: "array of { relation, name, birth_date }"
+      note: "`relation` is free text (spouse | child); empty on most personas"
+    - name: benefit_categories
+      type: array of string
+      normalize: policy_vocabulary
+
+
+# =============================================================================
+# 8. Where the labels are
+# =============================================================================
+
+artifacts:
+  status: emitted
+  layout:
+    "images/<doc_id>.png": the document as it would have been captured, after degradation
+    "labels/<doc_id>.json": one `document_label` record
+    "labels/<claim_id>.claim.json": one `claim_label` record
+    "ground_truth.json": >
+      The manifest for a run: `generator_version`, `seed`, `synthetic: true`, and the arrays
+      `personas`, `claims`, `documents`. The claim and document arrays hold exactly the same
+      records as the per-file labels — a second view, not a different set.
+  encoding: UTF-8 JSON, two-space indent, non-ASCII written literally rather than escaped
+  determinism: >
+    Every run is fully determined by `--seed`, so a scorecard may rely on the same seed
+    producing the same labels.
+
+
+# =============================================================================
+# 9. Required changes to src/ — NONE OF THEM MADE
+# =============================================================================
+#
+# Every divergence above that can only be closed by editing this repository, collected in one
+# place. NOTHING IN THIS LIST HAS BEEN IMPLEMENTED. Each says which file, what would change,
+# and whether it is mechanical or waits on a decision — because a change that waits on a
+# decision must not be made by whoever happens to read this next.
+#
+#   blocked_on: decision  — the author must choose between two defensible answers
+#   blocked_on: none      — mechanical; the data already exists and is discarded
+#   blocked_on: nothing   — withdrawn: the divergence was settled the other way, and nothing
+#                           in this repository changes. The entry stays so its id keeps
+#                           resolving and the decision stays visible.
+
+required_changes:
+
+  - id: RC-01
+    file: none — nothing changes in this repository
+    change: >
+      WITHDRAWN. The counterparty naming divergence was settled in favour of the name this
+      generator already emits: `counterparty` stays, and the requirement is amended instead.
+      `seller_name` is semantically wrong for half of the four target classes — a payer or
+      payee on a payment confirmation, a payee on a bank statement, a seller on neither.
+    because: see divergence_counterparty_name, which carries the full reasoning
+    blocked_on: nothing
+    kept_because: >
+      The id is retained rather than removed so that references to RC-01 elsewhere, and in
+      anything already written against this file, keep resolving. A withdrawn entry that
+      explains itself is cheaper than a renumbered list.
+
+  - id: RC-02
+    file: src/receipt_synth/schemas.py, content_builder.py
+    change: >
+      Replace `has_fiscal_number: bool` with a fiscal-scheme structure — jurisdiction plus
+      that scheme's requisites. Ф-312 forbids a boolean fiscality flag. The requirement's own
+      jurisdiction vocabulary has no member for DE or ES, whose archetypes are planned here,
+      so this cannot be closed by copying the enum.
+    blocked_on: decision
+
+  - id: RC-03
+    file: src/receipt_synth/schemas.py, content_builder.py
+    change: >
+      Replace `has_qr` / `qr_is_fiscal` with the decoded payload and a four-value type
+      (fiscal_link / promotional / payment / unknown), per Ф-310. `PrroReceipt.qr_payload`
+      already holds the payload and `ground_truth()` drops it.
+    blocked_on: none
+
+  - id: RC-04
+    file: src/receipt_synth/schemas.py, content_builder.py
+    change: >
+      Carry the seller's tax / fiscal number as a labelled value. `Seller.tax_code` and
+      `tax_code_label` already exist and are dropped at label time.
+    blocked_on: none
+
+  - id: RC-05
+    file: src/receipt_synth/schemas.py, content_builder.py
+    change: >
+      Carry per-letter VAT amounts. `_build_tax_lines` already computes `TaxLine(letter,
+      rate, gross, vat)` per letter and `ground_truth()` drops it. §4.3 requires it and
+      states that tax cannot be a scalar on a Ukrainian receipt.
+    blocked_on: none
+
+  - id: RC-06
+    file: src/receipt_synth/schemas.py, content_builder.py
+    change: >
+      Carry the payment-confirmation fields as values: RRN, authorization code, payer, payee,
+      payment purpose, payment form. `Acquiring` already holds rrn, auth_code, terminal_id,
+      card_masked and operation and drops them. Until RRN carries a value the dataset can
+      exercise deduplication (Ф-406) but cannot score it.
+    blocked_on: >
+      none for the acquiring fields; decision for payer / payee / purpose, which need a
+      payment archetype first
+
+  - id: RC-07
+    file: src/receipt_synth/schemas.py
+    change: "Add invoice payment status and amount due. No counterpart of any kind exists."
+    blocked_on: decision
+
+  - id: RC-08
+    file: src/receipt_synth/schemas.py, templates/
+    change: >
+      Record positive and negative fiscality markers with their position in the text
+      (Ф-311). Needs both a field and archetypes that print such a marker.
+    blocked_on: decision
+
+  - id: RC-09
+    file: src/receipt_synth/content_builder.py
+    change: >
+      `validate_line_item_sum` returns False for an empty list. §4.3 makes an empty list
+      CORRECT for `payment_confirmation` and `bank_statement`, so the invariant has to become
+      type-aware rather than universal.
+    blocked_on: none
+
+  - id: RC-10
+    file: src/receipt_synth/policy_engine.py
+    change: >
+      `covered_fraction` and `evaluate_claim` raise when the line-item total is zero. A claim
+      evidenced only by a payment confirmation has no lines and must still be evaluable.
+      Related to RC-09 but not the same: this one changes what a verdict can be derived from.
+    blocked_on: decision
+
+  - id: RC-11
+    file: src/receipt_synth/degrader.py, schemas.py
+    change: >
+      `degrade` raises `NotImplementedError` for `photo` and `scan`, so two thirds of the
+      `Capture` vocabulary is unreachable. The consumer additionally requires a fourth value,
+      `digital_pdf`, and calls the field `medium` on the file rather than on the document — a
+      natively generated PDF is the absence of a capture mode, not one of them.
+    blocked_on: none for the recipes; decision for the name and the fourth value
+
+  - id: RC-12
+    file: src/receipt_synth/assembler.py, schemas.py
+    change: >
+      Model multi-document files. Ф-309 makes file-to-document segmentation a pipeline step
+      and names this generator as the source of ground truth for the boundaries; today one
+      image is one document and no label describes a region of a file.
+    blocked_on: decision
+
+  - id: RC-13
+    file: src/receipt_synth/schemas.py
+    change: >
+      Reconcile `Verdict` with the consumer's `Decision` enum: `covered` and `auto_approved`
+      are the same concept under different words; `rejected` has no counterpart and its
+      definition matches the zero-coverage case the sources currently disagree about;
+      `in_review` has no counterpart and is arguably a runtime outcome rather than a label.
+      Also, the consumer treats `partially_paid` and `partially_covered` as independent axes
+      that may hold at once, which a single-valued `Verdict` cannot express.
+    blocked_on: decision — the same open question as `verdicts.not_proof_of_payment.undecided`
+
+  - id: RC-14
+    file: src/receipt_synth/schemas.py
+    change: >
+      `DocType` has no `contract` member and no `other` member, both of which §4.3 names —
+      `contract` with its own required fields, `other` as the catch-all every non-target
+      class folds into. The generator cannot label a document as either.
+    blocked_on: decision
+
+  - id: RC-15
+    file: src/receipt_synth/schemas.py
+    change: >
+      Record each document's role in a linked claim (`proof_of_subject` / `proof_of_payment`)
+      per document rather than only as a type-level default in policy.yaml's
+      `document_evidence`. The requirement's `DocumentLink` also expects the result of named
+      cross-checks, which nothing here produces.
+    blocked_on: decision
+
+# Two items belong on the consumer's side and are recorded so they are not lost:
+#
+#   * Ф-403 routes a claim to `in_review` when the line-item array is empty while
+#     `total > 0`, while §4.3 makes an empty array correct for `payment_confirmation` and
+#     `bank_statement`. The guard has to be type-aware or those two types always land in
+#     manual review. Recorded under `document_label.line_items.cardinality`.
+#
+#   * Ф-401 checks `subtotal + Σtax ≈ total` and Ф-403 checks `abs(Σline_items − subtotal)`,
+#     which require `subtotal` to be net in one and gross in the other. On a VAT-inclusive
+#     Ukrainian receipt only the gross is printed, and the generator emits no subtotal at
+#     all. Recorded under `document_label.amount.no_subtotal`.
