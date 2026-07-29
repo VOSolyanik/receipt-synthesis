@@ -167,9 +167,22 @@ class DocGroundTruth(BaseModel):
 class ClaimGroundTruth(BaseModel):
     """The label record of a claim, which may span several documents.
 
-    ``covered_fraction``, ``verdict_basis`` and ``policy_trace`` are populated by the
-    policy engine. Until it exists they stay empty rather than being guessed: an unset
-    field is honest, a defaulted one would be a label nobody derived.
+    ``covered_fraction``, ``verdict_basis``, ``imperfection`` and ``policy_trace`` are
+    populated by `policy_engine`, which computes them from the built documents and the
+    persona's ledger. They are optional here rather than required because they are
+    derived: a record that carries them because something derived them is a label, and one
+    that carries them by default would be a guess. The defaults are what an undecided
+    claim looks like, not what a claim should look like.
+
+    ``covered_fraction`` is covered amount over total amount, taken from the line items
+    alone. A claim held back only by an exhausted annual limit therefore still reads 1.0;
+    the limit shows up in ``imperfection``, in ``verdict_basis`` and in
+    ``reimbursable_amount``.
+
+    The two money-ish fields answer different questions and neither substitutes for the
+    other: ``covered_fraction`` is *how much of this document belongs to the category*,
+    ``reimbursable_amount`` is *how much the plan actually pays out*. They differ exactly
+    when an annual limit binds.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -180,6 +193,11 @@ class ClaimGroundTruth(BaseModel):
     documents: list[str]
     verdict: Verdict
     covered_fraction: float | None = None
+    # What the plan pays out for this claim, in the policy's reporting currency: the
+    # covered amount, capped by whatever is left of the annual limit. It is the only
+    # number that distinguishes a limit-bound claim, and without it a consumer would have
+    # to parse ``policy_trace`` — a field that is prose by design.
+    reimbursable_amount: Money | None = None
     linked: bool = False
     imperfection: list[str] = Field(default_factory=list)
     verdict_basis: list[VerdictBasis] = Field(default_factory=list)

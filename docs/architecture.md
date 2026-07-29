@@ -72,6 +72,12 @@ split across several documents.
 It processes a persona's claims in date order and carries the remaining category balance, so that a claim can
 also become partially covered by exhausting an annual limit rather than by containing a non-covered item.
 
+The verdict itself is not computed here. The planner chooses what to build and what answer it is aiming at; a
+separate policy engine reads `config/policy.yaml` and derives the verdict, the covered fraction, the
+reimbursable amount and the justification from the documents that were actually built. Keeping the two apart
+is what lets the answer be checked as a pure function of (claims, policy), with no rendering anywhere near it
+— and the engine is free to disagree with the plan. It does, whenever a limit binds.
+
 ### 3. `content_builder`
 
 Fills the plan with concrete, valid data: checksum-correct tax identifiers, the VAT letter that matches the
@@ -198,18 +204,36 @@ A claim may span several documents.
   "documents": ["p001_c2_d1", "p001_c2_d2"],
   "verdict": "partially_covered",
   "covered_fraction": 0.72,
+  "reimbursable_amount": 900.00,
   "linked": true,
   "imperfection": ["mixed_items"],
   "verdict_basis": ["documents"],
   "policy_trace": [
     "category=sport ok",
     "period ok",
-    "coverage 72% (non-covered item excluded)"
+    "coverage 72% (1 of 4 line items not covered)"
   ]
 }
 ```
 
-Two fields deserve attention.
+Five fields deserve attention.
+
+**`covered_fraction`** is the covered amount over the total, taken from the line items and nothing else. It
+reports what the *document* covers, which is not always what the plan *pays*: a claim whose every line is
+covered but whose annual limit has run out reads `covered_fraction: 1.0` and
+`verdict: "partially_covered"`. That pairing is not a contradiction, it is the two facts kept apart.
+
+Note also that the fraction never decides the verdict. The coverage rule is strict — *any* non-covered line
+makes a claim partially covered, however small — so a claim spanning enough documents cannot dilute a real
+non-reimbursable article into a rounding error.
+
+**`reimbursable_amount`** is what the plan actually pays out for the claim, in the policy's reporting
+currency: the covered amount, capped by whatever is left of the annual limit. It is the only field that
+distinguishes a limit-bound claim numerically, and it is what makes the pairing above readable.
+
+**`imperfection`** names why a `partially_covered` claim is partial, using the causes declared in
+`policy.yaml`: `mixed_items` (a non-covered line is on the document) and `limit_exhausted` (the annual
+balance ran out). A claim can carry both.
 
 **`verdict_basis`** records what the verdict actually depends on:
 
@@ -217,12 +241,14 @@ Two fields deserve attention.
 - `["documents", "account_state"]` — also requires the persona's spending history, for example when an annual
   limit is already exhausted. No model can read a remaining balance off a receipt.
 
-Document-understanding metrics should be computed on the first subset only; end-to-end system metrics on
-both. Without this distinction a model is penalized for information it was never given.
+This is exactly why the two causes are distinguished: `mixed_items` is visible in the image, `limit_exhausted`
+is not. Document-understanding metrics should be computed on the first subset only; end-to-end system metrics
+on both. Without this distinction a model is penalized for information it was never given.
 
 **`policy_trace`** is the human-readable justification of the verdict. It costs nothing to emit — the
 generator necessarily knows why the verdict is what it is — and it gives consumers a reference for evaluating
-explanation quality, not just decision accuracy.
+explanation quality, not just decision accuracy. It carries only what the verdict rested on: a limit that did
+not bind is not mentioned, and a claim rejected for its date says so without arguing about coverage.
 
 ### Verdicts
 

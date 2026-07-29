@@ -23,12 +23,13 @@ Everything is deterministic: no function here reads a clock or an unseeded gener
 
 from __future__ import annotations
 
+import math
 import random
 import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from string import Formatter
 
 from receipt_synth.config import category, jurisdiction
@@ -525,19 +526,56 @@ _ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 _LEGAL_FORM_PREFIX = {"TOV": "ТОВ", "FOP": "ФОП", "PRAT": "ПрАТ"}
 
+# How many of an article a receipt lists. An assumption, not a measurement: nothing here
+# was fitted to observed baskets, and the weighting toward one is ordinary shopping
+# knowledge — a shopper buying two identical packs is less common than buying one. It
+# affects how a document looks, never what a label says. Kept as a constant because
+# `estimated_line_value` sizes a basket from its mean, and the two must not drift apart.
+_QTY_CHOICES = (1, 1, 1, 2)
+
+# The longest receipt this builder will print. A cap rather than a preference: the planner
+# sizes a basket upward when it needs one large enough to overrun an annual limit, and
+# without a bound a large enough remaining balance would ask for a receipt no shop issues.
+MAX_LINE_ITEMS = 20
+
+
+def _placeholders(template: str) -> list[str]:
+    # Sorted, because iterating a set would order the draws by a hash that varies
+    # between interpreter runs — and determinism under --seed would quietly stop holding.
+    return sorted({name for _, name, _, _ in Formatter().parse(template) if name})
+
+
+def _is_renderable(template: str) -> bool:
+    return set(_placeholders(template)) <= _PLACEHOLDER_VALUES.keys()
+
 
 def _fill_placeholders(template: str, rng: random.Random) -> str | None:
     """A line-item name with its placeholders resolved, or ``None`` if some placeholder
     has no vocabulary yet."""
-    names = sorted({name for _, name, _, _ in Formatter().parse(template) if name})
-    if not set(names) <= _PLACEHOLDER_VALUES.keys():
+    if not _is_renderable(template):
         return None
-    # Sorted, because iterating a set would order the draws by a hash that varies
-    # between interpreter runs — and determinism under --seed would quietly stop holding.
+    names = _placeholders(template)
     return template.format(**{name: rng.choice(_PLACEHOLDER_VALUES[name]) for name in names})
 
 
-def _build_line_item(item_kind: str, templates: list[str], rng: random.Random) -> LineItem:
+def renderable_kinds(catalogue: dict, language: str = "uk") -> list[str]:
+    """The item kinds of a bucket that can currently be printed at all.
+
+    A kind whose every name template carries a placeholder with no vocabulary yet — the
+    `{brand}` and `{drug}` families, which wait on `config/vendors.json` — is not a bug and
+    must not raise: it simply cannot appear on a document until the vocabulary lands. This
+    is where that is decided, once, instead of at each draw.
+    """
+    return sorted(
+        kind
+        for kind, names in catalogue.items()
+        if any(_is_renderable(template) for template in names[language])
+    )
+
+
+def _build_line_item(
+    item_kind: str, templates: list[str], rng: random.Random, *, covered: bool
+) -> LineItem:
     usable = [name for name in (_fill_placeholders(t, rng) for t in templates) if name]
     if not usable:
         raise ValueError(f"no renderable name template for item kind {item_kind!r}")
@@ -546,11 +584,11 @@ def _build_line_item(item_kind: str, templates: list[str], rng: random.Random) -
     return LineItem(
         name=rng.choice(usable),
         item_kind=item_kind,
-        qty=Decimal(rng.choice((1, 1, 1, 2))),
+        qty=Decimal(rng.choice(_QTY_CHOICES)),
         # Drawn in whole ten-kopiyka steps: retail prices do not end in arbitrary
         # kopiykas, and an exact integer keeps the sum exact.
         price=Decimal(rng.randrange(low, high, 10)) / 100,
-        covered=True,
+        covered=covered,
         vat_letter=vat_letter_for_kind(item_kind, "UA", rng),
     )
 
@@ -561,7 +599,7 @@ _DISTINCT_DRAW_LIMIT = 40
 
 
 def _draw_distinct_items(
-    rng: random.Random, kinds: list[str], catalogue: dict, count: int
+    rng: random.Random, kinds: list[str], catalogue: dict, count: int, *, covered: bool
 ) -> list[LineItem]:
     """Line items with distinct printed names.
 
@@ -573,14 +611,129 @@ def _draw_distinct_items(
     items: list[LineItem] = []
     seen: set[str] = set()
 
-    for _ in range(_DISTINCT_DRAW_LIMIT):
+    # Scaled by the requested count: the flat bound was written for baskets of two to
+    # four, and a basket sized to overrun an annual limit would otherwise run out of
+    # attempts before it ran out of names.
+    attempts = max(_DISTINCT_DRAW_LIMIT, _DISTINCT_DRAW_LIMIT * count // 4)
+    for _ in range(attempts):
         if len(items) == count:
             break
         kind = rng.choice(kinds)
-        item = _build_line_item(kind, catalogue[kind]["uk"], rng)
+        item = _build_line_item(kind, catalogue[kind]["uk"], rng, covered=covered)
         if item.name not in seen:
             seen.add(item.name)
             items.append(item)
+    return items
+
+
+def estimated_line_value(category_id: str) -> Decimal:
+    """Roughly what one covered line of this category is worth.
+
+    Used by `claim_planner` to size a basket *before* it is drawn, when it needs one large
+    enough to exceed a remaining annual balance. An estimate and nothing else: no label is
+    ever derived from it, and a basket that misses the balance is reported as a miss
+    rather than relabelled.
+    """
+    kinds = renderable_kinds(category(category_id)["covered_items"])
+    if not kinds:
+        raise ValueError(f"category {category_id!r} has no printable covered item")
+
+    ranges = [_PRICE_RANGE_KOPIYKAS.get(kind, _PRICE_RANGE_KOPIYKAS["default"]) for kind in kinds]
+    mean_price = Decimal(sum((low + high) for low, high in ranges)) / (2 * len(ranges) * 100)
+    mean_qty = Decimal(sum(_QTY_CHOICES)) / len(_QTY_CHOICES)
+    return (mean_price * mean_qty).quantize(KOPIYKA)
+
+
+# Non-covered lines per mixed basket. Usually one — the carrier bag, the tube of cream —
+# because that is what the imperfection catalogue describes: a non-qualifying item inside
+# an otherwise qualifying purchase.
+_EXCLUDED_LINE_COUNTS = (1, 1, 2)
+
+
+def _repriced(item: LineItem, line_total: Decimal) -> LineItem:
+    """The same line, priced so it comes to about ``line_total``.
+
+    Clamped into the item kind's own range and rounded to ten kopiykas, so that hitting a
+    coverage target cannot print a 4 UAH blood-pressure monitor. The clamp is why the
+    realized coverage only approaches the target — which is enough, because the target
+    only has to land the claim on the right side of `full_threshold`.
+    """
+    low, high = _PRICE_RANGE_KOPIYKAS.get(item.item_kind, _PRICE_RANGE_KOPIYKAS["default"])
+    kopiykas = int((line_total / item.qty * 100).to_integral_value(rounding=ROUND_HALF_UP))
+    kopiykas = min(max(kopiykas - kopiykas % 10, low), high)
+    return item.model_copy(update={"price": Decimal(kopiykas) / 100})
+
+
+def _excluded_ceiling(kinds: list[str]) -> Decimal:
+    """The most one non-covered line may cost, over the kinds available.
+
+    The sizing bound for the loop below: at qty 1 no non-covered line can be repriced
+    above this without leaving the range its item kind is plausible in.
+    """
+    return Decimal(
+        max(_PRICE_RANGE_KOPIYKAS.get(kind, _PRICE_RANGE_KOPIYKAS["default"])[1] for kind in kinds)
+    ) / 100
+
+
+def _build_mixed_basket(
+    rng: random.Random, *, category_id: str, count: int, coverage_target: Decimal
+) -> list[LineItem]:
+    """A basket drawn from both the covered and the excluded bucket of a category.
+
+    This is how `partially_covered` by `mixed_items` is realized. The planner has already
+    chosen that verdict; the builder's obligation is to produce evidence consistent with
+    it, never the other way round — so the non-covered lines are priced toward the
+    requested coverage ratio rather than left wherever the price draw put them.
+
+    `ambiguous_items` are deliberately not drawn from: policy.yaml states no coverage
+    answer for that bucket, and a `covered` flag for one would be this generator's
+    invention rather than the policy's rule.
+    """
+    spec = category(category_id)
+    covered_catalogue = spec["covered_items"]
+    excluded_catalogue = spec["excluded_items"]
+
+    covered = _draw_distinct_items(
+        rng, renderable_kinds(covered_catalogue), covered_catalogue, count, covered=True
+    )
+    if not covered:
+        raise ValueError(f"category {category_id!r} produced no covered line")
+
+    excluded_kinds = renderable_kinds(excluded_catalogue)
+    if not excluded_kinds:
+        raise ValueError(
+            f"category {category_id!r} has no non-covered item this generator can print "
+            "yet — every excluded name template still needs a placeholder vocabulary"
+        )
+
+    # covered / (covered + excluded) = target  =>  excluded = covered × (1 − target) / target
+    def budget(items: list[LineItem]) -> Decimal:
+        return line_items_total(items) * (1 - coverage_target) / coverage_target
+
+    ceiling = _excluded_ceiling(excluded_kinds)
+    wanted = max(rng.choice(_EXCLUDED_LINE_COUNTS), math.ceil(budget(covered) / ceiling))
+    excluded = _draw_distinct_items(
+        rng, excluded_kinds, excluded_catalogue,
+        min(wanted, MAX_LINE_ITEMS - len(covered)), covered=False,
+    )
+    if not excluded:
+        raise ValueError(f"category {category_id!r} produced no non-covered line")
+
+    # A low coverage target asks for more non-covered money than the category's excluded
+    # bucket can plausibly carry — today most of those name templates cannot be printed at
+    # all, because `config/vendors.json` is still a stub and `{brand}` and `{drug}` have no
+    # vocabulary. Shrinking the covered side is the honest way to reach the ratio; the
+    # alternative, one absurdly priced non-covered line, would be a visible artifact in
+    # the image. This loop stops firing as the vocabulary lands.
+    while len(covered) > 1 and budget(covered) > ceiling * len(excluded):
+        covered.pop()
+
+    excluded = [_repriced(item, budget(covered) / len(excluded)) for item in excluded]
+
+    items = covered + excluded
+    # Otherwise every non-covered line is the last one on every mixed receipt, which is a
+    # position a consumer could learn instead of learning to read the line.
+    rng.shuffle(items)
     return items
 
 
@@ -619,29 +772,47 @@ def build_prro_receipt(
     vendor: dict,
     address: str = "м. Київ",
     covered_only: bool = True,
+    coverage_target: Decimal | None = None,
     item_count: int | None = None,
 ) -> PrroReceipt:
     """Build one Ukrainian ПРРО fiscal receipt.
 
-    ``covered_only`` is the label-first knob this skeleton exposes: the planner has
-    already chosen the verdict, and for ``covered`` the builder may draw only from the
-    category's covered items. Mixed baskets, which realize ``partially_covered``, come
-    with the policy engine.
+    ``covered_only`` is the label-first knob: the planner has already chosen the verdict,
+    and the builder realizes it. For ``covered`` the basket is drawn from the category's
+    covered items alone; for ``partially_covered`` by ``mixed_items`` the caller clears
+    the flag and states the ``coverage_target`` the basket should come to.
     """
     rules = jurisdiction("UA")
     receipt_rules = rules["receipt"]
 
-    if not covered_only:
-        raise NotImplementedError(
-            "mixed baskets realize partially_covered and need the policy engine; "
-            "see docs/architecture.md#label-first-generation"
-        )
-
     # -- what was bought
-    catalogue = category(category_id)["covered_items"]
-    kinds = sorted(catalogue)
     count = item_count if item_count is not None else rng.randint(2, 4)
-    items = _draw_distinct_items(rng, kinds, catalogue, count)
+    if not 1 <= count <= MAX_LINE_ITEMS:
+        raise ValueError(f"a receipt carries 1 to {MAX_LINE_ITEMS} lines, not {count}")
+
+    if covered_only:
+        if coverage_target is not None:
+            raise ValueError(
+                "coverage_target describes a mixed basket; covered_only=True already "
+                "means every line is covered"
+            )
+        catalogue = category(category_id)["covered_items"]
+        items = _draw_distinct_items(
+            rng, renderable_kinds(catalogue), catalogue, count, covered=True
+        )
+    else:
+        if coverage_target is None:
+            raise ValueError(
+                "a mixed basket needs the coverage_target the planner chose — the builder "
+                "realizes a verdict, it does not decide one"
+            )
+        if not Decimal(0) < coverage_target < Decimal(1):
+            raise ValueError(
+                f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
+            )
+        items = _build_mixed_basket(
+            rng, category_id=category_id, count=count, coverage_target=coverage_target
+        )
     total = line_items_total(items)
 
     # -- who sold it

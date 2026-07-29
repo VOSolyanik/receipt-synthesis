@@ -16,13 +16,17 @@ import pytest
 
 from receipt_synth.config import category, jurisdiction
 from receipt_synth.content_builder import (
+    MAX_LINE_ITEMS,
     build_prro_receipt,
+    estimated_line_value,
     is_valid_edrpou,
+    renderable_kinds,
     validate_amount_in_words,
     validate_line_item_sum,
     validate_vat_letter,
 )
-from receipt_synth.schemas import Capture, DocType
+from receipt_synth.policy_engine import covered_total, resolved_coverage, verdict_for
+from receipt_synth.schemas import Capture, DocType, Verdict
 
 ISSUED_AT = datetime(2026, 8, 3, 14, 22, 51)
 VENDOR = {"name": "Аптека АНЦ", "legal_form": "TOV"}
@@ -84,6 +88,149 @@ def test_covered_only_receipt_contains_no_excluded_item(seed):
 
     assert all(item.covered for item in receipt.line_items)
     assert {item.item_kind for item in receipt.line_items} <= covered_kinds
+
+
+# ---------------------------------------------------------- mixed baskets ----
+
+
+def mixed(seed: int, coverage_target: str = "0.7", **kwargs):
+    return build(
+        seed, covered_only=False, coverage_target=Decimal(coverage_target), **kwargs
+    )
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_a_mixed_basket_draws_from_both_buckets(seed):
+    spec = category("vitamins_nutrition")
+    receipt = mixed(seed)
+
+    kinds = {item.item_kind for item in receipt.line_items}
+    assert kinds & set(spec["covered_items"]), "no covered line"
+    assert kinds & set(spec["excluded_items"]), "no non-covered line"
+    assert kinds.isdisjoint(spec["ambiguous_items"]), (
+        "policy.yaml states no coverage answer for the ambiguous bucket, so a line drawn "
+        "from it would carry a `covered` flag this generator invented"
+    )
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_the_covered_flag_agrees_with_the_bucket_the_line_came_from(seed):
+    """The flag is the label. A line from `excluded_items` marked covered would be a
+    wrong per-line label *and* a wrong claim verdict, from one mistake."""
+    spec = category("vitamins_nutrition")
+    for item in mixed(seed).line_items:
+        assert item.covered is (item.item_kind in spec["covered_items"])
+        assert item.covered is not (item.item_kind in spec["excluded_items"])
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_a_mixed_basket_lands_on_the_partially_covered_side_of_the_threshold(seed):
+    """What the builder actually owes the planner. The realized ratio only approaches the
+    target — prices are clamped into each item kind's own range so the receipt stays
+    plausible — but the verdict it produces has to be the one that was asked for. Under
+    the STRICT rule that is guaranteed by the existence of a non-covered line rather than
+    by where the ratio lands, which is exactly why the clamp is tolerable."""
+    receipt = mixed(seed)
+    items = receipt.line_items
+    covered = covered_total("vitamins_nutrition", items)
+    every_line_covered = all(resolved_coverage("vitamins_nutrition", items))
+
+    assert not every_line_covered
+    assert verdict_for(covered, receipt.total, every_line_covered=every_line_covered) is (
+        Verdict.PARTIALLY_COVERED
+    )
+
+
+@pytest.mark.parametrize("target", ["0.3", "0.5", "0.7", "0.9"])
+def test_the_realized_coverage_tracks_the_requested_one(target):
+    """Averaged over seeds, because a single basket is a draw. Within 0.15 of the target:
+    the clamp on prices is what stops it being exact, and closer than that is not
+    something a label depends on — the verdict turns on the non-covered line existing, not
+    on the ratio."""
+    wanted = Decimal(target)
+    realized = [
+        covered_total("vitamins_nutrition", r.line_items) / r.total
+        for r in (mixed(seed, coverage_target=target) for seed in range(40))
+    ]
+    mean = sum(realized) / len(realized)
+    assert abs(mean - wanted) < Decimal("0.15"), f"asked {wanted}, got {mean}"
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_a_mixed_basket_still_satisfies_every_document_invariant(seed):
+    receipt = mixed(seed)
+    assert validate_line_item_sum(receipt.line_items, receipt.total)
+    assert validate_amount_in_words(receipt.amount_in_words, receipt.total)
+    assert sum(line.gross for line in receipt.tax_lines) == receipt.total
+    for item in receipt.line_items:
+        assert validate_vat_letter(item.item_kind, item.vat_letter, "UA")
+        assert item.price > 0
+
+
+def test_the_non_covered_line_is_not_always_the_last_one():
+    """Position is learnable. If every mixed receipt put its non-covered line at the
+    bottom, a consumer could score well on this dataset without reading the line."""
+    positions = set()
+    for seed in range(40):
+        items = mixed(seed).line_items
+        positions |= {i for i, item in enumerate(items) if not item.covered}
+    assert len(positions) > 1
+
+
+def test_a_mixed_basket_is_deterministic_under_seed():
+    assert mixed(7) == mixed(7)
+
+
+def test_a_mixed_basket_refuses_to_guess_its_coverage():
+    """The planner chose the verdict; a default here would let the builder choose one."""
+    with pytest.raises(ValueError):
+        build(1, covered_only=False)
+
+
+@pytest.mark.parametrize("target", ["0", "1", "-0.5", "1.5"])
+def test_a_coverage_target_outside_the_open_unit_interval_is_refused(target):
+    """At 1 there is no non-covered line and at 0 there is no covered one; both are other
+    verdicts, reached by other mechanisms."""
+    with pytest.raises(ValueError):
+        mixed(1, coverage_target=target)
+
+
+def test_a_covered_only_basket_refuses_a_coverage_target():
+    with pytest.raises(ValueError):
+        build(1, covered_only=True, coverage_target=Decimal("0.7"))
+
+
+def test_a_receipt_longer_than_the_cap_is_refused():
+    with pytest.raises(ValueError):
+        build(1, item_count=MAX_LINE_ITEMS + 1)
+
+
+def test_a_basket_can_be_sized_up_to_the_cap():
+    """The planner sizes a basket upward to overrun an annual limit. If the distinct-name
+    draw ran out of attempts first, the overrun would silently not happen."""
+    receipt = build(3, item_count=MAX_LINE_ITEMS)
+    assert len(receipt.line_items) == MAX_LINE_ITEMS
+    assert len({item.name for item in receipt.line_items}) == MAX_LINE_ITEMS
+
+
+def test_only_printable_item_kinds_are_offered():
+    """`medicine` and `cosmetics` templates all carry `{drug}` or `{brand}`, and neither
+    has a vocabulary yet. They must be skipped, not raise: an item kind that cannot be
+    printed today is a gap in `config/vendors.json`, not a bug in the draw."""
+    excluded = category("vitamins_nutrition")["excluded_items"]
+    printable = renderable_kinds(excluded)
+
+    assert "medical_device" in printable
+    assert "medicine" not in printable
+    assert "cosmetics" not in printable
+    assert set(printable) < set(excluded)
+
+
+def test_estimated_line_value_is_inside_the_price_ranges_it_summarizes():
+    """It sizes a basket before the basket is drawn, so it only has to be the right order
+    of magnitude — but a value outside every range would mean it summarizes nothing."""
+    value = estimated_line_value("vitamins_nutrition")
+    assert Decimal("90.00") < value < Decimal("1500.00")
 
 
 @pytest.mark.parametrize("seed", range(30))

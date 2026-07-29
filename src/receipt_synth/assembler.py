@@ -12,19 +12,40 @@ from __future__ import annotations
 import json
 import random
 import tempfile
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
 
 from receipt_synth import __version__
-from receipt_synth.claim_planner import ClaimPlan, plan_claim, plannable_categories
+from receipt_synth.claim_planner import (
+    REALIZABLE_VERDICTS,
+    ClaimPlan,
+    documentable_categories,
+    plan_claims,
+    unrealizable_verdicts,
+    why_no_claim,
+)
 from receipt_synth.config import load_vendors
 from receipt_synth.content_builder import build_prro_receipt
 from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
+from receipt_synth.policy_engine import (
+    Ledger,
+    evaluate_claim,
+    partially_covered_causes,
+    verdict_mix,
+)
 from receipt_synth.renderer import Renderer
-from receipt_synth.schemas import Capture, ClaimGroundTruth, Country, DocGroundTruth, Persona
+from receipt_synth.schemas import (
+    Capture,
+    ClaimGroundTruth,
+    Country,
+    DocGroundTruth,
+    Persona,
+    Verdict,
+)
 
 # How many personas to draw before giving up on finding one a registered archetype can
 # document. Only reachable while the template set is incomplete: with one archetype
@@ -32,15 +53,39 @@ from receipt_synth.schemas import Capture, ClaimGroundTruth, Country, DocGroundT
 # misconfiguration fails loudly instead of looping.
 _PERSONA_DRAW_LIMIT = 200
 
+# The bucket for ordered claims the planner stopped short of without a reason it could
+# name. Spelled out rather than merged into the nearest plausible reason: a count under a
+# label that sounds accounted for is worse than a count that admits it is not.
+UNATTRIBUTED = "not attributed — planning stopped for a reason claim_planner cannot name"
+
 
 @dataclass(frozen=True)
 class Dataset:
-    """Everything one run produced."""
+    """Everything one run produced.
+
+    `plans` is run metadata rather than ground truth: it holds the verdict each claim was
+    *aimed at*, which the balance report needs in order to say where the realized labels
+    differ from the drawn ones. It is deliberately not part of the manifest — a target is
+    not a label, and putting the two in one file invites reading one as the other.
+
+    `claims_ordered` and `claims_skipped` are the other half of that honesty. A run of
+    five personas × eight claims orders forty and may build thirty-one, and a report that
+    opens with thirty-one presents the shortfall as if it had never been asked for. The
+    difference between "generated 150 claims" and "ordered 150, built 116" is the
+    difference between a true and a false sentence in somebody's write-up, and nobody
+    re-derives it later.
+    """
 
     seed: int
     personas: list[Persona]
     claims: list[ClaimGroundTruth]
     documents: list[DocGroundTruth]
+    plans: list[ClaimPlan] = field(default_factory=list)
+    claims_ordered: int = 0
+    # Reason -> how many ordered claims were not built for it. `claim_planner` supplies the
+    # reasons; anything it cannot attribute is counted under `UNATTRIBUTED` rather than
+    # being folded into a bucket that sounds accounted for.
+    claims_skipped: dict[str, int] = field(default_factory=dict)
 
     def as_manifest(self) -> dict:
         return {
@@ -59,7 +104,7 @@ def _draw_documentable_persona(
     """Draw personas until one holds a category some archetype can document."""
     for _ in range(_PERSONA_DRAW_LIMIT):
         persona = generate_persona(rng, persona_id=persona_id, country=country)
-        if plannable_categories(persona):
+        if documentable_categories(persona):
             return persona
     raise RuntimeError(
         f"no persona in {_PERSONA_DRAW_LIMIT} draws held a category any registered "
@@ -92,6 +137,9 @@ def _build_document(
         # No "м." prefix: Faker's uk_UA city names already carry their settlement type
         # ("хутір Великі Мости"), and prefixing produced "м. хутір Великі Мости".
         address=persona.location.city,
+        covered_only=plan.coverage_target is None,
+        coverage_target=plan.coverage_target,
+        item_count=plan.item_count,
     )
 
     image_path = out_dir / "images" / f"{doc_id}.png"
@@ -123,6 +171,7 @@ def generate_dataset(
     seed: int,
     out_dir: Path,
     personas: int = 1,
+    claims_per_persona: int = 1,
     country: Country = Country.UA,
 ) -> Dataset:
     """Generate the dataset for a seed, writing images and labels under `out_dir`.
@@ -130,11 +179,20 @@ def generate_dataset(
     Fully determined by `seed`. Each persona gets its own generator, derived from the
     root one, so that adding a persona does not shift the content of the personas before
     it.
+
+    `claims_per_persona` is a ceiling. Each persona carries its own ledger, and the
+    planner stops early once no category of theirs has an annual balance left — which is
+    also the only way the cumulative-limit mechanism can be exercised at all.
     """
+    if claims_per_persona < 1:
+        raise ValueError(f"a persona files at least one claim, not {claims_per_persona}")
+
     root = random.Random(seed)
     all_personas: list[Persona] = []
     all_claims: list[ClaimGroundTruth] = []
     all_documents: list[DocGroundTruth] = []
+    all_plans: list[ClaimPlan] = []
+    skipped: Counter[str] = Counter()
 
     with Renderer() as renderer:
         for index in range(personas):
@@ -142,25 +200,241 @@ def generate_dataset(
             persona_id = f"p{index + 1:03d}"
 
             persona = _draw_documentable_persona(rng, persona_id, country)
-            plan = plan_claim(rng, persona=persona, claim_id=f"{persona_id}_c1")
-            document = _build_document(
-                rng,
-                persona=persona,
-                plan=plan,
-                doc_id=f"{plan.claim_id}_d1",
-                renderer=renderer,
-                out_dir=out_dir,
-            )
-
             all_personas.append(persona)
-            all_claims.append(plan.ground_truth([document.doc_id]))
-            all_documents.append(document)
+
+            # One ledger per persona: limits are cumulative per persona per category, and
+            # a shared ledger would let one person's spending exhaust another's benefit.
+            ledger = Ledger()
+            built = 0
+            for plan in plan_claims(
+                rng, persona=persona, count=claims_per_persona, ledger=ledger
+            ):
+                document = _build_document(
+                    rng,
+                    persona=persona,
+                    plan=plan,
+                    doc_id=f"{plan.claim_id}_d1",
+                    renderer=renderer,
+                    out_dir=out_dir,
+                )
+                # The oracle, not the plan, decides the label. The plan's verdict was the
+                # target; where the two differ the balance report says so.
+                evaluation = evaluate_claim(
+                    persona_id=persona.persona_id,
+                    category=plan.category,
+                    documents=[document],
+                    ledger=ledger,
+                )
+                ledger.record(persona.persona_id, plan.category, evaluation.reimbursable)
+
+                all_plans.append(plan)
+                all_claims.append(plan.ground_truth([document.doc_id], evaluation))
+                all_documents.append(document)
+                built += 1
+
+            if built < claims_per_persona:
+                # Attributed, or explicitly not. `why_no_claim` returning None here would
+                # mean planning stopped for a reason nothing in the planner explains, and
+                # the report has to say that rather than assume the usual one.
+                reason = why_no_claim(persona, ledger) or UNATTRIBUTED
+                skipped[reason] += claims_per_persona - built
 
     dataset = Dataset(
-        seed=seed, personas=all_personas, claims=all_claims, documents=all_documents
+        seed=seed,
+        personas=all_personas,
+        claims=all_claims,
+        documents=all_documents,
+        claims_ordered=personas * claims_per_persona,
+        claims_skipped=dict(skipped),
+        plans=all_plans,
     )
     _write_labels(dataset, out_dir)
     return dataset
+
+
+def balance_report(dataset: Dataset) -> str:
+    """The realized verdict distribution against `verdict_mix` — and what is missing from it.
+
+    Deliberately not a tidy table. Only two of the five verdicts in `verdict_mix` can be
+    built yet, so the draw is renormalized over those two and the realized shares are
+    conditional on that subset. A report that renormalized silently would print a
+    balanced-looking dataset while a third of the target mix was absent, which is worse
+    than printing nothing: it answers the question nobody would then think to ask.
+
+    The full report — document classes, currencies, languages, the train/validation split
+    — is a later step. This is the verdict axis, the claim count and the exclusion note,
+    nothing else.
+    """
+    mix = verdict_mix()
+    missing = unrealizable_verdicts()
+    realizable_share = sum(share for verdict, share in mix.items() if verdict not in missing)
+
+    realized = Counter(claim.verdict for claim in dataset.claims)
+    total = sum(realized.values())
+
+    lines = _count_lines(dataset, total)
+    lines.append(f"Verdict balance — {total} claim(s) built")
+
+    # Every realizable verdict gets a row whether or not it occurred, plus any verdict that
+    # occurred without being realizable. Iterating the target mix instead skipped the
+    # unrealizable ones, so a claim the engine did emit as one would vanish from the table
+    # while still counting in `total`, and the rows would quietly stop summing.
+    rows = list(REALIZABLE_VERDICTS) + [
+        verdict for verdict in missing if realized[verdict]
+    ]
+    for verdict in rows:
+        count = realized[verdict]
+        if verdict in missing:
+            lines.append(
+                f"  {verdict.value:<22} {count:>4}  {_share(count, total):>6}"
+                "   !! realized but not realizable — the planner cannot draw this verdict,"
+                " so the engine emitted it on its own"
+            )
+            continue
+        lines.append(
+            f"  {verdict.value:<22} {count:>4}  {_share(count, total):>6}"
+            f"   target {mix[verdict] / realizable_share:.1%} of the realizable subset"
+            f" ({mix[verdict]:.1%} of the full mix)"
+        )
+
+    accounted = sum(realized[verdict] for verdict in rows)
+    if accounted != total:
+        lines.append(
+            f"  !! the rows above account for {accounted} of {total} claim(s). "
+            "This cannot happen unless a claim carries a verdict outside the enum; "
+            "the table is wrong, not the dataset."
+        )
+
+    lines += _cause_lines(dataset)
+
+    if missing:
+        named = ", ".join(
+            f"{verdict.value} ({mix[verdict]:.1%})" if verdict in mix
+            else f"{verdict.value} (not in verdict_mix)"
+            for verdict in missing
+        )
+        lines += [
+            f"NOT GENERATED IN THIS RUN: {named}",
+            f"  {1 - realizable_share:.1%} of the target mix is absent, so the shares above are",
+            "  CONDITIONAL on the realizable subset and are not this dataset's balance",
+            "  against verdict_mix. Do not read them as one.",
+        ]
+
+    lines += _drift_lines(dataset)
+    return "\n".join(lines)
+
+
+def _count_lines(dataset: Dataset, built: int) -> list[str]:
+    """How many claims the run ordered, how many it built, and why the rest were not.
+
+    The first thing in the report, because it is the number that gets quoted. A run of
+    `--personas 5 --claims-per-persona 8` orders forty; if planning stops early for three
+    personas the report must not open with thirty-one as though thirty-one had been the
+    request. Skipped claims are broken down by the reason `claim_planner` gives, and any
+    it cannot attribute is said to be unattributed rather than assigned to the likeliest
+    bucket.
+    """
+    ordered = dataset.claims_ordered
+    if not ordered:
+        return ["Claims — count not recorded for this dataset"]
+
+    skipped = sum(dataset.claims_skipped.values())
+    lines = [f"Claims — {ordered} ordered, {built} built, {skipped} not built"]
+    if skipped != ordered - built:
+        lines.append(
+            f"  !! {ordered - built} claim(s) are missing but {skipped} are accounted for; "
+            "the difference is unexplained"
+        )
+    # Sorted by reason so the report is byte-identical between runs of the same seed.
+    for reason, count in sorted(dataset.claims_skipped.items()):
+        lines.append(f"  {count:>4}  {reason}")
+    return lines
+
+
+def _cause_lines(dataset: Dataset) -> list[str]:
+    """`partially_covered` by cause, counted the way policy.yaml defines it.
+
+    `partially_covered_causes` splits the bucket **per claim** and sums to 1.0. Counting
+    occurrences instead would put a claim that carries both causes in two rows, and the
+    printed shares could then never converge on the target however large the run — a
+    number that cannot reach its target is worse than no number, because it reads as a
+    miss rather than as a category error.
+
+    A claim with both causes therefore gets its own row and is attributed to neither
+    target. Which of the two "really" caused it is not something policy.yaml answers, and
+    picking one would be an invented tie-break sitting inside a report about balance.
+    """
+    causes = list(partially_covered_causes())
+    counts: Counter[tuple[str, ...]] = Counter(
+        tuple(cause for cause in claim.imperfection if cause in causes)
+        for claim in dataset.claims
+    )
+    del counts[()]  # claims with no cause are not in the partially_covered bucket
+    total = sum(counts.values())
+
+    lines = [
+        f"partially_covered by cause — {total} claim(s); "
+        "policy.yaml splits this bucket per claim, not per occurrence"
+    ]
+    for cause, share in partially_covered_causes().items():
+        count = counts[(cause,)]
+        lines.append(
+            f"  {cause + ' only':<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
+        )
+    both = total - sum(counts[(cause,)] for cause in causes)
+    lines.append(
+        f"  {'both causes on one claim':<26} {both:>4}  {_share(both, total):>6}"
+        "   policy.yaml declares no share for this"
+    )
+    return lines
+
+
+def _drift_lines(dataset: Dataset) -> list[str]:
+    """Where the label differs from the verdict that was drawn, split by what it means.
+
+    The two directions are not the same event and must not share a counter:
+
+    * a `covered` target labelled `partially_covered` is the ledger binding — the oracle
+      overruling the plan, which is the cumulative-limit mechanism working as designed;
+    * a `partially_covered` target labelled `covered` is a builder shortfall — the basket
+      `claim_planner._overrun_item_count` sized from an *estimate* of a line's value did
+      not exceed the remaining balance. Nothing is mislabelled, but the run contains fewer
+      of that mechanism than was asked for, and that is a defect to fix rather than a
+      policy event to note.
+
+    `Dataset.plans` may be empty for a dataset assembled without them, in which case there
+    is nothing to compare and the report simply says so instead of raising.
+    """
+    if not dataset.plans:
+        return ["(no plans recorded for this dataset — target-vs-realized comparison skipped)"]
+
+    pairs = list(zip(dataset.plans, dataset.claims, strict=True))
+    overruled = [c for p, c in pairs if p.verdict is Verdict.COVERED and p.verdict is not c.verdict]
+    shortfall = [
+        (p, c) for p, c in pairs
+        if p.verdict is Verdict.PARTIALLY_COVERED and c.verdict is Verdict.COVERED
+    ]
+
+    lines: list[str] = []
+    if overruled:
+        lines.append(
+            f"  {len(overruled)} claim(s) drawn as `covered` were labelled "
+            f"{overruled[0].verdict.value} by a binding annual limit — the oracle "
+            "overruling\n  the target, which is the limit mechanism doing its job."
+        )
+    if shortfall:
+        named = ", ".join(f"{c.claim_id} ({p.cause})" for p, c in shortfall[:5])
+        more = "" if len(shortfall) <= 5 else f" and {len(shortfall) - 5} more"
+        lines.append(
+            f"  {len(shortfall)} claim(s) drawn as `partially_covered` came out `covered`: "
+            f"{named}{more}.\n  The basket sized from an estimated line value did not "
+            "overrun the balance — a builder\n  shortfall, not a policy event."
+        )
+    return lines
+
+
+def _share(count: int, total: int) -> str:
+    return f"{count / total:.1%}" if total else "—"
 
 
 def _write_labels(dataset: Dataset, out_dir: Path) -> None:
