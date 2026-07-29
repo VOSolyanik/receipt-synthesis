@@ -22,6 +22,7 @@ from receipt_synth import __version__
 from receipt_synth.claim_planner import (
     REALIZABLE_VERDICTS,
     ClaimPlan,
+    DocumentPlan,
     documentable_categories,
     plan_claims,
     unrealizable_verdicts,
@@ -146,11 +147,19 @@ def _pick_vendor(
     return resolve_vendor(rng, rng.choice(candidates), country.value)
 
 
+# Which builder produces which archetype. A table rather than a call, because a claim is
+# now a list of documents and the loop below cannot assume they are all fiscal receipts —
+# an unregistered slug has to fail by name instead of being silently handed to the one
+# builder that exists. One entry today, for the one registered archetype.
+_BUILDERS = {"ua_prro_receipt": build_prro_receipt}
+
+
 def _build_document(
     rng: random.Random,
     *,
     persona: Persona,
     plan: ClaimPlan,
+    document_plan: DocumentPlan,
     vendor: dict,
     doc_id: str,
     renderer: Renderer,
@@ -159,12 +168,34 @@ def _build_document(
     """One document of a claim.
 
     `vendor` is passed in rather than chosen here. It is the claim's vendor instance, and
-    every document of the claim has to name the same seller.
+    every document of the claim has to name the same seller — while a sole trader's name
+    was a stored constant that held by the nature of the type, and a drawn name can differ,
+    so it is now a constraint somebody has to keep.
+
+    The basket goes to the claim's SUBJECT document and to no other. Sizing is a claim-level
+    decision (`ClaimPlan.coverage_target`, `item_count`), and giving the same basket to a
+    second document would double the money a claim aimed at a limit was sized to spend.
     """
-    receipt = build_prro_receipt(
+    slug = document_plan.archetype.slug
+    if slug not in _BUILDERS:
+        raise NotImplementedError(
+            f"archetype {slug!r} is registered in claim_planner.ARCHETYPES but no builder "
+            f"produces it; assembler._BUILDERS knows {sorted(_BUILDERS)}"
+        )
+    if document_plan is not plan.subject_document:
+        # Every builder registered above produces a document that states what was bought,
+        # and takes a basket to state it with. A document that states no subject — a
+        # payment confirmation, a statement — needs a builder of its own, and none exists.
+        # Said here rather than assumed: the claim loop no longer takes a claim to have one
+        # document, and this is the place that still cannot honour it.
+        raise NotImplementedError(
+            f"{slug!r} is planned as a document that does not state what was bought, and "
+            "no builder produces one yet"
+        )
+    receipt = _BUILDERS[slug](
         rng,
         category_id=plan.category,
-        issued_at=plan.issued_at,
+        issued_at=document_plan.issued_at,
         vendor=vendor,
         # No "м." prefix: Faker's uk_UA city names already carry their settlement type
         # ("хутір Великі Мости"), and prefixing produced "м. хутір Великі Мости".
@@ -178,9 +209,7 @@ def _build_document(
     with tempfile.TemporaryDirectory() as staging:
         # The clean render is an intermediate, not an artifact: the dataset ships the
         # document as it would have been captured.
-        clean = renderer.render(
-            plan.archetype.slug, receipt.render_context(), Path(staging) / f"{doc_id}.png"
-        )
+        clean = renderer.render(slug, receipt.render_context(), Path(staging) / f"{doc_id}.png")
         degraded = degrade(
             cv2.imread(str(clean.image_path)),
             clean.field_bboxes,
@@ -241,38 +270,47 @@ def generate_dataset(
             for plan in plan_claims(
                 rng, persona=persona, count=claims_per_persona, ledger=ledger
             ):
-                # The claim's vendor instance, chosen once here and carried into every
-                # document of the claim. One document today; the loop that adds the second
-                # must reuse this value rather than call `_pick_vendor` again, or the two
-                # documents of one purchase will name two different sole traders.
+                # The claim's vendor instance, chosen ONCE here and carried into every
+                # document of the claim. Outside the loop below on purpose: a sole
+                # trader's name is drawn rather than stored, so calling `_pick_vendor` per
+                # document would put two different sellers on two documents of one
+                # purchase. That constraint used to hold by the nature of the type.
                 vendor = _pick_vendor(
                     rng,
                     persona.location.country,
                     plan.category,
                     mixed=plan.coverage_target is not None,
                 )
-                document = _build_document(
-                    rng,
-                    persona=persona,
-                    plan=plan,
-                    vendor=vendor,
-                    doc_id=f"{plan.claim_id}_d1",
-                    renderer=renderer,
-                    out_dir=out_dir,
-                )
+                # A claim is a list of documents. One entry while one archetype is
+                # registered — and the number is read off the plan, never assumed.
+                documents = [
+                    _build_document(
+                        rng,
+                        persona=persona,
+                        plan=plan,
+                        document_plan=document_plan,
+                        vendor=vendor,
+                        doc_id=f"{plan.claim_id}_d{index}",
+                        renderer=renderer,
+                        out_dir=out_dir,
+                    )
+                    for index, document_plan in enumerate(plan.documents, start=1)
+                ]
                 # The oracle, not the plan, decides the label. The plan's verdict was the
                 # target; where the two differ the balance report says so.
                 evaluation = evaluate_claim(
                     persona_id=persona.persona_id,
                     category=plan.category,
-                    documents=[document],
+                    documents=documents,
                     ledger=ledger,
                 )
                 ledger.record(persona.persona_id, plan.category, evaluation.reimbursable)
 
                 all_plans.append(plan)
-                all_claims.append(plan.ground_truth([document.doc_id], evaluation))
-                all_documents.append(document)
+                all_claims.append(
+                    plan.ground_truth([d.doc_id for d in documents], evaluation)
+                )
+                all_documents.extend(documents)
                 built += 1
 
             if built < claims_per_persona:

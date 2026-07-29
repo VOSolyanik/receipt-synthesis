@@ -31,10 +31,12 @@
 # adding one would be inventing a caller. It is consumed by downstream tooling; its
 # accuracy is maintained by being re-checked against a freshly generated label file.
 
-# Bumped to 4 by the addition of section 9, `known_limitations`. A consumer that vendors
-# this file compares versions before diffing it, so a new top-level section under an
-# unchanged number would be a change nobody looked for.
-version: 4
+# Bumped to 5 by a CLAIM-LEVEL SHAPE CHANGE: a claim's evidence is now resolved into
+# transactions before any verdict is derived, `imperfection` carries four new causes, and
+# `covered_fraction` has become genuinely nullable. See `claim_evidence` below. A consumer
+# that vendors this file compares versions before diffing it, so a change of this size
+# under an unchanged number would be a change nobody looked for.
+version: 5
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -960,6 +962,20 @@ verdicts:
       `document_evidence` entry in policy.yaml says `proves_payment: false`. The route
       through item coverage is closed — that case is `rejected`, a separate member — so
       nothing competes for this name any more.
+    derived_but_not_built: >
+      `policy_engine.evaluate_claim` NOW LABELS THIS CASE: a claim NONE of whose documents
+      proves payment — an invoice, an act, an order screenshot or a non-fiscal receipt,
+      alone or together — comes back `not_proof_of_payment` with an empty `imperfection`.
+      No archetype produces such a document, so the verdict still reaches no dataset and
+      the status above stays `forward_contract`.
+    not_the_same_as_a_missing_subject: >
+      A claim whose payment IS proven and whose subject is not — a bare transfer — is
+      `insufficient_evidence` with cause `subject_not_evidenced`, not this verdict. The two
+      are the two halves of `document_evidence` and each has its own name.
+      docs/architecture.md's imperfection catalogue used to fold "no proof of payment" into
+      the `insufficient_evidence` row as well as into this one; that row now names only the
+      missing-subject half, because leaving both there made this verdict unreachable by any
+      mechanism either source describes.
     # -----------------------------------------------------------------------
     # WAS UNDECIDED. NOW DECIDED — recorded here so the reasoning survives the decision.
     # -----------------------------------------------------------------------
@@ -993,12 +1009,29 @@ verdicts:
   insufficient_evidence:
     status: forward_contract
     means: >
-      A required fact is missing entirely — an out-of-period document, no proof of payment,
-      or no statement of what was bought.
+      The claim does not establish what a reimbursement rests on. FOUR CAUSES, each named
+      in `imperfection`: no statement of what was bought (`subject_not_evidenced`), a
+      payment outside the benefit period (`outside_period`), and two ways for a subject
+      document and its payment to fail to describe one transaction (`amount_mismatch`,
+      `payment_precedes_subject`).
     consumer_counterpart: insufficient_evidence
+    why_a_disagreement_is_this_verdict_and_not_a_new_one: >
+      Both facts are present separately, and the claim still does not establish that THIS
+      payment paid for THIS subject — which is a linkage a claim has to prove, so the
+      evidence is insufficient by the verdict's own name. Recorded as a cause rather than as
+      a new enum member, following the precedent `partially_covered` sets: one verdict,
+      several named causes, told apart because a consumer can know different things about
+      each. Here the distinguishing fact is whether a second document exists at all — a
+      missing document versus two that contradict each other.
+    never_a_flag_on_a_coverage_verdict: >
+      Load-bearing. Were the cause hung off a coverage-determined verdict, a claim whose
+      documents contradict each other would come out `covered` with a flag beside it, and
+      every number derived from the verdict would be computed off evidence that does not
+      hold together.
     note: >
-      The policy engine already labels an out-of-period claim correctly; what is missing is a
-      planner path that produces one.
+      The policy engine labels all four causes correctly; what is missing is a planner path
+      that produces a claim carrying only half its evidence, which needs archetypes that do
+      not exist. No dataset contains this verdict.
 
   partially_paid:
     status: forward_contract
@@ -1116,6 +1149,102 @@ verdict_notes:
 # `claims` array of `ground_truth.json`. Model: `ClaimGroundTruth`; the derived values come
 # from `policy_engine.evaluate_claim`. Every key is present in every record.
 
+# ---------------------------------------------------------------------------
+# 6a. How a claim's documents become its amount
+# ---------------------------------------------------------------------------
+#
+# A CLAIM'S AMOUNT IS NOT THE SUM OF ITS DOCUMENTS, and a consumer that computes it as one
+# gets a plausible verdict off a doubled figure. This block states the rule the labels were
+# derived under, because nothing in the label files makes it visible: `documents` is a flat
+# list of ids and does not say which of them describe the same money.
+#
+# The rule is read off `document_evidence` in policy.yaml and nothing else. A document that
+# proves payment attests to a movement of money; a document that proves only the subject
+# describes money some payment document already attests. So:
+#
+#   * an invoice plus the payment confirmation that settles it are ONE transaction. The
+#     claim's line items are the invoice's, counted once, and the payment adds no money of
+#     its own — it supplies the amount the invoice is CROSS-CHECKED against.
+#   * several fiscal receipts are several transactions, and their money does add. Each is
+#     its own payment. That is the same rule, not an exception to it.
+#
+# Implemented in `policy_engine.resolve_evidence`, whose `Transaction` pairs a subject
+# document with the payment that settles it.
+
+claim_evidence:
+  status: emitted
+
+  shapes_the_generator_can_resolve:
+    self_contained: >
+      Every payment document proves its own subject and no other document is present. One
+      transaction per document; their amounts add. THE ONLY SHAPE ANY DATASET CONTAINS
+      TODAY, since the single registered archetype is a fiscal receipt.
+    one_split_pair: >
+      Exactly one document proves the subject, exactly one proves the payment, and they are
+      different documents. One transaction described twice, counted once.
+
+  shapes_that_are_refused:
+    status: emitted
+    note: >
+      `policy_engine` RAISES rather than labelling, because the guess would decide the
+      claim's amount. A fiscal receipt beside an invoice is either the same purchase
+      described twice or two purchases one of which was never paid; one invoice beside two
+      payments leaves open which payment settles it. `document_evidence` answers neither.
+    bank_statement: >
+      REFUSED OUTRIGHT, and worth stating separately because it is the one type that
+      genuinely adds money: a statement lists several transactions while its label carries
+      a single `amount` for the whole document, so nothing identifies the row a given claim
+      is about. That is the same question left open under
+      `document_types.bank_statement.undecided` — whether a statement is labelled once or
+      once per transaction — and it has to be settled before a statement archetype lands.
+
+  cross_checks:
+    status: emitted
+    note: >
+      Applied to a split pair only; a self-contained document cannot disagree with itself
+      about which payment settled it. Failing either is `insufficient_evidence` with the
+      cause in `imperfection` — NOT a flag on a coverage-determined verdict, which would
+      let a claim whose documents contradict each other come out `covered`.
+    amount: >
+      The subject document and its payment state the same amount, compared to two decimal
+      places. Cause `amount_mismatch`.
+    order: >
+      The payment is not dated BEFORE the document it settles. Strictly before: paying an
+      invoice on the day it is issued is ordinary. Cause `payment_precedes_subject`.
+    not_checked_here: >
+      Whether a document's own stated `amount` equals the sum of its own line items. That
+      is a DOCUMENT invariant, owned by `content_builder.validate_line_item_sum`,
+      deliberately without a caller on the honest path, and it belongs to the fraud
+      archetypes that will break it on purpose. See `document_label.amount.invariant`.
+
+  period_and_date:
+    status: emitted
+    claim_date: >
+      A claim is dated by its PROOF OF PAYMENT — the earliest payment document where it
+      carries several — and not by its earliest document. A limit is consumed when money
+      moves; the earliest document is the invoice, which is the date of the obligation. The
+      claim label carries no date field, so this is visible only in the ORDER claims consume
+      a persona's annual balance in.
+    period: >
+      Checked on the PAYMENT DATE ONLY. A December invoice paid in January is an ordinary
+      January expense, not a period failure — the subject document's date is checked for
+      order instead (see `cross_checks.order`). Cause `outside_period`.
+
+  what_is_not_recorded:
+    status: divergent
+    note: >
+      WHICH DOCUMENT PROVED WHAT IS NOT IN THE LABEL. The pairing above is derived at
+      evaluation time from `document_evidence` and the document's TYPE; no field of
+      `ClaimGroundTruth` or `DocGroundTruth` carries a document's role in the claim, so a
+      consumer holding only the labels re-derives it the same way. `policy_trace` names the
+      pairing in prose, and prose is not comparable. See RC-15.
+    consequence_for_archetypes: >
+      Because the role is type-level, an archetype whose evidence DIFFERS from its type's
+      default — policy.yaml's example is a bank confirmation whose payment purpose spells
+      out what was bought — cannot be labelled correctly and must not be registered. The
+      override is described in policy.yaml and exists nowhere in `src/`; `claim_planner.
+      Archetype` says so at its head.
+
 claim_label:
   status: emitted
   file: "labels/<claim_id>.claim.json"
@@ -1147,7 +1276,19 @@ claim_label:
       required: true
       normalize: identity per element
       answers: which document labels make up the evidence
-      cardinality: at least one; exactly one in every run so far
+      cardinality: >
+        At least one; exactly one in every run so far, and that is a property of the
+        ARCHETYPE REGISTRY rather than of a claim — the one registered template is a fiscal
+        receipt, which proves both facts, so no claim needs a second document yet. Nothing
+        in the pipeline assumes the count is one.
+      ordering: >
+        The order the assembler wrote them in, which for a split claim is subject first and
+        payment second. Do NOT read a role off the position: the pairing is derived from
+        `document_evidence` and the document's type. See `claim_evidence`.
+      joining: >
+        A document belongs to exactly one claim, and this list is the join. Do not pair the
+        `claims` and `documents` arrays of `ground_truth.json` positionally — that only
+        works while every claim has one document.
 
     - name: verdict
       type: enum
@@ -1171,8 +1312,16 @@ claim_label:
         two facts kept apart rather than a contradiction. The reasoning is in
         docs/architecture.md#ground-truth.
       absence: >
-        `null` means nothing derived a fraction — what an undecided claim looks like, not
-        what a claim should look like. Present on every record written so far.
+        `null` means nothing derived a fraction. TWO CAUSES NOW, and they are different
+        states: an undecided claim, which is what the default of the model is for; and a
+        claim with NO LINE ITEMS to compute a fraction from — one evidenced by a payment
+        and nothing saying what it bought. `null` is emphatically not `0`, which says the
+        lines were read and none of them is covered. Present and non-null on every record
+        written so far, because no archetype produces a claim of the second kind.
+      definition_across_documents: >
+        Covered amount over total, over the line items of the claim's SUBJECT documents,
+        counted once per transaction — not over every document's lines. An invoice and the
+        payment that settles it describe one purchase. See `claim_evidence`.
 
     - name: reimbursable_amount
       type: number or null
@@ -1209,22 +1358,58 @@ claim_label:
         in the link (`proof_of_subject` / `proof_of_payment`). The generator has the role
         information at TYPE level in policy.yaml's `document_evidence` and records nothing
         per document. See RC-15.
+      partly_closed: >
+        TWO of the consumer's cross-checks are now PERFORMED, though still not recorded per
+        document: amount agreement and date order between a subject document and the payment
+        that settles it. A claim failing either is `insufficient_evidence` with the cause in
+        `imperfection` — see `claim_evidence.cross_checks`. Counterparty tax number, payment
+        form and contract party against payee are not performed, because no generator field
+        carries any of them (see `document_types.payment_confirmation`).
 
     - name: imperfection
       type: array of string
       required: false
       normalize: string_list_unordered
-      answers: WHY a `partially_covered` claim is partial
+      answers: >
+        WHY the verdict is what it is, where the verdict alone does not say. One verdict,
+        several named causes — a consumer can know different things about each, so neither
+        absorbs the other.
       vocabulary:
+        # Causes of `partially_covered`. These two, and only these two, are declared in
+        # policy.yaml — as `partially_covered_causes`, which exists to give them SHARES of
+        # the dataset.
         mixed_items: a non-covered line is on the document — VISIBLE IN THE IMAGE
         limit_exhausted: the annual balance ran out — NOT VISIBLE IN THE IMAGE
+        # Causes of `insufficient_evidence`. POLICY.YAML NAMES NONE OF THESE: it declares a
+        # cause vocabulary only where shares are being declared, and no share of a dataset
+        # is sized by them. The names are `policy_engine`'s, exported as module constants,
+        # and this file is where they are contracted.
+        subject_not_evidenced: >
+          Payment is proven and no document states what was bought — a bare transfer. The
+          claim has one document too few.
+        amount_mismatch: >
+          A subject document and the payment that settles it state different amounts, so
+          the claim does not establish that THIS payment paid for THIS subject.
+        payment_precedes_subject: >
+          The payment is dated before the document it settles. An impossible order, and a
+          different defect from a date outside the benefit period.
+        outside_period: >
+          The PAYMENT falls outside `period` in policy.yaml. The subject document's date is
+          not checked against the period at all — see `claim_evidence.period_and_date`.
       cardinality: >
-        Empty on a `covered` claim; both causes may appear on one claim, for which
-        policy.yaml declares no share.
+        Empty on a `covered` claim, and empty on `not_proof_of_payment`, where the verdict
+        says the whole of it. Several causes may appear on one claim: both
+        `partially_covered` causes, for which policy.yaml declares no share, and both
+        cross-check causes, where one pair of documents disagrees twice over.
+      verdict_scope: >
+        A cause never appears under a verdict it does not belong to. The two
+        `partially_covered` causes and the four `insufficient_evidence` causes are disjoint
+        sets, so a consumer may key on either the verdict or the cause and get the same
+        partition.
       narrower_than_the_catalogue: >
-        docs/architecture.md#imperfection-catalogue names fifteen mechanisms; only these two
-        reach a label, because only these two are causes of `partially_covered`. Where the
-        others will be recorded is not decided. The consumer's counterpart is
+        docs/architecture.md#imperfection-catalogue names fifteen mechanisms; only these six
+        reach a label, because only these six are causes of a verdict that names no cause of
+        its own. Where the others will be recorded is not decided. The consumer's counterpart is
         `ValidationFlag` plus the guard reasons (`line_items_unreliable`,
         `arithmetic_inconsistent`, `segmentation_uncertain`), which are runtime outcomes
         rather than labels.
@@ -1661,8 +1846,23 @@ required_changes:
     change: >
       Record each document's role in a linked claim (`proof_of_subject` / `proof_of_payment`)
       per document rather than only as a type-level default in policy.yaml's
-      `document_evidence`. The requirement's `DocumentLink` also expects the result of named
-      cross-checks, which nothing here produces.
+      `document_evidence`.
+
+      NOW LOAD-BEARING RATHER THAN MERELY ABSENT. `policy_engine.resolve_evidence` derives
+      the role from the document's TYPE at evaluation time, which is the only thing
+      `DocGroundTruth` carries. Two consequences follow, and neither existed while a claim
+      had one document. First, an archetype whose evidence differs from its type's default —
+      policy.yaml's own example is a bank confirmation whose payment purpose spells out what
+      was bought — CANNOT BE REGISTERED, because the engine would go on applying the default
+      and label the claim by a rule the plan had overridden; `claim_planner.Archetype` says
+      so and carries no override fields for that reason. Second, a consumer holding only the
+      labels has to re-derive the pairing the same way, since `documents` is a flat list of
+      ids.
+
+      The requirement's `DocumentLink` also expects the result of named cross-checks. Two of
+      them — amount agreement and date order — are now performed and reported as
+      `imperfection` causes on the claim; the rest need fields that do not exist. See
+      `claim_label.linked.partly_closed`.
     blocked_on: decision
 
 # Two items belong on the consumer's side and are recorded so they are not lost:

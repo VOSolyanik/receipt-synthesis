@@ -30,7 +30,9 @@ from receipt_synth.config import coverage_targets, load_policy
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
     ClaimEvaluation,
+    Evidence,
     Ledger,
+    document_evidence,
     partially_covered_causes,
     verdict_mix,
 )
@@ -47,11 +49,20 @@ from receipt_synth.schemas import (
 class Archetype:
     """One document template, with the facts it can establish.
 
-    `proves_subject` and `proves_payment` are what let the planner assemble a claim from
-    several documents: it keeps adding until both are satisfied. They default from
-    `document_evidence` in policy.yaml and may be overridden per archetype — a bank
+    What a template proves is read from `document_evidence` in policy.yaml, keyed by
+    `doc_type` — see `evidence_of`. That is what lets the planner assemble a claim from
+    several documents: it takes archetypes until both facts are satisfied.
+
+    NO PER-ARCHETYPE OVERRIDE, and its absence is a decision rather than an omission.
+    policy.yaml notes that a specific archetype may differ from its type's default — a bank
     confirmation whose payment purpose spells out what was bought does prove the subject,
-    unlike a bare transfer.
+    unlike a bare transfer — and an override declared here could not be honoured today: the
+    verdict is derived by `policy_engine` from `DocGroundTruth`, which records a document's
+    TYPE and not the archetype that produced it, so the engine would go on applying the
+    default and label the claim by a rule the plan had overridden. Carrying the role per
+    document is a change to the label shape, and it is listed as an open decision in
+    config/labelling-schema.yaml. Until it is taken, an archetype whose evidence differs
+    from its type's default must not be registered.
     """
 
     slug: str
@@ -62,6 +73,11 @@ class Archetype:
     # print a gym membership. As templates land this widens until every category has at
     # least one archetype in every jurisdiction.
     categories: tuple[str, ...]
+
+
+def evidence_of(archetype: Archetype) -> Evidence:
+    """What a document built from this archetype establishes, per policy.yaml."""
+    return document_evidence(archetype.doc_type)
 
 
 # The registry the planner selects from. One entry today; the remaining twenty-three
@@ -88,14 +104,19 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
     Verdict.NOT_PROOF_OF_PAYMENT: (
         "needs a document type that establishes no payment — an invoice, an act, a sales "
         "slip — via the `proves_payment: false` entries of `document_evidence` in "
-        "policy.yaml. No template in ARCHETYPES carries one yet. This verdict is reached "
-        "ONLY that way: a basket bought in the wrong category is `rejected`, which is a "
-        "separate member of the enum, so the two mechanisms no longer compete for one name"
+        "policy.yaml. `policy_engine.resolve_evidence` labels such a claim today; no "
+        "template in ARCHETYPES carries one, so nothing can build it. This verdict is "
+        "reached ONLY that way: a basket bought in the wrong category is `rejected`, "
+        "which is a separate member of the enum, so the two mechanisms no longer compete "
+        "for one name"
     ),
     Verdict.INSUFFICIENT_EVIDENCE: (
-        "needs a document dated outside the active period of policy.yaml, or a claim "
-        "missing one of the two facts a reimbursement rests on. Content, not coverage "
-        "arithmetic — `policy_engine` labels an out-of-period claim correctly today"
+        "needs a payment dated outside the active period of policy.yaml, a claim whose "
+        "documents leave one of the two facts unestablished, or two documents that "
+        "disagree about the transaction they describe. Content, not coverage arithmetic — "
+        "`policy_engine` labels all three correctly today, and each carries its own cause "
+        "in `imperfection`; what is missing is the archetypes that would let a claim be "
+        "built with only half its evidence"
     ),
     Verdict.PARTIALLY_PAID: (
         "needs document types that do not exist yet: an invoice or a statement that "
@@ -183,9 +204,42 @@ def draw_partially_covered_cause(rng: random.Random) -> str:
     return rng.choices(list(causes), weights=list(causes.values()), k=1)[0]
 
 
+# How far before the payment a subject document may be dated, in days. A plan's own
+# choice rather than a policy value: policy.yaml has nothing to say about the gap between
+# an invoice and its settlement, and the only rule the engine enforces is that the payment
+# does not come first. Zero is included, because an invoice paid on the day it is issued is
+# ordinary. The upper end deliberately reaches past a month, so that a subject document
+# dated in the previous benefit period is reachable — that combination is an ordinary claim
+# under the period rule and it has to occur in the data, not merely be permitted by it.
+_SUBJECT_LEAD_DAYS = 45
+
+
+@dataclass(frozen=True)
+class DocumentPlan:
+    """One document of a claim: which template, and dated when.
+
+    Its own date, because the documents of a claim are not simultaneous: an invoice is
+    issued and then settled. What it proves is not a field — that is `evidence_of` on the
+    archetype, read from policy.yaml.
+    """
+
+    archetype: Archetype
+    issued_at: datetime
+
+
 @dataclass(frozen=True)
 class ClaimPlan:
     """What to build, and what answer it is meant to produce once built.
+
+    `documents` is a LIST, and everything downstream has to treat it as one. A claim's
+    evidence may be split — an invoice proving what was bought plus a payment confirmation
+    proving it was paid — and while the registry holds one archetype that list has exactly
+    one entry. Nothing may depend on that: the guarantees that used to hold because a claim
+    had one document (one vendor could not differ between documents, a claim could not
+    disagree with itself) are now guarantees somebody has to keep.
+
+    `issued_at` is the CLAIM's date — the date its money moved, which is the date of its
+    proof of payment and the date the ledger orders it by. Each document carries its own.
 
     `verdict` and `cause` are the *target*. The label that reaches the dataset comes from
     `policy_engine`, which may disagree — a basket meant to overrun an annual limit that
@@ -197,12 +251,38 @@ class ClaimPlan:
     persona_id: str
     category: str
     verdict: Verdict
-    archetype: Archetype
+    documents: tuple[DocumentPlan, ...]
     issued_at: datetime
     cause: str | None = None
     # Passed straight to `content_builder`. `None` means "the builder's own default".
+    # CLAIM-LEVEL, not per document: a basket sized to overrun an annual balance is sized
+    # against the claim, and `subject_document` below is what stops a second document from
+    # doubling it.
     coverage_target: Decimal | None = None
     item_count: int | None = None
+
+    @property
+    def subject_document(self) -> DocumentPlan:
+        """The one document of this claim that states what was bought, and so carries the
+        basket.
+
+        Exactly one, and the plans this planner builds satisfy that by construction —
+        `_select_documents` returns either a single document proving both facts or one
+        subject plus one payment. It is asserted here rather than assumed because the
+        basket is sized once for the whole claim: two documents carrying line items would
+        make a claim aimed at overrunning a 12000 balance overrun it twice, and the label
+        would be right about a dataset that no longer contains the mechanism it was
+        counted under.
+        """
+        carriers = [d for d in self.documents if evidence_of(d.archetype).proves_subject]
+        if len(carriers) != 1:
+            raise ValueError(
+                f"claim {self.claim_id} plans {len(carriers)} documents that state what "
+                "was bought; the basket is sized once for the claim, so exactly one has "
+                "to carry it. Splitting a basket across documents is a decision nobody "
+                "has taken — see `coverage_target` above."
+            )
+        return carriers[0]
 
     def ground_truth(
         self, document_ids: list[str], evaluation: ClaimEvaluation
@@ -296,6 +376,53 @@ def draw_claim_dates(rng: random.Random, count: int) -> list[datetime]:
     return sorted(_draw_date_in_period(rng) for _ in range(count))
 
 
+def _select_documents(
+    rng: random.Random, candidates: list[Archetype], issued_at: datetime
+) -> tuple[DocumentPlan, ...]:
+    """The documents a claim needs to establish both facts a reimbursement rests on.
+
+    A reimbursement needs to know what was bought and that it was paid for
+    (`document_evidence` in policy.yaml), and the two need not come from the same
+    document. Two shapes are built, in this order:
+
+    1. **One document that proves both** — a fiscal receipt. Preferred wherever one is
+       registered, because it is the shape a real claim usually takes and because a claim
+       whose evidence is split has more ways to be wrong.
+    2. **A subject document plus a payment document.** The subject is dated on or before
+       the payment: an invoice is issued and then settled, and a payment that came first
+       is a defect the engine names. The lead is drawn from the seeded generator, so a
+       subject dated in the previous benefit period occurs — that is an ordinary claim
+       under the period rule, and the rule is only exercised if the data contains one.
+
+    Where neither shape can be assembled the planner refuses. It does not build a claim
+    out of whichever archetypes exist and leave the engine to discover that half the
+    evidence is missing: the verdict is chosen first here, and the two verdicts this
+    planner draws both need complete evidence.
+    """
+    both = [a for a in candidates if all(evidence_of(a))]
+    if both:
+        return (DocumentPlan(archetype=rng.choice(both), issued_at=issued_at),)
+
+    subjects = [a for a in candidates if evidence_of(a) == Evidence(True, False)]
+    payments = [a for a in candidates if evidence_of(a) == Evidence(False, True)]
+    if subjects and payments:
+        # Drawn before the archetypes so that adding a template does not shift the dates
+        # of a run: the lead is a property of the claim, the templates are a property of
+        # the registry, and the two should not be entangled in the seed stream.
+        lead = timedelta(days=rng.randint(0, _SUBJECT_LEAD_DAYS))
+        return (
+            DocumentPlan(archetype=rng.choice(subjects), issued_at=issued_at - lead),
+            DocumentPlan(archetype=rng.choice(payments), issued_at=issued_at),
+        )
+
+    raise ValueError(
+        "no registered archetype, and no pair of them, establishes both what was bought "
+        "and that it was paid for: "
+        f"{sorted(a.slug for a in candidates)}. policy.yaml's `document_evidence` says "
+        "what each document type proves, and a claim needs both facts."
+    )
+
+
 def _overrun_item_count(remaining: Decimal, category: str) -> int:
     """How many lines a basket needs before it plausibly exceeds `remaining`.
 
@@ -363,6 +490,8 @@ def plan_claim(
         raise ValueError(
             f"no archetype registered for {category!r} in {persona.location.country.value}"
         )
+    if issued_at is None:
+        issued_at = _draw_date_in_period(rng)
 
     coverage_target: Decimal | None = None
     item_count: int | None = None
@@ -386,8 +515,8 @@ def plan_claim(
         category=category,
         verdict=verdict,
         cause=cause,
-        archetype=rng.choice(candidates),
-        issued_at=issued_at if issued_at is not None else _draw_date_in_period(rng),
+        documents=_select_documents(rng, candidates, issued_at),
+        issued_at=issued_at,
         coverage_target=coverage_target,
         item_count=item_count,
     )

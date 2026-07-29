@@ -185,6 +185,14 @@ class DocGroundTruth(BaseModel):
 class ClaimGroundTruth(BaseModel):
     """The label record of a claim, which may span several documents.
 
+    ``documents`` is a LIST and is the join from a claim to its evidence — a document
+    belongs to exactly one claim. Which of them proved what is NOT recorded: the roles are
+    derived at evaluation time from a document's ``doc_type`` and ``document_evidence`` in
+    policy.yaml (`policy_engine.resolve_evidence`), and a consumer holding only the labels
+    re-derives them the same way. Nor is the claim's amount the sum of its documents': an
+    invoice and the payment that settles it describe one movement of money, and adding them
+    would count it twice.
+
     ``covered_fraction``, ``verdict_basis``, ``imperfection`` and ``policy_trace`` are
     populated by `policy_engine`, which computes them from the built documents and the
     persona's ledger. They are optional here rather than required because they are
@@ -192,10 +200,17 @@ class ClaimGroundTruth(BaseModel):
     that carries them by default would be a guess. The defaults are what an undecided
     claim looks like, not what a claim should look like.
 
-    ``covered_fraction`` is covered amount over total amount, taken from the line items
-    alone. A claim held back only by an exhausted annual limit therefore still reads 1.0;
-    the limit shows up in ``imperfection``, in ``verdict_basis`` and in
-    ``reimbursable_amount``.
+    ``covered_fraction`` is covered amount over total amount, taken from the line items of
+    the claim's subject documents and nothing else. A claim held back only by an exhausted
+    annual limit therefore still reads 1.0; the limit shows up in ``imperfection``, in
+    ``verdict_basis`` and in ``reimbursable_amount``. It is ``None`` where there is no line
+    item to compute it from, which is a different statement from ``0.0``.
+
+    ``imperfection`` names why the verdict is what it is where the verdict alone does not
+    say. Two causes for ``partially_covered``, declared in policy.yaml; four for
+    ``insufficient_evidence``, named in `policy_engine` because policy.yaml declares a
+    cause vocabulary only where it is declaring shares. The two sets are disjoint. The
+    whole vocabulary is contracted in config/labelling-schema.yaml.
 
     The two money-ish fields answer different questions and neither substitutes for the
     other: ``covered_fraction`` is *how much of this document belongs to the category*,

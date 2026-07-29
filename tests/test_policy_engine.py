@@ -382,6 +382,7 @@ def test_a_wholly_non_covered_basket_is_rejected():
     assert result.verdict_basis == (VerdictBasis.DOCUMENTS,)
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
+        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "period ok",
         "coverage 0% (2 of 2 line items not covered)",
     )
@@ -699,9 +700,14 @@ def test_evaluating_the_same_claims_twice_gives_the_same_answer():
     assert evaluate_claims(claims) == evaluate_claims(claims)
 
 
-def test_a_claim_is_dated_by_its_earliest_document():
-    """A claim may span documents. The balance moves when the money did, so the claim is
-    dated by its earliest document rather than by the last piece of paper that arrived."""
+def test_a_claim_of_several_receipts_is_dated_by_the_earliest_of_them():
+    """A claim may span documents, and the balance moves when the money did.
+
+    Every document here is a fiscal receipt, so every one of them is a proof of payment
+    and the earliest payment is simply the earliest document. Where that stops being true —
+    an invoice dated before the payment that settles it — is
+    `test_claim_evidence.test_a_claim_is_dated_by_its_proof_of_payment`.
+    """
     early = document([item("100.00", True)], when=date(2026, 2, 1), doc_id="a")
     late = document([item("100.00", True)], when=date(2026, 11, 1), doc_id="b")
     subject = ClaimInput(
@@ -766,6 +772,7 @@ def test_the_trace_justifies_a_partially_covered_verdict():
     result = evaluate([item("997.00", True), item("3.00", False)])
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
+        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "period ok",
         "coverage 99.7% (1 of 2 line items not covered)",
     )
@@ -778,6 +785,7 @@ def test_the_trace_names_the_limit_when_the_limit_is_the_reason():
 
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
+        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "period ok",
         "coverage 100% (all line items covered)",
         "annual limit vitamins_nutrition 12000.00 UAH: 10500.00 already reimbursed, "
@@ -818,6 +826,7 @@ def test_the_trace_justifies_a_rejected_verdict_with_the_coverage_line():
     assert result.verdict is Verdict.REJECTED
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
+        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "period ok",
         "coverage 0% (1 of 1 line items not covered)",
     )

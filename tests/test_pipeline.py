@@ -148,11 +148,13 @@ def test_plan_picks_a_category_the_persona_holds():
     assert plan.category in subject.benefit_categories
 
 
-def test_plan_picks_an_archetype_that_can_carry_the_category():
+def test_plan_picks_archetypes_that_can_carry_the_category():
     subject = persona()
     plan = plan_claim(random.Random(3), persona=subject, claim_id="c1", ledger=Ledger())
-    assert plan.category in plan.archetype.categories
-    assert plan.archetype.country is subject.location.country
+    assert plan.documents, "a claim is a list of documents, and never an empty one"
+    for document in plan.documents:
+        assert plan.category in document.archetype.categories
+        assert document.archetype.country is subject.location.country
 
 
 def test_a_category_no_archetype_covers_is_refused():
@@ -498,11 +500,15 @@ def dataset(tmp_path_factory):
     return generate_dataset(seed=SEED, out_dir=out), out
 
 
-def test_run_produces_one_document_per_claim(dataset):
+def test_the_run_builds_exactly_the_documents_its_plans_asked_for(dataset):
+    """One document per claim is a property of the ARCHETYPE REGISTRY — the one template
+    registered proves both facts, so a claim needs no second document — and not of a
+    dataset. Asserted against the plans rather than against the number 1, so that the day
+    a claim plans two this test measures the run instead of failing on a constant."""
     result, _ = dataset
     assert len(result.personas) == 1
     assert len(result.claims) == 1
-    assert len(result.documents) == 1
+    assert len(result.documents) == sum(len(plan.documents) for plan in result.plans)
 
 
 def test_images_and_labels_are_written(dataset):
@@ -546,6 +552,8 @@ def test_a_covered_claim_carries_the_policy_engines_answer(dataset):
     assert claim.imperfection == []
     assert claim.policy_trace == [
         f"category={claim.category} ok",
+        f"evidence: 1 transaction — {result.documents[0].doc_id} (fiscal_receipt) "
+        "proves both",
         "period ok",
         "coverage 100% (all line items covered)",
     ]
@@ -561,10 +569,33 @@ def multi_claim_dataset(tmp_path_factory):
     return generate_dataset(seed=SEED, out_dir=out, personas=4, claims_per_persona=8), out
 
 
+def documents_of(result):
+    """(claim, its documents) for a finished run, joined through `claim.documents`.
+
+    Not `zip(result.claims, result.documents)`. `Dataset.documents` is a flat list over
+    every claim of the run, and pairing the two lists positionally only works while every
+    claim has exactly one document — a coincidence of the archetype registry, not a
+    property of a dataset. The join through the claim's own document ids is what the label
+    files give a consumer, and it stays right when a claim spans two.
+    """
+    by_id = {document.doc_id: document for document in result.documents}
+    return [(claim, [by_id[doc_id] for doc_id in claim.documents]) for claim in result.claims]
+
+
 def test_a_persona_can_file_several_claims(multi_claim_dataset):
     result, _ = multi_claim_dataset
     assert len(result.claims) > len(result.personas)
-    assert len(result.documents) == len(result.claims)
+    assert len(result.documents) == sum(len(claim.documents) for claim in result.claims)
+
+
+def test_every_document_written_belongs_to_exactly_one_claim(multi_claim_dataset):
+    """The join `documents_of` relies on, asserted rather than assumed: no document is
+    orphaned, none is claimed twice, and every id a claim names was written."""
+    result, _ = multi_claim_dataset
+    claimed = [doc_id for claim in result.claims for doc_id in claim.documents]
+
+    assert len(claimed) == len(set(claimed)), "a document is claimed by two claims"
+    assert set(claimed) == {document.doc_id for document in result.documents}
 
 
 def test_the_single_claim_default_is_still_reachable(dataset):
@@ -575,9 +606,13 @@ def test_the_single_claim_default_is_still_reachable(dataset):
 def test_every_claim_of_a_persona_is_in_date_order(multi_claim_dataset):
     result, _ = multi_claim_dataset
     for persona_record in result.personas:
+        # By the PAYMENT date, which is what a claim takes its place in the ledger by —
+        # `ClaimInput.dated`. Every document of this dataset is a fiscal receipt and so is
+        # its own proof of payment; the max is what keeps that true of a claim whose
+        # subject document is dated earlier.
         dates = [
-            document.date
-            for claim, document in zip(result.claims, result.documents, strict=True)
+            max(document.date for document in documents)
+            for claim, documents in documents_of(result)
             if claim.persona_id == persona_record.persona_id
         ]
         assert dates == sorted(dates)
@@ -594,16 +629,29 @@ def test_the_limit_flag_is_recomputable_from_the_dataset_alone(multi_claim_datas
     """
     from collections import defaultdict
 
-    from receipt_synth.policy_engine import annual_limit, covered_total
+    from receipt_synth.policy_engine import annual_limit, covered_total, document_evidence
 
     result, _ = multi_claim_dataset
     spent: dict[tuple[str, str], Decimal] = defaultdict(lambda: Decimal(0))
 
-    for claim, document in zip(result.claims, result.documents, strict=True):
+    for claim, documents in documents_of(result):
         key = (claim.persona_id, claim.category)
         limit = annual_limit(claim.category)
         remaining = limit - spent[key]
-        covered = covered_total(claim.category, document.line_items)
+        # Over the claim's SUBJECT documents, which is where the line items of a claim
+        # live — see `policy_engine.resolve_evidence`. Every document here proves both
+        # facts, so the two sets coincide; taking them from the evidence table rather than
+        # from every document is what keeps this re-derivation honest when they stop
+        # coinciding.
+        covered = covered_total(
+            claim.category,
+            [
+                line
+                for document in documents
+                if document_evidence(document.doc_type).proves_subject
+                for line in document.line_items
+            ],
+        )
         reimbursed = min(covered, remaining)
 
         assert ("limit_exhausted" in claim.imperfection) is (reimbursed < covered)
@@ -648,17 +696,16 @@ def test_the_per_line_covered_flags_agree_with_the_claim_fraction(multi_claim_da
     """The end-to-end statement for the oracle: the claim label a consumer reads is
     recomputable from the per-line labels in the same file."""
     result, _ = multi_claim_dataset
-    for claim, document in zip(result.claims, result.documents, strict=True):
+    for claim, documents in documents_of(result):
         # True for every claim, including the limit-bound ones: `covered_fraction` stays
         # a property of the line items, and the limit is recorded elsewhere in the label.
+        lines = [line for document in documents for line in document.line_items]
         covered = sum(
             Decimal(str(item.qty)) * Decimal(str(item.price))
-            for item in document.line_items
+            for item in lines
             if item.covered
         )
-        total = sum(
-            Decimal(str(item.qty)) * Decimal(str(item.price)) for item in document.line_items
-        )
+        total = sum(Decimal(str(item.qty)) * Decimal(str(item.price)) for item in lines)
         assert abs(float(covered / total) - claim.covered_fraction) < 1e-6
 
 
@@ -819,16 +866,17 @@ def test_the_reason_a_persona_runs_out_is_the_one_reported(multi_claim_dataset):
     result, _ = multi_claim_dataset
     for persona_record in result.personas:
         pairs = [
-            (claim, document)
-            for claim, document in zip(result.claims, result.documents, strict=True)
+            (claim, documents)
+            for claim, documents in documents_of(result)
             if claim.persona_id == persona_record.persona_id
         ]
         if len(pairs) == 8:
             continue  # this persona built everything it was asked for
 
         ledger = Ledger()
-        for claim, document in pairs:
-            covered = covered_total(claim.category, document.line_items)
+        for claim, documents in pairs:
+            lines = [line for document in documents for line in document.line_items]
+            covered = covered_total(claim.category, lines)
             remaining = ledger.remaining(claim.persona_id, claim.category)
             ledger.record(claim.persona_id, claim.category, min(covered, remaining))
 

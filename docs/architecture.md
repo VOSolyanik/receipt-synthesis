@@ -6,6 +6,7 @@ How `receipt-synth` produces document images whose ground truth is known by cons
 - [Pipeline](#pipeline)
 - [Configuration model](#configuration-model)
 - [Ground truth](#ground-truth)
+- [Evidence](#evidence)
 - [Document archetypes](#document-archetypes)
 - [Imperfection catalogue](#imperfection-catalogue)
 - [Degradation](#degradation)
@@ -75,6 +76,15 @@ frequency threshold in full; note that it is a property of the sample rather tha
 The label-first core. For each persona × category it draws a target verdict and an imperfection mechanism,
 then selects the document archetypes that realize them — including claims whose evidence is deliberately
 split across several documents.
+
+**A plan is a list of documents.** Each entry names a template and its own date, because the documents of a
+claim are not simultaneous: an invoice is issued and then settled. The planner keeps taking archetypes until
+both facts a reimbursement rests on are established — what was bought, and that it was paid for — reading
+what each type proves from `document_evidence` in `config/policy.yaml`. Where a single archetype proves both,
+as a fiscal receipt does, the claim has one document; where none does, it takes a subject document and a
+payment document. The registry currently holds one archetype and it proves both, so every claim built today
+has exactly one document — that is a property of the registry and not of a claim, and nothing downstream may
+depend on it.
 
 It processes a persona's claims in date order and carries the remaining category balance, so that a claim can
 also become partially covered by exhausting an annual limit rather than by containing a non-covered item.
@@ -236,10 +246,13 @@ A claim may span several documents.
 
 Five fields deserve attention.
 
-**`covered_fraction`** is the covered amount over the total, taken from the line items and nothing else. It
-reports what the *document* covers, which is not always what the plan *pays*: a claim whose every line is
-covered but whose annual limit has run out reads `covered_fraction: 1.0` and
-`verdict: "partially_covered"`. That pairing is not a contradiction, it is the two facts kept apart.
+**`covered_fraction`** is the covered amount over the total, taken from the line items of the claim's subject
+documents and nothing else — see [Evidence](#evidence) for why that is not the same as every document's line
+items. It reports what the *documents* cover, which is not always what the plan *pays*: a claim whose every
+line is covered but whose annual limit has run out reads `covered_fraction: 1.0` and
+`verdict: "partially_covered"`. That pairing is not a contradiction, it is the two facts kept apart. It is
+`null` only where there is no line item to compute it from — a claim evidenced by a payment and nothing
+saying what it bought — which is a different statement from `0`.
 
 Note also that the fraction never decides the verdict. The coverage rule is strict — *any* non-covered line
 makes a claim partially covered, however small — so a claim spanning enough documents cannot dilute a real
@@ -249,9 +262,12 @@ non-reimbursable article into a rounding error.
 currency: the covered amount, capped by whatever is left of the annual limit. It is the only field that
 distinguishes a limit-bound claim numerically, and it is what makes the pairing above readable.
 
-**`imperfection`** names why a `partially_covered` claim is partial, using the causes declared in
-`policy.yaml`: `mixed_items` (a non-covered line is on the document) and `limit_exhausted` (the annual
-balance ran out). A claim can carry both.
+**`imperfection`** names why the verdict is what it is, where the verdict alone does not say. For
+`partially_covered` the causes are declared in `policy.yaml`: `mixed_items` (a non-covered line is on the
+document) and `limit_exhausted` (the annual balance ran out). For `insufficient_evidence` they are
+`subject_not_evidenced`, `outside_period`, `amount_mismatch` and `payment_precedes_subject` — see
+[Evidence](#evidence). A claim can carry more than one. The two sets are disjoint, so a consumer may key on
+either the verdict or the cause and get the same partition.
 
 **`verdict_basis`** records what the verdict actually depends on:
 
@@ -290,6 +306,74 @@ is visible on the document itself.
 from `proves_payment` in the `document_evidence` block, and it has nothing to do with what was bought. A
 fiscal receipt proves its payment whatever its basket was — so a pharmacy receipt listing nothing but
 medicines is `rejected`, and is not, on any reading, a failure of proof of payment.
+
+---
+
+## Evidence
+
+A claim is a list of documents, and the list has to resolve into the money the claim is about before any
+verdict can be derived from it. That resolution is read off `document_evidence` in `config/policy.yaml` —
+what each document *type* proves — and off nothing else.
+
+### A claim's amount is not the sum of its documents
+
+The dominant pair is an invoice plus the payment confirmation that settles it, and those are one movement of
+money described twice. Adding them counts it twice, and the doubled figure would travel: `covered_fraction`,
+`reimbursable_amount` and the cumulative limit would all be computed from it, the verdict would still come
+out plausible, and the balance report would not notice, because it checks the distribution of verdicts and
+not the arithmetic of amounts.
+
+So a claim's documents are grouped into **transactions**. A document that proves payment attests to one
+movement of money; a document that proves only the subject describes money some payment document already
+attests, and adds none of its own. The claim's line items are the line items of its subject documents,
+counted once per transaction.
+
+Two shapes are derivable, and only two:
+
+| Shape | Example | Amount |
+|---|---|---|
+| Self-contained | Several fiscal receipts | Each is its own transaction, and their money **does** add |
+| One split pair | An invoice and the transfer that settles it | One transaction, described twice, counted once |
+
+Anything else is refused rather than guessed, because the guess decides the claim's amount. A fiscal receipt
+beside an invoice is either the same purchase described twice or two purchases one of which was never paid;
+one invoice beside two payments leaves open which payment settles it. A **bank statement** is refused
+outright: it genuinely lists several transactions while its label carries one amount for the whole document,
+so nothing identifies the row a given claim is about.
+
+### Both facts, or no reimbursement
+
+A claim is reimbursable only when its documents establish *both* what was bought and that it was paid for.
+Neither is optional and neither implies the other:
+
+- nothing proving payment — an invoice on its own — is `not_proof_of_payment`;
+- payment proven with nothing saying what it bought — a bare transfer — is `insufficient_evidence`, cause
+  `subject_not_evidenced`.
+
+With a fiscal receipt this is vacuously satisfied, which is exactly why it has to be checked rather than
+assumed: the moment a claim can be an invoice on its own, a verdict derived from coverage alone would label
+it `covered`.
+
+### Documents that disagree
+
+The two documents of a split pair have to describe *one* transaction. Two cross-checks say whether they do,
+and each is its own defect with its own name:
+
+- **`amount_mismatch`** — the subject document and its payment state different amounts;
+- **`payment_precedes_subject`** — the payment is dated before the document it settles. Strictly before:
+  paying an invoice on the day it is issued is ordinary.
+
+Either makes the claim `insufficient_evidence`. By the verdict's own name: both facts are present separately,
+and the claim still does not establish that *this* payment paid for *this* subject — a linkage a claim has to
+prove. It is a verdict and not a flag beside a coverage verdict, because a flag would let a claim whose
+documents contradict each other come out `covered`.
+
+### The period is checked on the payment
+
+A limit is consumed when money moves, so a claim is dated by its **proof of payment** and the active period
+is checked against that date alone. A December invoice paid in January is an ordinary January expense, and
+labelling it `insufficient_evidence` would be wrong. The subject document's date is checked for *order*
+instead, which is the `payment_precedes_subject` defect above — a different question with a different repair.
 
 ---
 
@@ -344,12 +428,12 @@ short. Each mechanism is a parameter of `claim_planner`, combined with a target 
 | Non-covered addition to an order | A non-qualifying item inside a qualifying order | `partially_covered` |
 | Annual limit exhausted | Fourth claim exceeds what remains | `partially_covered` |
 | Category does not match the policy | A purchase outside the claimed category | `rejected` |
-| Date outside the active period | Transaction before or after the window | `insufficient_evidence` |
+| Payment outside the active period | Money moved before or after the window | `insufficient_evidence` |
 | Document does not prove payment | Invoice marked "paid: 0"; sales slip; booking confirmation | `not_proof_of_payment` |
 | Paid in installments | Part of the amount settled | `partially_paid` |
-| Evidence incomplete | No proof of payment, or no statement of what was bought | `insufficient_evidence` |
+| Evidence incomplete | No statement of what was bought — a bare transfer | `insufficient_evidence` |
 | Paid through an aggregator | Payee is a payment intermediary, no visible link to the merchant | requires linking |
-| Documents disagree | Payment amount differs from the contract; payment predates the contract | flag |
+| Documents disagree | Payment amount differs from the contract; payment predates the contract | `insufficient_evidence` |
 | Subject and payment in different documents | Order screenshot plus account statement | `covered` via linking |
 | Duplicate | The same RRN in two files | dedup |
 | Near-duplicate counter-example | Two genuine payments seconds apart | **not** dedup |
@@ -394,8 +478,10 @@ Any unseeded source of randomness is a bug.
 
 **A new document archetype.** Add `templates/<slug>.html` and `templates/<slug>.css`. Mark every extractable
 field with `data-field="<name>"` so the renderer can capture its bounding box. Register the archetype so
-`claim_planner` can select it, with the document class it belongs to and the facts it can prove (subject,
-payment, or both).
+`claim_planner` can select it, with the document class it belongs to; what it proves follows from that class
+through `document_evidence` in `config/policy.yaml`, and there is no per-archetype override — a template
+whose evidence differs from its class must not be registered until a document's role is carried in the label
+rather than derived from its type. Add a builder for it, keyed by slug in `assembler`.
 
 **A new benefit category.** Add an entry to `config/policy.yaml` with `intent`, an annual limit and the three
 item buckets — `covered_items`, `excluded_items`, `ambiguous_items` — each mapping an item kind to line-item
