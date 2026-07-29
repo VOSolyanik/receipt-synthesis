@@ -3,7 +3,7 @@ out/
 dataset/
 
 # --- real test set: the author's own receipts. PII. NEVER committed. ---------
-# (docs/design.md §11 — lives locally only)
+# (lives locally only)
 testset/
 real/
 

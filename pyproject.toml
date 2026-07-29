@@ -18,7 +18,8 @@ dependencies = [
     "segno>=1.6.1",
     # degradation
     "augraphy>=8.2.6",
-    # MIT pin — do NOT switch to AlbumentationsX (AGPL). See docs/design.md §9.
+    # MIT pin — do NOT switch to AlbumentationsX (AGPL): this tool is MIT, and a copyleft
+    # dependency would make its licensing ambiguous for anyone shipping a modified build.
     "albumentations==2.0.8",
     # schemas + config
     "pydantic>=2.9.0",

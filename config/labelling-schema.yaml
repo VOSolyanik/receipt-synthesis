@@ -68,16 +68,17 @@ sources:
     and a copy here would be a second thing to keep in step.
   consumer: >
     The neighbouring product requirements document — its extraction fields per document
-    type and its entity model (§4.3), its classifier classes and metric, its extraction
+    type and its entity model, its classifier classes and metric, its extraction
     thresholds and field names, its rules for QR content, fiscality markers and fiscal
     schemes, its validation and line-item guards, its duplicate detection and its
     cross-document checks — together with the concept note on the open language and
     currency scope. THAT DOCUMENT IS NOT IN THIS REPOSITORY AND NEVER WILL BE. Individual
     requirements are therefore restated below in substance and on their own authority,
-    never cited by requirement number: a number an outside reader cannot resolve carries
-    nothing, and it goes on looking authoritative while pointing at something else the
-    first time that document is renumbered. That document remains authoritative for its
-    own contents and is never edited from here.
+    never cited by an address into it — neither requirement number nor section number: an
+    address an outside reader cannot resolve carries nothing while still reading as a
+    precise reference, and it rots besides, a renumbered requirement pointing silently at
+    the wrong rule and a reorganized section vanishing outright. That document remains
+    authoritative for its own contents and is never edited from here.
 
 
 # =============================================================================
@@ -92,9 +93,10 @@ sources:
 # an `other` catch-all — which settles it. There is no per-type narrative below:
 # what each document class is belongs to docs/architecture.md#document-archetypes.
 #
-# `prd_required_fields` is §4.3's required-field table for the type, EXPRESSED IN THE SHAPE
-# THE REQUIREMENT DEMANDS rather than in the generator's current shape, with the generator's
-# counterpart named beside it. That is what makes a divergence visible instead of inherited.
+# `prd_required_fields` is the requirements document's table of the fields a consuming system
+# must extract from this document type, EXPRESSED IN THE SHAPE THE REQUIREMENT DEMANDS rather
+# than in the generator's current shape, with the generator's counterpart named beside it.
+# That is what makes a divergence visible instead of inherited.
 
 document_types:
 
@@ -172,8 +174,9 @@ document_types:
     classifier_role: target_class
     status: forward_contract
     line_items: >
-      EMPTY BY DESIGN. §4.3 states plainly that this type has no line items — it is proof
-      of one transaction. Settled by the requirement, not an open question.
+      EMPTY BY DESIGN. The requirements document states plainly that this type has no line
+      items — it is proof of one transaction. Settled by the requirement, not an open
+      question.
     prd_required_fields:
       - prd: amount
         generator: amount
@@ -212,7 +215,9 @@ document_types:
   bank_statement:
     classifier_role: target_class
     status: forward_contract
-    line_items: "EMPTY BY DESIGN, per §4.3. Settled."
+    line_items: >
+      EMPTY BY DESIGN. The requirements document gives this type no line items, as it gives
+      none to `payment_confirmation`. Settled by the requirement, not an open question.
     prd_required_fields:
       - prd: amount
         generator: amount
@@ -262,7 +267,7 @@ document_types:
     status: forward_contract
     note: >
       The consumer's classifier vocabulary folds the act of services rendered into `other`
-      explicitly. §4.3 gives it no required-field row of its own.
+      explicitly, and the required-field table gives it no row of its own.
 
   order_screenshot:
     classifier_role: other
@@ -277,8 +282,8 @@ document_types:
     status: forward_contract
     undecided: >
       The consumer's `other` class is defined as "everything else", which mechanically
-      absorbs this type — but §4.3's `other` row says such a document gets classification
-      only and the claim goes straight to `in_review`, while the consumer's fiscality-marker
+      absorbs this type — but the requirement's `other` row says such a document gets
+      classification only and the claim goes straight to `in_review`, while the fiscality-marker
       rule requires exactly these documents (a sales slip with full requisites marked
       non-fiscal, a terminal slip with an RRN and an empty receipt-number field) to be
       DETECTED AND REASONED ABOUT: a negative marker must override positive fiscality
@@ -300,10 +305,10 @@ classifier_metric:
     would say nothing about the system. A consumer that folds `other` into the macro average
     computes a different number than the one being reported.
   missing_from_doctype: >
-    `DocType` in schemas.py has NO `contract` member and NO `other` member, while §4.3 names
-    both — `contract` with its own required-field row (subject, parties, validity period,
-    amount; exploratory extraction, no threshold) and `other` as the catch-all. The
-    generator therefore cannot label a document as either. See RC-14.
+    `DocType` in schemas.py has NO `contract` member and NO `other` member, while the
+    consumer's required-field table names both — `contract` with its own row (subject,
+    parties, validity period, amount; exploratory extraction, no threshold) and `other` as
+    the catch-all. The generator therefore cannot label a document as either. See RC-14.
 
 # The consumer's per-field extraction thresholds, for the same reason: a threshold applied
 # to the wrong slice is not a smaller number, it is a different measurement.
@@ -492,7 +497,8 @@ normalization:
       The registration and transaction identifiers a document prints — tax code, VAT number,
       receipt number, RRN, authorization code, terminal id. NONE HAS A LABELLED VALUE TODAY:
       they appear in `field_bboxes` as geometry only, so this rule has nothing to normalize
-      yet. §4.3 makes several of them required fields; see `required_changes`.
+      yet. The requirements document makes several of them fields a consuming system must
+      extract; see `required_changes`.
     rule: >
       Strip everything outside [0-9A-Za-z], then compare case-insensitively. Separators,
       spacing and the label printed beside an identifier (ІД / ІПН on a Ukrainian receipt,
@@ -548,11 +554,11 @@ normalization:
 # `documents` array of `ground_truth.json`. Model: `DocGroundTruth`.
 #
 # ONE MODEL FOR EVERY DOCUMENT TYPE. Nothing in schemas.py varies the field set by
-# `doc_type`, so the list below is the field list for all seven types. The consumer's §4.3
-# is per type; this is not, and that gap is what `document_types.*.prd_required_fields`
-# records above. A per-type label shape would make the label depend on the answer to the
-# classification question, which is one of the things being evaluated — so the divergence is
-# recorded rather than resolved.
+# `doc_type`, so the list below is the field list for all seven types. The consumer's
+# required-field table is per type; this is not, and that gap is what
+# `document_types.*.prd_required_fields` records above. A per-type label shape would make the
+# label depend on the answer to the classification question, which is one of the things being
+# evaluated — so the divergence is recorded rather than resolved.
 #
 # EVERY KEY IS PRESENT IN EVERY RECORD. `required: false` means the VALUE may be null or an
 # empty container, never that the key is missing.
@@ -680,17 +686,19 @@ document_label:
       cardinality:
         emitted: at least one on every document produced so far
         forward_contract: >
-          EMPTY for `payment_confirmation` and `bank_statement`, per §4.3. Settled by the
-          requirement — this is not an open question. Two places in `src/` currently treat
-          an empty array as wrong: `validate_line_item_sum` returns False for it, and
+          EMPTY for `payment_confirmation` and `bank_statement`: the requirements document
+          gives neither type line items. Settled by the requirement — this is not an open
+          question. Two places in `src/` currently treat an empty array as wrong:
+          `validate_line_item_sum` returns False for it, and
           `policy_engine` raises on a claim whose total is zero. See RC-09 and RC-10.
         consumer_interaction: >
           The consumer's line-item guard routes a claim to `in_review` with reason
           `line_items_unreliable` when the line-item array is empty while `total > 0`, on
           the ground that a document with a total and no lines is more likely to have been
-          read badly than to have no lines. Read together with §4.3, THAT GUARD MUST BE
-          TYPE-AWARE or every payment confirmation and every bank statement lands in manual
-          review. This is the consumer's to fix, not the generator's; it is recorded
+          read badly than to have no lines. Read together with the requirement above that
+          those two types carry no line items at all, THAT GUARD MUST BE TYPE-AWARE or every
+          payment confirmation and every bank statement lands in manual review.
+          This is the consumer's to fix, not the generator's; it is recorded
           here because the two requirements only contradict each other when read side by
           side, which is what this file is for.
 
@@ -799,17 +807,17 @@ document_label:
     bbox_only:
       # No ground-truth value exists for any of these. Indices are zero-based and dense.
       - seller_address
-      - seller_tax_code                  # ЄДРПОУ or РНОКПП, checksum-correct; §4.3 requires it
+      - seller_tax_code                  # ЄДРПОУ or РНОКПП, checksum-correct; consumer-required
       - seller_vat_number                # ПН — the VAT payer number
       - item_<i>_sum                     # qty × price
-      - tax_line_<i>                     # one row per VAT letter; §4.3 requires the amounts
-      - payment_method                   # §4.3 requires payment form on payment_confirmation
+      - tax_line_<i>                     # one row per VAT letter; the consumer requires the amounts
+      - payment_method                   # payment form; consumer-required on payment_confirmation
       - acquirer
       - terminal_id
       - operation
       - card_masked                      # ЕПЗ — електронний платіжний засіб, the masked card
-      - auth_code                        # §4.3 requires it; a decisive duplicate key
-      - rrn                              # §4.3 requires it; a decisive duplicate key
+      - auth_code                        # the consumer requires it; a decisive duplicate key
+      - rrn                              # the consumer requires it; a decisive duplicate key
       - amount_in_words
       - receipt_number
       - time
@@ -899,7 +907,7 @@ line_item:
         The coverage boundary deliberately does not coincide with the VAT boundary, so a
         consumer cannot derive `covered` from this field and has to read the line.
       aggregate_is_missing: >
-        Per-line letters are labelled; the per-letter VAT AMOUNTS §4.3 requires are not. See
+        Per-line letters are labelled; the per-letter VAT AMOUNTS the consumer requires are not. See
         `document_types.fiscal_receipt` and RC-05.
 
 
@@ -1550,8 +1558,8 @@ required_changes:
     file: src/receipt_synth/schemas.py, content_builder.py
     change: >
       Carry per-letter VAT amounts. `_build_tax_lines` already computes `TaxLine(letter,
-      rate, gross, vat)` per letter and `ground_truth()` drops it. §4.3 requires it and
-      states that tax cannot be a scalar on a Ukrainian receipt.
+      rate, gross, vat)` per letter and `ground_truth()` drops it. The consumer requires it
+      and states that tax cannot be a scalar on a Ukrainian receipt.
     blocked_on: none
 
   - id: RC-06
@@ -1580,9 +1588,9 @@ required_changes:
   - id: RC-09
     file: src/receipt_synth/content_builder.py
     change: >
-      `validate_line_item_sum` returns False for an empty list. §4.3 makes an empty list
-      CORRECT for `payment_confirmation` and `bank_statement`, so the invariant has to become
-      type-aware rather than universal.
+      `validate_line_item_sum` returns False for an empty list. The requirements document
+      makes an empty list CORRECT for `payment_confirmation` and `bank_statement`, so the
+      invariant has to become type-aware rather than universal.
     blocked_on: none
 
   - id: RC-10
@@ -1636,9 +1644,10 @@ required_changes:
   - id: RC-14
     file: src/receipt_synth/schemas.py
     change: >
-      `DocType` has no `contract` member and no `other` member, both of which §4.3 names —
-      `contract` with its own required fields, `other` as the catch-all every non-target
-      class folds into. The generator cannot label a document as either.
+      `DocType` has no `contract` member and no `other` member, both of which the consumer's
+      class vocabulary names — `contract` with its own required fields, `other` as the
+      catch-all every non-target class folds into. The generator cannot label a document as
+      either.
     blocked_on: decision
 
   - id: RC-15
@@ -1653,7 +1662,7 @@ required_changes:
 # Two items belong on the consumer's side and are recorded so they are not lost:
 #
 #   * The consumer's line-item guard routes a claim to `in_review` when the line-item array
-#     is empty while `total > 0`, while §4.3 makes an empty array correct for
+#     is empty while `total > 0`, while the requirements document makes an empty array correct for
 #     `payment_confirmation` and `bank_statement`. The guard has to be type-aware or those
 #     two types always land in manual review. Recorded under
 #     `document_label.line_items.cardinality`.
