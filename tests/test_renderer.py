@@ -19,14 +19,60 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 import pytest
-from jinja2 import UndefinedError
+from jinja2 import Environment, FileSystemLoader, UndefinedError, meta
 from PIL import Image
 
+from receipt_synth.assembler import _BUILDERS
+from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.config import jurisdiction
 from receipt_synth.content_builder import build_prro_receipt, resolve_vendor
 from receipt_synth.renderer import FONT_FILES, FONTS_DIR, TEMPLATES_DIR, Renderer, qr_svg
 
 TEMPLATE = "ua_prro_receipt"
+# Millimetres of paper per rendered pixel is fixed across the UA fiscal receipts: 640 px is
+# the 80 mm roll, so eight pixels are one millimetre. Stated here because it is what ties a
+# stylesheet's `width` to `receipt.widths_mm` in config/fiscal-rules.yaml — without it a width
+# in pixels and a width in millimetres are two unrelated numbers.
+PIXELS_PER_MM = 8
+
+# Every archetype the planner may draw, and therefore every template a dataset can contain.
+# Read from the registry rather than listed, so a template registered without being rendered
+# here is impossible.
+REGISTERED_SLUGS = sorted(ARCHETYPES)
+
+
+def template_source(template_name: str) -> str:
+    """A template's own source plus the source of every template it includes.
+
+    FOLLOWING INCLUDES IS WHAT KEEPS THE SOURCE-LEVEL GUARDS BELOW HONEST, and it is not a
+    convenience. Three archetypes share one body — `templates/ua_fiscal_receipt.jinja` — so
+    each `<slug>.html` is a comment and one `{% include %}`. A guard that read `<slug>.html`
+    alone would inspect a file with no markup in it and pass on anything whatsoever, while
+    still reporting green: the most expensive kind of failure, because it disarms the reader.
+
+    Jinja comments are stripped, so a rule quoted in a comment is not mistaken for markup.
+    The stylesheet include is skipped: every guard built on this asks a question about markup,
+    and a Ukrainian term inside a CSS comment is exactly the false positive `printed_text`
+    exists to avoid.
+    """
+    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=True)
+    pending = [template_name]
+    seen: set[str] = set()
+    sources: list[str] = []
+    while pending:
+        name = pending.pop()
+        if name in seen or name.endswith(".css"):
+            continue
+        seen.add(name)
+        source = env.loader.get_source(env, name)[0]
+        sources.append(source)
+        referenced = list(meta.find_referenced_templates(env.parse(source)))
+        # `None` is what a dynamically named include resolves to. There are none today, and one
+        # added later must fail here rather than drop silently out of the sweep, which would
+        # narrow every guard below without any of them going red.
+        assert None not in referenced, f"{name} includes a dynamically named template"
+        pending += referenced
+    return re.sub(r"\{#.*?#\}", "", "\n".join(sources), flags=re.DOTALL)
 
 # A registered ПДВ payer and an unregistered seller. Both are ordinary — a pharmacy chain is
 # registered, a sole trader on the simplified system is not — and the two print DIFFERENT
@@ -50,14 +96,22 @@ PAYER_SOLE_TRADER = resolve_vendor(
 )
 
 
-def make_receipt(seed: int = 20260803, vendor: dict = PAYER):
+def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "prro"):
     return build_prro_receipt(
         random.Random(seed),
         category_id="vitamins_nutrition",
         issued_at=datetime(2026, 8, 3, 14, 22, 51),
         vendor=vendor,
         address="м. Київ, вул. Хрещатик, 22",
+        registrar=registrar,
     )
+
+
+# Which kind of register each archetype's documents come from — the pairing the assembler
+# makes. Taken from `assembler._BUILDERS` rather than restated, because a slug rendered here
+# under the wrong registrar would produce a page no run can produce.
+def registrar_of(slug: str) -> str:
+    return getattr(_BUILDERS[slug], "keywords", {}).get("registrar", "prro")
 
 
 @pytest.fixture(scope="module")
@@ -89,9 +143,28 @@ def test_every_template_declares_exactly_one_document_root(template_path):
     is found, and that fallback is silent: a template missing the marker would still
     render, just framed as the browser window rather than as the document. Nothing
     downstream would report it, so it is asserted here, for every template — including
-    the twenty-three still to be written."""
-    source = re.sub(r"\{#.*?#\}", "", template_path.read_text(encoding="utf-8"), flags=re.DOTALL)
-    assert source.count("data-document") == 1, "expected exactly one document root"
+    the ones still to be written.
+
+    Counted over the template AND its includes, because three archetypes carry their root
+    through a shared body. EXACTLY one either way: a root in the body and another in an
+    including template would frame the image on whichever the browser met first.
+    """
+    assert template_source(template_path.name).count("data-document") == 1, (
+        "expected exactly one document root, counting includes"
+    )
+
+
+def declared_width_px(slug: str) -> int:
+    """The width `<slug>.css` gives the document root.
+
+    Read out of the archetype's OWN stylesheet, which is where the paper width lives: the
+    shared stylesheet the three archetypes layer it over sets no width at all, so a width that
+    migrated there would leave one archetype silently taking another's paper.
+    """
+    stylesheet = (TEMPLATES_DIR / f"{slug}.css").read_text(encoding="utf-8")
+    declared = re.search(r"\.receipt\s*\{[^}]*?\bwidth:\s*(\d+)px", stylesheet, re.DOTALL)
+    assert declared, f"{slug}.css should give the document root an explicit width"
+    return int(declared.group(1))
 
 
 def test_the_image_width_is_the_declared_document_width(rendered):
@@ -101,11 +174,74 @@ def test_the_image_width_is_the_declared_document_width(rendered):
     exactly one document root, the stylesheet gives that root a width, and the image is
     that wide — so the frame came from the document rather than from the browser.
     """
-    stylesheet = (TEMPLATES_DIR / f"{TEMPLATE}.css").read_text(encoding="utf-8")
-    declared = re.search(r"\.receipt\s*\{[^}]*?\bwidth:\s*(\d+)px", stylesheet, re.DOTALL)
+    assert rendered.width == declared_width_px(TEMPLATE)
 
-    assert declared, "the stylesheet should give the document root an explicit width"
-    assert rendered.width == int(declared.group(1))
+
+@pytest.mark.parametrize("slug", REGISTERED_SLUGS)
+def test_every_archetype_is_rendered_on_a_paper_width_the_jurisdiction_sells(slug):
+    """A receipt is printed on a roll, and rolls come in fixed widths — `receipt.widths_mm` in
+    config/fiscal-rules.yaml, 58 mm and 80 mm for Ukraine. Until this test the list was read by
+    nothing, so a stylesheet at 700 px would have rendered a paper width no supplier stocks and
+    every image of that archetype would carry it.
+
+    The scale is the one 640 px = 80 mm fixes, and it is asserted for the whole set rather than
+    per template: if the two widths mapped through different scales the ratio between the images
+    would mean nothing.
+    """
+    widths_mm = jurisdiction("UA")["receipt"]["widths_mm"]
+    width_px = declared_width_px(slug)
+    assert width_px % PIXELS_PER_MM == 0, f"{width_px} px is not a whole number of millimetres"
+    assert width_px // PIXELS_PER_MM in widths_mm, (
+        f"{slug} is {width_px // PIXELS_PER_MM} mm wide, and config/fiscal-rules.yaml lists "
+        f"{widths_mm}"
+    )
+
+
+def test_both_configured_paper_widths_are_actually_rendered():
+    """The other direction. Every archetype sitting on one width would satisfy the test above
+    while the narrow roll reached no image at all — and the whole reason the 58 mm variant is
+    its own archetype is that a corpus rendered only on the wide roll teaches a consumer where
+    the amount column sits."""
+    rendered_mm = {declared_width_px(slug) // PIXELS_PER_MM for slug in REGISTERED_SLUGS}
+    assert set(jurisdiction("UA")["receipt"]["widths_mm"]) == rendered_mm
+
+
+@pytest.mark.parametrize("slug", REGISTERED_SLUGS)
+def test_every_registered_archetype_has_a_template_a_stylesheet_and_a_builder(slug):
+    """An archetype the planner can draw and nothing can produce fails mid-run, on a machine
+    nobody is watching, after some of the dataset has been written. All three halves have to
+    exist: `_build_document` names a missing builder, but a missing `<slug>.css` surfaces as a
+    `FileNotFoundError` out of the renderer and a missing `<slug>.html` as a Jinja
+    `TemplateNotFound`, neither of which says that the registry is what disagrees."""
+    assert (TEMPLATES_DIR / f"{slug}.html").is_file(), "no template for this archetype"
+    assert (TEMPLATES_DIR / f"{slug}.css").is_file(), "no stylesheet for this archetype"
+    assert slug in _BUILDERS, "no builder produces this archetype"
+
+
+@pytest.mark.parametrize("slug", REGISTERED_SLUGS)
+def test_every_registered_archetype_renders_with_every_box_on_the_paper(renderer, tmp_path, slug):
+    """Every archetype rendered, not just the one the fixtures use — and the narrow roll is why.
+
+    A template that is correct and ugly is still a defect on every image of its class: a line
+    that runs past the paper edge, or a column that collapses onto its label, is invisible to a
+    test that only ever renders the wide roll. Three things are asserted per archetype, and
+    together they are what "it fits on the paper" means: every marked field has a box, every box
+    lies inside the image, and no box has zero area.
+
+    NOT A SUBSTITUTE FOR LOOKING AT THE IMAGE. Text that overflows its own element still reports
+    a box inside the paper, so this catches the collapse and the overrun and cannot catch
+    ugliness. The renders were also inspected by eye when this archetype landed.
+    """
+    receipt = make_receipt(registrar=registrar_of(slug))
+    result = renderer.render(slug, receipt.render_context(), tmp_path / f"{slug}.png")
+    marked = marked_fields(renderer.build_html(slug, receipt.render_context()))
+
+    assert set(result.field_bboxes) == marked, "a marked field lost its box, or gained one"
+    for name, (x, y, width, height) in result.field_bboxes.items():
+        assert width > 0 and height > 0, f"{slug}: {name} has no area"
+        assert x >= 0 and y >= 0, f"{slug}: {name} starts off the paper"
+        assert x + width <= result.width, f"{slug}: {name} runs past the paper edge"
+        assert y + height <= result.height, f"{slug}: {name} runs past the bottom"
 
 
 def test_image_is_the_document_not_the_window(rendered):
@@ -174,9 +310,14 @@ def test_indexed_fields_follow_the_line_items(renderer, tmp_path):
 
 
 def test_the_total_box_sits_below_the_line_items(rendered):
-    last_item = max(
-        box[1] for name, box in rendered.field_bboxes.items() if name.endswith("_name")
-    )
+    """LINE-ITEM names only, matched on the indexed key. `endswith("_name")` also caught
+    `seller_name` — harmlessly, being above the total — and then `provider_name`, which sits
+    in the foot BELOW it, so the loose filter turned a true property into a failing test. A
+    filter that happens to work is a filter that stops working when a field is added."""
+    item_names = [name for name in rendered.field_bboxes if re.fullmatch(r"item_\d+_name", name)]
+    assert item_names, "no line-item name boxes — this test would assert nothing"
+
+    last_item = max(rendered.field_bboxes[name][1] for name in item_names)
     assert rendered.field_bboxes["total"][1] > last_item
 
 
@@ -214,16 +355,25 @@ def printed_text(html: str) -> str:
     return body
 
 
-def test_the_identifier_prefix_is_not_written_into_the_template():
-    """Both prefixes come from `identifiers` in config/fiscal-rules.yaml, chosen by the
-    seller's VAT status. A prefix in the markup is the whole cause of the defect this
-    version fixes: the template cannot know the status, so one of the two lines it printed
-    was always a requisite the seller cannot hold."""
-    source = (TEMPLATES_DIR / f"{TEMPLATE}.html").read_text(encoding="utf-8")
-    body = re.sub(r"\{#.*?#\}", "", source, flags=re.DOTALL)
+@pytest.mark.parametrize("slug", REGISTERED_SLUGS)
+def test_the_identifier_prefix_is_not_written_into_the_template(slug):
+    """Every prefix comes from `identifiers` in config/fiscal-rules.yaml or from
+    `receipt.registrars`, chosen by the seller's VAT status and the kind of register. A prefix
+    in the markup is the whole cause of the defect the ПН/ІД pair once had: the template cannot
+    know the status, so one of the two lines it printed was always a requisite the seller
+    cannot hold.
+
+    «ФН» and «ЗН» are in the sweep for the same reason and it was earned the same way. «ФН
+    ПРРО» WAS a literal in this markup, so the hardware archetype would have printed a ПРРО's
+    prefix on a document from a machine that has no ПРРО — the identical defect one requisite
+    over.
+    """
+    body = template_source(f"{slug}.html")
 
     assert "ПН" not in body, "the VAT-payer prefix is hardcoded in the markup"
     assert "ІД" not in body, "the tax-number prefix is hardcoded in the markup"
+    assert "ФН" not in body, "the fiscal-number prefix is hardcoded in the markup"
+    assert "ЗН" not in body, "the factory-serial prefix is hardcoded in the markup"
 
 
 def test_the_totals_labels_come_from_the_configuration():
@@ -239,8 +389,7 @@ def test_the_totals_labels_come_from_the_configuration():
     labels = jurisdiction("UA")["receipt"]["totals_labels"]
     assert set(labels) == {"total", "discount", "rounding", "amount_due"}
 
-    source = (TEMPLATES_DIR / f"{TEMPLATE}.html").read_text(encoding="utf-8")
-    body = re.sub(r"\{#.*?#\}", "", source, flags=re.DOTALL)
+    body = template_source(f"{TEMPLATE}.html")
     for key, label in labels.items():
         assert label not in body, f"{key} label {label!r} is hardcoded in the markup"
 
@@ -404,6 +553,69 @@ def test_a_non_payers_boxes_lack_exactly_what_is_not_on_the_document(
     assert "seller_tax_code" in payer_fields & non_payer_fields
 
 
+# ------------------------------------------- the fiscal foot of the receipt --
+
+
+@pytest.mark.parametrize("slug", REGISTERED_SLUGS)
+def test_the_maker_name_is_printed_immediately_after_the_fiscal_title(renderer, tmp_path, slug):
+    """📄 Line 35 of the published form is ONE requisite — the wording «ФІСКАЛЬНИЙ ЧЕК»
+    together with the name or logo of the maker — and 👁 11 of 11 open receipts print such a
+    name directly after the wording, which makes it the best-evidenced layout fact available.
+    The title was printed alone until this version.
+
+    IMMEDIATELY, asserted as "nothing between them": the maker's box starts below the title's
+    and no other field of the document begins in the gap. Checking only that it comes after
+    would pass with the QR, the mode marker and the thanks line wedged in between.
+    """
+    receipt = make_receipt(registrar=registrar_of(slug))
+    result = renderer.render(slug, receipt.render_context(), tmp_path / f"{slug}.png")
+
+    title_top = result.field_bboxes["title"][1]
+    maker_top = result.field_bboxes["provider_name"][1]
+    assert maker_top > title_top, "the maker's name is not below the fiscal wording"
+
+    between = [
+        name
+        for name, (_, top, _, _) in result.field_bboxes.items()
+        if name not in ("title", "provider_name") and title_top < top < maker_top
+    ]
+    assert not between, f"{between} sit between the fiscal wording and the maker's name"
+
+
+def test_only_the_hardware_archetype_puts_a_factory_serial_on_the_page(renderer):
+    """The rendered half of ⚠️ «ЗН» and «ФН» are not a pair, asserted on the fields the page
+    actually carries rather than on the builder's own attributes.
+
+    The delta is checked in BOTH directions and against the model rather than against whatever
+    came out: the hardware page gains «ЗН» and loses the online marker, and nothing else about
+    the two documents differs. A page that simply printed every line for everyone would satisfy
+    a one-directional check.
+    """
+    prro = marked_fields(
+        renderer.build_html("ua_prro_receipt", make_receipt().render_context())
+    )
+    rro = marked_fields(
+        renderer.build_html("ua_rro_receipt", make_receipt(registrar="rro").render_context())
+    )
+
+    assert rro - prro == {"device_serial"}
+    assert prro - rro == {"mode_marker"}
+
+
+def test_the_two_prro_archetypes_carry_the_same_requisites(renderer):
+    """The 58 mm variant differs in the PAPER and in nothing else. Worth pinning, because the
+    two share a body: a conditional added for one width would silently drop a requisite from
+    that archetype's every image while the other stayed correct."""
+    context = make_receipt().render_context()
+    wide = marked_fields(renderer.build_html("ua_prro_receipt", context))
+    narrow = marked_fields(renderer.build_html("ua_prro_receipt_58mm", context))
+
+    assert wide == narrow
+    assert declared_width_px("ua_prro_receipt_58mm") < declared_width_px("ua_prro_receipt"), (
+        "the narrow archetype is not narrower, so it is not the archetype it claims to be"
+    )
+
+
 # ---------------------------------------------------- fonts and determinism --
 
 
@@ -422,11 +634,40 @@ def test_every_font_is_loaded_from_the_repository(renderer):
         assert FONTS_DIR in path.parents, f"{family} is loaded from outside fonts/"
 
 
-def test_the_stylesheet_falls_back_to_noto(renderer):
+@pytest.mark.parametrize("slug", REGISTERED_SLUGS)
+def test_the_stylesheet_falls_back_to_noto(renderer, slug):
     """The house rule from fonts/README.md: Roboto has no ₴ glyph, so a Noto face must
-    always be reachable for Chromium to substitute from."""
-    stylesheet = (TEMPLATES_DIR / f"{TEMPLATE}.css").read_text(encoding="utf-8")
-    assert '"Noto Sans"' in stylesheet
+    always be reachable for Chromium to substitute from.
+
+    Asserted on the BUILT PAGE and for every archetype, rather than on one `<slug>.css`. The
+    font stack now lives in a shared stylesheet that each archetype's own file is layered over,
+    so reading one file could report the rule kept while an archetype that overrode the stack
+    shipped without a fallback. What has to hold is that the fallback reaches the page.
+
+    IT ASSERTS ON THE `font-family` DECLARATIONS, not on the page text, and two false passes are
+    the reason. Searching the raw page for the name is green however the stack is written: each
+    vendored face is DECLARED with `font-family: "Noto Sans"` in an `@font-face` block, and the
+    shared stylesheet's own comment explains the rule in the same words. Both survived stripping
+    the other. Declaring a face makes it available; only the stack makes it reachable, so the
+    stack is what has to be read — a stack being the declarations that list more than one family.
+
+    EVERY stack, not merely one of them, and that too was a false pass. The shared stylesheet
+    always supplies a correct stack, so "some stack on the page names Noto" stayed green when an
+    archetype's own `<slug>.css` overrode `.receipt`'s font with a Noto-less one — the very case
+    the per-archetype parametrization is here for, since the override wins the cascade. Any stack
+    a document renders through has to be able to substitute ₴.
+    """
+    html = renderer.build_html(
+        slug, make_receipt(registrar=registrar_of(slug)).render_context()
+    )
+    body = re.sub(r"/\*.*?\*/", "", html, flags=re.DOTALL)
+    body = re.sub(r"@font-face\s*\{[^}]*\}", "", body, flags=re.DOTALL)
+    stacks = [
+        value for value in re.findall(r"font-family:\s*([^;{}]+);", body) if "," in value
+    ]
+    assert stacks, "the page declares no font stack at all"
+    without = [value.strip() for value in stacks if '"Noto Sans"' not in value]
+    assert not without, f"these font stacks cannot substitute ₴: {without}"
 
 
 def test_qr_encoding_is_deterministic():

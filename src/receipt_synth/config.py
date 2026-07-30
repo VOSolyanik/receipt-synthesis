@@ -211,6 +211,34 @@ def vendor_profile(slug: str) -> frozenset[str]:
 
 
 @cache
+def fiscal_makers(pool: str, country: str) -> tuple[tuple[str, str], ...]:
+    """The makers a fiscal receipt may name at its foot, as ``(title_suffix, name)`` pairs.
+
+    `pool` is a top-level block of config/vendors.json — `fiscal_software` for a ПРРО's software
+    provider, `fiscal_hardware` for a hardware register's manufacturer — and it is named by
+    `receipt.registrars.<kind>.maker_pool` in config/fiscal-rules.yaml rather than chosen here.
+    Which pool a kind of register draws from is a fact about the document; the marks themselves
+    are data, so they live in the data file and are not restated in the fiscal rules.
+
+    PAIRS, NOT NAMES, because the two are printed forms of ONE fact — which maker produced the
+    document. 📄 Line 35 of the form prints the wording «ФІСКАЛЬНИЙ ЧЕК» and then the maker's
+    name; 👁 a ПРРО additionally tags the wording with a short abbreviation. Returning them
+    together is what stops the paper from showing one provider's tag above another's name.
+
+    `title_suffix` is OPTIONAL and no entry carries one today: 👁 the tag is observed, but no
+    published source pairs a tag with a provider, so printing one would assert a pairing nobody
+    established. Absence yields ``""`` rather than raising — an entry without a tag is the
+    ordinary case, not a gap in the file.
+    """
+    names = load_vendors()[pool].get(country)
+    if not names:
+        raise KeyError(f"config/vendors.json lists no {pool!r} entry for {country!r}")
+    return tuple(
+        (entry.get("title_suffix", ""), entry["display_name"]) for entry in names
+    )
+
+
+@cache
 def acquirers(country: str) -> tuple[str, ...]:
     """Card acquirer names as printed on a receipt of this jurisdiction."""
     names = load_vendors()["acquirers"].get(country)

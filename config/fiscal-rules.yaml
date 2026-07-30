@@ -141,6 +141,10 @@ jurisdictions:
       # it exists the corpus shows one provider's set of optional requisites. `Seller.tax_code`
       # is already `None`-able for exactly this, so the template is the whole of the work.
       #
+      # NONE OF THE THREE TEMPLATES REGISTERED TODAY IS THAT ONE. They vary the paper width and
+      # the kind of registrar, which are different axes: every one of them prints «ІД». The gap
+      # is unchanged by their arrival, and it is not narrower for there being more templates.
+      #
       # ЄДРПОУ — legal entity registry code. Its identification code, printed under «ІД».
       edrpou: { length: 8, type: numeric, checksum: edrpou, label: "ІД" }
       # РНОКПП (formerly called ІПН) — individual taxpayer number, a sole trader's
@@ -163,15 +167,103 @@ jurisdictions:
       # contradict the one document there is. For a sole trader the relation is IDENTITY rather
       # than prefix: one ten-digit number under both prefixes.
       vat_number: { legal_entity_length: 12, type: numeric, checksum: none, label: "ПН" }
-      # ФН ПРРО — fiscal number of the (software) registrar.
-      fiscal_device_number: { length: 10, type: numeric, checksum: none, label: "ФН ПРРО" }
-      # ЗН — factory/serial number of a classic hardware РРО.
+      # ФН — fiscal number of the registrar. NO `label` HERE, and that is the point: the
+      # printed prefix depends on the KIND of registrar — 👁 a ПРРО prints «ФН ПРРО», a
+      # hardware РРО prints «ФН» — so it lives once, per kind, under `receipt.registrars`
+      # below. A label here as well would be a second source of truth for the same string.
+      fiscal_device_number: { length: 10, type: numeric, checksum: none }
+      # ЗН — заводський номер: the factory/serial number of a classic hardware РРО. Printed
+      # ONLY by a hardware registrar — see `registrars` below for why it is not a pair with ФН.
       device_serial: { pattern: "[A-Z]{2}[0-9]{8}", label: "ЗН" }
 
     receipt:
       title: "ФІСКАЛЬНИЙ ЧЕК"
-      # ПРРО vendors append their own tag to the title, e.g. "ФІСКАЛЬНИЙ ЧЕК WFP".
-      title_suffixes: ["", "WFP", "CB", "VCH"]
+
+      # WHAT DISTINGUISHES ONE KIND OF CASH REGISTER FROM ANOTHER, in the requisites it prints.
+      #
+      # ⚠️ «ЗН» AND «ФН» ARE NOT A PAIR, and treating them as one is the error this block
+      # exists to prevent. 👁 The ПРРО receipts examined print «ФН ПРРО <номер>» and carry no
+      # «ЗН» at all (1/1 of the observed software receipts); 👁 the two published samples of a
+      # hardware РРО print «ЗН» AND «ФН» together (2/2). So the SET of fiscal identity lines
+      # follows the kind of registrar, and printing both on every document would be a requisite
+      # combination no observed receipt of either kind carries.
+      #
+      # `maker_pool` IS THE OTHER HALF OF 📄 LINE 35 OF THE FORM, which reads, verbatim:
+      #
+      #     «Найменування або графічне зображення виробника, перед яким друкується напис
+      #      «ФІСКАЛЬНИЙ ЧЕК»»
+      #
+      # ONE requisite, and the wording comes BEFORE the name — so the order this generator prints
+      # them in is 📄 primary law and not merely 👁 the 11 of 11 open receipts that agree with it.
+      #
+      # 🔴 THE NORM SAYS «ВИРОБНИКА» AND NOTHING MORE, and the distinction matters because it is
+      # easy to over-read. The primary text does NOT say whose maker — it does not distinguish a
+      # device manufacturer from a ПРРО software provider. Published commentary glosses the line as
+      # «найменування виробника ПРРО» when discussing a ПРРО, and that gloss is a COMMENTATOR'S
+      # reading rather than the rule's words. What the rule licenses on its own is narrow: a maker
+      # is named. That there is no other candidate value for a ПРРО — software has no factory — is
+      # an inference, and it is the inference this generator acts on. Recorded so a reader does not
+      # take the split below for something the norm states.
+      #
+      # TWO POOLS, BECAUSE THE TWO KINDS OF REGISTER HAVE DIFFERENT MAKERS. A hardware register is
+      # built by a manufacturer entered in a published state register; a ПРРО is published by a
+      # software provider. `maker_pool` NAMES A BLOCK OF config/vendors.json rather than listing
+      # names here: a mark is DATA and belongs in the data file, while which pool a kind of
+      # register draws from is a layout fact about the document and belongs here. One fact, one
+      # file — the names are not restated in this file at any point.
+      #
+      # 🔴 NO INVENTED NAMES, AND THIS WAS TRIED THE OTHER WAY FIRST. An earlier version of this
+      # block carried invented maker names, and it was withdrawn against the rule at the head of
+      # config/generation.yaml: publicness is verifiable and inventedness is not, so the file
+      # admits no invented-mark class at all. The attempt is worth one line rather than none,
+      # because it demonstrated the rule instead of testing it — of seven invented candidates,
+      # five collided with an existing mark once the DISTINCTIVE WORD was searched rather than the
+      # full name, two of them active in electronics. And a search establishes only that a name is
+      # not PROMINENT, never that it is free, so the block would have shipped resting on a check
+      # that cannot bear the weight. Public marks need no such check, which is the whole of why
+      # the rule prefers them; nothing here carries a verification note for that reason.
+      #
+      # 🔴 NO TITLE SUFFIX IS PRINTED, AND THAT IS A GAP RATHER THAN A DECISION AGAINST THE
+      # OBSERVATION. 👁 A ПРРО does tag the title with a short abbreviation — the observation stands
+      # and is recorded under `verified_against_own_receipts` below. What is missing is the PAIRING:
+      # no published source says which provider prints which tag, and it was looked for. Printing a
+      # tag beside a NAMED provider would therefore assert a pairing nobody established — the same
+      # class of unverified claim as an invented name, and the reason it is not simply carried over
+      # from the old `title_suffixes` list, which paired its tags with nothing at all because no
+      # maker was printed then. So `title_suffix` is a field a vendor entry MAY carry and none does;
+      # the mechanism is wired and tested, and the corpus prints the bare wording until a pairing is
+      # evidenced. The tag and the name come from ONE entry when a suffix exists, so the paper can
+      # never show one provider's tag above another provider's name.
+      #
+      # 🔴 «МАС» IS DELIBERATELY NOT PRINTED, on either kind. 📄 The published table of the form
+      # numbers it line 30 and marks it as the hardware-РРО line, so it is a genuine requisite
+      # of that archetype and its absence is a known gap rather than an oversight. But no source
+      # available here shows a printed one — not its alphabet, not its length, not whether the
+      # label is «МАС:» or «МАС » — so the only way to print it is to invent the format, and an
+      # invented format would sit on every image of the archetype where a consumer could read it
+      # as evidence of what a real МАС looks like. The standing rule of this repository is that
+      # a requisite whose printed form has not been observed is not invented; what is claimed
+      # here is narrow — the line is absent because its shape is unknown, not because the form
+      # omits it.
+      registrars:
+        # ПРРО — програмний реєстратор розрахункових операцій, the software cash register.
+        prro:
+          fiscal_number_label: "ФН ПРРО"
+          prints_device_serial: false
+          # 📄 Line 31 of the form, the online/offline marker, is a ПРРО requisite.
+          prints_mode_marker: true
+          receipt_number_format: alphanumeric
+          # `fiscal_software` in config/vendors.json — publicly marketed ПРРО providers.
+          maker_pool: fiscal_software
+        # РРО — the classic hardware register, which is what «ЗН» belongs to.
+        rro:
+          fiscal_number_label: "ФН"
+          prints_device_serial: true
+          prints_mode_marker: false
+          receipt_number_format: sequential
+          # `fiscal_hardware` in config/vendors.json — manufacturers in the published
+          # Державний реєстр РРО, the state register of approved cash registers.
+          maker_pool: fiscal_hardware
 
       # The four amount lines under the items, in printed order — 📄 lines 20 to 24 of the
       # published form, where СУМА and ДО СПЛАТИ are separate requisites and differ by the two
@@ -194,13 +286,20 @@ jurisdictions:
       # A non-fiscal look-alike must carry this line — classification trap
       # (docs/architecture.md#document-archetypes, templates 12 and 13).
       non_fiscal_marker: "НЕ ФІСКАЛЬНИЙ ЧЕК"
+      # The paper widths a Ukrainian thermal roll comes in. One template per width, and the
+      # stylesheet of each states its own width in pixels: the test suite checks that every
+      # width a template declares is one of these, so a template at a width no roll is sold
+      # in fails rather than merely looking odd.
       widths_mm: [58, 80]
-      # Receipt number as printed after "ЧЕК №". Modern ПРРО issue a short
-      # alphanumeric id (e.g. aB3xK9pQ2mT), NOT a sequential number — this is a
-      # field the model must extract, so the format matters.
+      # Receipt number as printed after "ЧЕК №". THE FORMAT FOLLOWS THE KIND OF REGISTRAR, and
+      # which kind takes which is stated once, under `registrars.*.receipt_number_format` above.
+      # Both the alphabet and the length come from the pattern, so this is the only place either
+      # is written down — a length repeated in code is how the two drift apart.
       receipt_number:
-        alphanumeric: { pattern: "[A-Za-z0-9]{11}" }   # ПРРО (Checkbox-style)
-        sequential: { pattern: "[0-9]{4,6}" }          # classic hardware РРО
+        # 👁 Modern ПРРО issue a short alphanumeric id, not a sequential number.
+        alphanumeric: { pattern: "[A-Za-z0-9]{11}" }
+        # 👁 A classic hardware РРО counts its receipts, so the number is short and sequential.
+        sequential: { pattern: "[0-9]{4,6}" }
       # Online ПРРО print a mode marker.
       mode_markers: ["Онлайн", "Офлайн"]
 
@@ -247,6 +346,9 @@ jurisdictions:
       - "ПН is 12 digits for a legal entity but 10 for a sole trader — its РНОКПП, the same number as its ІД"
       - "receipt number is an 11-character alphanumeric id, not sequential"
       - "time separated by dashes, not colons: 01.03.2026 09-14-22"
+      # 👁 The observation stands. THE GENERATOR DOES NOT REPRODUCE IT, and the reason is stated
+      # under `registrars` above: no published source pairs a tag with a provider, and the maker
+      # is now named on the paper, so a tag beside it would assert a pairing nobody established.
       - "title may carry a provider suffix: 'ФІСКАЛЬНИЙ ЧЕК WFP'"
       - "acquiring block: Екв. / Термінал / ПРОДАЖ / ЕПЗ / Код авт. / RRN"
       - "amounts use a space as thousands separator; decimal separator varies by vendor"

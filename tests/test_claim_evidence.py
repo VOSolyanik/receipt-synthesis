@@ -37,6 +37,7 @@ from pathlib import Path
 import pytest
 
 from receipt_synth.claim_planner import (
+    ARCHETYPES,
     Archetype,
     ClaimPlan,
     DocumentPlan,
@@ -707,13 +708,19 @@ def _persona():
 
 
 def test_the_registered_archetype_yields_a_claim_of_exactly_one_document():
-    """What the dataset contains today, asserted rather than assumed. One archetype is
-    registered and it proves both facts, so a claim needs one document — and the planner
-    prefers that shape wherever it exists."""
+    """What the dataset contains today, asserted rather than assumed. Every registered
+    archetype is a fiscal receipt and proves both facts, so a claim needs one document — and
+    the planner prefers that shape wherever it exists.
+
+    The chosen slug is checked against the registry rather than named: three fiscal receipts
+    are registered, the planner draws among them, and pinning one of the three here would
+    assert the outcome of a draw instead of the property this test is about. Which archetypes
+    exist is asserted in `test_every_registered_archetype_is_a_fiscal_receipt_that_builds`.
+    """
     plan = plan_claim(random.Random(3), persona=_persona(), claim_id="c1", ledger=Ledger())
 
     assert len(plan.documents) == 1
-    assert plan.documents[0].archetype.slug == "ua_prro_receipt"
+    assert plan.documents[0].archetype.slug in ARCHETYPES
     assert evidence_of(plan.documents[0].archetype) == (True, True)
 
 

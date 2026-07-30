@@ -251,9 +251,17 @@ categories:
       cosmetics:
         uk: ["Крем {brand} {w} мл"]
         en: ["Cream {brand} {w} ml"]
+      # BRANDLESS ON PURPOSE, and it is what makes this kind printable at all. Both templates
+      # used to name `{brand}`, and the brand vocabulary in config/generation.yaml is keyed by
+      # ITEM KIND rather than by template — so one pool had to serve the shower gel and the
+      # toothpaste, and a mark drawn for either was printed on the other. The generator
+      # therefore declined to fill the kind and it reached no dataset. Naming the size instead
+      # of a house removes the pool, and 👁 it is how Ukrainian receipts most often print such
+      # articles anyway. The consequence for a consumer is that this kind contributes exactly
+      # two printed strings — see KL-02 in config/labelling-schema.yaml.
       hygiene:
-        uk: ["Гель для душу {brand}", "Зубна паста {brand}"]
-        en: ["Shower gel {brand}", "Toothpaste {brand}"]
+        uk: ["Гель для душу 250 мл", "Зубна паста 75 мл"]
+        en: ["Shower gel 250 ml", "Toothpaste 75 ml"]
     ambiguous_items:
       lab_test:
         # Ordered by the nutritionist, but it is a medical service.

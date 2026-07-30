@@ -1,5 +1,5 @@
 {
-  "$schema_note": "Merchant, bank and provider names. CLEAN ROOM: every name here is either a publicly known retail or service brand, or an invented one — invented sole-trader names use the ФОП/JDG/EK/AUTONOMO convention with a made-up surname and initials and denote no real person. Never a customer, employer or colleague list. The brand-shaped blocks (banks, payment_providers, fiscal_software, marketplaces) determine the LAYOUT of an archetype and must stay recognizable; the vendors and aggregators blocks are only the counterparty string printed on a document, where naming-pattern coverage matters more than fame.",
+  "$schema_note": "Merchant, bank and provider names. CLEAN ROOM: every name here is either a publicly known retail or service brand, or an invented one — invented sole-trader names use the ФОП/JDG/EK/AUTONOMO convention with a made-up surname and initials and denote no real person. Never a customer, employer or colleague list. The brand-shaped blocks (banks, payment_providers, fiscal_software, fiscal_hardware, marketplaces) determine the LAYOUT of an archetype and must stay recognizable; the vendors and aggregators blocks are only the counterparty string printed on a document, where naming-pattern coverage matters more than fame. `fiscal_software` and `fiscal_hardware` are a third case again — neither the counterparty nor a layout owner, but the MAKER OF THE REGISTER printed at the foot of a fiscal receipt, which is why each carries its own basis-for-publicness note.",
   "version": 2,
 
   "banks": {
@@ -41,9 +41,25 @@
   },
 
   "fiscal_software": {
+    "$note": "ПРРО SOFTWARE PROVIDERS, printed at the foot of a Ukrainian fiscal receipt as the «виробник» of 📄 line 35 of the form. READ BY THE GENERATOR as of the commit that added the two further fiscal-receipt archetypes; it used to be declared and read by nothing, which made it dead data sitting beside live data. `content_builder` draws one per document through `receipt.registrars.prro.maker_pool` in config/fiscal-rules.yaml, which names this block rather than copying it. Every mark here is PUBLICLY MARKETED ПРРО software with a live site of its own, which is what makes it usable at all: the rule at the head of config/generation.yaml admits no invented-mark class, because publicness is verifiable and inventedness is not. Each is used only for the trade it is publicly in — ПРРО software — exactly as the vendor and acquirer names are. Basis for each, so the claim is checkable rather than asserted: checkbox.ua, kasa.vchasno.com.ua, cashalot.ua, joinposter.com/ua/programniy-rro, e-check.com.ua, webchek.com.ua. NO `title_suffix` ON ANY ENTRY, and that is a finding rather than an omission — see `registrars` in config/fiscal-rules.yaml.",
     "UA": [
       { "slug": "checkbox", "display_name": "Checkbox" },
-      { "slug": "vchasno",  "display_name": "Vchasno.Kasa" }
+      { "slug": "vchasno",  "display_name": "Вчасно.Каса" },
+      { "slug": "cashalot", "display_name": "Cashalot" },
+      { "slug": "poster",   "display_name": "Poster" },
+      { "slug": "e_check",  "display_name": "Є-Чек" },
+      { "slug": "webchek",  "display_name": "ВебЧек" }
+    ]
+  },
+
+  "fiscal_hardware": {
+    "$note": "HARDWARE РРО MANUFACTURERS, the other population 📄 line 35 draws from: a classic register has a physical maker, where a ПРРО has only a software provider. Drawn through `receipt.registrars.rro.maker_pool` in config/fiscal-rules.yaml. WHAT MAKES THESE PUBLIC IS A PUBLISHED GOVERNMENT REGISTER, which is a stronger basis than a marketing site: the Державний реєстр реєстраторів розрахункових операцій — the State Register of cash registers kept by the ДПС — lists every device model approved for use in Ukraine together with its manufacturer, and is published as open data (data.gov.ua dataset 1b1c829b-0699-4be3-a493-9d13382a68cc, mirroring tax.gov.ua/dovidniki--reestri--perelik/reestri/320822.html). Names below are manufacturers appearing in that register; `Екселліо` (Exellio) is the Ukrainian-market brand of the same Bulgarian maker as `Datecs`, and both appear. ШТРІХ-М and similar marks are deliberately ABSENT: they were looked for in the register and not found, so nothing establishes them as approved for use here.",
+    "UA": [
+      { "slug": "datecs",     "display_name": "Datecs" },
+      { "slug": "exellio",    "display_name": "Екселліо" },
+      { "slug": "iks_techno", "display_name": "ІКС-Техно" },
+      { "slug": "unisystem",  "display_name": "Юнісістем" },
+      { "slug": "leocas",     "display_name": "ЛеоКАС" }
     ]
   },
 

@@ -128,10 +128,12 @@ version: 1
 #
 # ONE POOL SERVES EVERY TEMPLATE OF A KIND, so a brand in it has to fit all of them. That
 # is a real constraint, not a technicality: `hardware` prints a laptop, a monitor and a pair
-# of headphones from one pool, `hygiene` a shower gel and a toothpaste, `electronics` a
-# tablet and a camera. Where a real pool cannot satisfy every template, the names are
-# invented rather than paired wrongly — see the clean-room note at the head of this file.
-# Splitting such a kind would mean editing policy.yaml, which is the label space.
+# of headphones from one pool, `electronics` a tablet and a camera. Where a real pool cannot
+# satisfy every template, the names are invented rather than paired wrongly — see the
+# clean-room note at the head of this file. Where no pool can serve every template, the repair
+# is a template that names no brand — which is what `hygiene` now does, and why it is no longer
+# in `unprintable_item_kinds`. Either repair means editing policy.yaml, which is the label
+# space and not this file.
 
 line_item_placeholders:
 
@@ -231,7 +233,8 @@ line_item_placeholders:
     cosmetics:
       brand: ["Nivea", "Bioderma", "La Roche-Posay", "CeraVe", "Eveline", "Green Pharm"]
       w: ["50", "75", "100", "200", "250"]
-    # `hygiene` has NO brand vocabulary and cannot get one — see `unprintable_item_kinds`.
+    # `hygiene` needs NO vocabulary at all: its templates in config/policy.yaml name a size
+    # rather than a house, which is why the kind is printable — see `unprintable_item_kinds`.
     probiotic:
       # Capsule probiotics sold over the counter. BioGaia was dropped: its range is drops,
       # tablets and chewables, and the template prints capsules.
@@ -374,41 +377,29 @@ line_item_placeholders:
 #
 # THE CAUSE IS THE KEYING, NOT THE MARKET. A vocabulary is keyed by item kind and then by
 # placeholder name, so a draw cannot see which of the kind's templates it is filling. When
-# one kind carries templates for different articles, a mark drawn for one is printed on the
-# other, whoever makes what:
-#
-#   `Гель для душу {brand}` and `Зубна паста {brand}` — one pool, two articles;
-#   `Планшет {brand}` and `Камера {brand}` — likewise.
+# one kind carries templates for different articles — `Планшет {brand}` and `Камера {brand}`
+# in the same kind — a mark drawn for one is printed on the other, whoever makes what.
 #
 # Note what this reasoning deliberately does NOT rest on. "No public house makes both" would
-# be an appeal to the market, and it would be false — houses selling a toothpaste and a
-# shower gel, or a tablet and a camera, do exist. The objection stands without it: this file
-# cannot express which article a mark was chosen for.
+# be an appeal to the market, and it would be false — houses selling a tablet and a camera do
+# exist. The objection stands without it: this file cannot express which article a mark was
+# chosen for.
 #
-# THE FIX IS A BRANDLESS TEMPLATE FORM — `Гель для душу 250 мл` rather than
-# `Гель для душу {brand}` — which is also how Ukrainian receipts most often print such
-# lines. Templates live in config/policy.yaml, which is the label space and is not edited
-# from here, so the gap is recorded rather than closed.
+# THE FIX IS A BRANDLESS TEMPLATE FORM, and `hygiene` HAS NOW HAD IT. Its two templates read
+# `Гель для душу 250 мл` and `Зубна паста 75 мл` instead of naming a house, which removes the
+# pool and with it the defect; 👁 it is also how Ukrainian receipts most often print such
+# articles. The kind is out of the list below and is drawn like any other, so the four excluded
+# kinds of `vitamins_nutrition` all reach the dataset and KL-02 in
+# config/labelling-schema.yaml no longer carries a narrowing.
 #
-# CONSEQUENCE, stated plainly because it changes the dataset: `hygiene` is one of the four
-# excluded kinds of `vitamins_nutrition`, the one category with an archetype, so the
-# non-covered vocabulary of every document drops from four kinds to three. That deepens the
-# limitation recorded as KL-02 in config/labelling-schema.yaml, and KL-02 says so.
-# `electronics` reaches no dataset today — `hobby` has no archetype.
-
-# WHY THESE CANNOT BE FILLED — a property of this file, not a claim about the market.
-# Vocabularies here are keyed by item kind and then by placeholder name, so a draw does not
-# know which of the kind's templates it is filling. When one kind carries templates for
-# different articles, a mark drawn for one is printed on the other. That is the whole of the
-# reason, it is checkable by reading the two keys, and it needs no assertion about who
-# manufactures what — an appeal to the market would be both unverifiable and, as it happens,
-# wrong: houses making a toothpaste and a shower gel, or a tablet and a camera, do exist.
+# `electronics` HAS NOT HAD IT, and the reason is not cost — the edit is one line, the same
+# one. It is that the JUSTIFICATION does not transfer: the brandless form is grounded for
+# hygiene articles, which real receipts print that way, and not for consumer electronics,
+# where a real line names a brand and a model. Applying it there would buy nothing — the
+# category has no archetype, so the kind reaches no dataset either way — in exchange for
+# putting an unevidenced line shape into the label space. It stays declared below.
 
 unprintable_item_kinds:
-  hygiene: >
-    One pool, keyed by kind, must serve both "Гель для душу {brand}" and "Зубна паста
-    {brand}" — so any mark drawn for one is also printed on the other. Needs a brandless
-    template form in policy.yaml.
   electronics: >
     One pool, keyed by kind, must serve both "Планшет {brand}" and "Камера {brand}" — so any
     mark drawn for one is also printed on the other. Needs a brandless template form in

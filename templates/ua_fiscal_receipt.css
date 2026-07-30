@@ -1,0 +1,136 @@
+/*
+ * Ukrainian fiscal receipt — the rules SHARED by every UA fiscal-receipt archetype.
+ *
+ * Included by templates/ua_fiscal_receipt.jinja, ahead of the including archetype's own
+ * `<slug>.css`, so a per-archetype rule overrides one here. THE PAPER WIDTH IS NOT IN THIS
+ * FILE: it is the whole of what distinguishes the archetypes visually, and it belongs to each
+ * of them. Nothing here may set `.receipt { width }` — the test suite reads the width out of
+ * `<slug>.css` and checks it against `receipt.widths_mm` in config/fiscal-rules.yaml.
+ *
+ * Font stack: a monospace face first, because thermal printers are monospace and the
+ * column alignment of a receipt depends on it. "Noto Sans" follows as the fallback
+ * required throughout this repository — Roboto has no ₴ glyph, so Chromium must always
+ * have a Noto face to substitute from (see fonts/README.md). The generic `monospace`
+ * last is a backstop that should never be reached: the vendored fonts are what make the
+ * same seed produce the same pixels on any machine.
+ *
+ * The font SIZE is shared too, and that is what makes the narrow archetype a narrower
+ * receipt rather than a smaller picture of the same one: a thermal printer's character cell
+ * does not shrink with the roll, so a 58 mm roll fits fewer characters per line and long
+ * names wrap where they did not.
+ *
+ * No @font-face rules here. They live in the template, where the renderer can point them
+ * at absolute paths into fonts/.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
+
+.receipt {
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #111111;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 15px;
+  font-weight: 400;
+  /* Thermal print is slightly loose vertically and slightly tight horizontally. */
+  line-height: 1.45;
+  letter-spacing: -0.1px;
+  font-variant-ligatures: none;
+}
+
+.block {
+  margin: 0;
+}
+
+.centered {
+  text-align: center;
+}
+
+.rule {
+  border-top: 1px dashed #444444;
+  margin: 9px 0;
+}
+
+/* A label on the left, a value hard against the right edge — the column a reader's eye
+   follows down a receipt. */
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.seller-name {
+  font-weight: 700;
+  font-size: 17px;
+  margin-bottom: 2px;
+}
+
+.item {
+  margin-bottom: 6px;
+}
+
+.item:last-child {
+  margin-bottom: 0;
+}
+
+.item-name {
+  /* Long names wrap rather than overflow the paper width, as they do in print. */
+  overflow-wrap: anywhere;
+}
+
+.item-qty {
+  padding-left: 14px;
+  white-space: nowrap;
+}
+
+.item-sum {
+  white-space: nowrap;
+}
+
+/* ПДВ-літера: the VAT rate code printed at the end of each line item, with its legend
+   in the tax block below. */
+.vat-letter {
+  display: inline-block;
+  min-width: 1.1em;
+  text-align: right;
+}
+
+.total {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.caption {
+  color: #333333;
+}
+
+.fiscal-title {
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.6px;
+  margin-top: 8px;
+}
+
+.qr {
+  margin: 12px 0 6px;
+  line-height: 0;
+}
+
+.qr svg {
+  width: 150px;
+  height: 150px;
+  /* Rendered at whole-pixel scale so the modules stay square and machine-readable
+     before degradation is applied. */
+  image-rendering: pixelated;
+}
+
+.thanks {
+  margin-top: 6px;
+  letter-spacing: 0.4px;
+}

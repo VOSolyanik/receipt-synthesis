@@ -38,6 +38,7 @@ from receipt_synth.config import (
     acquirers,
     category,
     excluded_line_counts,
+    fiscal_makers,
     high_frequency_surnames,
     jurisdiction,
     placeholder_values,
@@ -427,14 +428,36 @@ class Acquiring:
 
 @dataclass(frozen=True)
 class PrroReceipt:
-    """One Ukrainian ПРРО fiscal receipt, complete but not yet rendered."""
+    """One Ukrainian fiscal receipt, complete but not yet rendered.
+
+    NAMED AFTER THE ПРРО AND NO LONGER ONLY ONE. It also carries a classic hardware РРО
+    receipt, which differs in the fiscal identity it prints and in nothing else this class
+    models — see `build_prro_receipt`. The name is left alone deliberately: renaming it
+    reaches every test module and is a rename rather than a change of behaviour, so it is
+    recorded here as a naming defect instead of being fixed in the same commit as the
+    templates.
+    """
 
     seller: Seller
     issued_at: datetime
     title: str
-    mode_marker: str  # Онлайн / Офлайн
+    # Онлайн / Офлайн. `None` on a classic hardware РРО: 📄 the mode marker is line 31 of the
+    # form and a ПРРО requisite, so a hardware receipt carries no such line.
+    mode_marker: str | None
     receipt_number: str
-    fiscal_device_number: str  # ФН ПРРО
+    fiscal_device_number: str
+    # The prefix printed before `fiscal_device_number` — «ФН ПРРО» or «ФН». Carried rather
+    # than looked up in the template, because it follows the kind of registrar and a template
+    # cannot know which one built the document. A literal in the markup is exactly what put
+    # «ПН» on every sole trader's receipt.
+    fiscal_number_label: str
+    # ЗН — the factory serial of a hardware РРО, and `None` for a ПРРО, which has none.
+    device_serial: str | None
+    device_serial_label: str
+    # The maker printed immediately after «ФІСКАЛЬНИЙ ЧЕК»: 📄 one requisite with the wording,
+    # 👁 present on 11 of 11 open receipts. A software provider for a ПРРО, a device
+    # manufacturer for a hardware РРО.
+    provider_name: str
     line_items: list[LineItem]
     total: Decimal
     # СУМА and ДО СПЛАТИ are two different lines of the form (20 and 24) and genuinely differ
@@ -497,6 +520,10 @@ class PrroReceipt:
             "time": self.issued_at.strftime(rules["time_format"]),
             "receipt_number": self.receipt_number,
             "fiscal_device_number": self.fiscal_device_number,
+            "fiscal_number_label": self.fiscal_number_label,
+            "device_serial": self.device_serial,
+            "device_serial_label": self.device_serial_label,
+            "provider_name": self.provider_name,
             "items": [
                 {
                     "name": item.name,
@@ -1053,6 +1080,67 @@ def _build_tax_lines(items: list[LineItem], *, vat_payer: bool) -> list[TaxLine]
     return lines
 
 
+_DIGITS = "0123456789"
+_UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+# The identifier patterns of config/fiscal-rules.yaml are a sequence of character classes,
+# each with a length or a length range: `[A-Za-z0-9]{11}`, `[0-9]{4,6}`, `[A-Z]{2}[0-9]{8}`.
+# Parsed rather than restated, so that the alphabet and the length are written down once, in
+# the file that states the format. An `11` in code beside a `{11}` in config is two sources of
+# truth about one number, and the first edit to either makes them disagree silently.
+_PATTERN_SEGMENT_RE = re.compile(r"\[(?P<cls>[^\]]+)\]\{(?P<low>\d+)(?:,(?P<high>\d+))?\}")
+
+# Character class as written in the configuration -> the characters to draw from. Keyed by
+# the class text verbatim rather than interpreted, because a class this drawer does not know
+# has to fail loudly: silently drawing from a wrong alphabet would produce an identifier the
+# configuration says is impossible, and the fullmatch below would be the only thing to notice.
+_PATTERN_ALPHABETS = {
+    "A-Za-z0-9": _ALNUM,
+    "0-9": _DIGITS,
+    "A-Z": _UPPERCASE,
+}
+
+
+def _draw_from_pattern(rng: random.Random, pattern: str) -> str:
+    """A value matching a configured identifier pattern.
+
+    A length RANGE is drawn from, because a range in the configuration means the length
+    genuinely varies: a hardware РРО's receipt counter reads four digits early in the life of
+    the register and six later, and a corpus that only ever printed one of those widths would
+    teach a consumer that width.
+
+    The result is matched against the whole pattern before it is returned. That check is what
+    makes the pattern load-bearing rather than decorative — narrow a class in config without
+    teaching this drawer the new one, and the run fails instead of printing a value the file
+    forbids.
+    """
+    segments = list(_PATTERN_SEGMENT_RE.finditer(pattern))
+    if not segments or "".join(m.group(0) for m in segments) != pattern:
+        raise ValueError(
+            f"pattern {pattern!r} in config/fiscal-rules.yaml is not a sequence of character "
+            "classes with lengths, which is all this drawer handles"
+        )
+
+    value = ""
+    for segment in segments:
+        alphabet = _PATTERN_ALPHABETS.get(segment["cls"])
+        if alphabet is None:
+            raise ValueError(
+                f"pattern {pattern!r} in config/fiscal-rules.yaml uses the character class "
+                f"[{segment['cls']}], which content_builder._PATTERN_ALPHABETS does not know"
+            )
+        low = int(segment["low"])
+        high = int(segment["high"]) if segment["high"] else low
+        value += "".join(rng.choice(alphabet) for _ in range(rng.randint(low, high)))
+
+    if not re.fullmatch(pattern, value):
+        raise ValueError(
+            f"drew {value!r} for pattern {pattern!r} in config/fiscal-rules.yaml — the "
+            "alphabets this builder draws from no longer match the pattern's classes"
+        )
+    return value
+
+
 def build_prro_receipt(
     rng: random.Random,
     *,
@@ -1063,8 +1151,9 @@ def build_prro_receipt(
     covered_only: bool = True,
     coverage_target: Decimal | None = None,
     item_count: int | None = None,
+    registrar: str = "prro",
 ) -> PrroReceipt:
-    """Build one Ukrainian ПРРО fiscal receipt.
+    """Build one Ukrainian fiscal receipt — from a ПРРО or from a classic hardware РРО.
 
     ``covered_only`` is the label-first knob: the planner has already chosen the verdict,
     and the builder realizes it. For ``covered`` the basket is drawn from the category's
@@ -1076,6 +1165,17 @@ def build_prro_receipt(
     beside the ІД line it always prints and whether the document has a VAT block, and its
     ``legal_form`` decides how the name is printed and which register both identifiers come from.
     Ask `vendor_can_carry` before choosing one for a mixed basket.
+
+    ``registrar`` names a key of ``receipt.registrars`` in config/fiscal-rules.yaml — ``prro``
+    for the software register, ``rro`` for the classic hardware one. IT DECIDES THE FISCAL
+    IDENTITY AND NOTHING ELSE: which prefix the fiscal number carries, whether a «ЗН» factory
+    serial is printed at all, whether the online/offline marker appears, which of the two
+    receipt-number formats is used, and which population the maker's name is drawn from. The
+    basket, the seller and the money are the same document either way, which is why one builder
+    produces both rather than two builders sharing everything but twenty lines.
+
+    THE PAPER WIDTH IS NOT HERE. It is the one difference that is purely visual, so it lives in
+    the stylesheet of each template, and two templates may therefore share a registrar.
     """
     rules = jurisdiction("UA")
     receipt_rules = rules["receipt"]
@@ -1164,17 +1264,54 @@ def build_prro_receipt(
     )
 
     # -- the fiscal identity of the document
-    suffix = rng.choice(receipt_rules["title_suffixes"])
-    receipt_number = "".join(rng.choice(_ALNUM) for _ in range(11))
-    fiscal_device_number = f"{rng.randint(0, 10**10 - 1):010d}"
+    #
+    # Which lines appear here is the whole of what `registrar` decides. ⚠️ «ЗН» and «ФН» are
+    # not a pair: a ПРРО prints the fiscal number alone, a hardware РРО prints both, and the
+    # set is read from config rather than assembled here — see `registrars` in
+    # config/fiscal-rules.yaml for the observations behind each line.
+    try:
+        registrar_rules = receipt_rules["registrars"][registrar]
+    except KeyError:
+        raise ValueError(
+            f"config/fiscal-rules.yaml declares no registrar {registrar!r} for UA; it knows "
+            f"{sorted(receipt_rules['registrars'])}"
+        ) from None
+
+    # The maker printed at the foot, drawn from the pool config/fiscal-rules.yaml names for this
+    # kind of register — a publicly marketed ПРРО provider or a manufacturer from the published
+    # state register of cash registers. Suffix and name arrive together so the two cannot name
+    # different makers; see `config.fiscal_makers`.
+    suffix, provider_name = rng.choice(fiscal_makers(registrar_rules["maker_pool"], "UA"))
+    receipt_number = _draw_from_pattern(
+        rng,
+        receipt_rules["receipt_number"][registrar_rules["receipt_number_format"]]["pattern"],
+    )
+    fiscal_number_rules = rules["identifiers"]["fiscal_device_number"]
+    fiscal_device_number = "".join(
+        rng.choice(_DIGITS) for _ in range(fiscal_number_rules["length"])
+    )
+    device_serial_rules = rules["identifiers"]["device_serial"]
+    device_serial = (
+        _draw_from_pattern(rng, device_serial_rules["pattern"])
+        if registrar_rules["prints_device_serial"]
+        else None
+    )
 
     return PrroReceipt(
         seller=seller,
         issued_at=issued_at,
         title=f"{receipt_rules['title']} {suffix}".strip(),
-        mode_marker=receipt_rules["mode_markers"][0],
+        mode_marker=(
+            receipt_rules["mode_markers"][0]
+            if registrar_rules["prints_mode_marker"]
+            else None
+        ),
         receipt_number=receipt_number,
         fiscal_device_number=fiscal_device_number,
+        fiscal_number_label=registrar_rules["fiscal_number_label"],
+        device_serial=device_serial,
+        device_serial_label=device_serial_rules["label"],
+        provider_name=provider_name,
         line_items=items,
         total=total,
         # Zero this version, and the reason is the policy's silence rather than the arithmetic

@@ -82,9 +82,9 @@ claim are not simultaneous: an invoice is issued and then settled. The planner k
 both facts a reimbursement rests on are established — what was bought, and that it was paid for — reading
 what each type proves from `document_evidence` in `config/policy.yaml`. Where a single archetype proves both,
 as a fiscal receipt does, the claim has one document; where none does, it takes a subject document and a
-payment document. The registry currently holds one archetype and it proves both, so every claim built today
-has exactly one document — that is a property of the registry and not of a claim, and nothing downstream may
-depend on it.
+payment document. The registry currently holds three archetypes, all of them Ukrainian fiscal receipts, and
+each proves both — so every claim built today has exactly one document, drawn from the three. That is a
+property of the registry and not of a claim, and nothing downstream may depend on it.
 
 It processes a persona's claims in date order and carries the remaining category balance, so that a claim can
 also become partially covered by exhausting an annual limit rather than by containing a non-covered item.
@@ -442,8 +442,17 @@ does not cover an expense paid outside its own period, which is a coverage answe
 
 ## Document archetypes
 
-Twenty-four HTML/CSS templates, sixteen Ukrainian and eight European. Layouts follow the publicly observable
+Twenty-four rows below, sixteen Ukrainian and eight European. Layouts follow the publicly observable
 conventions of each document class and jurisdiction.
+
+**Rows are not templates one for one.** Row 8 is realized by two templates, one per paper width, so the
+twenty-four rows are twenty-five templates. Three of them exist today — `ua_prro_receipt`,
+`ua_prro_receipt_58mm` and `ua_rro_receipt`, the whole of the `fiscal_receipt` class for Ukraine.
+
+The three share one body, `templates/ua_fiscal_receipt.jinja`, and differ in the paper width and in the fiscal
+identity the register prints. That is deliberate and it is also a limit: real registers differ in layout by
+provider, and no open sample shows the layout of a hardware receipt, so a layout difference invented between
+them would be a guess on every image. What varies is what is evidenced.
 
 ### Ukraine
 
@@ -451,8 +460,8 @@ conventions of each document class and jurisdiction.
 |---|---|---|---|
 | 1–4 | Bank in-app payment confirmations (four issuers) | `payment_confirmation` | Mainstream bank layouts |
 | 5–7 | Payment-service receipts (three providers) | `payment_confirmation` | Payment-gateway layouts |
-| 8 | Software cash register receipt — QR, fiscal number, VAT letters | `fiscal_receipt` | Modern fiscal document |
-| 9 | Classic thermal cash register receipt (58/80 mm) | `fiscal_receipt` | Layout diversity |
+| 8 | Software cash register receipt (ПРРО) — QR, `ФН ПРРО`, VAT letters; **two templates, 80 mm and 58 mm** | `fiscal_receipt` | Modern fiscal document |
+| 9 | Classic hardware cash register receipt (РРО), 80 mm — `ЗН` beside `ФН`, sequential number | `fiscal_receipt` | Register diversity |
 | 10 | Account statement for a period, multi-transaction PDF | `bank_statement` | The statement class |
 | 11 | Sole-trader invoice for services | `invoice` | The invoice class |
 | 12 | Sales slip marked "not a fiscal receipt" | trap | Fiscality trap |
@@ -545,6 +554,13 @@ field with `data-field="<name>"` so the renderer can capture its bounding box. R
 through `document_evidence` in `config/policy.yaml`, and there is no per-archetype override — a template
 whose evidence differs from its class must not be registered until a document's role is carried in the label
 rather than derived from its type. Add a builder for it, keyed by slug in `assembler`.
+
+Where a new archetype differs from an existing one only in what is already data — the paper width, which
+requisites the device prints — share the body rather than copying it: the three Ukrainian fiscal receipts
+include one `.jinja` fragment and carry only their own `<slug>.css`. Copying a template makes the evidence
+comments behind its layout facts two sources of truth, and the copy is the one that goes stale. The test suite
+follows includes when it checks a template, so a guard reading `<slug>.html` alone cannot quietly become
+vacuous.
 
 **A new benefit category.** Add an entry to `config/policy.yaml` with `intent`, an annual limit and the three
 item buckets — `covered_items`, `excluded_items`, `ambiguous_items` — each mapping an item kind to line-item

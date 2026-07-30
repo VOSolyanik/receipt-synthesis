@@ -14,6 +14,7 @@ import random
 import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 
 import cv2
@@ -53,9 +54,9 @@ from receipt_synth.schemas import (
 )
 
 # How many personas to draw before giving up on finding one a registered archetype can
-# document. Only reachable while the template set is incomplete: with one archetype
-# covering one category, most personas hold nothing it can carry. The bound exists so a
-# misconfiguration fails loudly instead of looping.
+# document. Only reachable while the template set is incomplete: the registered archetypes
+# cover one category between them, so most personas hold nothing any of them can carry. The
+# bound exists so a misconfiguration fails loudly instead of looping.
 _PERSONA_DRAW_LIMIT = 200
 
 # The bucket for ordered claims the planner stopped short of without a reason it could
@@ -150,8 +151,19 @@ def _pick_vendor(
 # Which builder produces which archetype. A table rather than a call, because a claim is
 # now a list of documents and the loop below cannot assume they are all fiscal receipts —
 # an unregistered slug has to fail by name instead of being silently handed to the one
-# builder that exists. One entry today, for the one registered archetype.
-_BUILDERS = {"ua_prro_receipt": build_prro_receipt}
+# builder that exists. One entry per slug in `claim_planner.ARCHETYPES`.
+#
+# THE KIND OF CASH REGISTER IS BOUND HERE, and this is the place for it: an archetype is a
+# template, `registrar` says which fiscal identity that template's document carries, and the
+# pairing of the two is exactly what this table is for. It is deliberately NOT a field on
+# `Archetype` — the planner decides labels, and which prefix a fiscal number takes is not one.
+# The paper width is bound nowhere in Python at all: it lives in `<slug>.css`, which the
+# renderer picks up from the slug.
+_BUILDERS = {
+    "ua_prro_receipt": build_prro_receipt,
+    "ua_prro_receipt_58mm": build_prro_receipt,
+    "ua_rro_receipt": partial(build_prro_receipt, registrar="rro"),
+}
 
 
 def _build_document(
@@ -281,8 +293,8 @@ def generate_dataset(
                     plan.category,
                     mixed=plan.coverage_target is not None,
                 )
-                # A claim is a list of documents. One entry while one archetype is
-                # registered — and the number is read off the plan, never assumed.
+                # A claim is a list of documents. One entry while every registered archetype
+                # proves both facts — and the number is read off the plan, never assumed.
                 documents = [
                     _build_document(
                         rng,

@@ -1,0 +1,18 @@
+{#
+  Ukrainian fiscal receipt from a classic hardware РРО — реєстратор розрахункових операцій,
+  the physical cash register the ПРРО software was introduced alongside.
+
+  The body is templates/ua_fiscal_receipt.jinja and the paper is ua_rro_receipt.css, 80 mm as
+  on the ПРРО archetype. What makes this document a hardware receipt is the fiscal identity,
+  and it arrives as data: `registrar: rro` in `assembler._BUILDERS` selects
+  `receipt.registrars.rro` of config/fiscal-rules.yaml, so the foot prints «ЗН» — the
+  заводський номер, the register's factory serial — together with «ФН», the receipt number is
+  the short sequential one a counting register issues rather than the ПРРО's alphanumeric id,
+  the name after the fiscal title is a device manufacturer instead of a software provider, and
+  there is no online/offline marker, that being 📄 a ПРРО requisite.
+
+  ⚠️ «ЗН» AND «ФН» ARE NOT A PAIR: this is the only archetype that prints «ЗН», and it prints
+  it because 👁 both published hardware samples carry both lines while 👁 the observed ПРРО
+  receipts carry «ФН» alone.
+#}
+{% include "ua_fiscal_receipt.jinja" %}

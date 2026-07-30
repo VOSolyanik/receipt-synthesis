@@ -31,6 +31,64 @@
 # adding one would be inventing a caller. It is consumed by downstream tooling; its
 # accuracy is maintained by being re-checked against a freshly generated label file.
 
+# Bumped to 8 by the `fiscal_receipt` CLASS GAINING TWO MORE ARCHETYPES, which changes what a
+# document of that class may contain and what a fixed key set for it is worth. SIX consequences
+# a consumer has to know about.
+#
+# Derived the same way as the version 7 list below — a key-set diff of this file against the
+# previous version, the printed-field inventory, and the `known_limitations` section — because
+# each omission from that list was found by deriving the delta rather than by re-reading it.
+#
+#   THE CLASS IS NO LONGER ONE RENDERING. `ua_prro_receipt` is joined by `ua_prro_receipt_58mm`,
+#   the same software register on the narrow 58 mm roll, and by `ua_rro_receipt`, a classic
+#   hardware register. All three carry `doc_type: fiscal_receipt` and the same labelled fields;
+#   they differ in the paper width and in the fiscal identity printed at the foot. A consumer
+#   that treated the class as one layout — a fixed image width, a fixed key set, a template match
+#   on «ФН ПРРО» — meets all three now. See `printed_fields`.
+#
+#   TWO NEW BBOX KEYS, AND ONE OF THEM IS ON A MINORITY OF DOCUMENTS. `provider_name` is the
+#   maker's name printed immediately after «ФІСКАЛЬНИЙ ЧЕК» — 📄 the same requisite of the form as
+#   the wording, 👁 present on 11 of 11 open receipts, and absent from this generator's output
+#   until now. `device_serial` is the «ЗН» factory serial, and it appears ONLY on the hardware
+#   archetype: ⚠️ «ЗН» and «ФН» are not a pair. `mode_marker`, present on every document until
+#   now, is absent from that same archetype. See `printed_fields.varies_with_the_kind_of_register`.
+#
+#   `fiscal_device_number` IS PREFIXED TWO WAYS AND `receipt_number` HAS TWO FORMATS. The
+#   printed prefix is «ФН ПРРО» on a software register and «ФН» on a hardware one; the receipt
+#   number is an eleven-character alphanumeric id on the first and four to six digits on the
+#   second. Same keys, same meanings, two printed shapes — so a consumer validating either by
+#   format needs both.
+#
+#   KL-02 IS WIDER, WHICH IS A LIMITATION SHRINKING RATHER THAN GROWING. `hygiene`, the fourth
+#   excluded kind of the one category with an archetype, was absent from every document because
+#   its templates named a brand the vocabulary could not supply per template. They now name a
+#   size instead, the kind is drawn like any other, and the entry's `narrowed_further_by` block
+#   is GONE — it described a state that no longer exists. A consumer that stratified on three
+#   head-noun families will meet a fourth.
+#
+#   ONE NEW LEAK, INSIDE KL-02 RATHER THAN AS AN ENTRY OF ITS OWN. The brandless `hygiene`
+#   templates carry no placeholder, so the kind contributes exactly TWO distinct strings against
+#   8, 13 and 8 for the other three excluded kinds — and within that kind the STRING IS THE
+#   LABEL. It sits in KL-02 as `a_second_leak_inside_one_kind` because it shares that entry's
+#   subset and nothing else: its predictor is the exact string rather than the head-noun family,
+#   so a consumer stratifying by family would not catch it. KL-02 also gains a `fixed_by` naming
+#   the root repair — keying the placeholder vocabulary by TEMPLATE rather than by item kind in
+#   config/generation.yaml — and saying plainly that the brandless form is the narrower fix taken
+#   instead. Its per-kind figures now state occurrences and distinct strings separately; an
+#   earlier draft gave one set without saying which, and they were occurrences.
+#
+#   NO NEW `known_limitations` ENTRY, AND THE ABSENCE IS A FINDING RATHER THAN AN OMISSION. The
+#   obvious candidate is that the corpus now mixes three renderings while no label names which
+#   one produced a document. It is not a limitation, because both axes are recoverable: the
+#   register's kind from whether `device_serial` is among the bbox keys, and the paper width from
+#   the image, whose width the degrader preserves. The reference-run counts are stated below so
+#   the proportions are known without measuring them.
+#
+#   EVERY REFERENCE-RUN FIGURE IN `known_limitations` MOVED AGAIN, mechanisms unchanged. Both
+#   changes of this version shift the seeded stream — a claim's receipt is now drawn from three
+#   archetypes, and `hygiene` entering the excluded catalogue changes the basket draw — so the run
+#   is 143 documents rather than 146. Each figure names its run and says what it was before.
+#
 # Bumped to 7 by the VAT-PAYER STATUS OF THE SELLER becoming a modelled property, which changes
 # what a fiscal receipt CONTAINS. NINE consequences a consumer has to know about, and the first
 # three would otherwise look like defects in the dataset.
@@ -121,7 +179,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 7
+version: 8
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -191,11 +249,24 @@ document_types:
     classifier_role: target_class
     status: emitted
     emitted_archetypes:
-      # The registry is `ARCHETYPES` in claim_planner.py.
+      # The registry is `ARCHETYPES` in claim_planner.py. All three print the same labelled
+      # fields and differ in the paper width and in the fiscal identity at the foot — see
+      # `printed_fields.varies_with_the_kind_of_register`.
       - slug: ua_prro_receipt
         jurisdiction: UA
         language: uk
         categories: [vitamins_nutrition]
+        register: software        # ПРРО, 80 mm
+      - slug: ua_prro_receipt_58mm
+        jurisdiction: UA
+        language: uk
+        categories: [vitamins_nutrition]
+        register: software        # ПРРО, 58 mm — the narrow roll
+      - slug: ua_rro_receipt
+        jurisdiction: UA
+        language: uk
+        categories: [vitamins_nutrition]
+        register: hardware       # classic РРО, 80 mm — the only archetype printing «ЗН»
     prd_required_fields:
       - prd: total
         generator: amount
@@ -591,8 +662,16 @@ normalization:
         printed on the document:   ТОВ «Вітамін Плюс»
         counterparty in the label: Вітамін Плюс
       `_LEGAL_FORM_PREFIX` in content_builder.py SUPPORTS three Ukrainian forms — ТОВ, ФОП,
-      ПрАТ. Only ТОВ has ever been PRODUCED: the one registered archetype carries one
-      category and vendors.json lists one vendor for it. Non-Ukrainian forms in vendors.json
+      ПрАТ. TWO OF THE THREE ARE PRODUCED, and ФОП is the majority: in the reference run 6 of
+      the 50 counterparties are named ТОВ vendors and the other 44 are ФОП sole traders, whose
+      printed form is `ФОП Прізвище І. Б.` — no guillemets, because the name is a person's. ПрАТ
+      is not produced: vendors.json carries ПрАТ entries, but none of them sells the one category
+      the registered archetypes cover.
+
+      (This paragraph said "only ТОВ has ever been PRODUCED" through version 7, which was false —
+      ФОП receipts were the larger half of every run. It was corrected in version 8 on a measured
+      count. The comparison rule below is unaffected either way: it strips the legal form
+      whichever form that is.) Non-Ukrainian forms in vendors.json
       (SA, SL, SP_ZOO, GMBH, EK) have no prefix mapping and would render as the raw key.
     decided_here: >
       Which side is authoritative. This file makes the bare name authoritative and requires
@@ -848,8 +927,9 @@ document_label:
             `counterparty` — the field the generator emits in every document label;
             `seller_name`  — the field the consumer's extraction metric names, and the one
                              the F1 >= 0.75 threshold was stated against;
-            `seller_name`  — the `data-field` bbox key in templates/ua_prro_receipt.html,
-                             covering the printed string WITH its legal form.
+            `seller_name`  — the `data-field` bbox key in templates/ua_fiscal_receipt.jinja, the
+                             body every UA fiscal-receipt archetype shares, covering the printed
+                             string WITH its legal form.
           The second and third are spelled the same and mean different things: the metric
           field is the merchant identity, the bbox key is the rendered text.
         resolution: >
@@ -958,9 +1038,11 @@ document_label:
         never from the absence of `seller_tax_code`.
 
         An earlier draft of this note said the two identifier keys were alternatives. Measured on
-        a 146-document run: `seller_tax_code` 146 of 146, `seller_vat_number` 125 of 146, and
-        BOTH TOGETHER on 125 of 146 — so the draft was false on the majority of the corpus, and
-        its count of varying keys corresponded to nothing. See
+        the version 7 run of 146 documents: `seller_tax_code` 146 of 146, `seller_vat_number` 125
+        of 146, and BOTH TOGETHER on 125 of 146 — so the draft was false on the majority of the
+        corpus, and its count of varying keys corresponded to nothing. On the version 8 run of 143
+        the same shape holds: `seller_tax_code` 143 of 143, `seller_vat_number` 116 of 143, both
+        together on those same 116. See
         `printed_fields.varies_with_vat_payer_status`.
 
     - name: synthetic
@@ -994,7 +1076,9 @@ document_label:
   # `document_types.*.prd_required_fields` and `required_changes`.
   printed_fields:
     status: emitted
-    archetype: ua_prro_receipt
+    # THREE ARCHETYPES, ONE CLASS. They print the same labelled fields; what differs is the
+    # paper width and the fiscal identity at the foot — see `varies_with_the_kind_of_register`.
+    archetypes: [ua_prro_receipt, ua_prro_receipt_58mm, ua_rro_receipt]
     with_a_labelled_value:
       seller_name: counterparty          # differs by legal form and quotation marks
       total: amount
@@ -1029,11 +1113,22 @@ document_label:
       - auth_code                        # the consumer requires it; a decisive duplicate key
       - rrn                              # the consumer requires it; a decisive duplicate key
       - amount_in_words
-      - receipt_number
+      - receipt_number                   # 11 alphanumeric characters from a software register,
+                                         # 4 to 6 digits from a hardware one
       - time
-      - fiscal_device_number             # ФН ПРРО
+      - fiscal_device_number             # 10 digits, prefixed «ФН ПРРО» by a software register
+                                         # and «ФН» by a hardware one
+      - device_serial                    # «ЗН» — the factory serial, 2 letters and 8 digits.
+                                         # HARDWARE REGISTER ONLY: ⚠️ ЗН and ФН are not a pair
       - title
-      - mode_marker                      # Онлайн / Офлайн
+      - provider_name                    # the maker printed immediately after «ФІСКАЛЬНИЙ ЧЕК»
+                                         # — 📄 part of the same requisite of the form. A
+                                         # software provider or a device manufacturer, per
+                                         # archetype. INVENTED NAMES, see `receipt.registrars`
+                                         # in config/fiscal-rules.yaml for why and for what the
+                                         # alternative would have cost
+      - mode_marker                      # Онлайн / Офлайн. SOFTWARE REGISTER ONLY — 📄 the mode
+                                         # marker is a ПРРО requisite
       - qr
       - footer_text
     tax_row_geometry:
@@ -1078,6 +1173,30 @@ document_label:
         An earlier version of this entry made the two identifier keys alternatives and would have
         had a consumer read the status off which one appeared — see
         `document_types.fiscal_receipt`.
+
+    varies_with_the_kind_of_register:
+      status: emitted
+      note: >
+        THE SECOND OBSERVED CONDITIONAL, and it partitions the class rather than the sellers.
+        ⚠️ «ЗН» and «ФН» are NOT a pair: 👁 the observed ПРРО receipts print the fiscal number
+        alone, 👁 both published hardware samples print the factory serial as well. So the set of
+        fiscal identity lines says which kind of cash register issued the document.
+
+        A HARDWARE REGISTER (`ua_rro_receipt`) carries `device_serial` and NO `mode_marker`, its
+        `fiscal_device_number` is prefixed «ФН», and its `receipt_number` is four to six digits.
+
+        A SOFTWARE REGISTER (`ua_prro_receipt`, `ua_prro_receipt_58mm`) carries `mode_marker` and
+        NO `device_serial`, its `fiscal_device_number` is prefixed «ФН ПРРО», and its
+        `receipt_number` is eleven alphanumeric characters.
+
+        This is the axis a consumer stratifies the class on, and `device_serial`'s presence among
+        the bbox keys is how: nothing in the labels names the archetype. The paper width is the
+        other axis and comes from the image — 464 px for the 58 mm roll, 640 px for the 80 mm one,
+        both preserved by the degrader.
+
+        As with the VAT-payer conditional above, a fixed key set for this archetype is wrong
+        rather than strict, and for a second independent reason: the two conditionals compose, so
+        four combinations of key set exist in the class.
 
     acquiring_block_is_conditional:
       status: forward_contract
@@ -1679,8 +1798,8 @@ claim_evidence:
       Because the role is type-level, an archetype whose evidence DIFFERS from its type's
       default — policy.yaml's example is a bank confirmation whose payment purpose spells
       out what was bought — cannot be labelled correctly and must not be registered. The
-      override is described in policy.yaml and exists nowhere in `src/`; `claim_planner.
-      Archetype` says so at its head.
+      override is described in policy.yaml and exists nowhere in `src/`;
+      `claim_planner.Archetype` says so at its head.
 
 claim_label:
   status: emitted
@@ -1999,28 +2118,39 @@ artifacts:
 # This is the same obligation policy.yaml states for `verdict_mix`, applied to predictors
 # rather than to class shares: report what was measured, and say on what.
 #
-# REFERENCE RUN for every share below — one archetype is registered, so the whole dataset is
-# Ukrainian pharmacy-and-nutrition receipts:
+# REFERENCE RUN for every share below — three archetypes are registered and all three are
+# Ukrainian fiscal receipts for the one category that has any, so the whole dataset is
+# pharmacy-and-nutrition receipts:
 #   generate-dataset --seed 20260803 --personas 30 --claims-per-persona 5
-#   -> 146 documents, 146 claims, 46 distinct counterparties,
-#      35 documents carrying a visible non-covered line.
+#   -> 143 documents, 143 claims, 50 distinct counterparties,
+#      31 documents carrying a visible non-covered line.
 #
-# RE-MEASURED FOR VERSION 7, and the figures moved because the generator's DRAW ORDER changed:
-# the seller's identifiers are now built differently, so the same seed reaches the basket draw in
-# a different state. Nothing about the mechanisms below changed — only which documents this seed
-# produces. Previously stated as 147 documents and 24 with a non-covered line. A figure quoted
-# against a seed is only as stable as the stream, which is why each one names its run.
+# BY ARCHETYPE, since the class is no longer one rendering: 54 `ua_prro_receipt` (80 mm software
+# register), 46 `ua_prro_receipt_58mm` (58 mm, same register), 43 `ua_rro_receipt` (80 mm hardware
+# register). The three are drawn with equal weight, so the split is a draw and not a target.
 #
-# Of those 46 counterparties, 6 are named firms and 40 are sole traders whose names are
+# RE-MEASURED FOR VERSION 8, and the figures moved because the seeded stream moved: a claim's
+# receipt is now drawn from three archetypes rather than taken from one, `hygiene` entering the
+# excluded catalogue changes the basket draw, and the maker's name is a further draw per document.
+# Nothing about the mechanisms below changed — only which documents this seed produces. Version 7
+# stated 146 documents, 46 counterparties and 35 with a non-covered line; version 6 stated 147 and
+# 24. A figure quoted against a seed is only as stable as the stream, which is why each one names
+# its run.
+#
+# HOW SENSITIVE THAT IS, MEASURED RATHER THAN ASSERTED, because it bounds what any figure here is
+# worth: within this version, changing only the SIZE of the maker-name pools — nothing else, no
+# mechanism and no other value — moved the run from 51 counterparties and 36 non-covered documents
+# to 49 and 32, and a later change to the same pools — swapping invented names for public ones,
+# which changed the pool sizes again — moved it to 50 and 31. Three measurements of one seed over
+# one commit. A draw of a different arity consumes the generator differently and every later
+# draw shifts. So these counts describe one run of one tree, and a reader must re-measure rather
+# than expect them after any edit that adds or removes a draw.
+#
+# Of those 50 counterparties, 6 are named firms and 44 are sole traders whose names are
 # DRAWN rather than stored — a fresh one per claim, since a `ФОП` entry in vendors.json
 # denotes a sole trader of that trade and not one named person. So a sole trader carries
 # exactly one document, and any statistic computed per counterparty is a sample of one for
-# 40 of the 46. KL-01 below depends on that and says so.
-#
-# Every figure here was re-measured when the sole-trader surname pool was narrowed to the
-# high-frequency set under `personal_names` in config/generation.yaml. That draw consumes
-# the shared generator differently, so it moved the whole run — the counts below are of the
-# run the command above produces today, not of the one it produced before.
+# 44 of the 50. KL-01 below depends on that and says so.
 
 known_limitations:
 
@@ -2034,19 +2164,19 @@ known_limitations:
       document it issues is fully covered by construction and its name alone settles the
       question.
     share_in_reference_run: >
-      TWO FIGURES, AND THEY DIFFER BY A LOT. Structurally 0 of 146: the one category with a
+      TWO FIGURES, AND THEY DIFFER BY A LOT. Structurally 0 of 143: the one category with a
       registered archetype has no covered-only vendor left, because `nutrition_practice`
       sells `medical_device` and its sole traders issue mixed receipts like any pharmacy.
 
-      Empirically 32 of 146, on 32 of the 46 counterparties — and every one of those 32 is a
+      Empirically 36 of 143, on 36 of the 50 counterparties — and every one of those 36 is a
       sole trader carrying a single document. All 6 counterparties that carry more than one
       document appear on both fully covered and partially covered ones. (Re-measured for version
-      7 on the run named above; previously 34 of 147, on 34 counterparties. The shape is
-      identical — the stream moved, not the mechanism.)
+      8 on the run named above; version 7 stated 32 of 146 on 32 counterparties, version 6
+      34 of 147. The shape is identical across all three — the stream moved, not the mechanism.)
 
       The gap is the whole point of stating both, and it widened when sole-trader names
       became a per-claim draw: a counterparty that appears once is trivially "never seen
-      partially covered", so the cross-tabulation now produces 32 hits of which none is
+      partially covered", so the cross-tabulation now produces 36 hits of which none is
       evidence of anything.
 
       A vendor that CANNOT sell an excluded kind is a permanent property of the data: it
@@ -2065,7 +2195,7 @@ known_limitations:
       Do NOT group by the counterparty string. Most counterparties are sole traders whose
       names are drawn per claim, so grouping by the string produces buckets of one and a
       long list of counterparties that are "never partially covered" for no reason at all —
-      34 of them in the reference run, none meaningful.
+      36 of them in the reference run, none meaningful.
 
       Group by the VENDOR PROFILE instead: `config/vendors.json` maps each entry to a
       profile, and a profile that sells nothing the category excludes is the thing that
@@ -2081,41 +2211,118 @@ known_limitations:
       something the same category excludes.
 
   - id: KL-02
-    name: every non-covered line comes from one of three item kinds
+    name: every non-covered line comes from one of four item kinds
     predictor: the line item itself
     hurts: training, evaluation
     subset: >
-      The whole dataset, without exception. One archetype is registered, so every claim is
-      `vitamins_nutrition`, and every non-covered line on every document is a medicine, a
-      blood-pressure monitor or glucose test strips, or a face cream. Three head-noun
-      families, and a consumer that learns those three scores as well here as one that reads
-      the article and resolves it against the policy.
+      The whole dataset, without exception. Every registered archetype carries the same one
+      category, so every claim is `vitamins_nutrition`, and every non-covered line on every
+      document is a medicine, a blood-pressure monitor or glucose test strips, a face cream, or a
+      shower gel or toothpaste. Four head-noun families, and a consumer that learns those four
+      scores as well here as one that reads the article and resolves it against the policy.
     share_in_reference_run: >
-      100% of non-covered lines. In the reference run 35 of 146 documents carried one — 32
-      distinct printed strings, drawn from the 398 those three kinds can produce. (Re-measured
-      for version 7; previously 24 of 147 and 26 strings, on the older draw order.)
+      100% of non-covered lines. In the reference run 31 of 143 documents carried one: 58
+      non-covered LINES between them, printing 31 DISTINCT strings, drawn from the 400 those four
+      kinds can produce.
+
+      BY KIND, AND THE TWO COUNTS ARE STATED SEPARATELY BECAUSE THEY ANSWER DIFFERENT QUESTIONS —
+      occurrences say how often a consumer meets the kind, distinct strings say how much of the
+      kind it ever sees. An earlier draft of this entry gave one set of per-kind numbers without
+      saying which they were; they were occurrences, they summed to 58 against 31 unique, and a
+      reader could not tell.
+
+        medical_device   29 occurrences,  8 distinct strings
+        cosmetics        13 occurrences, 13 distinct strings
+        medicine          8 occurrences,  8 distinct strings
+        hygiene           8 occurrences,  2 distinct strings
+
+      RE-MEASURED FOR VERSION 8 on the run named above, and the reason it moved is BOTH of this
+      version's changes rather than the arithmetic of one: the stream shifted, and `hygiene`
+      became drawable. Version 7 stated 35 of 146 documents, 32 strings and 398 producible over
+      three kinds; version 6 stated 24 of 147 and 26 strings.
+    what_changed_in_version_8: >
+      THE FOURTH FAMILY ARRIVED, AND THIS ENTRY USED TO CARRY A `narrowed_further_by` BLOCK
+      SAYING IT COULD NOT. `hygiene` reached no document because both its templates named a
+      brand, and the brand vocabulary in config/generation.yaml is keyed by ITEM KIND rather
+      than by template — so one pool served the shower gel and the toothpaste, and a mark drawn
+      for either was printed on the other. The generator declined to fill the kind rather than
+      print an article under a mark chosen for a different one; the objection was the keying, not
+      any claim about who manufactures what.
+
+      The repair was a brandless template form — `Гель для душу 250 мл` rather than
+      `Гель для душу {brand}`, which 👁 is how Ukrainian receipts most often print such articles.
+      The kind is out of `unprintable_item_kinds` and drawn like any other, so the block is gone
+      rather than reworded: it described a condition that no longer exists.
+
+      WHAT THE FOURTH FAMILY IS WORTH, stated because it is small. `hygiene` contributes exactly
+      TWO printable strings against the other three kinds' 398, since a brandless template has no
+      placeholder to vary. The families went from three to four; the vocabulary went from 398 to
+      400. A consumer stratifying by head noun gains a family, and one measuring string diversity
+      gains almost nothing.
+
+      `electronics` HAS THE SAME DEFECT AND KEEPS IT. It is an excluded kind of `hobby`, which has
+      no archetype, so it reaches no dataset either way; the brandless form is not applied to it
+      because the form is evidenced for hygiene articles and not for consumer electronics, where a
+      real receipt line names a brand and a model. It remains declared in
+      `unprintable_item_kinds`, and it is not a cause of any narrowing here.
+    a_second_leak_inside_one_kind: >
+      🔴 WITHIN `hygiene`, THE STRING IS THE LABEL — and this is a DIFFERENT leak from the one this
+      entry is named for, not the same one measured another way. It has its own predictor and its
+      own subset:
+
+        predictor — the SPECIFIC STRING, not the head-noun family;
+        subset    — the `hygiene` lines only. 8 occurrences on 7 of the 143 documents in the
+                    reference run.
+
+      A brandless template has no placeholder to vary, so the kind's two templates produce exactly
+      TWO strings for the whole corpus, against 8, 13 and 8 distinct strings for the other three
+      kinds. `Гель для душу 250 мл` and `Зубна паста 75 мл` are therefore not examples of a
+      non-covered hygiene article — between them they ARE the non-covered hygiene article, and
+      either string memorised gives the label with no reading of the policy at all.
+
+      WHY IT IS NOT FOLDED INTO `share_in_reference_run`. The share figure is about four families
+      standing in for an open world, and a consumer acts on it by stratifying on the family. This
+      leak works only inside one kind and only on the exact string, so a consumer acting on the
+      family would not catch it. Two mechanisms behind one visible column, as KL-01 and KL-04 are.
+
+      THE CLASS, stated rather than cited, since nothing else in this file records an instance of
+      it: a vocabulary narrow enough that a PARTICULAR STRING, and not the category it belongs to,
+      predicts the label. What makes this instance easy to miss is that it is localized to one item
+      kind instead of spread across the label space — the corpus-wide totals look healthy, 31
+      distinct strings over four families, and the defect is entirely inside one of the four.
+
+      HOW TO STRATIFY IT, which is not what the entry's own `how_to_stratify` says: exclude
+      `hygiene` lines from any metric that would credit reading the article, or report them
+      separately, until the vocabulary is keyed by template. Two strings cannot support a
+      generalization claim about anything.
+    fixed_by: >
+      KEY THE PLACEHOLDER VOCABULARY BY TEMPLATE RATHER THAN BY ITEM KIND, in
+      config/generation.yaml. That is the ROOT CAUSE of both this entry's second leak and of the
+      original brand-crossover defect that kept `hygiene` out of the dataset altogether: the pool
+      is keyed by kind, so a draw cannot see which of the kind's templates it is filling, and the
+      shower gel and the toothpaste therefore cannot be given placeholders of their own. Key it by
+      template and each article gets its own vocabulary — variety returns, the string stops being
+      the label, and no brandless form is needed at all.
+
+      THE BRANDLESS FORM IS THE NARROWER FIX, AND IT IS WHAT WAS TAKEN. It closes the crossover —
+      no mark is printed on an article it was not chosen for — at the cost of two strings where
+      there could have been dozens. It was preferred because it is one edit to a template and 👁
+      it matches how Ukrainian receipts print such articles, whereas re-keying the vocabulary is a
+      structural change to the shape of config/generation.yaml, a different concern from
+      registering templates, and not something to do in the same commit. Recorded here so the real
+      repair is not lost behind the narrower one that shipped.
     why_it_is_not_a_defect: >
       It IS the coverage rule of the one category that has an archetype, not an accident of
       the vendor data: `excluded_items` in policy.yaml is what the plan does not pay for. No
-      configuration change widens it — the file that would have to change is the policy, and
-      widening the label space to make a metric look harder would be the wrong repair
-      anyway. The fix is more categories with archetypes, which is a later wave of work.
-    narrowed_further_by: >
-      `hygiene` is a fourth excluded kind of the category and is NOT in the dataset. Its two
-      templates both print a brand, and the brand vocabulary is keyed by item kind rather
-      than by template, so a mark drawn for the shower gel is also printed on the toothpaste.
-      The generator declines to fill it rather than print an article under a mark chosen for
-      a different one — the objection is the keying, not any claim about who manufactures
-      what. It is declared under `unprintable_item_kinds` in config/generation.yaml and
-      excluded from every draw. The remedy is a brandless template form in policy.yaml, which
-      is not edited from here. Until then the head-noun families are three rather than four,
-      so this limitation is one family deeper than the policy alone would make it. `hygiene`
-      is the sole cause of that narrowing: `electronics` has the same defect but reaches no
-      dataset, because its category has no archetype.
+      configuration change widens it further — the file that would have to change is the policy,
+      and widening the label space to make a metric look harder would be the wrong repair
+      anyway. The fix is more categories with archetypes, which is a later wave of work. Note
+      what the version 8 change was NOT: the four families are what the policy already declared,
+      and the repair made the dataset match the label space rather than widening either.
     consequence: >
       Coverage metrics measured here are OPTIMISTIC relative to a real flow, where the
-      non-covered article is drawn from an open world rather than from three families. This
-      is the entry that reaches BOTH kinds of consumer: one that trains absorbs the three
+      non-covered article is drawn from an open world rather than from four families. This
+      is the entry that reaches BOTH kinds of consumer: one that trains absorbs the four
       head nouns as a rule, and one that prompts a language model is scored on a
       distribution far narrower than production, so the number it reports is an estimate of
       the wrong thing rather than a noisy estimate of the right one.
@@ -2135,10 +2342,11 @@ known_limitations:
       unlike KL-01 — a consumer picks the shortcut up without ever looking at the
       counterparty.
     share_in_reference_run: >
-      0 of 146. `online_course` and `certification_exam` had this shape (both selling
+      0 of 143. `online_course` and `certification_exam` had this shape (both selling
       profiles were covered-only) and `instrument_rent` likewise; the affinity data was
       changed so that a training centre also sells travel and a music school also sells
-      refreshments. Neither kind reaches a dataset yet in any case.
+      refreshments. Neither kind reaches a dataset yet in any case. (Re-measured for version 8;
+      version 7 stated 0 of 146. The denominator moved and the numerator is structurally zero.)
     still_open_where: >
       Nowhere, on this entry's own mechanism. The PL, DE and ES vendor lists do fail the
       enforced test, but for the SIBLING reason rather than this one: three covered kinds
@@ -2178,18 +2386,20 @@ known_limitations:
       NAMED implies PAYER with no exceptions, at any size, under any seed. That is leakage in
       KL-01's sense: a permanent property of the data rather than a sampling artifact.
 
-      EMPIRICALLY 106 of 146 documents carry a stored name, and 106 of those 106 have a VAT
-      block — zero exceptions on 73% of the corpus. The other 40 documents carry drawn
-      sole-trader names and are mixed: 19 payers, 21 non-payers.
+      EMPIRICALLY 99 of 143 documents carry a stored name, and 99 of those 99 have a VAT
+      block — zero exceptions on 69% of the corpus. The other 44 documents carry drawn
+      sole-trader names and are mixed: 17 payers, 27 non-payers. (Re-measured for version 8;
+      version 7 stated 106 of 146 with 40 drawn, 19 payers to 21. The structural figures above are
+      unchanged, config/vendors.json not having been touched.)
     the_leak_is_one_directional: >
       Worth stating because it bounds what a consumer can do with it. A STORED name implies a VAT
-      block with certainty; a DRAWN name implies nothing, being 19 payers to 21 non-payers. So a
+      block with certainty; a DRAWN name implies nothing, being 17 payers to 27 non-payers. So a
       model can shortcut the positive case only — which is the larger half, and enough to inflate
       any metric conditioned on the VAT block.
     how_to_stratify: >
       Report anything that depends on `vat_letter`, on the tax block or on `seller_vat_number`
       SEPARATELY for documents with a stored counterparty and documents with a drawn one, and
-      never as a single figure over the corpus. The two subsets are 73% and 27% here and neither
+      never as a single figure over the corpus. The two subsets are 69% and 31% here and neither
       is representative. A consumer reading only the labels cannot tell the two apart — the
       vendor file is what distinguishes them, exactly as in KL-01 — so the split has to be taken
       from config/vendors.json rather than computed from the labels.
@@ -2213,7 +2423,9 @@ known_limitations:
       EVERY document. All of them print the «ІД» identification code (bbox key
       `seller_tax_code`), while of the real ПРРО receipts examined only 1 of 3 carries one: two
       of three print no such line at all.
-    share_in_reference_run: 146 of 146 documents, against an observed real-world 1 of 3.
+    share_in_reference_run: >
+      143 of 143 documents, against an observed real-world 1 of 3. All three archetypes print the
+      line; version 7 stated 146 of 146.
     why_it_is_deliberate: >
       «ІД» is printed because it is the SUPERSET. A field that is present can be looked for and
       scored; a field the corpus never prints cannot be exercised at all, and its absence would
@@ -2235,12 +2447,16 @@ known_limitations:
       recall figures for `seller_tax_code` as estimates of real-world behaviour, and treat any
       model that learned to require the line as untested against the majority of real receipts.
     fixed_by: >
-      A SECOND PROVIDER TEMPLATE THAT PRINTS NO «ІД» LINE. The axis of the variation is the ПРРО
+      A FURTHER TEMPLATE THAT PRINTS NO «ІД» LINE. The axis of the variation is the ПРРО
       software provider — three observed receipts, three providers, and exactly one prints it —
       so it is NOT a property of the seller and must not become a flag on a vendor entry, which
       would model the wrong level and put a provider's layout choice on the merchant.
       `content_builder.Seller.tax_code` is already nullable for precisely this, so the template
       is the whole of the remaining work. Named as one gap in config/fiscal-rules.yaml.
+
+      NONE OF THE THREE ARCHETYPES ADDED IN VERSION 8 IS IT, and the entry is not narrower for
+      their arrival: they vary the paper width and the kind of cash register, and all three print
+      «ІД». More templates of a class do not by themselves vary a provider's optional requisites.
 
 
 # =============================================================================

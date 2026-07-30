@@ -21,6 +21,7 @@ from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.config import (
     acquirers,
     category,
+    fiscal_makers,
     high_frequency_surnames,
     jurisdiction,
     load_generation,
@@ -482,6 +483,51 @@ def test_an_unprintable_kind_is_never_offered_to_a_draw():
                 assert not offered & declared, f"{country}/{category_id}: {offered & declared}"
 
 
+def test_every_excluded_kind_of_a_generating_category_can_be_drawn():
+    """The positive counterpart to the declaration above, and the invariant KL-02 in
+    config/labelling-schema.yaml is measured against.
+
+    A kind declared unprintable is excluded from every draw, so a NON-COVERED kind that lands
+    in that list narrows the non-covered vocabulary of every document the generator produces —
+    which is a property of the corpus that no label mentions. `hygiene` was in it, so the
+    excluded vocabulary of the only category with an archetype was three kinds where the policy
+    declares four, and the head-noun families a consumer could learn were one fewer than the
+    label space says. The test asserts the whole of the category's `excluded_items` is
+    reachable, so a kind falling out of the dataset cannot go unnoticed again.
+
+    Scoped to the (jurisdiction, category) pairs some registered archetype carries: a category
+    no template can document reaches no dataset either way, and holding one to this would fail
+    on the PL / DE / ES lists, which are seeded rather than filled. The union is taken over the
+    vendors of THAT jurisdiction only — pooling every country's vendors would let a Polish entry
+    cover a kind no Ukrainian receipt can print.
+    """
+    documented = {
+        (archetype.country.value, category_id)
+        for archetype in ARCHETYPES.values()
+        for category_id in archetype.categories
+    }
+    assert documented, "no archetype registered — this test would assert nothing"
+
+    for country, category_id in sorted(documented):
+        spec = category(category_id)
+        sellers = {
+            kind
+            for vendor_country, vendor_category, vendor in every_vendor()
+            if (vendor_country, vendor_category) == (country, category_id)
+            # A vendor with no stored name trades under a drawn one; the name plays no part in
+            # what it sells, so any placeholder does.
+            for kind in sellable_kinds(
+                spec["excluded_items"], vendor if "name" in vendor else {**vendor, "name": "x"}
+            )
+        }
+        missing = sorted(set(spec["excluded_items"]) - sellers)
+        assert not missing, (
+            f"{country}/{category_id}: no vendor can put these excluded kinds on a receipt, so "
+            "they are absent from every document and the non-covered vocabulary is narrower "
+            f"than policy.yaml declares: {missing}"
+        )
+
+
 def test_a_placeholder_with_no_vocabulary_fails_loudly():
     """The other half of the same rule: unfilled must raise, not skip. If this ever
     returned a value or silently dropped the template, the sweep above would pass on a
@@ -607,10 +653,191 @@ def test_fiscal_device_number_is_ten_digits():
     assert value.isdigit()
 
 
-def test_title_may_carry_a_provider_suffix():
+def test_the_title_is_the_bare_wording_while_no_tag_pairing_is_public():
+    """REWRITTEN, AND THE OLD ASSERTION PINNED SOMETHING UNGROUNDED. It required a tagged title
+    to occur — "ФІСКАЛЬНИЙ ЧЕК" plus a short abbreviation — over a pool of tags paired with
+    NOTHING, which was harmless only while no maker was printed beside them.
+
+    👁 The tag itself is observed and the observation stands, recorded under
+    `verified_against_own_receipts` in config/fiscal-rules.yaml. What no published source gives is
+    the PAIRING: which provider prints which tag. Now that 📄 line 35's maker name is printed, a
+    tag beside a NAMED provider would assert a pairing nobody established, so none is printed and
+    every title is the bare wording.
+
+    This is the tripwire for that regression: a tag reappearing without a pairing to justify it
+    turns this red. The mechanism is not dead — the patched-pool test below exercises it — so this
+    asserts a state of the DATA, not a missing feature.
+    """
     titles = {build(seed).title for seed in range(40)}
-    assert "ФІСКАЛЬНИЙ ЧЕК" in titles
-    assert any(t.startswith("ФІСКАЛЬНИЙ ЧЕК ") for t in titles)
+    assert titles == {"ФІСКАЛЬНИЙ ЧЕК"}, (
+        "a title carries a provider tag; no public source pairs a tag with a provider, so a "
+        "tag printed beside the maker's name asserts a pairing nobody established"
+    )
+
+
+# ------------------------------------------------- which kind of cash register --
+#
+# ⚠️ «ЗН» and «ФН» are NOT a pair. 👁 The observed ПРРО receipts print the fiscal number
+# alone; 👁 the two published hardware samples print the factory serial as well. The set of
+# fiscal identity lines follows the kind of register, and the tests below are what stops the
+# generator from printing a combination no observed receipt of either kind carries.
+
+
+def registrars() -> dict:
+    return jurisdiction("UA")["receipt"]["registrars"]
+
+
+def test_only_a_hardware_register_prints_a_factory_serial():
+    """The pair that is not a pair. A ПРРО has no заводський номер to print — it is software —
+    so «ЗН» on its receipt would be a requisite the device cannot have; a hardware register
+    prints both lines. Both directions are asserted, because a builder that printed «ЗН» on
+    everything and one that printed it on nothing would each satisfy only one of them."""
+    for seed in range(10):
+        assert build(seed).device_serial is None, "a ПРРО has no factory serial"
+
+        serial = build(seed, registrar="rro").device_serial
+        assert serial is not None, "a hardware register prints its factory serial"
+        assert re.fullmatch(
+            jurisdiction("UA")["identifiers"]["device_serial"]["pattern"], serial
+        ), f"{serial!r} does not match the configured ЗН pattern"
+
+
+def test_the_fiscal_number_prefix_follows_the_kind_of_register():
+    """👁 A ПРРО prints «ФН ПРРО», a hardware register prints «ФН». Read from config rather
+    than restated: the label was a literal in the template, which is how the hardware
+    archetype would have printed a ПРРО's prefix."""
+    for kind, rules in registrars().items():
+        assert build(1, registrar=kind).fiscal_number_label == rules["fiscal_number_label"]
+    assert len({rules["fiscal_number_label"] for rules in registrars().values()}) == 2, (
+        "the two prefixes are the same string, so this test discriminates nothing"
+    )
+
+
+def test_the_receipt_number_format_follows_the_kind_of_register():
+    """👁 A ПРРО issues a short alphanumeric id; a hardware register counts its receipts, so
+    the number is a short sequence of digits. Both patterns are read from
+    `receipt.receipt_number` in config/fiscal-rules.yaml, so a length written into the builder
+    beside the pattern cannot drift from it — the alphanumeric length used to be an `11` in
+    code with a `{11}` in config and nothing tying them together.
+    """
+    patterns = jurisdiction("UA")["receipt"]["receipt_number"]
+    for kind, rules in registrars().items():
+        pattern = patterns[rules["receipt_number_format"]]["pattern"]
+        for seed in range(10):
+            number = build(seed, registrar=kind).receipt_number
+            assert re.fullmatch(pattern, number), f"{kind}: {number!r} against {pattern}"
+
+    # The sequential format states a RANGE of lengths, and a corpus printing one of them would
+    # teach a consumer that width rather than the field.
+    lengths = {len(build(seed, registrar="rro").receipt_number) for seed in range(40)}
+    assert len(lengths) > 1, "every hardware receipt number is the same length"
+
+
+def test_only_a_prro_prints_the_online_marker():
+    """📄 The mode marker is line 31 of the published form and a ПРРО requisite. A hardware
+    receipt carries no such line, and `None` is what says so — an empty string would render as
+    a blank line with a bounding box pointing at nothing."""
+    assert build(1).mode_marker == "Онлайн"
+    assert build(1, registrar="rro").mode_marker is None
+
+
+def test_the_title_tag_and_the_maker_name_come_from_one_pool_entry():
+    """📄 Line 35 of the form is ONE requisite — the wording «ФІСКАЛЬНИЙ ЧЕК» together with the
+    maker's name — and 👁 the title may also carry the maker's own short tag. So the tag and the
+    name are two printed forms of one fact, and this is the test that they cannot name different
+    makers: drawn from two independent lists, a receipt could show one provider's tag above
+    another provider's name.
+
+    Read from `config.fiscal_makers`, which is where the pairing now lives: each kind of register
+    names a pool of config/vendors.json and an entry carries both fields. The pools differ per
+    kind, so a maker drawn for a hardware receipt cannot come from the software list.
+
+    ⚠️ THIS TEST CANNOT DISCRIMINATE A MISPAIRING ON TODAY'S DATA, and saying so is the point.
+    Every entry's tag is empty, so ("", any name in the pool) satisfies the assertion and code
+    that printed one entry's tag beside another's name would pass here. Verified rather than
+    assumed: overriding the drawn name with the pool's first entry left this test green. What it
+    still catches is a maker drawn from OUTSIDE the pool. The mispairing itself is caught by
+    `test_a_configured_tag_is_printed_beside_its_own_maker`, on a pool whose tags differ — which
+    is the only shape in which the failure is observable at all.
+    """
+    for kind, rules in registrars().items():
+        entries = set(fiscal_makers(rules["maker_pool"], "UA"))
+        assert entries, f"{kind} draws from an empty maker pool"
+        for seed in range(30):
+            receipt = build(seed, registrar=kind)
+            tag = receipt.title.removeprefix(jurisdiction("UA")["receipt"]["title"]).strip()
+            assert (tag, receipt.provider_name) in entries, (
+                f"{kind}: title tag {tag!r} and maker {receipt.provider_name!r} are not one "
+                f"entry of the {rules['maker_pool']!r} pool"
+            )
+
+
+def test_the_two_kinds_of_register_draw_makers_from_different_pools():
+    """A ПРРО is published by a software provider; a hardware register is built by a manufacturer
+    entered in the state register. Printing a software provider as the maker of a physical device
+    would be false about both, and one shared pool is all it would take."""
+    pools = {kind: rules["maker_pool"] for kind, rules in registrars().items()}
+    assert len(set(pools.values())) == len(pools), f"two kinds share a maker pool: {pools}"
+
+    names = {
+        kind: {name for _, name in fiscal_makers(pool, "UA")} for kind, pool in pools.items()
+    }
+    software, hardware = names["prro"], names["rro"]
+    assert software and hardware
+    assert not software & hardware, f"a maker is in both pools: {software & hardware}"
+
+    for seed in range(20):
+        assert build(seed, registrar="prro").provider_name in software
+        assert build(seed, registrar="rro").provider_name in hardware
+
+
+def test_a_configured_tag_is_printed_beside_its_own_maker():
+    """The tag mechanism, exercised on a PATCHED pool because no real entry carries a tag.
+
+    TWO JOBS, and the second is the one the real-data test above cannot do. First, the wiring:
+    without this the mechanism would be untested for as long as the data declines to use it, and
+    the bare-wording tripwire would pass equally on a build that had lost the ability to print a
+    tag at all. Second, THE MISPAIRING — a pool whose two entries carry DIFFERENT tags is the only
+    shape in which one maker's tag beside another's name is observable, because with every tag
+    empty the mispaired result is indistinguishable from the correct one.
+
+    Both entries are exercised over several seeds, so the assertion is about the pairing rather
+    than about which entry a single draw happened to take.
+    """
+    from receipt_synth import content_builder
+
+    tagged = (("AA", "Каса Альфа"), ("BB", "Каса Бета"))
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(content_builder, "fiscal_makers", lambda pool, country: tagged)
+        printed = {
+            (
+                receipt.title.removeprefix(jurisdiction("UA")["receipt"]["title"]).strip(),
+                receipt.provider_name,
+            )
+            for receipt in (build(seed) for seed in range(20))
+        }
+
+    assert printed <= set(tagged), f"a tag was printed beside another maker's name: {printed}"
+    assert printed == set(tagged), (
+        f"only {printed} of {set(tagged)} was ever drawn, so the pairing is pinned for one entry"
+    )
+
+
+def test_a_maker_name_is_always_printed():
+    """👁 11 of 11 open receipts carry a name immediately after the fiscal wording, which
+    makes it the best-evidenced fact of the foot block. An entry with an empty name would
+    print the wording alone and satisfy every other test here."""
+    for kind in registrars():
+        for seed in range(10):
+            assert build(seed, registrar=kind).provider_name.strip()
+
+
+def test_an_unknown_kind_of_register_is_refused_by_name():
+    """The kinds are keys of config/fiscal-rules.yaml, and a slug mapped to a kind that file
+    does not declare has to say which kinds exist rather than fail on a `KeyError` inside the
+    draw, three statements away from the mistake."""
+    with pytest.raises(ValueError, match="declares no registrar 'krro'"):
+        build(1, registrar="krro")
 
 
 def test_acquiring_block_matches_the_configured_patterns():

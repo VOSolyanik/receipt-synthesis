@@ -1,0 +1,20 @@
+/*
+ * Ukrainian ПРРО fiscal receipt — 58 mm thermal paper, the narrow roll.
+ *
+ * THE NARROW WIDTH IS THE WHOLE ARCHETYPE, and it is a constraint rather than a number: at
+ * the same 8 px/mm scale and the same character cell as the 80 mm template, a line fits about
+ * two thirds as many characters, so long item names wrap onto a second line and the amount
+ * column sits much closer to the label. That is what a 58 mm receipt looks like, and it is
+ * why this variant is worth its own archetype: a model trained only on the wide roll learns
+ * an amount column at a fixed distance from the paper edge.
+ *
+ * 464 px is the 58 mm entry of `receipt.widths_mm` in config/fiscal-rules.yaml at 8 px/mm.
+ * The side padding is wider than the 80 mm template's in absolute terms and leaves 384 px of
+ * print — 48 mm, which is what a 58 mm roll prints on: the unprintable margin of a thermal
+ * roll does not shrink in proportion to the paper.
+ */
+
+.receipt {
+  width: 464px;
+  padding: 26px 40px 34px;
+}

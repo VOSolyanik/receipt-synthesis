@@ -15,17 +15,21 @@ detection in multi-document files, deduplication, and reimbursement-decision log
 
 ## Status
 
-Early development — the pipeline is being built end to end on a single archetype before the remaining
-templates are added. The interface below describes the target CLI; see [docs/architecture.md](docs/architecture.md)
-for the full design.
+Early development — the pipeline was built end to end on a single archetype and the remaining templates are
+being added a document class at a time. The interface below describes the target CLI; see
+[docs/architecture.md](docs/architecture.md) for the full design.
 
 | Component | State |
 |---|---|
 | Configuration model — policy, fiscal rules, FX, vendors | in place |
 | Fonts, dependency pinning, reproducible environment | in place |
 | `persona_generator` → `claim_planner` → `content_builder` → `renderer` → `degrader` → `assembler` | in progress |
-| 24 document archetypes | 0 of 24 |
+| 24 document archetypes | 3 templates, covering 2 of the 24 rows — the Ukrainian `fiscal_receipt` class |
 | Invariant test suite | in progress |
+
+The three are a software cash register (ПРРО) on 80 mm and on 58 mm paper, and a classic hardware register
+(РРО), which prints a different set of fiscal requisites. One archetype row is two templates because the paper
+width is one of them; [docs/architecture.md](docs/architecture.md#document-archetypes) has the catalogue.
 
 ## Install
 
@@ -177,7 +181,7 @@ and thresholds are this project's own plausible values and describe no real empl
 ```text
 config/                 labelling policy, labelling contract, fiscal rules, generation input,
                         exchange rates, vendors
-templates/              document archetypes (HTML + CSS)
+templates/              document archetypes (HTML + CSS), plus the .jinja bodies archetypes share
 fonts/                  redistributable fonts (OFL) + license texts
 src/receipt_synth/      the generator
 tests/                  invariant tests (VAT, amount in words, tax ids, date ↔ verdict)

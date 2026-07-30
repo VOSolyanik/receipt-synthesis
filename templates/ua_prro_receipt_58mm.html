@@ -1,0 +1,11 @@
+{#
+  Ukrainian ПРРО fiscal receipt on a 58 mm roll — the narrow thermal paper.
+
+  THE SAME DOCUMENT ON NARROWER PAPER, and nothing else: the body is
+  templates/ua_fiscal_receipt.jinja, the registrar is `prro` exactly as on the 80 mm
+  archetype, and the only difference is ua_prro_receipt_58mm.css. It earns its own archetype
+  because the width is not cosmetic — at the same character cell a 58 mm roll fits about two
+  thirds of a line, so item names wrap and the amount column moves; a corpus rendered only on
+  the wide roll would teach a consumer where the amounts sit rather than how to read them.
+#}
+{% include "ua_fiscal_receipt.jinja" %}

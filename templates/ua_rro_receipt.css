@@ -1,0 +1,18 @@
+/*
+ * Ukrainian fiscal receipt from a classic hardware РРО — 80 mm thermal paper.
+ *
+ * IDENTICAL TO THE 80 mm ПРРО STYLESHEET, AND DELIBERATELY SO. What distinguishes this
+ * archetype is the fiscal identity the register prints — «ЗН» beside «ФН», a sequential
+ * receipt number, a device manufacturer instead of a software provider, and no online marker
+ * — which is all content and arrives from `receipt.registrars.rro` in
+ * config/fiscal-rules.yaml. ⛔ No open sample shows the LAYOUT of a hardware receipt beyond
+ * two published drawings, so inventing a different one here would put a guess on every image
+ * of the archetype. The file exists rather than the archetype sharing the ПРРО stylesheet
+ * because the renderer reads `<slug>.css` per archetype, and because the day a hardware
+ * layout is evidenced this is where it goes.
+ */
+
+.receipt {
+  width: 640px;
+  padding: 26px 30px 34px;
+}

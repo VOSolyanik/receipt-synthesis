@@ -80,11 +80,36 @@ def evidence_of(archetype: Archetype) -> Evidence:
     return document_evidence(archetype.doc_type)
 
 
-# The registry the planner selects from. One entry today; the remaining twenty-three
-# archetypes register here as their templates land.
+# The registry the planner selects from. Three entries today, all of them Ukrainian fiscal
+# receipts; the rest register here as their templates land.
+#
+# THREE ENTRIES OF ONE DOCUMENT CLASS ARE STILL THREE ARCHETYPES. They carry the same
+# `doc_type`, so they establish the same facts and the planner treats them as interchangeable —
+# what differs is the paper width and the kind of cash register, which the class of the document
+# does not depend on. That is the point of the registry being keyed by slug rather than by type:
+# `_select_documents` picks among them, so a claim's receipt is now drawn from three renderings
+# rather than always being the same one.
 ARCHETYPES: dict[str, Archetype] = {
+    # 80 mm ПРРО — the software register.
     "ua_prro_receipt": Archetype(
         slug="ua_prro_receipt",
+        doc_type=DocType.FISCAL_RECEIPT,
+        country=Country.UA,
+        language="uk",
+        categories=("vitamins_nutrition",),
+    ),
+    # The same register on the narrow 58 mm roll, where long names wrap and the amount column
+    # moves. A width, not a document class.
+    "ua_prro_receipt_58mm": Archetype(
+        slug="ua_prro_receipt_58mm",
+        doc_type=DocType.FISCAL_RECEIPT,
+        country=Country.UA,
+        language="uk",
+        categories=("vitamins_nutrition",),
+    ),
+    # The classic hardware РРО: «ЗН» beside «ФН», a sequential receipt number, no online marker.
+    "ua_rro_receipt": Archetype(
+        slug="ua_rro_receipt",
         doc_type=DocType.FISCAL_RECEIPT,
         country=Country.UA,
         language="uk",
@@ -238,9 +263,9 @@ class ClaimPlan:
 
     `documents` is a LIST, and everything downstream has to treat it as one. A claim's
     evidence may be split — an invoice proving what was bought plus a payment confirmation
-    proving it was paid — and while the registry holds one archetype that list has exactly
-    one entry. Nothing may depend on that: the guarantees that used to hold because a claim
-    had one document (one vendor could not differ between documents, a claim could not
+    proving it was paid — and while every registered archetype proves both facts that list has
+    exactly one entry. Nothing may depend on that: the guarantees that used to hold because a
+    claim had one document (one vendor could not differ between documents, a claim could not
     disagree with itself) are now guarantees somebody has to keep.
 
     `issued_at` is the CLAIM's date — the date its money moved, which is the date of its
@@ -328,8 +353,8 @@ def documentable_categories(persona: Persona) -> list[str]:
 
     Ignores the ledger entirely — this is a question about templates, and it is the one
     `assembler._draw_documentable_persona` asks before any claim exists. Empty is a normal
-    answer while the template set is incomplete, not an error: with one archetype
-    registered, most personas hold nothing it can carry.
+    answer while the template set is incomplete, not an error: the registered archetypes cover
+    one category between them, so most personas hold nothing any of them can carry.
     """
     return [
         category
@@ -392,7 +417,9 @@ def _select_documents(
 
     1. **One document that proves both** — a fiscal receipt. Preferred wherever one is
        registered, because it is the shape a real claim usually takes and because a claim
-       whose evidence is split has more ways to be wrong.
+       whose evidence is split has more ways to be wrong. Where several such archetypes are
+       registered the choice between them is drawn, which is how the three UA fiscal receipts
+       all reach a dataset.
     2. **A subject document plus a payment document.** The subject is dated on or before
        the payment: an invoice is issued and then settled, and a payment that came first
        is a defect the engine names. The lead is drawn from the seeded generator, so a
