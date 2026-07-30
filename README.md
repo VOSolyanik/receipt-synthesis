@@ -62,7 +62,7 @@ Every flag:
 | `--out` | `out` | Output directory. |
 | `--personas` | `1` | How many synthetic people to generate. |
 | `--claims-per-persona` | `1` | An **upper bound**. Planning stops early once a persona has no category with an annual balance left, which is also the only way the cumulative-limit mechanism is exercised. |
-| `--split` | `0.85` | Fraction of **personas** assigned to train. The partition is by persona because annual limits are cumulative per persona; it is **not** stratified. |
+| `--split` | `0.5` | Fraction of **personas** assigned to train. Half rather than the familiar 85/15, because **nothing is trained on this dataset**: the partition guards against fitting the measurement, inspecting failures needs a few dozen documents, and the measurement side has to be large enough to carry a per-class figure for the thinnest class. The partition is by persona because annual limits are cumulative per persona; it is **not** stratified. |
 | `--country` | `UA` | Jurisdiction whose fiscal rules apply. |
 | `--version` | — | Print the version and exit. |
 
@@ -87,7 +87,7 @@ zero.
 
 [`docs/balance-report.md`](docs/balance-report.md) is that report for the **production corpus**, written for a
 reader rather than for a terminal: what the run produced, which per-class figures may be quoted and which may
-not, and what the corpus is not. Its machine-readable twin is profile `RP-05` under `run_profiles` in
+not, and what the corpus is not. Its machine-readable twin is profile `RP-06` under `run_profiles` in
 `config/labelling-schema.yaml` — the one profile there marked authoritative, because it is the corpus a
 consumer receives. The others are examples of how a quantity behaves, and the file says so where the numbers
 are.

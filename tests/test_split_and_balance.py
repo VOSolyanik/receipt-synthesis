@@ -145,12 +145,61 @@ def test_a_fraction_that_is_not_a_partition_is_refused(fraction):
 
 
 def test_a_run_too_small_to_partition_gets_an_empty_side_rather_than_a_forced_one():
-    """🔴 NO SIDE IS TOPPED UP. One persona at the default fraction is one training persona and no
-    validation set. Forcing one across would satisfy the SHAPE of a partition while producing a
-    validation set of a single person — worse than nothing, because it looks like something."""
+    """🔴 NO SIDE IS TOPPED UP, and WHICH side comes out empty follows the fraction.
+
+    One persona at the default is a single side. It used to be the training one, because the
+    default used to be 0.85; at 0.5 `round(1 × 0.5)` is 0 and the persona lands on validation
+    instead. The property under test is unchanged and is not about which side wins: forcing a
+    persona across would satisfy the SHAPE of a partition while producing a side of one person —
+    worse than nothing, because it looks like something.
+    """
     split = assign_splits(personas(1), seed=1, train_fraction=DEFAULT_TRAIN_FRACTION)
 
-    assert set(split.values()) == {Split.TRAIN}
+    assert len(set(split.values())) == 1, "a single persona cannot occupy two sides"
+
+
+def test_the_default_fraction_is_not_the_convention_borrowed_from_training():
+    """🔴 THE DEFAULT IS 0.5 AND THE REASON IS THAT NOTHING IS TRAINED ON THIS DATASET.
+
+    85/15 belongs to tasks where a model LEARNS on the larger side, and the larger side is large
+    because learning consumes examples. Here both sides answer a different question: the partition
+    guards against fitting the MEASUREMENT — whoever uses this corpus inspects documents, finds
+    where extraction errs and adjusts, and a figure does not count on the documents that were
+    inspected and tuned against. Inspection needs a few dozen documents; measurement wants as many
+    as the corpus allows.
+
+    Pinned as a test rather than left in a comment because a borrowed convention is exactly the
+    kind of number that creeps back in during an unrelated edit, carrying an authority it never
+    earned. Changing it should require saying so here.
+    """
+    assert DEFAULT_TRAIN_FRACTION == 0.5
+
+
+def test_the_default_gives_the_measurement_side_at_least_half():
+    """The PROPERTY behind the digit above, so the two tests fail for different reasons.
+
+    A drift back toward a training convention would raise the train share above a half, and this
+    catches that without pinning any particular value — 0.5, 0.4 and 0.3 all pass, 0.85 does not.
+    The binding constraint on how large validation must be is not a convention at all: a per-class
+    figure needs MIN_DOCUMENTS_PER_TARGET_CLASS on the side it is measured on, and the thinnest
+    target class runs near 8% of documents.
+    """
+    validation_fraction = 1 - DEFAULT_TRAIN_FRACTION
+
+    assert validation_fraction >= DEFAULT_TRAIN_FRACTION, (
+        f"the default sends {DEFAULT_TRAIN_FRACTION:.0%} to a side that trains nothing, leaving "
+        f"{validation_fraction:.0%} to carry every per-class figure"
+    )
+
+
+def test_the_cli_default_is_the_assembler_default_rather_than_its_own_copy():
+    """Two spellings of one decision drift apart, and this one would drift silently: a run would
+    partition differently from a direct call to `generate_dataset`, and nothing would say so."""
+    from receipt_synth.cli import build_parser
+
+    parsed = build_parser().parse_args(["--seed", "1"])
+
+    assert parsed.split == DEFAULT_TRAIN_FRACTION
 
 
 # ------------------------------------------------------------ report: the split --

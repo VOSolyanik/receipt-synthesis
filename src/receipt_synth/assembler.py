@@ -103,11 +103,28 @@ _CONTENT_BBOX_KEY = "__content_extent__"
 # channel for a given seed, exactly as reordering any drawn-from list in this repository does.
 CAPTURE_CHANNELS = (Capture.SCREENSHOT, Capture.PHOTO, Capture.SCAN)
 
-# What fraction of the PERSONAS go to training. A CONVENTION, declared as one: nothing measured it
-# and nothing in this repository depends on the number. It is a default so that an ordinary
-# invocation produces a partitioned dataset rather than an unpartitioned one that somebody later
-# partitions by hand — which is the only way the two halves come to be split differently twice.
-DEFAULT_TRAIN_FRACTION = 0.85
+# What fraction of the PERSONAS go to the development side. Still a convention — nothing measured
+# it — but no longer a BORROWED one, and the change from 0.85 is the whole point of this comment.
+#
+# 🔴 NOTHING IS TRAINED ON THIS DATASET, so the premise under 85/15 is absent. That ratio comes from
+# tasks where a model LEARNS on the larger side and the smaller side is merely held out; the larger
+# side has to be large because learning is what consumes examples. Here the two sides answer a
+# different question. The partition guards against fitting the MEASUREMENT: whoever uses this corpus
+# looks into documents, finds where extraction or classification errs, and adjusts accordingly — and
+# a figure does not count on the documents that were looked at and tuned against. That is all the
+# `train` side is for, and inspecting failures needs a few dozen documents, not several hundred.
+#
+# So the measurement side should be as large as the corpus allows, and the number that decides how
+# large it must be AT MINIMUM is not a convention at all: it is the THINNEST document class. A
+# per-class figure needs MIN_DOCUMENTS_PER_TARGET_CLASS on the side it is measured on, and
+# `fiscal_receipt` runs near 8% of documents, so a validation side below roughly 30% of the corpus
+# cannot carry one however healthy the corpus row looks. Half clears that with margin while still
+# leaving a development side an order of magnitude larger than inspection needs.
+#
+# ⚠️ IT IS A DEFAULT AND NOT A RULE. `--split` overrides it, and a caller whose consumer really does
+# train has every reason to. What the default may not do is arrive carrying the authority of a
+# convention whose premise nobody checked, which is what 0.85 did here.
+DEFAULT_TRAIN_FRACTION = 0.5
 
 # 🔴 THE MINIMUM NUMBER OF DOCUMENTS A PER-CLASS FIGURE MAY BE QUOTED ON. Below it a per-class
 # accuracy is not a measurement: at p ≈ 0.9 and n = 30 the 95% Wilson interval is about ±0.10, so

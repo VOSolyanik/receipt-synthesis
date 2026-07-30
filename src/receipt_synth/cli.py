@@ -48,8 +48,10 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="TRAIN_FRACTION",
         help=(
             "fraction of PERSONAS assigned to train, the rest to validation "
-            f"(default {DEFAULT_TRAIN_FRACTION}); the partition is by persona because annual "
-            "limits are cumulative per persona, and it is not stratified"
+            f"(default {DEFAULT_TRAIN_FRACTION}, because nothing is trained on this dataset and "
+            "the measurement side has to be big enough to carry a per-class figure for the "
+            "thinnest class); the partition is by persona because annual limits are cumulative "
+            "per persona, and it is not stratified"
         ),
     )
     parser.add_argument(
