@@ -26,6 +26,7 @@ from receipt_synth.assembler import _BUILDERS
 from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.config import jurisdiction
 from receipt_synth.content_builder import (
+    build_bank_statement,
     build_payment_confirmation,
     build_prro_receipt,
     resolve_vendor,
@@ -47,15 +48,19 @@ REGISTERED_SLUGS = sorted(ARCHETYPES)
 
 # AND THE SAME SET SPLIT BY DOCUMENT CLASS, because the registry no longer holds one class. A
 # receipt is printed on a till roll whose width is one the jurisdiction's suppliers sell and
-# carries a fiscal foot; a bank payment confirmation is an A4 page with neither. Every test below
-# that asserts a receipt fact reads THIS list, so registering a third class cannot make a
-# receipt-shaped assertion quietly apply to it — and the two lists are checked against the
-# registry, so a class nobody assigned cannot slip through either.
+# carries a fiscal foot; a bank payment confirmation is an A4 page with neither, and a statement is
+# an A4 page the long way round. Every test below that asserts a receipt fact reads THIS list, so
+# registering another class cannot make a receipt-shaped assertion quietly apply to it — and a
+# class nobody assigned cannot slip through either, because `context_for` refuses to build a
+# context for it and every whole-registry test goes through that function.
 FISCAL_SLUGS = sorted(
     slug for slug, a in ARCHETYPES.items() if a.doc_type is DocType.FISCAL_RECEIPT
 )
 CONFIRMATION_SLUGS = sorted(
     slug for slug, a in ARCHETYPES.items() if a.doc_type is DocType.PAYMENT_CONFIRMATION
+)
+STATEMENT_SLUGS = sorted(
+    slug for slug, a in ARCHETYPES.items() if a.doc_type is DocType.BANK_STATEMENT
 )
 
 
@@ -142,6 +147,21 @@ def make_confirmation(seed: int = 20260417, vendor: dict = PAYER, initiation: st
     )
 
 
+def make_statement(seed: int = 20260512, vendor: dict = PAYER):
+    """One bank account statement, for the whole-registry tests below.
+
+    The class's own tests are in test_bank_statement.py; this exists so that every test here that
+    sweeps the registry sweeps this archetype too.
+    """
+    return build_bank_statement(
+        random.Random(seed),
+        issued_at=datetime(2026, 5, 12, 14, 33),
+        vendor=vendor,
+        payer_name="Ковальчук Олена Петрівна",
+        payer_tax_id="2345678901",
+    )
+
+
 def context_for(slug: str) -> dict:
     """A render context for any registered archetype, built by its document class.
 
@@ -156,6 +176,8 @@ def context_for(slug: str) -> dict:
         return make_receipt(registrar=registrar_of(slug)).render_context()
     if doc_type is DocType.PAYMENT_CONFIRMATION:
         return make_confirmation().render_context()
+    if doc_type is DocType.BANK_STATEMENT:
+        return make_statement().render_context()
     raise AssertionError(
         f"{slug} is a {doc_type.value}, and this module has no context for that class — a "
         "registered archetype nothing here can render is one no test below covers"

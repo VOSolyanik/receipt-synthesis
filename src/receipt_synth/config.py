@@ -256,6 +256,36 @@ def acquirers(country: str) -> tuple[str, ...]:
 
 
 @cache
+def every_vendor(country: str) -> tuple[tuple[tuple[str, Any], ...], ...]:
+    """Every vendor of a jurisdiction, across all categories.
+
+    For the ordinary operations on a bank statement, which are 🔴 not a claim's evidence and
+    belong to no category at all: a person's account holds payments to whoever that person paid,
+    and drawing the noise from the claim's own category would make the relevant row findable by
+    its neighbours all being unlike it.
+
+    NOT DE-DUPLICATED, and both halves of that matter. A firm listed under two categories is
+    genuinely twice as likely to be paid, and — the half that would be a defect — the entries
+    that state NO name are the sole traders whose name is drawn per instance, so collapsing two
+    identical ones would collapse two different printed names into one.
+
+    Each vendor comes back as a tuple of sorted key-value pairs rather than a dict, because
+    `functools.cache` requires a hashable result and a shared mutable one would let one caller's
+    edit reach the next. Keys beginning with `$` are notes to a reader of the file and are
+    dropped. Order follows the file, so a seeded draw over the result is reproducible.
+    """
+    catalogue = load_vendors()["vendors"].get(country)
+    if not catalogue:
+        raise KeyError(f"config/vendors.json lists no vendor for {country!r}")
+
+    return tuple(
+        tuple(sorted((key, value) for key, value in vendor.items() if not key.startswith("$")))
+        for vendors in catalogue.values()
+        for vendor in vendors
+    )
+
+
+@cache
 def banks(country: str) -> tuple[str, ...]:
     """The issuers of a payment confirmation, as printed in its header.
 
@@ -357,3 +387,84 @@ def initiating_systems(language: str) -> tuple[str, ...]:
             f"config/generation.yaml lists no initiating system for language {language!r}"
         )
     return tuple(systems)
+
+
+# --- generation.yaml: the bank-statement draw inputs ---------------------------
+#
+# A group of its own, mirroring the confirmation's above, because it reads a different block of
+# a different document class. Deliberately NOT folded into one accessor family taking a class
+# name: two classes are two, and the shape is worth abstracting on the third rather than on the
+# second. What the statement PRINTS is `bank_statement` in config/fiscal-rules.yaml.
+
+
+def _bank_statement_generation() -> dict[str, Any]:
+    return load_generation()["bank_statement"]
+
+
+@cache
+def bank_statement_share(name: str) -> float:
+    """One of the observed proportions a bank-statement variant is drawn at."""
+    block = _bank_statement_generation()
+    key = f"{name}_share"
+    if key not in block:
+        raise KeyError(
+            f"config/generation.yaml declares no `bank_statement.{key}`; it has "
+            f"{sorted(k for k in block if k.endswith('_share'))}"
+        )
+    return float(block[key])
+
+
+@cache
+def bank_statement_money_range(name: str) -> tuple[Decimal, Decimal]:
+    """A money range of the bank-statement block, exact to the kopiyka.
+
+    Parsed from decimal text for the reason `price_range` states: a YAML float is a binary
+    double, and these bounds feed money arithmetic that is otherwise exact.
+    """
+    block = _bank_statement_generation()
+    key = f"{name}_range"
+    if key not in block:
+        raise KeyError(f"config/generation.yaml declares no `bank_statement.{key}`")
+    low, high = (Decimal(str(value)) for value in block[key])
+    return low, high
+
+
+@cache
+def bank_statement_count_range(name: str) -> tuple[int, int]:
+    """An inclusive range of whole things — rows on a page, days in a period.
+
+    Kept apart from the money accessor above rather than sharing one that returns `Decimal`: a
+    row count is not money, and a caller that received a `Decimal` here would have to convert it
+    back before handing it to `random.randint`.
+    """
+    block = _bank_statement_generation()
+    key = f"{name}_range"
+    if key not in block:
+        raise KeyError(f"config/generation.yaml declares no `bank_statement.{key}`")
+    low, high = (int(value) for value in block[key])
+    if low > high:
+        raise ValueError(
+            f"config/generation.yaml has `bank_statement.{key}` reversed: {low}-{high}"
+        )
+    return low, high
+
+
+@cache
+def statement_purposes(language: str, kind: str) -> tuple[str, ...]:
+    """The payment-purpose templates a statement row of this kind may carry.
+
+    `kind` is `debit`, `credit` or `service_fee`, and they are three pools rather than one
+    because 🔴 the direction decides what the text can say: a credit row's money is arriving, so
+    «Оплата за …» is impossible on it. The service-fee wording is a single string in the file and
+    comes back as a one-element tuple, so every caller draws the same way.
+    """
+    pools = _bank_statement_generation()["purposes"].get(language)
+    if not pools:
+        raise KeyError(f"config/generation.yaml lists no statement purpose for {language!r}")
+    if kind not in pools:
+        raise KeyError(
+            f"config/generation.yaml lists no `bank_statement.purposes.{language}.{kind}`; "
+            f"it has {sorted(pools)}"
+        )
+    entry = pools[kind]
+    return (entry,) if isinstance(entry, str) else tuple(entry)

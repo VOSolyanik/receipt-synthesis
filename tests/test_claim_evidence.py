@@ -61,6 +61,7 @@ from receipt_synth.policy_engine import (
 from receipt_synth.schemas import (
     Capture,
     Country,
+    Direction,
     DocGroundTruth,
     DocType,
     LineItem,
@@ -95,6 +96,7 @@ def doc(
     when: date = IN_PERIOD,
     items: list[LineItem] | None = None,
     currency: str = "UAH",
+    direction: Direction | None = None,
 ) -> DocGroundTruth:
     """One document label.
 
@@ -111,6 +113,7 @@ def doc(
         amount=Decimal(amount),
         date=when,
         counterparty="Vendor",
+        direction=direction,
         line_items=items or [],
         has_qr=True,
         qr_is_fiscal=True,
@@ -573,20 +576,49 @@ def test_a_disagreeing_claim_consumes_no_balance():
 # ------------------------------------------------ shapes the policy cannot resolve --
 
 
-def test_a_bank_statement_cannot_be_resolved_to_the_transaction_of_this_claim():
-    """The case decision A names as the one to think hardest about.
+def test_a_bank_statement_now_pairs_with_a_subject_document_like_any_other_payment():
+    """What replaced the blanket refusal of a statement, and it is the same test inverted.
 
-    A statement lists several transactions and the label carries ONE amount for the whole
-    document, so "the transaction in the statement that corresponds to this claim" is not
-    something the ground truth can point at. Neither policy.yaml nor the labelling contract
-    settles whether a statement produces one label or one per transaction, so the engine
-    refuses instead of picking.
+    A statement used to be refused outright here, on the ground that it lists several
+    transactions while its label carried one amount for the whole document, so nothing pointed
+    at the row the claim was about. Its label now describes ONE TRANSACTION — the row's amount,
+    date, counterparty and direction, with `relevant_transaction` naming the row — so the
+    claim's money is identified exactly as well as it is on a confirmation, and the type is an
+    ordinary payment document to this function.
+
+    Asserted on the SHAPE rather than on a verdict, because that is what changed: one
+    transaction, the invoice as its subject and the statement as its payment.
     """
-    statement = doc("c1_d2", DocType.BANK_STATEMENT, amount="5000.00")
+    statement = doc("c1_d2", DocType.BANK_STATEMENT, amount="600.00")
     invoice = doc("c1_d1", DocType.INVOICE, amount="600.00", items=[item("600.00")])
 
-    with pytest.raises(PolicyGapError, match="bank_statement"):
-        evaluate([invoice, statement])
+    shape = resolve_evidence([invoice, statement])
+
+    assert len(shape.transactions) == 1
+    assert shape.transactions[0].subject is invoice
+    assert shape.transactions[0].payment is statement
+    assert evaluate([invoice, statement]).verdict is Verdict.COVERED
+
+
+def test_a_credit_is_refused_because_money_arriving_proves_no_expense():
+    """🔴 The invariant of the statement class, checked on the oracle rather than on the builder.
+
+    Only a DEBIT can be proof of payment. A credit is a refund or a reversal, and a claim whose
+    proof of payment is money ARRIVING is a claim proving that the money came back. policy.yaml
+    assigns no verdict to that, so the engine refuses rather than inventing one.
+
+    Built by hand because `content_builder.BankStatement` cannot produce it — it refuses to
+    label a credit row — and this guard exists for what does not go through that builder: a trap
+    archetype, or a consumer's own record. Same amount, same date, same parties as the test
+    above; the direction is the only difference, and it is the whole difference.
+    """
+    refund = doc(
+        "c1_d2", DocType.BANK_STATEMENT, amount="600.00", direction=Direction.CREDIT
+    )
+    invoice = doc("c1_d1", DocType.INVOICE, amount="600.00", items=[item("600.00")])
+
+    with pytest.raises(PolicyGapError, match="credit"):
+        evaluate([invoice, refund])
 
 
 def test_a_receipt_and_an_invoice_together_have_no_derivable_pairing():

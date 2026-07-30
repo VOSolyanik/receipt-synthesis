@@ -36,8 +36,12 @@ from faker import Faker
 
 from receipt_synth.config import (
     acquirers,
+    bank_statement_count_range,
+    bank_statement_money_range,
+    bank_statement_share,
     banks,
     category,
+    every_vendor,
     excluded_line_counts,
     fiscal_makers,
     high_frequency_surnames,
@@ -50,10 +54,11 @@ from receipt_synth.config import (
     placeholder_values,
     price_range,
     quantity_choices,
+    statement_purposes,
     unprintable_item_kinds,
     vendor_profile,
 )
-from receipt_synth.schemas import Capture, DocGroundTruth, DocType, LineItem
+from receipt_synth.schemas import Capture, Direction, DocGroundTruth, DocType, LineItem
 
 KOPIYKA = Decimal("0.01")
 
@@ -1730,6 +1735,16 @@ def _draw_card(rng: random.Random, block: dict) -> str:
     return shown
 
 
+def _draw_bank_code(rng: random.Random, country: str) -> str:
+    """A МФО — the six-digit code identifying a bank in this jurisdiction.
+
+    Read from `identifiers.bank_code` in config/fiscal-rules.yaml, which is where it lives because
+    TWO document classes print it: a confirmation names the issuer's and a statement names the
+    account's. One shape, one place.
+    """
+    return _draw_from_pattern(rng, jurisdiction(country)["identifiers"]["bank_code"]["pattern"])
+
+
 def _draw_signature_path(rng: random.Random) -> str:
     """An SVG path for a handwritten signature — 👁 present beside the stamp on 7 of 8.
 
@@ -1810,8 +1825,8 @@ def build_payment_confirmation(
 
     # -- the two parties
     bank_name = rng.choice(banks(country))
-    bank_code = _draw_from_pattern(rng, block["parties"]["bank_code"]["pattern"])
-    payee_bank_code = _draw_from_pattern(rng, block["parties"]["bank_code"]["pattern"])
+    bank_code = _draw_bank_code(rng, country)
+    payee_bank_code = _draw_bank_code(rng, country)
 
     is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
     payee_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
@@ -1941,6 +1956,548 @@ def build_payment_confirmation(
     )
 
 
+@dataclass(frozen=True)
+class StatementRow:
+    """One operation as an account statement prints it.
+
+    Seven printed values, 👁 all of them observed on the corporate statement this class is built
+    from. Only some of them reach a label, and which ones is the point of the class: the row the
+    claim rests on contributes `amount`, `date`, `counterparty` and `payment_purpose` to
+    `DocGroundTruth`, every other row on the page contributes nothing at all, and the four
+    counterparty fields collapse to the NAME alone even on the labelled row.
+
+    `amount` IS UNSIGNED. `direction` says which of the two money columns it is printed in — see
+    `schemas.Direction` for why that is a field rather than a sign.
+    """
+
+    number: str
+    at: datetime
+    amount: Decimal
+    direction: Direction
+    purpose: str
+    counterparty_name: str
+    counterparty_code: str
+    counterparty_account: str
+    counterparty_bank: str
+
+    @property
+    def is_debit(self) -> bool:
+        return self.direction is Direction.DEBIT
+
+
+@dataclass(frozen=True)
+class BankStatement:
+    """One Ukrainian bank account statement, complete but not yet rendered.
+
+    🔴 THE LABEL CARRIES ONE TRANSACTION AND THE DOCUMENT'S OWN TOTALS CARRY NOTHING. That is the
+    whole shape of this class, and it is derived rather than chosen: the consumer's required-field
+    table names a statement's amount, date, payee and payment purpose in the SINGULAR and states
+    that the type has no line items, so what it describes is a transaction. `relevant` is that
+    transaction and `ground_truth` reads every scoreable field off it.
+
+    🔴 THE FOUR TURNOVER TOTALS ARE PRINTED AND NEVER LABELLED — opening balance, closing balance,
+    total credit, total debit. 👁 They are the most prominent numbers on the page, and omitting
+    them would make "find the relevant transaction" artificially easy and inflate whatever is
+    measured on the class. It is the same refusal as `PrroReceipt.amount_due` not being scoreable
+    and as the confirmation's total being printed while the transfer is the answer: a number is
+    printed because the document prints it, and labelled only where a label can mean something.
+    All four are DERIVED from the rows, so the page cannot contradict itself.
+
+    ⚠️ THE DIFFICULTY OF FINDING THE RELEVANT ROW IS UNDERSTATED IN THIS VERSION. The other rows
+    are ordinary operations drawn from the same pools, with no deliberate resemblance to the
+    labelled one — a row carrying the same counterparty or a nearby amount is a DECOY, that is a
+    difficulty dial belonging to the trap design, and it is deferred. Anyone quoting a number
+    measured on this class has to say so, which is why the contract states it too rather than
+    leaving it here.
+
+    THE LABELLED AMOUNT APPEARS ON NO OTHER ROW, and that is a separate decision from deferring
+    decoys — it is what makes the label well-posed. A consumer identifies the row from the claim's
+    OTHER document, an invoice naming a seller and a total, so two rows answering that description
+    would leave the ground truth pointing at one of two indistinguishable answers. The claim's
+    payee is additionally kept out of the pool the other rows draw from.
+
+    The residual case, stated rather than implied: a sole trader's printed name is DRAWN, so an
+    ordinary row could in principle draw the same personal name as the claim's payee. The amount is
+    what makes the row unique in that case, which is why the amount is the invariant and the payee
+    exclusion is not.
+    """
+
+    bank_name: str
+    bank_code: str
+    holder_name: str
+    holder_code: str
+    account: str
+    period_start: date
+    period_end: date
+    # The date and time the statement itself was produced, which is NOT the date of the
+    # transaction it is labelled for. 👁 The observed statement was issued the morning after its
+    # period closed.
+    issued_at: datetime
+    opening_balance: Decimal
+    rows: tuple[StatementRow, ...]
+    # Which row the label is about, as an index into `rows`. An index rather than a copy of the
+    # row so there is one row object and no way for the two to drift; the label exports the row's
+    # printed NUMBER, which is what a reader of the image can point at.
+    relevant_index: int
+    decimal_separator: str
+
+    def __post_init__(self) -> None:
+        if not self.rows:
+            raise ValueError("a statement lists at least one operation")
+        if not 0 <= self.relevant_index < len(self.rows):
+            raise ValueError(
+                f"relevant_index {self.relevant_index} is outside the {len(self.rows)} rows of "
+                "this statement, so the label would point at no row at all"
+            )
+        # The pointer has to point at one row. 👁 A drawn number repeated on two rows of one render
+        # before the numbering became a counter, and nothing but this would have caught it: the
+        # label was still correct about the row's values, and only the POINTER was ambiguous.
+        numbers = [row.number for row in self.rows]
+        if len(set(numbers)) != len(numbers):
+            raise ValueError(
+                "two operations on this statement carry the same number, so "
+                "`relevant_transaction` would point at both — see `_draw_operation_numbers`"
+            )
+        # 🔴 THE INVARIANT OF THIS CLASS, enforced at construction rather than trusted: only a
+        # DEBIT can be proof of payment. A credit is money arriving — a refund, a reversal, a
+        # transfer in — and it evidences no expense whatever its amount, so a statement whose
+        # labelled row is a credit is a document that cannot support the claim it was built for.
+        # `proves_payment_by_direction` states the same rule as a validator, and
+        # `policy_engine.resolve_evidence` refuses such a claim rather than labelling it.
+        if not self.relevant.is_debit:
+            raise ValueError(
+                f"row {self.relevant.number} is a {self.relevant.direction.value} and cannot be "
+                "proof of payment: money arriving is a refund, not an expense. A statement whose "
+                "labelled transaction is a credit is a trap archetype, which has to declare the "
+                "broken invariant in the claim's `imperfection` rather than be built here"
+            )
+
+    @property
+    def relevant(self) -> StatementRow:
+        """The one transaction this document is labelled for."""
+        return self.rows[self.relevant_index]
+
+    # -- the four turnover totals, all derived --------------------------------
+
+    @property
+    def total_debit(self) -> Decimal:
+        return sum((row.amount for row in self.rows if row.is_debit), Decimal(0)).quantize(KOPIYKA)
+
+    @property
+    def total_credit(self) -> Decimal:
+        return sum(
+            (row.amount for row in self.rows if not row.is_debit), Decimal(0)
+        ).quantize(KOPIYKA)
+
+    @property
+    def closing_balance(self) -> Decimal:
+        """👁 The observed statement's four figures satisfy this exactly, so it is arithmetic
+        rather than a convention: what was there, plus what arrived, less what left."""
+        return (self.opening_balance + self.total_credit - self.total_debit).quantize(KOPIYKA)
+
+    @property
+    def debit_count(self) -> int:
+        return sum(1 for row in self.rows if row.is_debit)
+
+    @property
+    def credit_count(self) -> int:
+        return len(self.rows) - self.debit_count
+
+    # -- rendering ------------------------------------------------------------
+
+    def _amount(self, value: Decimal) -> str:
+        rules = jurisdiction("UA")["number_format"]
+        whole, _, fraction = f"{value:.2f}".partition(".")
+        grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
+        return f"{grouped}{self.decimal_separator}{fraction}"
+
+    def render_context(self) -> dict:
+        """Everything the template prints, already formatted.
+
+        Rows arrive as a list of dicts rather than as `StatementRow` objects, because the template
+        needs each amount already in its own column and formatted: a template deciding which of
+        two columns a number goes in would put the direction rule in the markup, where no test
+        looks for it.
+
+        `relevant` is passed as a FLAG ON EACH ROW, and it is what marks the labelled cells for
+        the bounding-box collector. Nothing about it is visible on the page: it adds no class, no
+        emphasis and no ordering, so 👁 to the eye the row is one of twenty. That has to be true
+        or the corpus measures a highlighted row.
+        """
+        rules = jurisdiction("UA")
+        block = rules["bank_statement"]
+        return {
+            "bank_name": self.bank_name,
+            "bank_code": self.bank_code,
+            "header": block["header"],
+            "title": block["header"]["title"].format(
+                start=self.period_start.strftime(rules["date_format"]),
+                end=self.period_end.strftime(rules["date_format"]),
+            ),
+            "holder_name": self.holder_name,
+            "holder_code": self.holder_code,
+            "account": self.account,
+            "last_operation_on": self.rows[-1].at.strftime(rules["date_format"]),
+            "issued_on": self.issued_at.strftime(rules["date_format"]),
+            "issued_time": self.issued_at.strftime(block["time_format"]),
+            "totals": block["totals"],
+            "opening_balance": self._amount(self.opening_balance),
+            "closing_balance": self._amount(self.closing_balance),
+            "total_credit": self._amount(self.total_credit),
+            "total_debit": self._amount(self.total_debit),
+            "credit_count": self.credit_count,
+            "debit_count": self.debit_count,
+            "columns": block["columns"],
+            "rows": [
+                {
+                    "number": row.number,
+                    "date": row.at.strftime(rules["date_format"]),
+                    "time": row.at.strftime(block["time_format"]),
+                    "debit": self._amount(row.amount) if row.is_debit else None,
+                    "credit": None if row.is_debit else self._amount(row.amount),
+                    "purpose": row.purpose,
+                    "counterparty_name": row.counterparty_name,
+                    "counterparty_code": row.counterparty_code,
+                    "counterparty_account": row.counterparty_account,
+                    "counterparty_bank": row.counterparty_bank,
+                    "relevant": index == self.relevant_index,
+                }
+                for index, row in enumerate(self.rows)
+            ],
+            # This class carries no QR — 👁 none was observed on a statement, and the renderer
+            # requires the key on every context.
+            "qr_payload": None,
+        }
+
+    # -- labels ---------------------------------------------------------------
+
+    def ground_truth(
+        self,
+        *,
+        doc_id: str,
+        source_file: str,
+        capture: Capture,
+        field_bboxes: dict[str, tuple[float, float, float, float]],
+    ) -> DocGroundTruth:
+        """The label record for this statement — one transaction, not one document.
+
+        `amount`, `date`, `counterparty`, `payment_purpose` and `direction` are read off
+        `relevant`, and `relevant_transaction` carries that row's printed number so the label says
+        WHICH row the answers came from. `field_bboxes` then says where: the LABELLED field keys
+        are the cells of that row, because only its cells carry a field marker. Every row also
+        carries an indexed marker of its own — `operation_<i>` over the whole row rect — so the
+        boxes on a statement are NOT the labelled row's alone, and the labelled ones are.
+
+        NONE OF THE FOUR TURNOVER TOTALS IS LABELLED, and none of them is `total_charged` under
+        another name either — that field is the confirmation's «Загальна сума», one payment plus
+        its fee. Reusing it for a period's turnover would give one key two meanings, which is the
+        failure config/labelling-schema.yaml exists to prevent.
+
+        `counterparty` is the payee's NAME only, out of the 👁 four fields the row prints for it.
+        ⚠️ A single counterparty field is ambiguous about ROLE on a statement — for a debit the
+        counterparty received the money, for a credit it sent it — and `direction` is what removes
+        the ambiguity. That is the second reason the field exists, beside proof of payment.
+        """
+        row = self.relevant
+        return DocGroundTruth(
+            doc_id=doc_id,
+            source_file=source_file,
+            doc_type=DocType.BANK_STATEMENT,
+            language="uk",
+            currency="UAH",
+            amount=row.amount,
+            direction=row.direction,
+            date=row.at.date(),
+            counterparty=row.counterparty_name,
+            payer=self.holder_name,
+            payment_purpose=row.purpose,
+            # 👁 The observed statement's header carries no number of its own — a client, an
+            # account, a period and a production time. `document_code` is therefore `None`, and
+            # `relevant_transaction` below is a pointer INTO the document rather than its identity.
+            document_code=None,
+            relevant_transaction=row.number,
+            # EMPTY, and settled by the requirement rather than open: a statement has no line
+            # items. It lists transactions, and a transaction is not a line of a basket — which is
+            # exactly why 👁 a statement establishes nothing about what was bought.
+            line_items=[],
+            has_qr=False,
+            qr_is_fiscal=False,
+            has_fiscal_number=False,
+            capture=capture,
+            field_bboxes=field_bboxes,
+        )
+
+
+def _draw_operation_numbers(rng: random.Random, block: dict, count: int) -> list[str]:
+    """`count` per-row operation numbers, in the 👁 two observed shapes and all distinct.
+
+    🔴 DISTINCT BY CONSTRUCTION, because the number is the label's pointer at the labelled row: two
+    rows carrying the same one would point at both. The trailing digits are ONE COUNTER across the
+    page, which is 👁 what the short form is — a client's own sequential document numbering — so the
+    realism and the uniqueness are the same fact rather than a constraint bolted onto a draw.
+
+    Why a counter rather than rejection sampling: a loop that redrew on collision would take a
+    number of values from `rng` that depends on which collisions occurred, and every later value in
+    the whole run would shift with them.
+
+    The counter is enough on its own. Two rows of one width differ because their ordinals do; two
+    rows of different widths differ in length; and a prefixed number can never equal a bare one.
+    """
+    first = rng.randrange(10**6)
+    numbers = []
+    for ordinal in range(count):
+        spec = rng.choice(block["operation_number"]["formats"])
+        width = spec["serial_digits"]
+        head = _draw_from_pattern(rng, spec["pattern"]) if spec["pattern"] else ""
+        serial = (first + ordinal) % 10**width
+        numbers.append(f"{spec['prefix']}{head}{serial:0{width}d}")
+    return numbers
+
+
+def _draw_row_amount(rng: random.Random, low: Decimal, high: Decimal) -> Decimal:
+    """An amount in ten-kopiyka steps, as every other amount in this repository is drawn."""
+    return Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100
+
+
+def build_bank_statement(
+    rng: random.Random,
+    *,
+    issued_at: datetime,
+    vendor: dict,
+    payer_name: str,
+    payer_tax_id: str,
+    amount: Decimal | None = None,
+    country: str = "UA",
+) -> BankStatement:
+    """Build one Ukrainian bank account statement, on one page.
+
+    ⚠️ `issued_at` IS THE MOMENT OF THE LABELLED TRANSACTION, not of the document. Every other
+    archetype of this repository is a document about one payment, so the two coincide there and
+    the parameter means the same thing to the assembler; here the statement covers a period, and
+    its own production time is derived from the period's end. The claim's payment date is the
+    row's, which is what `ground_truth` puts in `date`.
+
+    `vendor` is the claim's payee, resolved, and it appears on the labelled row and on no other:
+    no ordinary row repeats that counterparty, so the row the label points at is the only one
+    matching the claim's other document. `payer_name` and `payer_tax_id` come from the persona and
+    are the ACCOUNT HOLDER — a statement of anybody else's account would evidence nothing about
+    this claimant's money.
+
+    `amount` is the labelled transaction's amount, drawn when not given. It is a parameter for the
+    reason the confirmation's `transfer` is one: a caller pairing this statement with an invoice
+    has to be able to state the amount both documents describe.
+    """
+    rules = jurisdiction(country)
+    block = rules["bank_statement"]
+
+    if amount is None:
+        amount = _draw_row_amount(rng, *bank_statement_money_range("transaction_amount"))
+    if amount <= 0:
+        raise ValueError(f"a statement row states a positive amount, got {amount}")
+
+    # -- the account and its holder
+    bank_name = rng.choice(banks(country))
+    bank_code = _draw_bank_code(rng, country)
+    account = generate_iban(rng, bank_code, country)
+
+    # -- the period. Derived from where the operations fall rather than declared: ⛔ nothing
+    # observed says how long a personal statement's period is, while the observed document's own
+    # period was exactly the span of its operations.
+    lead = rng.randint(*bank_statement_count_range("period_lead_days"))
+    trail = rng.randint(*bank_statement_count_range("period_trail_days"))
+    period_start = issued_at.date() - timedelta(days=lead)
+    period_end = issued_at.date() + timedelta(days=trail)
+
+    # -- how many operations, and how many of them arrive rather than leave
+    row_count = rng.randint(*bank_statement_count_range("row_count"))
+    # One row is the labelled transaction and one is the bank's own service charge; the rest are
+    # ordinary payments. `max` keeps a short page from having no ordinary rows at all.
+    ordinary = max(1, row_count - 2)
+    # At least one credit whatever the share returns: `direction` is a label field, and a page
+    # with no credit row carries no visible instance of the distinction it names.
+    credits = max(1, round(bank_statement_share("credit") * ordinary))
+    credits = min(credits, ordinary)
+
+    # The claim's own payee is taken OUT of the pool the ordinary rows draw from, so that no other
+    # row names it. See the uniqueness note on `BankStatement` for what that buys and for the one
+    # residual case it does not cover.
+    # Every row's number, allocated together so the counter that keeps them distinct is one
+    # counter. `ordinary + 2` is the fee row and the labelled transaction beside the ordinary ones.
+    numbers = _draw_operation_numbers(rng, block, ordinary + 2)
+
+    pool = [
+        dict(entry)
+        for entry in every_vendor(country)
+        if dict(entry).get("name") != vendor.get("name")
+    ]
+    purposes = {
+        kind: statement_purposes(rules["language"], kind)
+        for kind in ("debit", "credit", "credit_from_self", "service_fee")
+    }
+
+    def counterparty_of(entry: dict) -> tuple[str, str, str, str]:
+        """The four printed fields of a counterparty: name, code, account, bank."""
+        resolved = resolve_vendor(rng, entry, country)
+        code = (
+            generate_rnokpp(rng)
+            if resolved["legal_form"] == _SOLE_TRADER
+            else generate_edrpou(rng)
+        )
+        their_bank_code = _draw_bank_code(rng, country)
+        return (
+            printed_legal_name(resolved["name"], resolved["legal_form"]),
+            code,
+            generate_iban(rng, their_bank_code, country),
+            rng.choice(banks(country)),
+        )
+
+    def purpose_of(kind: str, at: datetime) -> str:
+        """A purpose line, with the invoice it refers to filled in.
+
+        🔴 It refers to a document that is not in the claim, which is the whole reason a statement
+        establishes nothing about what was bought.
+        """
+        template = rng.choice(purposes[kind])
+        return template.format(
+            invoice_no=f"{rng.randint(1, 9999)}",
+            invoice_date=(at - timedelta(days=rng.randint(0, 20))).strftime(rules["date_format"]),
+        )
+
+    relevant_name = printed_legal_name(vendor["name"], vendor["legal_form"])
+    rows: list[StatementRow] = []
+
+    # -- the ordinary operations. Their amounts avoid the labelled one, so the labelled row is the
+    # only row on the page carrying that amount.
+    debit_range = bank_statement_money_range("debit_amount")
+    credit_range = bank_statement_money_range("credit_amount")
+    for index in range(ordinary):
+        direction = Direction.CREDIT if index < credits else Direction.DEBIT
+        entry = rng.choice(pool)
+        name, code, iban, their_bank = counterparty_of(entry)
+        # A credit may be a transfer from ANOTHER ACCOUNT OF THE HOLDER'S, in which case the
+        # counterparty is the holder. Drawn after the vendor rather than instead of it, so that
+        # adding the case shifted no later value in the run.
+        kind = "credit" if direction is Direction.CREDIT else "debit"
+        if direction is Direction.CREDIT and rng.random() < bank_statement_share(
+            "credit_from_self"
+        ):
+            kind = "credit_from_self"
+            name, code, iban = payer_name, payer_tax_id, generate_iban(rng, bank_code, country)
+            their_bank = bank_name
+        row_amount = _draw_row_amount(
+            rng, *(credit_range if direction is Direction.CREDIT else debit_range)
+        )
+        if row_amount == amount:
+            # Nudged by one draw step rather than redrawn: a rejection loop would make the number
+            # of values taken from `rng` depend on what the earlier draws returned, and every later
+            # value in the whole run would shift with it.
+            row_amount += KOPIYKA * 10
+        at = _draw_row_time(rng, period_start, period_end)
+        rows.append(
+            StatementRow(
+                number=numbers[index],
+                at=at,
+                amount=row_amount,
+                direction=direction,
+                purpose=purpose_of(kind, at),
+                counterparty_name=name,
+                counterparty_code=code,
+                counterparty_account=iban,
+                counterparty_bank=their_bank,
+            )
+        )
+
+    # -- the bank's own service charge: 👁 a debit whose counterparty is the issuer itself.
+    fee_at = _draw_row_time(rng, period_start, period_end)
+    fee_low, fee_high = bank_statement_money_range("service_fee")
+    rows.append(
+        StatementRow(
+            number=numbers[ordinary],
+            at=fee_at,
+            amount=_draw_row_amount(rng, fee_low, fee_high),
+            direction=Direction.DEBIT,
+            purpose=purposes["service_fee"][0],
+            # 👁 The counterparty of a service charge is the issuer itself, and the code beside it
+            # is a МФО — six digits under the same «Код» caption that carries eight and ten
+            # elsewhere on the page. ⚠️ That is the confirmation's finding about caption plus
+            # length appearing again on a second class, and it is why a rule reading the KIND of
+            # code off its caption alone is wrong.
+            counterparty_name=bank_name,
+            counterparty_code=_draw_bank_code(rng, country),
+            counterparty_account=generate_iban(rng, bank_code, country),
+            counterparty_bank=bank_name,
+        )
+    )
+
+    # -- the labelled transaction
+    payee_bank_code = _draw_bank_code(rng, country)
+    rows.append(
+        StatementRow(
+            number=numbers[ordinary + 1],
+            at=issued_at,
+            amount=amount,
+            direction=Direction.DEBIT,
+            purpose=purpose_of("debit", issued_at),
+            counterparty_name=relevant_name,
+            counterparty_code=(
+                generate_rnokpp(rng)
+                if vendor["legal_form"] == _SOLE_TRADER
+                else generate_edrpou(rng)
+            ),
+            counterparty_account=generate_iban(rng, payee_bank_code, country),
+            counterparty_bank=rng.choice(banks(country)),
+        )
+    )
+
+    # 👁 Operations are printed in the order they happened, so the labelled one lands wherever its
+    # timestamp puts it — usually in the middle of the page. Sorted by the timestamp AND then by
+    # the drawn order, so two operations in the same second keep a defined order under a seed.
+    ordered = sorted(range(len(rows)), key=lambda index: (rows[index].at, index))
+    rows = [rows[index] for index in ordered]
+    relevant_index = ordered.index(len(ordered) - 1)
+
+    return BankStatement(
+        bank_name=bank_name,
+        bank_code=bank_code,
+        holder_name=payer_name,
+        holder_code=payer_tax_id,
+        account=account,
+        period_start=period_start,
+        period_end=period_end,
+        # 👁 The observed statement was produced the morning after its period closed.
+        issued_at=datetime(
+            period_end.year, period_end.month, period_end.day, rng.randint(9, 11),
+            rng.randint(0, 59)
+        )
+        + timedelta(days=1),
+        # 🔴 DERIVED, NOT DRAWN: what the account started with is what makes the period's
+        # arithmetic land on a plausible residue. Drawing it independently produced statements with
+        # a NEGATIVE closing balance — an account with a credit line, which is a different document
+        # and one nothing observed supports. The residue is drawn; `max` keeps the opening balance
+        # non-negative in the other direction, where more money arrived than left.
+        opening_balance=(
+            _draw_row_amount(rng, *bank_statement_money_range("closing_balance"))
+            + max(Decimal(0), _statement_net_outflow(rows))
+        ),
+        rows=tuple(rows),
+        relevant_index=relevant_index,
+        decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
+    )
+
+
+def _statement_net_outflow(rows: list[StatementRow]) -> Decimal:
+    """What the operations take out of the account, less what they put in."""
+    return sum(
+        (row.amount if row.is_debit else -row.amount for row in rows), Decimal(0)
+    ).quantize(KOPIYKA)
+
+
+def _draw_row_time(rng: random.Random, start: date, end: date) -> datetime:
+    """A timestamp inside the statement's period, at an hour a payment is made at."""
+    day = start + timedelta(days=rng.randint(0, (end - start).days))
+    return datetime(day.year, day.month, day.day, rng.randint(8, 21), rng.randint(0, 59))
+
+
 # =============================================================================
 # Invariant validators
 # =============================================================================
@@ -1973,6 +2530,30 @@ def validate_amount_in_words(text: str, amount: Decimal) -> bool:
         return words_to_amount_uk(text) == Decimal(amount).quantize(KOPIYKA)
     except (ValueError, ArithmeticError):
         return False
+
+
+def proves_payment_by_direction(direction: Direction | None) -> bool:
+    """Whether a transaction in this direction can be proof that an expense was paid.
+
+    🔴 ONLY A DEBIT CAN. A credit is money arriving — a refund, a reversal, a transfer from
+    another account of the holder's — and it evidences no expense whatever its amount: for a
+    reimbursement claim the difference between a debit and a credit is the difference between
+    proof of an expense and proof that the money came back.
+
+    `None` PASSES, and that is a statement rather than a lenience: a document class that prints no
+    direction is a document about ONE movement of money, made because a payment was made, so
+    there is nothing for the rule to be about. A receipt and a confirmation are that; a statement,
+    which lists movements both ways, is what the rule exists for.
+
+    Stated as a question with a boolean answer, like every validator here. Two things enforce it,
+    and only one of them goes through this function: `policy_engine.resolve_evidence` CALLS it, and
+    refuses a claim that rests on a credit rather than assigning it a verdict policy.yaml does not
+    support, while `BankStatement.__post_init__` refuses independently — it tests the row's own
+    direction, so the builder's guard survives a mistake in here and vice versa. A trap
+    archetype that prints a refund as though it were a payment is where the invariant is broken
+    deliberately, and it will have to name the break in the claim's `imperfection`.
+    """
+    return direction is not Direction.CREDIT
 
 
 def validate_vat_letter(item_kind: str, letter: str | None, country: str) -> bool:

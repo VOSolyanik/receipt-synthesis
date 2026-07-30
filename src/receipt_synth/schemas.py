@@ -53,6 +53,32 @@ class DocType(StrEnum):
     NON_FISCAL_RECEIPT = "non_fiscal_receipt"
 
 
+class Direction(StrEnum):
+    """Which way the money moved on the transaction a document is about.
+
+    Дебет / кредит as an account statement prints them, and a SEPARATE FIELD rather than a sign
+    on ``amount``. Two reasons, and the first one alone settles it:
+
+    * money is normalized identically on every document class of this dataset — two decimal
+      places, half-up, exact comparison — and a signed amount would give one class a second
+      convention. A consumer comparing ``-1200.00`` against ``1200.00`` would score a correct
+      reading as a miss;
+    * the direction is a fact of the page rather than a property of the number. A statement
+      prints the amount in one of two money columns, and which column it is in is what a reader
+      reads the direction off.
+
+    ONLY A DEBIT CAN BE PROOF OF PAYMENT. A credit is money arriving — a refund, a reversal, a
+    transfer in — and it evidences no expense whatever its amount. The rule is enforced rather
+    than noted: `content_builder.build_bank_statement` makes the labelled transaction a debit by
+    construction, `content_builder.proves_payment_by_direction` states it as a validator, and
+    `policy_engine.resolve_evidence` refuses a claim resting on a credit instead of assigning it a
+    verdict nothing in policy.yaml supports.
+    """
+
+    DEBIT = "debit"
+    CREDIT = "credit"
+
+
 class Capture(StrEnum):
     """How the document reached the verifier — see docs/architecture.md#degradation."""
 
@@ -187,6 +213,17 @@ class DocGroundTruth(BaseModel):
     amount of the operation and is NOT the largest number printed on the page. See
     ``content_builder.PaymentConfirmation``.
 
+    🔴 ON A BANK STATEMENT THE LABEL CARRIES ONE TRANSACTION AND NOT THE DOCUMENT. ``amount``,
+    ``date``, ``counterparty``, ``payment_purpose`` and ``direction`` are the values of the ONE
+    ROW the claim rests on, and ``relevant_transaction`` says which row that is. Derived rather
+    than chosen: the consumer's required-field table lists a statement's fields in the SINGULAR
+    and states that such a document has no line items, so the extraction target it describes is a
+    transaction. The statement's own four summary totals — opening balance, closing balance, total
+    credit, total debit — are printed and are NOT LABELLED AT ALL, for the reason spelled out at
+    ``amount_due`` below: they are the most salient numbers on the page, and a document that
+    omitted them would make "find the relevant transaction" artificially easy and inflate the
+    measurement. See ``content_builder.BankStatement``.
+
     ``amount_due`` is ``None`` for a document type that prints no such line, and is EQUAL TO
     ``amount`` wherever it is populated today, because the discount and the rounding that make
     the two differ are zero in this version. A consumer must therefore not report accuracy on
@@ -224,6 +261,11 @@ class DocGroundTruth(BaseModel):
     # apart from `amount` — an extractor that reaches for the most salient figure is measurably
     # wrong rather than invisibly wrong.
     total_charged: Money | None = None
+    # Which way the money moved — see `Direction`. `None` on a class that states no direction,
+    # which is every class whose document describes ONE movement of money: a receipt and a
+    # confirmation are issued because a payment was made, so there is nothing to distinguish. An
+    # account statement lists movements in both directions and is the reason the field exists.
+    direction: Direction | None = None
     date: date
     counterparty: str
     # The party the document names OPPOSITE `counterparty`. `counterparty` is the other side of
@@ -241,6 +283,12 @@ class DocGroundTruth(BaseModel):
     # deduplication key of this class — the authorization code is not, being six digits and
     # unique only within an issuer and a window.
     document_code: str | None = None
+    # WHICH ROW OF A MULTI-ROW DOCUMENT THE FIELDS ABOVE DESCRIBE — the printed operation number
+    # («Номер документа») of the labelled transaction, unique within the statement it is on. A
+    # POINTER INTO a document rather than the identity OF one, which is what tells it apart from
+    # `document_code` above; `None` on every class whose document describes a single transaction,
+    # where the document is the transaction and there is nothing to point at.
+    relevant_transaction: str | None = None
     # Код авторизації — six digits, and only where a card operation was authorized (👁 4 of 8).
     auth_code: str | None = None
     # EMPTY on a class that lists nothing — a payment confirmation proves one movement of money

@@ -183,6 +183,16 @@ jurisdictions:
       # ЗН — заводський номер: the factory/serial number of a classic hardware РРО. Printed
       # ONLY by a hardware registrar — see `registrars` below for why it is not a pair with ФН.
       device_serial: { pattern: "[A-Z]{2}[0-9]{8}", label: "ЗН" }
+      # МФО — the six-digit code that identifies a BANK, 📄 assigned in the National Bank's
+      # register of participants and carried inside every Ukrainian IBAN.
+      #
+      # HERE RATHER THAN UNDER A DOCUMENT CLASS, because two classes print it — a payment
+      # confirmation names the issuer's and a statement names the account's — and the code is a
+      # fact about the jurisdiction, not about either document. NO `label`, deliberately: the
+      # caption travels with the position it is printed in and each class states its own, so a
+      # label here would be a second source of truth for the same string. The same reasoning is
+      # spelled out at `fiscal_device_number` above.
+      bank_code: { pattern: "[0-9]{6}" }
 
     receipt:
       title: "ФІСКАЛЬНИЙ ЧЕК"
@@ -438,9 +448,10 @@ jurisdictions:
         bank_label: "Банк отримувача"
         # 👁 A third numeric code appears on the same document under its own caption — the МФО,
         # six digits — so one confirmation may print three unlabelled-by-type numbers of three
-        # lengths (10, 8, 6) and an extractor has to tell them apart by caption AND length.
+        # lengths (10, 8, 6) and an extractor has to tell them apart by caption AND length. The
+        # code's own shape is `identifiers.bank_code` above: it identifies a bank rather than this
+        # document, and a second class now prints it.
         bank_code_label: "Код банку"
-        bank_code: { pattern: "[0-9]{6}" }
         # 👁 2/8 have at least one empty field, in TWO mechanically different forms: a hyphen
         # printed AS the value, and a caption with nothing under it. They are not one situation
         # — OCR returns the string "-" for the first and nothing for the second — so both are
@@ -582,6 +593,137 @@ jurisdictions:
         marketing_payloads:
           - "https://example.com/app"
           - "https://example.com/mobile"
+
+    bank_statement:
+      # 👁 ONE CORPORATE CURRENT-ACCOUNT STATEMENT was observed — 4 pages, 89 operations, a
+      # period of one day — and this block is its arrangement. ⚠️ «Банківська виписка» is not one
+      # layout but at least three: this corporate form, a personal CARD statement (📄 the
+      # monobank open-API statement element carries a per-operation `balance`, and a card
+      # statement prints cashback), and 📄 a bank's own "open statement" cut down to four columns.
+      # Mixing them would reproduce a document that does not exist, so ONE is built and the other
+      # two are declared gaps in config/labelling-schema.yaml.
+      #
+      # 🔴 NO RUNNING BALANCE PER ROW, and it is the sharpest of the three differences: the
+      # observed corporate table has no balance column at all, while a card statement has one on
+      # every line. The turnover block below is where this form states its balances, twice — at
+      # the start of the period and at the end — and nowhere else.
+      running_balance: false
+
+      # 📄 A4 LANDSCAPE — ISO 216, 297 × 210 mm. ⛔ THE ORIENTATION WAS NOT ESTABLISHED: only a
+      # preview of the first page was seen, and it carries no measurement. It is chosen from what
+      # the columns require — seven columns, two of them free text — and a portrait page fits
+      # them only by making the free text unreadable, which would remove the difficulty this
+      # class exists to pose. Declared here rather than left implicit in a stylesheet, like the
+      # confirmation's page size above.
+      page: { width_mm: 297, height_mm: 210 }
+
+      # The header, 👁 in the observed order. `Заключна виписка` — a CLOSING statement, the form
+      # issued for a period that has ended — is the observed wording and the only one seen.
+      header:
+        title: "Заключна виписка за період з {start} по {end}"
+        # 👁 The observed header identified the bank by its ЄДРПОУ. This template prints the
+        # МФО under «Код банку» instead, which is 👁 the same identifier and caption the
+        # confirmation archetype prints for an issuer: two archetypes of one repository
+        # identifying the same bank by two different codes would be a difference nothing
+        # supports, and the bank code is already drawn rather than taken from any register. Its
+        # shape is `identifiers.bank_code` above, shared with that class.
+        bank_code_label: "Код банку"
+        client_label: "Клієнт"
+        # ⚠️ THE ACCOUNT HOLDER IS THE CLAIMANT, so the code beside the name is a РНОКПП — 👁 the
+        # observed statement was a company's and printed a ЄДРПОУ. This is not a layout choice:
+        # a statement is evidence that THIS person's money left THIS person's account, and a
+        # company's statement would evidence nothing about the persona filing the claim. ⛔ A
+        # personal current-account statement in exactly this arrangement was not observed; what
+        # was observed is the arrangement. Declared in config/labelling-schema.yaml.
+        client_code_label: "РНОКПП"
+        account_label: "Поточний рахунок"
+        currency_label: "валюта"
+        # 📄 ISO 4217: the alphabetic code and its numeric code, as the observed header prints
+        # both separated by a slash.
+        currency_code: "UAH/980"
+        last_operation_label: "Дата останньої операції"
+
+      # 🔴 THE FOUR TURNOVER TOTALS, 👁 in a framed block immediately under the header, and 👁 the
+      # most prominent numbers on the document. They are PRINTED AND NEVER LABELLED — the label
+      # of a statement carries one transaction, not the document — and printing them is the whole
+      # point: without them, finding the relevant transaction among twenty rows is artificially
+      # easy and any accuracy measured on the class is inflated. 👁 Each turnover carries its
+      # operation count beside it.
+      #
+      # They RECONCILE with the rows: the closing balance is the opening balance plus the credit
+      # turnover less the debit turnover, and each turnover is the sum of the rows on its side.
+      # 👁 The observed figures satisfy this exactly, which is why `content_builder` derives all
+      # four from the rows instead of drawing them.
+      totals:
+        opening_label: "вхідний залишок"
+        closing_label: "вихідний залишок"
+        credit_label: "разом за кредитом"
+        debit_label: "разом за дебетом"
+        operations_label: "Операцій"
+
+      # The columns of the operations table, 👁 in the observed order and wording, with ONE
+      # departure named below.
+      #
+      # 🔴 THE DEPARTURE: the observed table has a SINGLE unsigned «Сума» column, so a reader of
+      # that page cannot tell a debit row from a credit row at all — the direction is stated only
+      # in the turnover block, for the period as a whole. A label field must be readable from the
+      # image it labels, and `direction` is a label field, so the amount is printed in one of TWO
+      # money columns and which column it is in is the direction. 📄 That is the ledger-extract
+      # form the document's own turnover captions are written in («разом за дебетом», «разом за
+      # кредитом»), and it is a general layout of an account statement rather than an invention
+      # of this file; ⛔ but it is not what the one observed table did, and the alternatives —
+      # a sign on the amount, or a one-letter Дт/Кт column — were rejected: the first gives this
+      # class a money convention no other class has, and the second is grounded in nothing at all.
+      #
+      # ⚠️ THE COUNTERPARTY IS FOUR FIELDS, not one, 👁 laid out as two columns of two stacked
+      # lines each. All four are printed; only the NAME is labelled, because that is the single
+      # field the consumer's requirement asks a statement for. The other three are printed
+      # unlabelled for the same reason the turnover totals are.
+      columns:
+        number: "Номер документа"
+        # 👁 One caption over both values, printed on two lines. See `payment_date` in
+        # config/labelling-schema.yaml for what this date means and why it is derived here rather
+        # than inherited from the confirmation's caption order.
+        datetime: "Дата та час операції"
+        debit: "Дебет"
+        credit: "Кредит"
+        purpose: "Призначення платежу"
+        counterparty: "Реквізити контрагента"
+        counterparty_name: "Найменування"
+        # 👁 The observed caption is «ЄДРПОУ», which holds only while every counterparty is a
+        # legal entity. A sole trader carries a РНОКПП of ten digits, and ten digits under an
+        # ЄДРПОУ caption would be a false caption — so the column is captioned as the
+        # confirmation captions the same value. The narrowing is declared rather than silent.
+        counterparty_code: "Код"
+        counterparty_account: "Рахунок"
+        counterparty_bank: "Банк"
+      # A bank writes a time with colons. Stated for this class for the same reason the
+      # confirmation states it: the jurisdiction's `time_format` above separates with dashes,
+      # which is 👁 an observation about till printers and not about bank documents.
+      time_format: "%H:%M"
+
+      # 👁 The per-row operation number appears in two shapes on one document: a short number of
+      # three or four digits, and a longer prefixed form used for payments involving private
+      # individuals. Both are drawn from, because a consumer validating the field by shape needs
+      # both — and 🔴 this number is the label's POINTER at the labelled row, so two rows carrying
+      # the same one would point at both.
+      #
+      # UNIQUENESS COMES FROM `serial_digits`, and it is not a trick: 👁 the short form IS a
+      # sequential number — a client's own document numbering — so the trailing digits across the
+      # page are one counter and cannot repeat. A drawn number DID repeat: `631` appeared on two
+      # rows of a render before this was a counter. A rejection loop was rejected as the fix,
+      # because the number of values it takes from the generator depends on which collisions
+      # occurred, and every later draw in the run would shift with them.
+      #
+      # `prefix` is a literal, `pattern` is drawn per row and may be empty, and `serial_digits` is
+      # how many trailing digits the counter fills. Only the `@` is carried over from the observed
+      # form; everything after it is drawn or counted, because a verbatim token off a real document
+      # would be a value from a real document and this repository prints none.
+      operation_number:
+        formats:
+          - { prefix: "", pattern: "", serial_digits: 3 }
+          - { prefix: "", pattern: "", serial_digits: 4 }
+          - { prefix: "@", pattern: "[0-9]{1}[A-Z]{2}", serial_digits: 6 }
 
     # Fiscal QR: the public receipt-verification URL of the tax authority.
     qr:

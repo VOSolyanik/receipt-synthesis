@@ -149,6 +149,35 @@ ARCHETYPES: dict[str, Archetype] = {
             "hobby",
         ),
     ),
+    # THE THIRD DOCUMENT CLASS, and the SECOND that proves the payment without stating what was
+    # bought. 👁 A statement's payment purpose names an invoice or a delivery note, and at best a
+    # generic category of goods — never the expense — which CONFIRMS the `proves_subject: false`
+    # policy.yaml already gives this type rather than changing it.
+    #
+    # IT CARRIES EVERY CATEGORY for the reason the confirmation does: the page lists transactions
+    # and no items, so there is nothing on it a category could contradict. The tuple is checked
+    # against policy.yaml's categories by a test, so a category added there cannot silently drop
+    # out of it.
+    #
+    # ⚠️ STILL NO CLAIM, and the reason is unchanged and structural: a claim needs both facts, this
+    # supplies one, and the archetype that supplies the other — an invoice — is not written. Two
+    # payment-proving archetypes are not better than one for that purpose. What it does change is
+    # that `_select_documents` now has a CHOICE of payment archetype for the step that pairs them.
+    "ua_bank_statement": Archetype(
+        slug="ua_bank_statement",
+        doc_type=DocType.BANK_STATEMENT,
+        country=Country.UA,
+        language="uk",
+        categories=(
+            "medical_insurance",
+            "language_courses",
+            "professional_development",
+            "sport",
+            "mental_health",
+            "vitamins_nutrition",
+            "hobby",
+        ),
+    ),
 }
 
 
@@ -183,8 +212,14 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
         "needs a SUBJECT document to disagree with its payment"
     ),
     Verdict.PARTIALLY_PAID: (
-        "needs document types that do not exist yet: an invoice or a statement that "
-        "shows part of the amount settled. No template in ARCHETYPES can carry it"
+        "needs a document showing PART of an amount settled, and the statement archetype now "
+        "registered does not narrow this: a statement row states the amount that moved, and a "
+        "row worth less than the invoice beside it is a claim whose two documents disagree, "
+        "which `policy_engine` already labels `insufficient_evidence` with the cause "
+        "`amount_mismatch`. What is missing is what has always been missing — a document that "
+        "states an amount OUTSTANDING against a total, which no archetype prints. `amount_due` is "
+        "not that field: it is a receipt's ДО СПЛАТИ, the basket total less a discount plus cash "
+        "rounding, and it says nothing about how much of an obligation is still open"
     ),
     Verdict.REJECTED: (
         "is the policy not covering a claim whose evidence is complete, on either of two axes, "

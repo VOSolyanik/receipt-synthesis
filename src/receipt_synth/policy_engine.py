@@ -102,7 +102,11 @@ from decimal import Decimal
 from typing import NamedTuple
 
 from receipt_synth.config import category, load_policy
-from receipt_synth.content_builder import KOPIYKA, line_items_total
+from receipt_synth.content_builder import (
+    KOPIYKA,
+    line_items_total,
+    proves_payment_by_direction,
+)
 from receipt_synth.schemas import DocGroundTruth, DocType, LineItem, Verdict, VerdictBasis
 
 # Causes of a `partially_covered` verdict. The strings are the keys of
@@ -151,8 +155,14 @@ class PolicyGapError(Exception):
     Five cases reach it, all of them narrow and all of them deliberate:
     `coverage_of_kind` for an `ambiguous_items` kind and for a kind foreign to the claimed
     category, `_reimbursable` for a claim wholly beyond an exhausted annual limit, and
-    `resolve_evidence` for a claim carrying a bank statement and for a set of documents
-    that does not pair into transactions.
+    `resolve_evidence` for a claim whose evidence is a CREDIT — money arriving, which proves no
+    expense — and for a set of documents that does not pair into transactions.
+
+    The credit case replaced a blanket refusal of any claim carrying a bank statement, which was
+    right while a statement's label described the whole document and could not point at the row a
+    claim was about. It now points at one row, so the class needs no refusal of its own; what
+    survives is the narrower rule that money must have left the account. Recorded because a reader
+    of the git history will find the old refusal and should not have to guess why it went.
     """
 
 
@@ -313,22 +323,31 @@ def resolve_evidence(documents: Sequence[DocGroundTruth]) -> EvidenceShape:
     open which payment settles it. `document_evidence` answers neither, and picking would
     either double a claim or silently drop a document.
 
-    A BANK STATEMENT IS REFUSED OUTRIGHT, and it is the one worth stating separately. It
-    genuinely adds money — it lists several transactions — but a document label carries a
-    single `amount` for the whole statement and nothing points at the row this claim is
-    about. Whether a statement produces one label or one label per transaction is open on
-    both sides of the labelling contract, so identifying "the transaction in the statement
-    that corresponds to this claim" is not something the ground truth can do yet.
+    A BANK STATEMENT USED TO BE REFUSED OUTRIGHT HERE, on the ground that it lists several
+    transactions while its label carried a single amount for the whole document, so nothing
+    identified the row a claim was about. THAT REASON IS GONE: a statement's label now describes
+    ONE TRANSACTION — the row's amount, date, counterparty, purpose and direction, with
+    `relevant_transaction` naming the row and `field_bboxes` pointing at its cells — so the claim's
+    money is exactly as well identified as it is on a confirmation. A statement is now an ordinary
+    payment-proving document to this function.
+
+    WHAT REPLACED IT IS NARROWER AND IS A DIFFERENT QUESTION. Only a DEBIT can be proof of
+    payment; a credit is money arriving — a refund, a reversal — and evidences no expense. Such a
+    claim is refused rather than labelled, because policy.yaml assigns no verdict to a claim whose
+    proof of payment is a refund, and inventing one here would be the engine deciding policy. The
+    generator cannot build one: `content_builder.BankStatement` refuses to label a credit row. The
+    guard is here for the case that does not go through that builder — a trap archetype, or a
+    hand-built record — and it is what makes the invariant enforced rather than described.
     """
     for document in documents:
-        if document.doc_type is DocType.BANK_STATEMENT:
+        if not proves_payment_by_direction(document.direction):
             raise PolicyGapError(
-                f"document {document.doc_id} is a bank_statement, and a claim's amount "
-                "cannot be resolved from one: the statement lists several transactions "
-                "while its label carries a single amount for the whole document, so "
-                "nothing identifies the transaction this claim is about. Whether a "
-                "statement is labelled once or once per transaction is undecided on both "
-                "sides of config/labelling-schema.yaml; the engine will not pick."
+                f"document {document.doc_id} states a credit transaction and is being offered "
+                "as evidence. Only a debit can be proof of "
+                "payment: money arriving is a refund or a reversal and evidences no expense, so "
+                "the claim's proof of payment would be proof that the money came back. "
+                "policy.yaml assigns no verdict to such a claim and the engine will not invent "
+                "one — see `content_builder.proves_payment_by_direction`."
             )
         evidence = document_evidence(document.doc_type)
         if not (evidence.proves_subject or evidence.proves_payment):

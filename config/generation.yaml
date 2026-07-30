@@ -648,6 +648,126 @@ payment_confirmation:
 
 
 # =============================================================================
+# Bank statement — the draw inputs
+# =============================================================================
+#
+# What the document PRINTS is under `bank_statement` in config/fiscal-rules.yaml. Here are the
+# same three questions this file answers for every class: how many of a thing, how much money,
+# and which words fill a free-text field.
+#
+# ⚠️ THE EVIDENCE IS ONE DOCUMENT — a corporate statement of 89 operations over 4 pages. So a
+# share below is one document's proportion used as a draw weight, and a count is a page of that
+# document. Neither is a measurement anybody should quote, and where a number could not be
+# derived from one document at all it says so instead of looking derived.
+bank_statement:
+  # 👁 ≈18–20 operations on the first page, 89 over four. ONE PAGE IS GENERATED, and the reason
+  # is not cost: ⛔ a second page was never seen, so whether the header repeats on it is
+  # unestablished, and a repetition invented here would be on every image of the class. Twenty
+  # rows already make "find the relevant transaction" non-trivial, which is the whole task the
+  # class carries — 89 rows would buy nothing but four times the paper.
+  row_count_range: [15, 25]
+
+  # 👁 15 of 89 operations are credits — money arriving. The share matters because `direction` is
+  # a label field: a page with no credit row at all would carry no visible instance of the
+  # distinction the field names, so at least one is generated whatever the draw returns.
+  credit_share: 0.17
+
+  # Of the credits, how many are a transfer from ANOTHER ACCOUNT OF THE HOLDER'S rather than money
+  # from somebody else. ⚠️ A JUDGEMENT, and it is marked as one: the own-account transfer is 👁 one
+  # of the purpose formulas quoted from the observed statement, but a formula appearing in a quoted
+  # sample is not a rate. What is not a judgement is that the case has to exist — such a row prints
+  # the account holder as its own counterparty, which is a shape an extractor will meet.
+  credit_from_self_share: 0.3
+
+  # What the account is left with when the period closes. 🔴 THE OPENING BALANCE IS DERIVED FROM
+  # THIS AND FROM THE ROWS, not drawn: an opening balance drawn independently produced statements
+  # whose closing balance was NEGATIVE, which is a different document — an account with a credit
+  # line — and one nothing observed supports. So the residue is drawn and the opening balance is
+  # whatever makes the arithmetic come out at it. Neither figure is ever labelled.
+  closing_balance_range: ["800.00", "12000.00"]
+
+  # The amount of the ONE transaction the label is about. Its own key rather than a reuse of
+  # `payment_confirmation.transfer_amount_range`, because it is an assumption about a different
+  # document — but it is the same quantity, a person's payment toward a benefit, and it is chosen
+  # to sit inside the annual limits of policy.yaml for the reason stated there.
+  transaction_amount_range: ["400.00", "9000.00"]
+
+  # 🔴 THE ORDINARY DEBIT ROWS COVER THE LABELLED RANGE, and that is the point of the bound rather
+  # than a coincidence: if the noise were drawn smaller, the labelled transaction would be the
+  # largest debit on the page and findable without reading anything. It has to be an ordinary
+  # amount among ordinary amounts.
+  debit_amount_range: ["80.00", "9000.00"]
+
+  # 👁 A CREDIT IS TYPICALLY MUCH LARGER THAN A DEBIT, and the factor is derived rather than
+  # assumed: on the observed statement the credit turnover was spread over 15 operations and the
+  # debit turnover — of the same order — over 74, so the average credit is about four times the
+  # average debit. Money arrives in few large amounts, a salary, and leaves in many small ones.
+  #
+  # THE TWO TURNOVER AMOUNTS THEMSELVES ARE NOT WRITTEN DOWN ANYWHERE IN THIS REPOSITORY, and
+  # their absence is the point: they are concrete values printed on somebody's real statement, and
+  # this repository carries layout facts and counts from such a document, never its figures. The
+  # ratio is what the decision needs, and the ratio is not a value off the page.
+  credit_amount_range: ["4000.00", "40000.00"]
+
+  # 👁 1/1 statements carry a bank service charge as one of their operations — the row whose
+  # counterparty is the bank itself. It is generated on every statement rather than drawn: 📄 the
+  # charge for account servicing recurs monthly, so its presence within a period is expected, and
+  # ⛔ one document cannot give a rate. Named here as a constant of the class so that it is a
+  # decision rather than an accident, and as the first thing to vary once more are seen.
+  service_fee_range: ["10.00", "120.00"]
+
+  # How far the statement's period reaches either side of the labelled transaction, in days. ⛔ NOT
+  # OBSERVED: the one statement covered a single day, which is what a company pulls at the close
+  # of business and is implausible for a page of a private person's operations. Derived from the
+  # rows instead — the period is the span the operations fall in — so the only choice here is how
+  # far apart they are spread.
+  #
+  # 🔴 THE TRAILING WINDOW IS NEVER ZERO, and that is what keeps the labelled transaction off the
+  # bottom of the page. Rows are printed in the order they happened, so with no days after it the
+  # labelled row is the last one on every image — findable without reading anything, exactly the
+  # artificial ease the four printed totals exist to prevent. A first version had a zero lower
+  # bound here and put the row last on two renders out of three.
+  period_lead_days_range: [10, 25]
+  period_trail_days_range: [3, 12]
+
+  # 🔴 THE PAYMENT PURPOSE OF A STATEMENT ROW NAMES ANOTHER DOCUMENT, not the expense. 👁 Every
+  # observed purpose follows one pattern — `Оплата за <generic category> згідно <ВН|рахунку>
+  # № <number>[ від <date>], у т.ч. ПДВ 20%` — and the commonest form names no category at all,
+  # only an invoice number. That is what `proves_subject: false` for this type in
+  # config/policy.yaml rests on, and it is a WEAKER form of the same finding than the payment
+  # confirmation's: here a generic category of goods was at least sometimes named, so the
+  # confirmation's 0-of-7 is the stronger observation and this one confirms rather than carries it.
+  #
+  # `{invoice_no}` and `{invoice_date}` are filled by `content_builder`, as they are for a
+  # confirmation: a reference to another document is not merchandise, so it does not come from
+  # the placeholder vocabulary above.
+  purposes:
+    uk:
+      debit:
+        - "Оплата за товар згідно ВН № {invoice_no}, у т.ч. ПДВ 20%"
+        - "Оплата за послуги згідно рахунку № {invoice_no} від {invoice_date}"
+        - "Оплата за витратні матеріали згідно рахунку № {invoice_no}, у т.ч. ПДВ 20%"
+        - "Оплата згідно рахунку № {invoice_no} від {invoice_date}"
+        - "Оплата за обладнання згідно ВН № {invoice_no}, у т.ч. ПДВ 20%"
+      # 👁 A credit row's purpose cannot be an «Оплата за…»: the money is arriving. The observed
+      # forms are a return of funds and a transfer between the holder's own accounts — and note
+      # that a RETURN is exactly why a credit can never be proof of an expense.
+      credit:
+        - "Повернення коштів згідно рахунку № {invoice_no}, без ПДВ"
+        - "Зарахування коштів, без ПДВ"
+      # 🔴 A SEPARATE POOL BECAUSE THE COUNTERPARTY IS DIFFERENT, not because the wording is. On
+      # a transfer between the holder's own accounts the counterparty IS the holder, and a first
+      # version drew this purpose against an ordinary vendor — printing a shop as the sender of a
+      # transfer between the reader's own accounts. Nothing in a label would have caught it; the
+      # render did.
+      credit_from_self:
+        - "Переказ коштів між власними рахунками, без ПДВ"
+      # 👁 The observed service-charge wording, verbatim as a formula: it names a tariff rather
+      # than a transaction, and carries no identifier of anything.
+      service_fee: "Комісія за розрахунково-касове обслуговування згідно тарифів банку, без ПДВ"
+
+
+# =============================================================================
 # Personal names
 # =============================================================================
 #

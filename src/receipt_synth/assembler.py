@@ -32,6 +32,7 @@ from receipt_synth.claim_planner import (
 )
 from receipt_synth.config import load_vendors
 from receipt_synth.content_builder import (
+    build_bank_statement,
     build_payment_confirmation,
     build_prro_receipt,
     resolve_vendor,
@@ -162,14 +163,18 @@ def _pick_vendor(
 # The paper width is bound nowhere in Python at all: it lives in `<slug>.css`, which the
 # renderer picks up from the slug.
 #
-# TWO DOCUMENT CLASSES NOW, WITH DIFFERENT PARAMETERS, which is why `_build_document` dispatches
+# THREE DOCUMENT CLASSES NOW, WITH DIFFERENT PARAMETERS, which is why `_build_document` dispatches
 # on what the document has to state instead of calling every entry the same way. A receipt takes a
-# basket; a payment confirmation takes the payer and an amount and states no basket at all.
+# basket; a payment confirmation and a statement take the payer and state no basket at all — and
+# the two of them take the SAME parameters, which is what the dispatch keys on: it asks what the
+# document must establish, not which class it is, so a third payment-proving archetype needed no
+# new branch.
 _BUILDERS = {
     "ua_prro_receipt": build_prro_receipt,
     "ua_prro_receipt_58mm": build_prro_receipt,
     "ua_rro_receipt": partial(build_prro_receipt, registrar="rro"),
     "ua_bank_payment_confirmation": build_payment_confirmation,
+    "ua_bank_statement": build_bank_statement,
 }
 
 

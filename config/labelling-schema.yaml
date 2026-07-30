@@ -45,6 +45,48 @@
 #
 # Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 11 by THE THIRD DOCUMENT CLASS ARRIVING — a bank account statement — and by the ONE
+# THING ABOUT IT THAT IS NOT LIKE THE OTHER TWO: its label describes ONE ROW of a many-row document
+# rather than the document. SIX consequences a consumer has to know about.
+#
+# Derived the same way as the lists below: a key-set diff of this file against version 10, the
+# printed-field inventory, and a reading of the label model, because every omission from such a list
+# has been found by deriving the delta rather than by re-reading the prose.
+#
+#   THE LABEL OF A STATEMENT IS A TRANSACTION, NOT A DOCUMENT. `amount`, `date`, `counterparty`,
+#   `payment_purpose` and `direction` are the values of the one row a claim rests on, and the
+#   document's own four summary totals are printed and NOT LABELLED AT ALL. A consumer that expected
+#   a statement's `amount` to be a figure from its summary block will find a figure from a table
+#   row. Derived from the requirement's own field list, which is singular over a type it says has no
+#   line items. See `document_types.bank_statement.the_label_is_one_transaction`.
+#
+#   ONE NEW LABEL FIELD, `direction`: `debit` | `credit`, `null` on every other class. A separate
+#   field rather than a sign on `amount`, because money is normalized identically on every class of
+#   this dataset and a signed amount would give one class a second convention. 🔴 IT DOES NOT
+#   DISCRIMINATE IN THIS VERSION — every statement's labelled row is a debit — so its accuracy is
+#   not to be reported, exactly as `amount_due`'s is not. What it carries is an INVARIANT: only a
+#   debit can be proof of payment.
+#
+#   ONE NEW LABEL FIELD, `relevant_transaction`: the printed operation number of the labelled row,
+#   `null` on every other class. Forced by the shape above — a field list in the singular over a
+#   document with twenty rows has to say WHICH row.
+#
+#   `field_bboxes` GAINS AN INDEXED KEY PER TABLE ROW on this class — `operation_<i>` over the whole
+#   row rect — alongside the labelled cells and the four unlabelled totals. A consumer pinning a
+#   key set per class meets a key count that varies with the row count, which is the lesson version
+#   8 already recorded about deriving a key set from the document rather than pinning it.
+#
+#   `amount`'s MEANING IS NO LONGER ONE SENTENCE FOR EVERY CLASS. It was "the total payable, gross,
+#   VAT inclusive"; that is a basket's total and a statement has no basket. The field's own entry now
+#   states the question it answers and each class's answer to it.
+#
+#   A REFUSAL IN THE ORACLE WAS REPLACED BY A NARROWER ONE, which changes which claims are
+#   labelled at all. A claim carrying a bank statement used to be refused outright, because the
+#   label could not point at the row the claim was about; it now can, so such a claim is labelled
+#   like any other. What refuses instead is a claim whose proof of payment is a CREDIT — money
+#   arriving proves no expense — and policy.yaml assigns no verdict to that. See
+#   `document_label.fields[direction]`.
+#
 # Bumped to 10 by THE SECOND DOCUMENT CLASS ARRIVING: a bank payment confirmation has a template, a
 # builder and label fields. SEVEN consequences a consumer has to know about, and the first is the
 # one that changes what a label record looks like.
@@ -271,7 +313,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 10
+version: 11
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -696,26 +738,302 @@ document_types:
   bank_statement:
     classifier_role: target_class
     status: forward_contract
+    archetypes:
+      # ONE ARCHETYPE, AND IT IS IN NO RUN YET, for the reason `payment_confirmation` above gives:
+      # a claim needs both facts, this class proves one, and the class that proves the other — an
+      # invoice — is not written. `ua_bank_statement` is registered in `ARCHETYPES` in
+      # claim_planner.py, has a template and a stylesheet, and produces every field below.
+      - slug: ua_bank_statement
+        jurisdiction: UA
+        language: uk
+        # Every category of policy.yaml, and for the same reason the confirmation carries them all:
+        # the page lists transactions and no items, so nothing on it can contradict a category.
+        categories: all
+        paper: >
+          A4 the long way round — 297 × 210 mm — and ONE page. ⛔ The orientation is not observed:
+          it follows from seven columns, two of them free text. Every generated statement is exactly
+          one sheet, and a test holds the tallest row counts to it.
+        rows: 15–25 operations, of which exactly one is labelled
+
+    # 🔴 THE SHAPE OF THIS TYPE'S LABEL, AND IT IS DERIVED RATHER THAN CHOSEN.
+    #
+    # The requirement lists this type's fields in the SINGULAR — an amount, a date, a payee, a
+    # payment purpose — and states that it has no line items. A single amount for a document that
+    # lists twenty transactions would be a number nothing on the page is, so what the requirement
+    # describes is ONE TRANSACTION. The label follows: `amount`, `date`, `counterparty`,
+    # `payment_purpose` and `direction` are the values of the one row a claim rests on, and
+    # `relevant_transaction` names that row.
+    #
+    # WHICH ROW IS THE RELEVANT ONE IS NOT A PROPERTY OF THE IMAGE ALONE, and a consumer has to
+    # know it: the row is identified from the claim's OTHER document — an invoice naming a seller
+    # and a total — which is what makes the dominant pair a pair. A statement scored on its own,
+    # with no claim around it, is not a well-posed extraction task for these fields, and no
+    # threshold in `extraction_thresholds` should be read as one.
+    the_label_is_one_transaction:
+      status: forward_contract
+      labelled_from_the_row: [amount, date, counterparty, payment_purpose, direction]
+      pointer: relevant_transaction
+      bboxes: >
+        `field_bboxes` carries the CELLS OF THAT ROW for each field above, so the label says where
+        the answer is and not only what it is. Each row additionally carries an indexed box over its
+        whole rect — `operation_<i>`, `i` counted down the page from 0 — so a consumer can find the
+        rows without reading them. That is also what makes "the boxes are on the labelled row" a
+        measurement: `tests/test_bank_statement.py` requires each labelled box to sit inside
+        `operation_<k>` and its centre to fall in no other row's rect.
+      the_four_totals_are_printed_and_never_labelled: >
+        🔴 A statement prints four summary figures — вхідний залишок, вихідний залишок, разом за
+        кредитом, разом за дебетом — 👁 in a framed block under the header, and 👁 they are the most
+        prominent numbers on the document. NONE OF THEM IS LABELLED, and none is `total_charged`
+        under another name: that field is one payment plus its fee on a confirmation, and reusing it
+        for a period's turnover would give one key two meanings.
+
+        THEY ARE PRINTED ALL THE SAME, and that is the deliberate half. Omitting them would make
+        "find the relevant transaction" artificially easy and inflate every figure measured on this
+        class. It is the same refusal as `amount_due` not being scoreable and as the confirmation's
+        total being printed while the transfer is the answer: a document prints what the document
+        prints, and a value is labelled only where the label can mean something.
+
+        All four are DERIVED from the rows — the closing balance is the opening balance plus the
+        credit turnover less the debit turnover, and each turnover is the sum of its side — so the
+        block cannot contradict the table it sits above. 👁 The observed document's figures satisfy
+        this exactly.
+
+    # THE DATE OF THE LABELLED ROW, DERIVED FROM THIS CLASS'S OWN OBSERVATIONS.
+    #
+    # 🔴 NOT INHERITED FROM THE CONFIRMATION'S CAPTION ORDER, and the distinction is the point. That
+    # order was derived from eight payment confirmations; applying it to a statement would be
+    # applying a rule outside the evidence it was derived on.
+    payment_date:
+      status: forward_contract
+      concept: >
+        config/policy.yaml, `period.payment_date` — the date the funds left the payer's account. Not
+        restated here: a second statement of a definition becomes a second definition the first time
+        one of them is edited.
+      derived_from: >
+        👁 THE ROW CARRIES EXACTLY ONE DATE, and that is the whole derivation. The observed table has
+        a single temporal column, captioned «Дата та час операції» and printed as a date over a time.
+        It has no second one of any kind — no valuation date, no composition date, no processing
+        date — so on this layout there is nothing to PREFER, and the question the confirmation's
+        ordered list exists to answer does not arise. The one date a row states is the date that
+        row's money moved.
+
+        A ROW IS ALSO THE ONLY PLACE A PER-TRANSACTION DATE COULD BE. The label describes one
+        transaction; every other date on the page is a property of the DOCUMENT — see `never` below,
+        which is where the work of this block actually is, since the acceptance side has a single
+        candidate and no contest.
+      accept:
+        # ONE ENTRY, and one is not an oversight: the row carries one date. It is a list all the
+        # same, so that a second temporal column found on some other statement layout is an ADDITION
+        # here rather than a rewrite — and so that a test can read the caption rather than a
+        # sentence. `tests/test_bank_statement.py` checks this string against the column caption
+        # config/fiscal-rules.yaml actually prints, in both directions.
+        - caption: "Дата та час операції"
+          reads_as: >
+            The DATE part of the row's own timestamp. The time is printed under it and is not part
+            of the label — `normalize.iso_date` compares calendar dates.
+          why: >
+            It names the operation the row IS, and a statement row exists because an operation was
+            carried out on the account: the funds are recorded as having left on the date the row
+            states. ⛔ Not a defined term of any instruction, and it does not need to be — nothing
+            competes with it on this layout.
+      never:
+        # THE THREE DOCUMENT-LEVEL DATES A STATEMENT PRINTS. Each is disqualified by its own
+        # mechanism and none by comparison with another, so editing one cannot move the others.
+        # This list is why the block is worth writing at all: an extractor that reaches for the most
+        # authoritative-looking date on the page reaches for one of these three, and the label would
+        # score it wrong for a reason that would look like an extraction error.
+        - caption: "the production timestamp in the header"
+          also_printed_as: ["a bare date and time, top right, under no caption at all"]
+          why: >
+            WHEN THE STATEMENT WAS MADE, not when any money moved. 👁 The observed document was
+            produced the morning after its period closed, and this generator reproduces that, so the
+            value is STRICTLY LATER than every operation on the page and can never be any row's
+            date. It carries no caption, which is what makes it dangerous: it looks like the
+            document's date because it is the only date not inside something else.
+        - caption: "Дата останньої операції"
+          also_printed_as: []
+          why: >
+            THE DATE OF THE LAST ROW, which is a fact about the table rather than about the
+            transaction the label is for. It is captioned with a date word and sits in the header
+            among the account's identifying facts, so it reads as authoritative; it answers "how
+            current is this statement", and the labelled row is usually not the last one.
+
+            ⚠️ IT CAN COINCIDE with the labelled date in general — a labelled row that happens to be
+            last, or another row on the same day — so the rule is about WHICH FIELD IS READ and never
+            about the values being distinct. IN THIS CORPUS THEY ARE DISTINCT: measured over 24
+            seeds, the labelled date differed from the last operation's on 24 of 24. That is a
+            consequence of a draw parameter and not a property a consumer may rely on — the period
+            runs at least three days past the labelled transaction, so with fifteen to twenty-five
+            rows across it some row almost always falls later. Narrow that window and the coincidence
+            returns. The measurement is recorded because the sentence here previously asserted the
+            opposite of what the corpus does, and `tests/test_bank_statement.py` now pins the count
+            with its denominator so the two cannot drift apart again.
+        - caption: "the period bounds in the title"
+          also_printed_as: ["«Заключна виписка за період з … по …»"]
+          why: >
+            A WINDOW, NOT AN EVENT. Two dates naming the interval the document covers; no
+            transaction happened on either by virtue of its being a bound. The start is frequently
+            the date of the first row and the end frequently the date of the last, which makes
+            either one a plausible-looking answer that is right by coincidence when it is right.
+      relation_to_the_confirmations_rule: >
+        DERIVED FROM THIS CLASS'S OWN DOCUMENT, AND IT AGREES WITH THE CONFIRMATION'S — in that
+        order, and the order is the point. The caption accepted above is 👁 what a statement row
+        prints, established from the statement; that the confirmation's block lists «Дата та час
+        операції» as a variant of its third accepted caption is a SEPARATE FACT, established from
+        eight confirmations, and the two agreeing is a RESULT of two derivations rather than a
+        licence for one.
+
+        The distinction is operational, not stylistic. Had this block been written by carrying the
+        confirmation's ordered list across, it would have imported an ORDER — a preference among
+        captions — into a class where no second caption exists to prefer against, and the first
+        statement layout printing a valuation column would have been read by a rule never derived on
+        a statement. Where the two classes genuinely differ: there, that caption is accepted only
+        when neither better one is printed; here there is no better one to be absent.
+
+        AND THE REFUSALS DO NOT CORRESPOND AT ALL, which is the clearest evidence that the two were
+        derived separately. The confirmation refuses three CAPTIONED CONCEPTS that compete for the
+        same slot on one transaction — valuation, composition, processing. A statement prints none of
+        those; what it prints instead are three DOCUMENT-LEVEL dates, and one of them carries no
+        caption at all. A rule carried across would have refused three things that are not on the
+        page and admitted three that are.
+      see: document_types.payment_confirmation.payment_date
+
     line_items: >
       EMPTY BY DESIGN. The requirements document gives this type no line items, as it gives
-      none to `payment_confirmation`. Settled by the requirement, not an open question.
+      none to `payment_confirmation`. Settled by the requirement, not an open question — and it is
+      why a statement establishes nothing about what was bought: a transaction is not a line of a
+      basket.
+
+    difficulty_is_understated: >
+      🔴 A NUMBER MEASURED ON THIS CLASS IS EASIER THAN IT LOOKS, AND ANYONE QUOTING ONE MUST SAY SO.
+      The rows that are not the labelled one are ordinary operations drawn from the same pools, with
+      NO deliberate resemblance to it. A DECOY — a row carrying the same counterparty, or an amount
+      a kopiyka away — is what makes "find the relevant transaction" hard, and decoys are deferred:
+      they are a difficulty dial belonging to the design of traps rather than to the first version
+      of this template.
+
+      Two things are additionally true by construction and both make the task easier: the labelled
+      amount appears on NO other row, and the claim's payee is kept out of the pool the other rows
+      draw from. The first of those is not a difficulty choice — it is what makes the label
+      well-posed, since a consumer identifies the row by seller and total and two matching rows
+      would leave the ground truth pointing at either.
+
+    narrower_than_observed: >
+      SIX WAYS THIS CLASS IS NARROWER THAN, OR DIFFERENT FROM, WHAT WAS OBSERVED. Recorded here
+      rather than under `known_limitations` because every entry there states a share of a reference
+      run and no run contains this class yet. They move there when one does.
+
+      ONE LAYOUT OF AT LEAST THREE. 👁 The corporate current-account statement is modelled: no
+      running balance per row, and the turnover block instead. 📄 A personal CARD statement carries a
+      balance on EVERY line — the monobank open-API statement element has a `balance` field, and such
+      a statement prints cashback — and 📄 a bank's own "open statement" is cut down to four columns.
+      Mixing them would reproduce a document that does not exist, so one is built and the other two
+      are gaps. A consumer must not read robustness across statement layouts off this corpus.
+
+      ONE PAGE. 👁 The observed statement had four. ⛔ Only a preview of its first page was seen, so
+      whether the header repeats on the second is unestablished, and a repetition invented here
+      would be on every image of the class. Twenty rows already make finding the relevant
+      transaction non-trivial.
+
+      THE ACCOUNT HOLDER IS A NATURAL PERSON ON A CORPORATE LAYOUT. ⚠️ 👁 The observed statement was a
+      company's, and printed a ЄДРПОУ beside the client's name; this one prints a persona and a
+      РНОКПП. That is not a layout preference: a statement is evidence that THIS person's money left
+      THIS person's account, and a company's statement would evidence nothing about the persona
+      filing the claim. ⛔ A personal current-account statement in exactly this arrangement was not
+      observed — what was observed is the arrangement. The observed header's branch line, naming the
+      bank's corporate-business division, is not printed for the same reason.
+
+      TWO MONEY COLUMNS. 👁 THE OBSERVED TABLE HAS ONE, captioned «Сума» and unsigned; ⛔ THE
+      TWO-COLUMN FORM WAS NOT OBSERVED ON IT. Both halves stated first, because this is the one place
+      in this block where the generator prints something the sample does not.
+
+      Why it is printed anyway: on the observed table a reader cannot tell a debit row from a credit
+      row at all — the direction appears only in the turnover block, for the period as a whole — and
+      `direction` is a LABELLED field. 🔴 A ground-truth field the document cannot support is worse
+      than no field: it is unlearnable, and every extractor fails it for a reason that is the
+      dataset's fault rather than the system's. So the amount is printed in one of two columns,
+      «Дебет» or «Кредит», which is 📄 the ledger-extract form the document's OWN turnover captions
+      are written in («разом за дебетом», «разом за кредитом»).
+
+      The three options, with the strength of each claim, because the choice is a judgement and a
+      reader is entitled to weigh it: a SIGN ON THE AMOUNT breaks the money normalization that is
+      uniform across every document type of this dataset, so a consumer comparing `-1200.00` against
+      `1200.00` scores a correct reading as a miss; a Дт/Кт LETTER COLUMN is grounded in nothing at
+      all; TWO COLUMNS departs from one observed corporate layout. The third is the weakest claim of
+      the three, which is why it is the one taken.
+
+      THE COUNTERPARTY-CODE COLUMN IS CAPTIONED «Код», NOT «ЄДРПОУ». 👁 The observed caption holds
+      only while every counterparty is a legal entity; a sole trader carries a РНОКПП of ten digits,
+      and ten digits under an ЄДРПОУ caption would be a false caption. ⚠️ Note the consequence, which
+      is the confirmation's finding on a second class: three code lengths appear under one caption —
+      ten for a sole trader, eight for a company, six for the bank's own service-charge row — so the
+      caption does not tell the kinds apart.
+
+      THE BANK IS IDENTIFIED BY ITS МФО. 👁 The observed header carried the bank's ЄДРПОУ. The МФО is
+      what the confirmation archetype prints for an issuer, and two archetypes of one repository
+      identifying the same bank by two different codes would be a difference nothing supports.
+
     prd_required_fields:
       - prd: amount
-        generator: amount
+        generator: amount — THE LABELLED ROW'S, not the document's
         status: forward_contract
+        see: document_types.bank_statement.the_label_is_one_transaction
       - prd: date
-        generator: date
+        generator: date — the labelled row's operation date
         status: forward_contract
+        see: document_types.bank_statement.payment_date
       - prd: payee
         generator: counterparty
         status: divergent
         see: divergence_counterparty_name
+        note: >
+          ⚠️ THE ROW PRINTS FOUR FIELDS FOR ITS COUNTERPARTY — 👁 name, code, IBAN and bank, laid out
+          as two columns of two stacked lines — and the label carries the NAME. The other three are
+          printed and unlabelled, like the turnover totals: the requirement asks a statement for one
+          counterparty field, so a label carrying four would be answering a question nobody asked
+          while leaving the name's own comparison rule to cover them.
+
+          🔴 AND A SINGLE COUNTERPARTY FIELD IS AMBIGUOUS ABOUT ROLE ON THIS CLASS, which is the
+          second reason `direction` exists. For a debit the counterparty received the money; for a
+          credit it sent it. Without the direction, "the payee" of a statement row cannot be
+          distinguished from the sender of a refund — which for a reimbursement claim is the
+          difference between proof of an expense and proof that the money came back.
       - prd: payment purpose
-        generator: none
+        generator: payment_purpose
         status: forward_contract
-    undecided: >
-      Whether a multi-page statement produces one label for the statement or one per
-      transaction, and how `amount` and `date` are then defined. Neither side settles it.
+        note: >
+          THE GENERATOR NOW HAS A COUNTERPART — this entry read `generator: none` until version 11,
+          when the archetype began printing a purpose on every row and labelling the relevant one.
+
+          🔴 IT NAMES ANOTHER DOCUMENT, NOT THE EXPENSE. 👁 Every observed purpose follows one
+          pattern — payment for a generic category of goods, «згідно» an invoice or a delivery note
+          by number — and the commonest form names no category at all, only a number. So a statement
+          CONFIRMS `proves_subject: false` for its type in policy.yaml rather than testing it. ⚠️ It
+          is the WEAKER of the two confirmations available: a generic category of goods was at least
+          sometimes named here, while 👁 0 of 7 payment-confirmation purposes named anything of the
+          kind, so the confirmation carries the finding and this class agrees with it.
+      - prd: >
+          NOT A REQUIRED FIELD, and named because the generator emits it: `direction`, and the
+          pointer `relevant_transaction`.
+        generator: direction, relevant_transaction
+        status: forward_contract
+        note: >
+          Neither is asked for by the requirement. `relevant_transaction` is forced by the shape of
+          the label — a field list in the singular over a document with twenty rows has to say WHICH
+          row — and `direction` is forced by the invariant that only a debit can be proof of
+          payment. See both fields in `document_label`.
+
+    decided_in_version_11: >
+      WHAT THIS BLOCK USED TO LEAVE OPEN, so that a consumer diffing versions finds the answer
+      rather than the absence. Until version 11 it read: "whether a multi-page statement produces
+      one label for the statement or one per transaction, and how `amount` and `date` are then
+      defined. Neither side settles it."
+
+      It is settled, and by derivation rather than by choice: the requirement's own field list is
+      singular over a type it says has no line items, so the extraction target it describes is one
+      transaction — see `the_label_is_one_transaction`. Multi-page is a separate question and is now
+      a declared gap rather than an open decision: one page is generated because ⛔ a second was
+      never observed.
 
   invoice:
     classifier_role: target_class
@@ -1148,10 +1466,26 @@ document_label:
       type: number
       required: true
       normalize: money
-      meaning: the total payable, gross, VAT inclusive
+      meaning: >
+        ONE QUESTION, ANSWERED BY EACH CLASS'S OWN REQUISITE — *the amount this document is about*.
+        It was written here as "the total payable, gross, VAT inclusive" until version 11, which is
+        a BASKET's total and true of only one of the three classes that exist.
+
+          fiscal_receipt        the basket total, gross, VAT inclusive.
+          payment_confirmation  📄 the TRANSFER — the amount of the operation, which excludes the
+                                fee and is not the largest number printed. See `total_charged`.
+          bank_statement        the amount of the ONE ROW the label is about, and never a figure
+                                from the document's summary block. See
+                                `document_types.bank_statement.the_label_is_one_transaction`.
       invariant: >
-        Equals Σ(qty × price) over `line_items`, exactly. Fraud and trap archetypes will
-        break this deliberately, and the break is then named in the claim's `imperfection`.
+        WHERE THE DOCUMENT LISTS ITEMS, this equals Σ(qty × price) over `line_items`, exactly. Fraud
+        and trap archetypes will break that deliberately, and the break is then named in the claim's
+        `imperfection`.
+
+        Two classes list nothing, and on them the invariant is vacuous rather than violated: a
+        payment confirmation and a bank statement carry an EMPTY `line_items`, which is the statement
+        "this document lists nothing" and is why neither establishes what was bought. The sentence
+        used to be unqualified and was already false of a confirmation when version 10 added one.
       printed_twice: >
         A ПРРО receipt prints this value as the total due and again as the amount paid
         (`total` and `paid_amount` among the printed fields). One value, two boxes.
@@ -1202,7 +1536,18 @@ document_label:
       type: string
       required: true
       normalize: iso_date
-      meaning: the calendar date of the transaction
+      meaning: >
+        The calendar date of the TRANSACTION, which on two of the three classes is not the date the
+        document itself was produced.
+
+          fiscal_receipt        the date printed at the foot; the sale and the document coincide.
+          payment_confirmation  the payment date, under one of three accepted captions. See
+                                `document_types.payment_confirmation.payment_date`.
+          bank_statement        the operation date of the LABELLED ROW. 👁 The statement is produced
+                                after its period closes — the observed one the following morning —
+                                so a record dated by the document would be dated days after the
+                                money moved, and the period rule reads this value. See
+                                `document_types.bank_statement.payment_date`.
 
     - name: counterparty
       type: string
@@ -1238,10 +1583,13 @@ document_label:
           instance of it rather than an exception to it.
 
     # ------------------------------------------------------------------------
-    # SIX FIELDS THAT ARE `null` ON A FISCAL RECEIPT, added in version 10 with the second document
-    # class. One label model serves every class, so a field a class does not print is null on its
-    # records rather than absent — `required: false` here means the VALUE may be null, never that
-    # the key is missing.
+    # EIGHT FIELDS THAT ARE `null` ON A FISCAL RECEIPT — six added in version 10 with the second
+    # document class, two in version 11 with the third. One label model serves every class, so a
+    # field a class does not print is null on its records rather than absent — `required: false`
+    # here means the VALUE may be null, never that the key is missing.
+    #
+    # EACH ONE'S `null_on` IS PART OF THE CONTRACT, not a remark: it is what tells a consumer
+    # whether a missing value is information or a failure to read.
     # ------------------------------------------------------------------------
 
     - name: fee
@@ -1285,7 +1633,11 @@ document_label:
         👁 One observed confirmation prints a HYPHEN as the payer's value, and OCR returns the string
         "-" for it, so the label carries that string. A label that merged the two would make
         accuracy on empty fields unmeasurable, which is the whole reason both forms are produced.
-      null_on: every class but `payment_confirmation`
+      null_on: >
+        `fiscal_receipt`. Populated on a `payment_confirmation`, where it is the payer named on the
+        document, and on a `bank_statement`, where it is THE ACCOUNT HOLDER — the claimant, whose
+        account the statement is of. On a debit row the holder is the payer of the labelled
+        transaction, which is the only direction a claim may rest on.
 
     - name: payment_purpose
       type: string or null
@@ -1293,12 +1645,18 @@ document_label:
       normalize: text_name
       meaning: >
         Призначення платежу — free text written by the payer. 🔴 It NEVER names what was bought:
-        👁 0 of 7 observed purposes do, naming an invoice, a delivery note, a generic category, or
-        the movement of money itself. A consumer must not read a subject out of it; that is what
-        `proves_subject: false` for this type means in practice.
+        👁 0 of 7 observed confirmation purposes do, naming an invoice, a delivery note, a generic
+        category, or the movement of money itself. A consumer must not read a subject out of it; that
+        is what `proves_subject: false` for these types means in practice.
+
+        ON A BANK STATEMENT it is the purpose of the LABELLED ROW — 👁 every row carries one — and the
+        same finding holds there in a WEAKER form: a generic category of goods was at least sometimes
+        named on a statement, so the confirmation's 0 of 7 carries the observation and the statement
+        agrees with it.
       null_on: >
-        every class but `payment_confirmation` — and 👁 1 of 8 confirmations has no such field at
-        all, an internet-acquiring document, so null occurs within the class too
+        `fiscal_receipt`. Populated on a `payment_confirmation` — where 👁 1 of 8 has no such field at
+        all, an internet-acquiring document, so null occurs within that class too — and on every
+        `bank_statement`.
 
     - name: document_code
       type: string or null
@@ -1323,6 +1681,78 @@ document_label:
       null_on: >
         every class but `payment_confirmation`, and within the class wherever the payment was not a
         card operation. Its absence is information, not an extraction failure.
+
+    # ------------------------------------------------------------------------
+    # THE TWO FIELDS VERSION 11 ADDED, both of them for the same reason: a bank statement is the
+    # first class whose document describes MANY transactions while its label describes one.
+    # ------------------------------------------------------------------------
+
+    - name: direction
+      type: enum or null
+      required: false
+      normalize: closed_enum
+      vocabulary: [debit, credit]
+      meaning: >
+        Which way the money moved on the transaction this label is about — дебет or кредит, as an
+        account statement prints them.
+      why_not_a_sign_on_the_amount: >
+        Two reasons, and the first settles it on its own. Money is normalized IDENTICALLY on every
+        class of this dataset — two decimal places, half-up, exact comparison — and a signed amount
+        would give one class a second convention, so a consumer comparing `-1200.00` against
+        `1200.00` would score a correct reading as a miss. And the direction is a fact of the PAGE
+        rather than a property of the number: the amount is printed in one of two money columns, and
+        which column it is in is what a reader reads the direction off.
+      invariant: >
+        🔴 ONLY A DEBIT CAN BE PROOF OF PAYMENT. A credit is money arriving — a refund, a reversal, a
+        transfer from another account of the holder's — and it evidences no expense whatever its
+        amount: for a reimbursement claim the difference is the difference between proof of an expense
+        and proof that the money came back.
+
+        ENFORCED, NOT DESCRIBED, in two INDEPENDENT places. `content_builder.BankStatement` refuses
+        to be constructed with a credit as its labelled row, testing the row's own direction; and
+        `policy_engine.resolve_evidence` REFUSES a claim resting on a credit rather than labelling it,
+        because policy.yaml assigns no verdict to such a claim and the oracle does not invent one. The
+        two share no code, so a mistake in either is caught by the other.
+        `content_builder.proves_payment_by_direction` states the rule as a validator and is what the
+        second of them calls. A trap archetype that prints a refund as though it were a
+        payment is where the invariant is broken deliberately, and it will have to name the break in
+        the claim's `imperfection`.
+      do_not_report_its_accuracy: >
+        🔴 THE FIELD DISCRIMINATES NOTHING IN THIS VERSION. Every statement's labelled row is a debit,
+        so a system answering `debit` unconditionally scores perfectly while having read nothing —
+        exactly the state `amount_due` is in, and the same refusal applies. What varies is what the
+        PAGE shows: both directions appear among the rows, and reading the labelled row's direction
+        means finding that row. Score the field once the corpus contains a labelled credit, which
+        needs a trap archetype and a policy decision about what verdict a refund-backed claim gets.
+      bbox: >
+        NO BOX OF ITS OWN, and that is a property of the field rather than an omission: the direction
+        has no printed element — it is WHICH of two columns the amount occupies. The two column
+        headers carry boxes without labelled values, `column_debit` and `column_credit`, and a
+        consumer combines one of those with the `amount` box.
+      null_on: >
+        every class whose document describes ONE movement of money — `fiscal_receipt` and
+        `payment_confirmation`. Such a document exists because a payment was made, so there is nothing
+        for the field to distinguish. `null` is therefore a statement about the class and never a
+        missing reading.
+
+    - name: relevant_transaction
+      type: string or null
+      required: false
+      normalize: identifier
+      meaning: >
+        WHICH ROW of a multi-row document the fields above describe: the printed operation number
+        («Номер документа») of the labelled row, unique within the statement it is on.
+      a_pointer_not_an_identity: >
+        This is what distinguishes it from `document_code`, which is the identity OF a document. A
+        statement's `document_code` is `null` — 👁 the observed header carries no number of its own,
+        only a client, an account, a period and a production time — and this field points INTO the
+        document instead.
+      uniqueness: >
+        Distinct across the rows of one statement BY CONSTRUCTION: the trailing digits are one
+        counter, which is 👁 what a short operation number is — a client's own sequential numbering.
+        A drawn number did repeat on two rows of one render before that was so, and nothing but the
+        pointer would have revealed it: every labelled VALUE was still the right row's.
+      null_on: every class but `bank_statement`
 
     - name: line_items
       type: array of line_item
@@ -1425,6 +1855,13 @@ document_label:
         together on those same 116. See
         `printed_fields.varies_with_vat_payer_status`.
 
+        SINCE VERSION 11 THE KEY COUNT ALSO VARIES WITH THE ROW COUNT of a bank statement. Each
+        operation carries an indexed box over its whole row rect — `operation_<i>`, counted down the
+        page from 0 — so a statement of 15 rows and one of 25 have ten keys' difference between them
+        and neither is missing anything. It is the same shape as `item_<i>_*` on a receipt, applied
+        to a row rather than to a line. A consumer that pins a key set per class rather than deriving
+        it from the document meets this immediately.
+
     - name: synthetic
       type: boolean
       required: true
@@ -1459,6 +1896,12 @@ document_label:
     # THREE ARCHETYPES, ONE CLASS. They print the same labelled fields; what differs is the
     # paper width and the fiscal identity at the foot — see `varies_with_the_kind_of_register`.
     archetypes: [ua_prro_receipt, ua_prro_receipt_58mm, ua_rro_receipt]
+    # ⚠️ THIS INVENTORY IS THE FISCAL RECEIPT'S AND NOT THE DATASET'S, and the `archetypes` key
+    # above is what scopes it. The other two classes state their own box vocabularies at their own
+    # types — `document_types.bank_statement.the_label_is_one_transaction.bboxes` for the indexed
+    # per-row keys, the two unlabelled money-column headers and the four unlabelled totals — so a
+    # reader must not take the lists below as the whole of what a run's `field_bboxes` can contain.
+    scope: the three `fiscal_receipt` archetypes named above
     with_a_labelled_value:
       seller_name: counterparty          # differs by legal form and quotation marks
       total: amount

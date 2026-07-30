@@ -1,0 +1,172 @@
+{#
+  Ukrainian bank account statement — банківська виписка за рахунком.
+
+  🔴 THE ONE THING TO UNDERSTAND ABOUT THIS ARCHETYPE: the label of the document it renders
+  describes ONE ROW of the table below, and not the document. `amount`, `date`, `counterparty`,
+  `payment_purpose` and `direction` are that row's values, and the four turnover totals in the
+  framed block — the most prominent numbers on the page — are printed and never labelled. That is
+  derived rather than chosen: the consumer's required-field table names a statement's fields in the
+  SINGULAR and gives the type no line items, so what it asks to be extracted is a transaction. See
+  `content_builder.BankStatement`.
+
+  ⚠️ THE RELEVANT ROW MUST BE INDISTINGUISHABLE FROM ITS NEIGHBOURS TO THE EYE, and everything
+  below is written to keep it that way. `row.relevant` adds no class, no emphasis, no ordering and
+  no marker that CSS can reach — it decides only which cells carry `data-field`, which is invisible
+  in a screenshot. A highlighted row would make every measurement taken on this class meaningless.
+
+  ⚠️ ONE MACRO-LEVEL WARNING ON THE SAME THEME: the difficulty of FINDING that row is understated
+  in this version of the dataset. The other rows are ordinary operations drawn from the same pools
+  with no deliberate resemblance to the labelled one; a decoy — same counterparty, or a nearby
+  amount — is a difficulty dial belonging to the trap design and is deferred. Declared in
+  config/labelling-schema.yaml as well as here, because a figure measured on this class would
+  otherwise read as harder-won than it is.
+
+  👁 ONE LAYOUT, THE OBSERVED CORPORATE ONE: no running balance per row, and the turnover block
+  under the header instead. 📄 A personal CARD statement carries a balance on every line, and a
+  bank's public "open statement" is cut down to four columns — three layouts, and mixing them
+  would produce a document that does not exist. The other two are declared gaps.
+
+  🔴 ONE DEPARTURE FROM THE OBSERVED COLUMN LIST, and it is deliberate: the amount is printed in
+  one of TWO money columns, «Дебет» or «Кредит», where the observed table had a single unsigned
+  «Сума». A reader of that page cannot tell a debit row from a credit row at all, and `direction`
+  is a LABEL field — a label must be readable from the image it labels. The reasoning, and the two
+  alternatives that were rejected, are at `bank_statement.columns` in config/fiscal-rules.yaml.
+
+  Every element a consumer would extract carries data-field="<name>". Each `<tr>` carries an
+  INDEXED one of its own — `operation_<i>` over the whole row rect — so a consumer can find the
+  rows without reading them, and so the claim that the labelled boxes fall on the labelled row is
+  a MEASUREMENT rather than an assertion: box containment in `operation_<k>` decides it.
+#}
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# data-document marks the page root: the renderer sizes the viewport to this element, so the
+   image is the document and not the browser window around it. Exactly one per template. #}
+<div class="page" data-document="bank_statement">
+
+  {# 👁 The header identifies the bank, then the client, then the account — in that order. The
+     ACCOUNT HOLDER IS THE CLAIMANT, so the code beside the name is a РНОКПП; the observed
+     statement was a company's and carried a ЄДРПОУ. That is not a layout preference: a statement
+     is evidence that THIS person's money left THIS person's account, and a company's statement
+     would evidence nothing about the persona filing the claim. #}
+  <header class="head">
+    <div class="bank">
+      <div class="bank-name">{{ bank_name }}</div>
+      <div class="muted">{{ header.bank_code_label }} {{ bank_code }}</div>
+      <div class="muted">
+        {{ header.client_label }} <span class="strong" data-field="payer">{{ holder_name }}</span>,
+        {{ header.client_code_label }} <span data-field="holder_code">{{ holder_code }}</span>
+      </div>
+      <div class="muted">
+        {{ header.account_label }} №<span data-field="account">{{ account }}</span>,
+        {{ header.currency_label }} {{ header.currency_code }}
+      </div>
+      <div class="muted">{{ header.last_operation_label }}: {{ last_operation_on }}</div>
+    </div>
+    {# 👁 The production time of the statement, top right — and NOT the date of the transaction
+       the label is about. The two differ by design here: this one follows the period's close,
+       the labelled row's own timestamp is in the table. #}
+    <div class="issued muted">{{ issued_on }} {{ issued_time }}</div>
+  </header>
+
+  <h1 class="title">{{ title }}</h1>
+
+  {# 🔴 THE FOUR TURNOVER TOTALS — 👁 a framed block immediately under the header, and 👁 the most
+     prominent numbers on the document. PRINTED AND NEVER LABELLED. Omitting them would make
+     "find the relevant transaction" artificially easy and inflate anything measured on this class;
+     labelling them would put a second meaning on `amount`, which is one transaction's. They carry
+     boxes without labelled values, exactly as the receipt's discount line does, so a consumer can
+     locate them without reading text.
+
+     All four are DERIVED from the rows — the closing balance is the opening balance plus the
+     credit turnover less the debit turnover — so the block cannot contradict the table. 👁 Each
+     turnover prints its operation count beside it. #}
+  <section class="turnover">
+    <div class="turnover-row">
+      <span class="caption">{{ totals.opening_label }}:</span>
+      <span class="money" data-field="opening_balance">{{ opening_balance }}</span>
+      <span class="caption">{{ totals.credit_label }}:</span>
+      <span class="money" data-field="total_credit">{{ total_credit }}</span>
+      <span class="count">({{ totals.operations_label }}: {{ credit_count }})</span>
+    </div>
+    <div class="turnover-row">
+      <span class="caption">{{ totals.closing_label }}:</span>
+      <span class="money" data-field="closing_balance">{{ closing_balance }}</span>
+      <span class="caption">{{ totals.debit_label }}:</span>
+      <span class="money" data-field="total_debit">{{ total_debit }}</span>
+      <span class="count">({{ totals.operations_label }}: {{ debit_count }})</span>
+    </div>
+  </section>
+
+  {# The operations table. 👁 Seven columns in the observed order, with the amount split into two
+     as explained at the head of this file. ⚠️ THE COUNTERPARTY IS FOUR FIELDS laid out as two
+     columns of two stacked lines — all four printed, and only the NAME labelled, because the name
+     is the single counterparty field the consumer's requirement asks a statement for. #}
+  <table class="ops">
+    <thead>
+      <tr>
+        <th class="c-num">{{ columns.number }}</th>
+        <th class="c-when">{{ columns.datetime }}</th>
+        {# The two money columns carry boxes of their own, with no labelled value. They are what
+           makes `direction` READABLE: the field has no printed element of its own — the direction
+           is which of these two columns the amount sits in — so the box a consumer needs is this
+           header together with the amount's own. A box per column is also what lets a test prove
+           the labelled amount is in the debit column and not merely somewhere on the right row. #}
+        <th class="c-money" data-field="column_debit">{{ columns.debit }}</th>
+        <th class="c-money" data-field="column_credit">{{ columns.credit }}</th>
+        <th class="c-purpose">{{ columns.purpose }}</th>
+        <th class="c-party">{{ columns.counterparty }}<span class="sub">{{ columns.counterparty_name }} / {{ columns.counterparty_code }}</span></th>
+        <th class="c-acct">{{ columns.counterparty_account }} / {{ columns.counterparty_bank }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {# 👁 Operations in the order they happened, so the labelled one lands wherever its timestamp
+         puts it. `data-field` on the row itself is the INDEXED box: geometry per row, so the
+         labelled cells below can be shown to fall inside the right one.
+
+         The conditional `data-field` attributes are the whole of what `relevant` does. A
+         non-relevant row renders the same span with no attribute — identical pixels, and the only
+         difference is a box in the label. #}
+      {% for row in rows %}
+      <tr data-field="operation_{{ loop.index0 }}">
+        <td class="c-num"><span {% if row.relevant %}data-field="relevant_transaction"{% endif %}>{{ row.number }}</span></td>
+        <td class="c-when">
+          <span {% if row.relevant %}data-field="date"{% endif %}>{{ row.date }}</span>
+          <span class="sub" {% if row.relevant %}data-field="time"{% endif %}>{{ row.time }}</span>
+        </td>
+        {# The amount sits in one column or the other and never in both, which is what makes the
+           direction readable. The empty cell is empty markup rather than a span, so no box points
+           at nothing. #}
+        <td class="c-money">{% if row.debit %}<span {% if row.relevant %}data-field="amount"{% endif %}>{{ row.debit }}</span>{% endif %}</td>
+        <td class="c-money">{% if row.credit %}<span {% if row.relevant %}data-field="amount"{% endif %}>{{ row.credit }}</span>{% endif %}</td>
+        <td class="c-purpose"><span {% if row.relevant %}data-field="payment_purpose"{% endif %}>{{ row.purpose }}</span></td>
+        <td class="c-party">
+          <span {% if row.relevant %}data-field="counterparty"{% endif %}>{{ row.counterparty_name }}</span>
+          <span class="sub" {% if row.relevant %}data-field="counterparty_code"{% endif %}>{{ row.counterparty_code }}</span>
+        </td>
+        <td class="c-acct">
+          <span {% if row.relevant %}data-field="counterparty_account"{% endif %}>{{ row.counterparty_account }}</span>
+          <span class="sub" {% if row.relevant %}data-field="counterparty_bank"{% endif %}>{{ row.counterparty_bank }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+</body>
+</html>

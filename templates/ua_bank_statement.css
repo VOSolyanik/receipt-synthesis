@@ -1,0 +1,190 @@
+/*
+ * Ukrainian bank account statement — A4 LANDSCAPE.
+ *
+ * SELF-CONTAINED, like the payment confirmation and unlike the three fiscal receipts that layer
+ * over one shared body. There is one archetype of this class and nothing to share a rule with.
+ *
+ * THE PAPER. 📄 A4 is 210 × 297 mm (ISO 216), and this class prints on it the long way round:
+ * 297 mm × 96 / 25.4 = 1123 px by 794 px, at the 96 dpi a PDF page is shown at on screen, which
+ * is how such a document reaches a claimant. ⛔ THE ORIENTATION WAS NOT OBSERVED — only a preview
+ * of the first page was seen — and it follows from the columns: seven of them, two carrying free
+ * text, fit a portrait page only by making the text unreadable, which would remove the very
+ * difficulty this class exists to pose. Declared in `bank_statement.page` in
+ * config/fiscal-rules.yaml, so it is not a number a reader has to take on trust from a stylesheet.
+ *
+ * `min-height` rather than `height`: 25 rows of two-line cells are close to the page and a long
+ * payment purpose may wrap, so the sheet lengthens instead of clipping. A bounding box running
+ * past the bottom of the image is the one failure a fixed height would guarantee.
+ *
+ * 🔴 NOTHING HERE MAY SELECT ON `data-field`. Those attributes mark the cells of the ONE row the
+ * label describes, and a rule keyed on them would make that row look different from its
+ * neighbours — which would turn "find the relevant transaction among twenty" into "find the
+ * highlighted one" and silently invalidate every measurement taken on this class. A test asserts
+ * the absence rather than trusting this comment.
+ *
+ * The type is small because a real statement's is: 👁 ≈20 operations of seven columns on one page
+ * leaves no other option, and reproducing that is part of reproducing the document. Font stacks
+ * follow the house rule in fonts/README.md — "Noto Sans" leads the prose, "Noto Sans Mono" the
+ * money columns, and both carry a Noto face so Chromium always has one to substitute ₴ from.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
+
+.page {
+  box-sizing: border-box;
+  width: 1123px;
+  min-height: 794px;
+  padding: 18px 30px 14px;
+  background: #ffffff;
+  color: #14171c;
+  font-family: "Noto Sans", "Roboto", sans-serif;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.muted {
+  color: #3d444d;
+}
+
+.strong {
+  font-weight: 700;
+}
+
+/* -- header ---------------------------------------------------------------- */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1.5px solid #1b3a6b;
+  padding-bottom: 6px;
+}
+
+.bank-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1b3a6b;
+  letter-spacing: 0.2px;
+}
+
+.issued {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  white-space: nowrap;
+}
+
+.title {
+  margin: 6px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.2px;
+}
+
+/* -- the four turnover totals --------------------------------------------- */
+
+/* 👁 A framed block immediately under the header, and the most prominent numbers on the page.
+   Framed and set in a heavier weight because that is what was observed — and because the whole
+   point of printing them is that an extractor reaching for the most salient figure has something
+   salient to reach for. */
+.turnover {
+  border: 1px solid #1b3a6b;
+  background: #f4f7fb;
+  padding: 4px 10px;
+  margin-bottom: 8px;
+}
+
+.turnover-row {
+  display: grid;
+  grid-template-columns: 120px 130px 150px 130px auto;
+  align-items: baseline;
+  column-gap: 8px;
+}
+
+.turnover .caption {
+  color: #3d444d;
+}
+
+.turnover .money {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.turnover .count {
+  color: #3d444d;
+  font-size: 10px;
+}
+
+/* -- the operations table -------------------------------------------------- */
+
+.ops {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+.ops th {
+  border: 1px solid #9aa4b1;
+  background: #eef1f5;
+  padding: 2px 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-align: left;
+  vertical-align: top;
+}
+
+.ops td {
+  border: 1px solid #c8cfd8;
+  padding: 1px 4px;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+/* Each stacked second line — a time under a date, a code under a name — as its own block, which
+   is 👁 how the observed table prints two values in one cell. */
+.ops .sub {
+  display: block;
+  color: #3d444d;
+  font-size: 8px;
+}
+
+.ops th .sub {
+  font-weight: 400;
+}
+
+.c-num {
+  width: 74px;
+}
+
+.c-when {
+  width: 66px;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+}
+
+/* Both money columns identical, so that which one a number is in is the only difference between a
+   debit and a credit. Right-aligned, as a money column is. */
+.c-money {
+  width: 84px;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  text-align: right;
+}
+
+.c-purpose {
+  width: 330px;
+}
+
+.c-party {
+  width: 190px;
+}
+
+.c-acct {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+}

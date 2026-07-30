@@ -396,9 +396,15 @@ Two shapes are derivable, and only two:
 
 Anything else is refused rather than guessed, because the guess decides the claim's amount. A fiscal receipt
 beside an invoice is either the same purchase described twice or two purchases one of which was never paid;
-one invoice beside two payments leaves open which payment settles it. A **bank statement** is refused
-outright: it genuinely lists several transactions while its label carries one amount for the whole document,
-so nothing identifies the row a given claim is about.
+one invoice beside two payments leaves open which payment settles it.
+
+A **bank statement** used to be refused outright here, because it lists several transactions while its label
+carried one amount for the whole document, so nothing identified the row a given claim was about. Its label
+now describes **one transaction** — the row's amount, date, counterparty, purpose and direction, with a
+pointer naming the row — so it pairs with a subject document like any other payment. What refuses instead is
+narrower and is a different question: a claim whose proof of payment is a **credit**. Money arriving is a
+refund or a reversal and evidences no expense, and `policy.yaml` assigns no verdict to a claim that rests on
+one, so the engine will not invent one.
 
 ### Both facts, or no reimbursement
 
@@ -460,13 +466,28 @@ Twenty-four rows below, sixteen Ukrainian and eight European. Layouts follow the
 conventions of each document class and jurisdiction.
 
 **Rows are not templates one for one.** Row 8 is realized by two templates, one per paper width, so the
-twenty-four rows are twenty-five templates. Three of them exist today — `ua_prro_receipt`,
-`ua_prro_receipt_58mm` and `ua_rro_receipt`, the whole of the `fiscal_receipt` class for Ukraine.
+twenty-four rows are twenty-five templates. **Five exist today**, across three document classes:
 
-The three share one body, `templates/ua_fiscal_receipt.jinja`, and differ in the paper width and in the fiscal
-identity the register prints. That is deliberate and it is also a limit: real registers differ in layout by
-provider, and no open sample shows the layout of a hardware receipt, so a layout difference invented between
-them would be a guess on every image. What varies is what is evidenced.
+| Template | Class |
+|---|---|
+| `ua_prro_receipt`, `ua_prro_receipt_58mm`, `ua_rro_receipt` | `fiscal_receipt` — the whole class for Ukraine |
+| `ua_bank_payment_confirmation` | `payment_confirmation` |
+| `ua_bank_statement` | `bank_statement` |
+
+The three receipts share one body, `templates/ua_fiscal_receipt.jinja`, and differ in the paper width and in
+the fiscal identity the register prints. That is deliberate and it is also a limit: real registers differ in
+layout by provider, and no open sample shows the layout of a hardware receipt, so a layout difference invented
+between them would be a guess on every image. What varies is what is evidenced.
+
+The other two share nothing with them and nothing with each other — a bank document and a till roll have no
+layout in common — and each carries the one limit of its own class: the confirmation models one arrangement of
+the fields four issuers all carry, and the statement models the **corporate** account statement, which is one
+of at least three layouts that go by that name. Both limits are declared in `config/labelling-schema.yaml`
+rather than left to be discovered from a score.
+
+**Only the fiscal receipts reach a dataset today.** A claim needs both facts, and the two bank classes prove
+one apiece; the class that proves the other — an invoice — is not written, so `claim_planner` reports those
+categories as not-yet-documentable rather than planning a claim its own document selector would refuse.
 
 ### Ukraine
 
@@ -476,7 +497,7 @@ them would be a guess on every image. What varies is what is evidenced.
 | 5–7 | Payment-service receipts (three providers) | `payment_confirmation` | Payment-gateway layouts |
 | 8 | Software cash register receipt (ПРРО) — QR, `ФН ПРРО`, VAT letters; **two templates, 80 mm and 58 mm** | `fiscal_receipt` | Modern fiscal document |
 | 9 | Classic hardware cash register receipt (РРО), 80 mm — `ЗН` beside `ФН`, sequential number | `fiscal_receipt` | Register diversity |
-| 10 | Account statement for a period, multi-transaction PDF | `bank_statement` | The statement class |
+| 10 | Account statement, A4 landscape — **one page, 15–25 operations, one of them labelled** | `bank_statement` | The statement class |
 | 11 | Sole-trader invoice for services | `invoice` | The invoice class |
 | 12 | Sales slip marked "not a fiscal receipt" | trap | Fiscality trap |
 | 13 | Non-fiscal POS slip — RRN and auth code, no fiscal number | trap | Fiscality trap |
