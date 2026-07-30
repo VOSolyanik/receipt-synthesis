@@ -446,6 +446,60 @@ partially_covered_causes:
   mixed_items: 0.65        # a non-covered line on the document
   limit_exhausted: 0.35    # the annual balance ran out
 
+# Why a claim's evidence is insufficient. Splits the `insufficient_evidence` bucket
+# of `verdict_mix` by cause, over the causes the generator can BUILD; must sum to 1.0.
+#
+# WHY THIS BLOCK IS LEGITIMATE HERE AND A `document_mix` WOULD NOT BE — the question the
+# next reader will ask, so it is answered where the parameter lives.
+#
+# A share here is a DESIGN PARAMETER OF AN EVALUATION SET, of exactly the same kind as
+# `verdict_mix` above: it does not estimate how often a real claimant attaches a payment
+# for the wrong amount, it DECIDES how often this dataset contains one, so that a
+# per-cause figure is measurable at all. The paragraph above `verdict_mix` says the same
+# thing about verdicts — over-representing the harder cases is what makes a per-class
+# metric meaningful, and the production prior is deliberately not defined here. This
+# block inherits that reasoning whole. It asserts NOTHING about a real claim flow.
+#
+# A `document_mix` — how often a dataset contains a receipt rather than an invoice — was
+# refused for the opposite reason: it would read as an observation about which documents
+# claimants actually submit, which nothing in this repository has measured. The
+# distinction is not the file the number sits in; it is whether the number is a decision
+# about this dataset or a claim about the world. This one is a decision.
+#
+# 🔴 ONLY THE CAUSES THAT CAN BE BUILT CARRY A SHARE. `subject_not_evidenced` — a claim
+# whose documents establish that money moved and never what it bought — has none, for the
+# same reason `rejected` has none in `verdict_mix`: building it needs a claim planned with
+# DELIBERATELY INCOMPLETE evidence, which the planner refuses by construction today, and a
+# share written before a mechanism exists sizes a bucket nothing can fill. It is absent
+# from this map rather than present as `null`, because the two members below are the whole
+# of what is drawn and must sum to 1.0.
+#
+# The two that are here are the CROSS-CHECK causes: both need a claim whose subject
+# document and whose payment document are different documents, so both became buildable
+# only when an archetype proving the subject alone was registered. They carry the same
+# `verdict_basis` — a reader of the two images can see either.
+#
+# 🔴 THE SHARES ARE EQUAL, AND EQUAL FOR A REASON RATHER THAN BY DEFAULT. An unequal split
+# would have to come from an observation — that claimants attach a payment for the wrong
+# amount more often than they attach one dated too early, or the reverse — and NO SUCH
+# OBSERVATION EXISTS. Nothing in this repository has measured either, and inventing a skew
+# would smuggle a claim about the world into a file whose whole point is that these numbers
+# are decisions about a dataset. So the realizable causes split evenly: two of them, half
+# each; three of them, thirds. `partially_covered_causes` above is NOT uniform, and the
+# difference is instructive — its 65/35 sizes the share of the dataset that exercises the
+# cumulative-limit mechanism, which is a decision about how much of a MECHANISM to test.
+# There is no such asymmetry between two cross-checks that cost the same to build.
+#
+# WHAT IS REQUIRED IS OF THE RESULT, NOT OF THE SHARE: every cause here must be NON-ZERO in
+# a generated run. A verdict's share is not a mechanism's share — `verdict_mix` declares
+# `insufficient_evidence: 0.10` and says nothing about which cause realizes it, so ten
+# percent of the corpus arriving through one cause would leave the label vocabulary
+# promising three causes while the data held one. The realized distribution is measured and
+# recorded per run in `known_limitations` in config/labelling-schema.yaml.
+insufficient_evidence_causes:
+  amount_mismatch: 0.50           # the payment states a different amount from the subject
+  payment_precedes_subject: 0.50  # the payment is dated before what it settles
+
 # What each document type proves. A claim is reimbursable only when BOTH facts
 # are established — what was bought, and that it was paid for — possibly across
 # different documents. That is where linked claims come from (an order screenshot

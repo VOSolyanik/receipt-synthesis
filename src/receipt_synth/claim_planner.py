@@ -29,10 +29,13 @@ from decimal import Decimal
 from receipt_synth.config import coverage_targets, load_policy
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
+    AMOUNT_MISMATCH,
+    PAYMENT_PRECEDES_SUBJECT,
     ClaimEvaluation,
     Evidence,
     Ledger,
     document_evidence,
+    insufficient_evidence_causes,
     partially_covered_causes,
     verdict_mix,
 )
@@ -227,7 +230,35 @@ ARCHETYPES: dict[str, Archetype] = {
 # The verdicts this planner can build documents for. The others are refused rather than
 # approximated: a planner that accepted one and produced an ordinary basket would write a
 # wrong label instead of failing.
-REALIZABLE_VERDICTS: tuple[Verdict, ...] = (Verdict.COVERED, Verdict.PARTIALLY_COVERED)
+REALIZABLE_VERDICTS: tuple[Verdict, ...] = (
+    Verdict.COVERED,
+    Verdict.PARTIALLY_COVERED,
+    # 🔴 THE THIRD, AND IT ARRIVED WITH A MECHANISM RATHER THAN WITH A TEMPLATE. A claim can now be
+    # planned whose subject document and whose payment document DISAGREE — about the amount, or
+    # about which came first — which is what `policy_engine._cross_checks` has always labelled and
+    # what nothing could build until an archetype proving the subject alone existed. Only the two
+    # CROSS-CHECK causes are drawn; see `_UNREALIZABLE_CAUSES` for the third and why it is not.
+    Verdict.INSUFFICIENT_EVIDENCE,
+)
+
+# WHY A CAUSE OF A REALIZABLE VERDICT NEEDS ITS OWN TABLE. `_UNREALIZABLE_REASONS` below is keyed by
+# VERDICT, and `insufficient_evidence` is realizable now — so the reason its third cause still
+# cannot be built had nowhere to live, and would have vanished with the entry that moved. A verdict
+# being realizable and every route to it being realizable are different statements, and the second
+# is the one a reader of a corpus needs.
+_UNREALIZABLE_CAUSES: dict[str, str] = {
+    "subject_not_evidenced": (
+        "is `insufficient_evidence` reached by a claim that establishes a movement of money and "
+        "never what it bought — a bare payment confirmation or a bare statement. "
+        "`policy_engine.resolve_evidence` labels such a claim today and NOTHING CAN PLAN ONE: "
+        "`_select_documents` assembles both facts or refuses, `documentable_categories` reports a "
+        "category it cannot complete as not documentable, and `ClaimPlan.subject_document` raises "
+        "unless exactly one document states what was bought. Building it means planning "
+        "DELIBERATELY INCOMPLETE evidence, which is a change to the claim model rather than to a "
+        "template or a share — so config/policy.yaml declares no share for it, on the same "
+        "reasoning that leaves `rejected` without one in `verdict_mix`"
+    ),
+}
 
 _UNREALIZABLE_REASONS: dict[Verdict, str] = {
     Verdict.NOT_PROOF_OF_PAYMENT: (
@@ -241,22 +272,6 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
         "`documentable_categories` reports a category it cannot complete as not documentable "
         "rather than letting such a plan be made. The document type is still the whole mechanism: "
         "amounts, baskets and dates are not consulted"
-    ),
-    Verdict.INSUFFICIENT_EVIDENCE: (
-        "is the other two slots of `document_evidence`. WHAT WAS BOUGHT, left unestablished by "
-        "a claim carrying no type that states it; or ONE TRANSACTION, left unestablished by a "
-        "subject document and its payment that both exist and fail a cross-check. Content, not "
-        "coverage arithmetic — `policy_engine` labels all three causes correctly today, each "
-        "with its own name in `imperfection`. WHAT IS MISSING IS NO LONGER THE SAME THING FOR "
-        "ALL THREE, and the difference matters to whoever closes this. For "
-        "`subject_not_evidenced` the archetypes now EXIST — a bank payment confirmation and a bank "
-        "statement each state no subject — and what is missing is a planner that deliberately "
-        "plans an INCOMPLETE "
-        "claim: `_select_documents` assembles both facts or refuses, because the two verdicts "
-        "this planner draws both need complete evidence, and `documentable_categories` reports "
-        "a payment-only category as not documentable rather than letting such a plan be made. "
-        "The other two causes still need an archetype that does not exist, since a cross-check "
-        "needs a SUBJECT document to disagree with its payment"
     ),
     Verdict.PARTIALLY_PAID: (
         "needs a document showing PART of an amount settled, and the statement archetype now "
@@ -321,17 +336,28 @@ def unrealizable_verdicts() -> list[Verdict]:
     return [verdict for verdict in Verdict if verdict not in REALIZABLE_VERDICTS]
 
 
-def draw_verdict(rng: random.Random) -> Verdict:
+def draw_verdict(
+    rng: random.Random, realizable: tuple[Verdict, ...] = REALIZABLE_VERDICTS
+) -> Verdict:
     """A target verdict from `verdict_mix`, restricted to what can be built.
 
     The shares are renormalized over the realizable subset — `random.choices` does that
     from the raw weights — so the drawn distribution is the target mix *conditioned* on
     that subset, not the target mix. Whoever reads the realized distribution has to be
     told which verdicts were excluded, or the conditioning is invisible.
+
+    ⚠️ `realizable` NARROWS THAT SUBSET PER PERSONA, and the conditioning is one layer deeper than
+    it was. `insufficient_evidence` needs a category documented by a PAIR — a claim cannot
+    contradict itself with one document — so a persona holding only a category that has a fiscal
+    receipt cannot realize it, and drawing it for them would plan a claim that has to be refused.
+    The alternative was to skip such a claim and account for it, which spends a whole claim to
+    preserve a share; renormalizing spends none and is visible here. Declared in the balance report
+    and in config/labelling-schema.yaml, because a share conditioned on the persona is not the
+    share the file declares.
     """
     mix = verdict_mix()
     weights: list[float] = []
-    for verdict in REALIZABLE_VERDICTS:
+    for verdict in realizable:
         share = mix[verdict]
         if share is None:
             # policy.yaml may declare a verdict with no share yet — see `verdict_mix`. That
@@ -344,7 +370,22 @@ def draw_verdict(rng: random.Random) -> Verdict:
                 "REALIZABLE_VERDICTS."
             )
         weights.append(share)
-    return rng.choices(REALIZABLE_VERDICTS, weights=weights, k=1)[0]
+    return rng.choices(realizable, weights=weights, k=1)[0]
+
+
+def draw_insufficient_evidence_cause(rng: random.Random) -> str:
+    """Which cross-check a claim's two documents fail, per `insufficient_evidence_causes`.
+
+    Drawn in the order policy.yaml declares the causes in, which is a file order rather than a set
+    order, so the draw stays reproducible — the same rule as the `partially_covered` causes below.
+
+    🔴 THE MAP IS NOT THE CAUSE VOCABULARY. `subject_not_evidenced` also leads to this verdict and
+    carries no share, because nothing can plan a deliberately incomplete claim — see
+    `_UNREALIZABLE_CAUSES`. A consumer reading a corpus must not infer from the two causes present
+    that the third does not exist; `policy_engine` returns it and would label it correctly.
+    """
+    causes = insufficient_evidence_causes()
+    return rng.choices(list(causes), weights=list(causes.values()), k=1)[0]
 
 
 def draw_partially_covered_cause(rng: random.Random) -> str:
@@ -515,7 +556,9 @@ def documentable_categories(persona: Persona) -> list[str]:
     ]
 
 
-def plannable_categories(persona: Persona, ledger: Ledger) -> list[str]:
+def plannable_categories(
+    persona: Persona, ledger: Ledger, verdict: Verdict | None = None
+) -> list[str]:
     """The persona's documentable categories that still have an annual balance.
 
     The ledger is required rather than optional. Defaulting it to "no history" made the
@@ -523,12 +566,52 @@ def plannable_categories(persona: Persona, ledger: Ledger) -> list[str]:
     omitted it would plan a claim `policy_engine` then refuses to label — the failure
     landing one stage away from its cause. A caller with genuinely no history passes a
     fresh `Ledger()` and says so at the call site.
+
+    🔴 `verdict` NARROWS FURTHER, AND THE NARROWING IS PER VERDICT RATHER THAN GLOBAL. That is the
+    subtle part of this function and the reason it takes the argument at all.
+
+    `insufficient_evidence` is realized by a claim whose SUBJECT document and PAYMENT document
+    disagree, so it needs a category documented by a PAIR. A category that has a fiscal receipt
+    gets one self-sufficient document — `_select_documents` prefers that shape — and one document
+    cannot contradict itself, so such a category can never realize this verdict.
+
+    WHY NOT NARROW GLOBALLY. Because `covered` and `partially_covered` are realizable in BOTH
+    shapes: a receipt category is perfectly plannable for them, and dropping it from every claim
+    would remove the only `fiscal_receipt` documents the corpus has, to satisfy a constraint that
+    belongs to one verdict out of three. The narrowing follows the verdict because the CONSTRAINT
+    follows the verdict — a global filter would encode one verdict's requirement as a property of
+    the persona.
     """
-    return [
+    open_balance = [
         category
         for category in documentable_categories(persona)
         if ledger.remaining(persona.persona_id, category) > 0
     ]
+    if verdict is not Verdict.INSUFFICIENT_EVIDENCE:
+        return open_balance
+    return [
+        category
+        for category in open_balance
+        if not any(
+            all(evidence_of(archetype))
+            for archetype in archetypes_for(persona.location.country, category)
+        )
+    ]
+
+
+def realizable_verdicts_for(persona: Persona, ledger: Ledger) -> tuple[Verdict, ...]:
+    """The verdicts this persona can realize right now, given the categories it can still spend in.
+
+    Every verdict this planner draws needs a category; `insufficient_evidence` needs one of a
+    particular SHAPE, so a persona whose only remaining category carries a fiscal receipt cannot
+    realize it. Drawing it for them would produce a plan `_select_documents` has to refuse — the
+    failure landing a stage away from its cause, which is the thing this module keeps not doing.
+    """
+    return tuple(
+        verdict
+        for verdict in REALIZABLE_VERDICTS
+        if plannable_categories(persona, ledger, verdict)
+    )
 
 
 def _draw_date_in_period(rng: random.Random) -> datetime:
@@ -559,7 +642,11 @@ def draw_claim_dates(rng: random.Random, count: int) -> list[datetime]:
 
 
 def _select_documents(
-    rng: random.Random, candidates: list[Archetype], issued_at: datetime
+    rng: random.Random,
+    candidates: list[Archetype],
+    issued_at: datetime,
+    *,
+    payment_precedes_subject: bool = False,
 ) -> tuple[DocumentPlan, ...]:
     """The documents a claim needs to establish both facts a reimbursement rests on.
 
@@ -578,6 +665,13 @@ def _select_documents(
        subject dated in the previous benefit period occurs — that is an ordinary claim
        under the period rule, and the rule is only exercised if the data contains one.
 
+    🔴 `payment_precedes_subject` INVERTS THAT ORDER DELIBERATELY, and it is the whole of what the
+    cause of the same name needs: the subject is dated AFTER the payment, so the claim states that
+    money moved before there was anything to pay for. One sign, because the defect is the ORDER and
+    nothing else — the lead is drawn identically either way, so a claim built for this cause is
+    distinguishable from an ordinary one by nothing except the thing being labelled. That is what
+    makes it a usable negative: had the flag also changed the gap, a consumer could learn the gap.
+
     Where neither shape can be assembled the planner refuses. It does not build a claim
     out of whichever archetypes exist and leave the engine to discover that half the
     evidence is missing: the verdict is chosen first here, and the two verdicts this
@@ -594,8 +688,16 @@ def _select_documents(
         # of a run: the lead is a property of the claim, the templates are a property of
         # the registry, and the two should not be entangled in the seed stream.
         lead = timedelta(days=rng.randint(0, _SUBJECT_LEAD_DAYS))
+        if payment_precedes_subject:
+            # ⚠️ A ZERO LEAD WOULD NOT BREAK ANYTHING. `_cross_checks` compares dates STRICTLY —
+            # paying an invoice on the day it is issued is ordinary — so the subject has to land at
+            # least one day after the payment for the cause to be real. `max` is what guarantees it
+            # rather than a redraw, which would make the number of values taken from `rng` depend on
+            # what the first one returned.
+            lead = max(lead, timedelta(days=1))
+        subject_at = issued_at + lead if payment_precedes_subject else issued_at - lead
         return (
-            DocumentPlan(archetype=rng.choice(subjects), issued_at=issued_at - lead),
+            DocumentPlan(archetype=rng.choice(subjects), issued_at=subject_at),
             DocumentPlan(archetype=rng.choice(payments), issued_at=issued_at),
         )
 
@@ -640,7 +742,7 @@ def plan_claim(
     passes `Ledger()` and says so at the call site.
     """
     if verdict is None:
-        verdict = draw_verdict(rng)
+        verdict = draw_verdict(rng, realizable_verdicts_for(persona, ledger) or REALIZABLE_VERDICTS)
     if verdict not in REALIZABLE_VERDICTS:
         raise NotImplementedError(
             f"verdict {verdict.value!r} "
@@ -648,11 +750,12 @@ def plan_claim(
         )
 
     if category is None:
-        options = plannable_categories(persona, ledger)
+        options = plannable_categories(persona, ledger, verdict)
         if not options:
             raise ValueError(
-                f"persona {persona.persona_id} holds no category any registered archetype "
-                f"can document with balance left: {persona.benefit_categories}"
+                f"persona {persona.persona_id} holds no category any registered archetype can "
+                f"document with balance left, for verdict {verdict.value!r}: "
+                f"{persona.benefit_categories}"
             )
         category = rng.choice(options)
     elif category not in persona.benefit_categories:
@@ -690,8 +793,23 @@ def plan_claim(
             item_count = _overrun_item_count(remaining, category)
         else:
             raise ValueError(f"policy.yaml declares no such partially_covered cause: {cause!r}")
+    elif verdict is Verdict.INSUFFICIENT_EVIDENCE:
+        # TWO VERDICTS CARRY A CAUSE NOW, which is why the guard below widened from "a cause
+        # belongs to a partially_covered claim". The cause decides which cross-check the claim's
+        # two documents fail; the engine decides whether they actually did, and nothing here
+        # assumes it.
+        cause = cause or draw_insufficient_evidence_cause(rng)
+        if cause not in (AMOUNT_MISMATCH, PAYMENT_PRECEDES_SUBJECT):
+            raise ValueError(
+                f"policy.yaml declares no such buildable insufficient_evidence cause: {cause!r}. "
+                f"{cause!r} may still be a cause the ENGINE returns — see "
+                "`claim_planner._UNREALIZABLE_CAUSES` for the one that is and cannot be planned."
+            )
     elif cause is not None:
-        raise ValueError(f"a cause belongs to a partially_covered claim, not to {verdict.value!r}")
+        raise ValueError(
+            f"a cause belongs to a partially_covered or an insufficient_evidence claim, not to "
+            f"{verdict.value!r}"
+        )
 
     return ClaimPlan(
         claim_id=claim_id,
@@ -699,7 +817,10 @@ def plan_claim(
         category=category,
         verdict=verdict,
         cause=cause,
-        documents=_select_documents(rng, candidates, issued_at),
+        documents=_select_documents(
+            rng, candidates, issued_at,
+            payment_precedes_subject=cause == PAYMENT_PRECEDES_SUBJECT,
+        ),
         issued_at=issued_at,
         coverage_target=coverage_target,
         item_count=item_count,

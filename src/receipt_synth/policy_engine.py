@@ -219,6 +219,25 @@ def partially_covered_causes() -> dict[str, float]:
             load_policy()["partially_covered_causes"].items()}
 
 
+def insufficient_evidence_causes() -> dict[str, float]:
+    """How the `insufficient_evidence` bucket splits by cause, in declaration order.
+
+    🔴 OVER THE CAUSES THE GENERATOR CAN BUILD, WHICH IS NOT THE WHOLE VOCABULARY. Three causes
+    lead to this verdict — `SUBJECT_NOT_EVIDENCED`, `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT` —
+    and policy.yaml declares shares for the two CROSS-CHECK causes only. The third needs a claim
+    planned with deliberately incomplete evidence, which the planner refuses by construction, and
+    policy.yaml says at the block why a share written before a mechanism exists sizes a bucket
+    nothing can fill.
+
+    So a reader of this map must not take it for the cause vocabulary: `policy_engine` still
+    RETURNS `subject_not_evidenced`, and a claim carrying it is labelled correctly. What the map
+    describes is the DRAW, and the two are different questions — the same distinction `verdict_mix`
+    and `REALIZABLE_VERDICTS` have always had between them.
+    """
+    return {str(name): float(share) for name, share in
+            load_policy()["insufficient_evidence_causes"].items()}
+
+
 # =============================================================================
 # Evidence: what a claim's documents establish between them
 # =============================================================================

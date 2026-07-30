@@ -45,6 +45,32 @@
 #
 # Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 13 by A VERDICT BECOMING DRAWABLE: `insufficient_evidence` is now a target the planner
+# AIMS AT, so the corpus contains claims whose two documents deliberately contradict each other.
+# FOUR consequences a consumer has to know about, and the first changes what is in the data.
+#
+#   A THIRD VERDICT IS IN THE CORPUS. `insufficient_evidence` was absent from every dataset; it is
+#   now ~14% of claims. A consumer that had never received one — and whose scorecard therefore had
+#   no row for it — meets it on every run. Two of its three causes occur; see `known_limitations`
+#   KL-07 for which, with counts.
+#
+#   THE DRAWN MIX OF EVERY OTHER VERDICT SHIFTED, because the draw renormalizes over the realizable
+#   subset and that subset gained a member: `covered` went from 0.50/0.70 to 0.50/0.80 of the draw
+#   and `partially_covered` from 0.20/0.70 to 0.20/0.80. No share in config/policy.yaml changed. A
+#   figure measured per class on an earlier run is a figure about a different mix.
+#
+#   `config/policy.yaml` GAINED A BLOCK — `insufficient_evidence_causes`, splitting that verdict by
+#   cause. 🔴 THIS IS AN I-2 EVENT: the file is vendored under a sha lock, so a consumer holding an
+#   earlier copy is holding a different file. Its `version` stays at 1 under the standing rule — the
+#   sha IS its identity, and a version key inside a sha-locked file would be a second source of
+#   truth about the same thing. The shares are EQUAL, and the file says why: an unequal split would
+#   need an observation that does not exist.
+#
+#   A CLAIM MAY NOW DISAGREE WITH ITSELF ON PURPOSE. Two documents of one claim may state different
+#   amounts, or be dated in the impossible order — and the claim's own `imperfection` says which.
+#   A consumer must read the intended disagreement off the label rather than treating any
+#   disagreement as a defect: everything NOT named there still agrees, which is asserted per run.
+#
 # Bumped to 12 by THE FOURTH DOCUMENT CLASS ARRIVING — an invoice — and by THE CONSEQUENCE THAT
 # MATTERS MORE THAN THE CLASS: a claim's evidence can now be SPLIT ACROSS TWO DOCUMENTS, which no
 # dataset has ever contained. FIVE consequences a consumer has to know about.
@@ -353,7 +379,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 12
+version: 13
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -3480,46 +3506,118 @@ known_limitations:
       is declared here rather than fixed alongside the archetype that exposed it.
 
   - id: KL-07
-    name: the corpus realizes one verdict's causes and not the others
+    name: one cause of `insufficient_evidence` is in the vocabulary and never in the data
     predictor: none — a coverage gap in the cause vocabulary
     hurts: evaluation
     subset: >
-      🔴 THE CROSS-CHECK CAUSES ARE NEVER REALIZED. `imperfection` has a vocabulary of six causes;
-      this corpus contains two of them. `amount_mismatch` and `payment_precedes_subject` — the two
-      that need a claim's subject document and its payment to DISAGREE — occur zero times, and
-      `subject_not_evidenced` likewise. A consumer stratifying by VERDICT cannot see this, because
-      the verdict those three causes produce (`insufficient_evidence`) is absent from the corpus
-      altogether: a share of a verdict says nothing about which mechanism realized it.
+      🔴 `subject_not_evidenced` IS NEVER REALIZED. `imperfection` has a vocabulary of six causes
+      and this corpus now contains four. The two CROSS-CHECK causes became drawable when the
+      planner gained `insufficient_evidence` as a target — see `when_it_appeared` — and the third
+      route to that verdict did not: a claim that establishes a movement of money and never what it
+      bought needs DELIBERATELY INCOMPLETE evidence, which `_select_documents` refuses by
+      construction and `ClaimPlan.subject_document` raises on.
+
+      A consumer stratifying by VERDICT still cannot see this: `insufficient_evidence` is present in
+      the corpus now, so its share says nothing about which of its three mechanisms produced it.
+      `outside_period` is likewise absent, its verdict `rejected` having no share yet.
     share_in_reference_run: >
-      MEASURED ON `--seed 42 --personas 12 --claims-per-persona 8`, denominator 86 claims:
-      `limit_exhausted` 31 (36.0%), `mixed_items` 22 (25.6%), no cause at all 40 (46.5%) — the
-      three sum past 86 because 7 claims carry both `partially_covered` causes. `amount_mismatch`
-      0, `payment_precedes_subject` 0, `subject_not_evidenced` 0, `outside_period` 0.
+      MEASURED ON THE ×4 RUN — `--seed 42 --personas 48 --claims-per-persona 8`, 363 claims, 679
+      documents. Denominator 363 claims: `limit_exhausted` 112 (30.9%), `mixed_items` 60 (16.5%),
+      `amount_mismatch` 28 (7.7%), `payment_precedes_subject` 22 (6.1%), `subject_not_evidenced` 0,
+      `outside_period` 0. Of the 50 `insufficient_evidence` claims, 28 carry the first cause and 22
+      the second — both non-zero, which is the requirement policy.yaml states on the RESULT rather
+      than on the share.
+
+      ⚠️ WHICH RUN THIS DESCRIBES IS PART OF THE FIGURE. An earlier version of this entry was
+      measured on `--personas 12` (86 claims, 162 documents) and reported every cause of this
+      verdict as zero. A production run of a different size will produce different counts for the
+      same quantities, and a reader meeting two figures without their runs named would take the
+      dataset to contradict itself.
     when_it_appeared: >
-      THE ENTRY IS NEW AND HALF THE GAP IS NEWLY MEANINGFUL. Until the invoice archetype landed no
-      claim had a subject document distinct from its payment, so a cross-check had nothing to
-      compare and the two causes were unreachable for a structural reason. They are now reachable —
-      a pair exists — and are unrealized for a different reason: `assembler._build_document` hands
-      the subject's amount to the payment document, so the two agree by construction, and
-      `_select_documents` dates the subject on or before the payment. The reason a figure is zero
-      changed even though the figure did not, which is exactly the kind of thing an unexamined
-      justification outlives.
+      THE FIGURES MOVED FOR A MECHANISM, NOT FOR A SEED. On the 12-persona run all three causes of
+      this verdict were zero, and the reason was that the planner could not aim at the verdict at
+      all: `insufficient_evidence` was not in `REALIZABLE_VERDICTS`, the payment document was handed
+      the subject's amount, and the subject was always dated first. The commit that made the two
+      cross-checks drawable is what moved them off zero; nothing about the third changed, and its
+      figure is zero for the reason it has always been zero.
     consequence: >
-      Any evaluation of a system's cross-document checks is UNMEASURED on this corpus. A consumer
-      must not read the absence of `amount_mismatch` as evidence that its own checker works: no
-      claim here exercises it. Report cross-document accuracy as not measured rather than as
-      perfect.
+      Evaluation of a system's ability to notice a MISSING SUBJECT DOCUMENT is unmeasured here. The
+      two cross-checks are measured. A consumer must not read the presence of `insufficient_evidence`
+      in the corpus as evidence that all three of its routes are exercised.
     how_to_stratify: >
-      By `imperfection` membership, never by verdict. The two realized causes both sit under
-      `partially_covered`, so a stratification by verdict puts every claim in this corpus into a
-      bucket whose cause vocabulary it exercises a third of.
+      By `imperfection` membership, never by verdict — the four realized causes sit under two
+      verdicts, and one verdict carries two of them.
     fixed_by: >
-      A DRAWN DIVERGENCE. The planner would have to aim at `insufficient_evidence` — adding it to
-      `REALIZABLE_VERDICTS`, drawing which cause realizes it, and telling the builder to make a
-      pair disagree by amount or by order. That is a change to what the planner can draw rather
-      than a template, and the share governing it would be a DESIGN PARAMETER OF AN EVALUATION SET
-      belonging beside `verdict_mix` in config/policy.yaml — the same kind of parameter as that
-      one, asserting nothing about a real claim flow.
+      A PLANNER THAT PLANS INCOMPLETE EVIDENCE. `_select_documents` would have to return a payment
+      document with no subject beside it, and `ClaimPlan.subject_document` would have to tolerate
+      zero carriers instead of raising. That is a change to the claim model rather than to a share
+      or a template, which is why config/policy.yaml declares no share for the cause — the same
+      reasoning that leaves `rejected` without one in `verdict_mix`.
+
+  - id: KL-08
+    name: the cross-check causes can never occur on a fiscal receipt
+    predictor: doc_type — a document class fully determines that two causes are absent from it
+    hurts: evaluation
+    subset: >
+      🔴 EVERY `fiscal_receipt` IN THE CORPUS IS THE WHOLE OF ITS CLAIM, so neither cross-check
+      cause can ever be observed on one. A cross-check compares a claim's SUBJECT document with its
+      PAYMENT document, and a receipt is both — a self-sufficient document has nothing to disagree
+      with. The planner makes this exact: `_select_documents` prefers a single document proving both
+      facts wherever one is registered, and the three fiscal receipts are registered for the one
+      category that has them.
+    share_in_reference_run: >
+      MEASURED ON THE ×4 RUN — `--seed 42 --personas 48 --claims-per-persona 8`, 363 claims, 679
+      documents. 316 claims carry two documents and 47 carry one. FISCAL RECEIPTS APPEARING IN A
+      MULTI-DOCUMENT CLAIM: 0 of 316. The 50 claims carrying a cross-check cause hold invoices (50),
+      payment confirmations (27) and bank statements (23) — and no receipt.
+    why_it_is_deliberate: >
+      It is STRUCTURAL rather than chosen, which is why it is declared instead of fixed. Pairing a
+      receipt with a payment document would mean planning a claim whose evidence is described twice
+      — the shape `policy_engine.resolve_evidence` refuses outright, because nothing says whether
+      such documents are one purchase or two.
+    consequence: >
+      A per-class evaluation of cross-document checking is measurable on three of the four target
+      classes and NOT on `fiscal_receipt`. A consumer must not average a cross-check metric across
+      the four and report it as a figure about the dataset: for one class the denominator is zero.
+    how_to_stratify: >
+      By `doc_type == "fiscal_receipt"`, which coincides exactly with `len(claim.documents) == 1`
+      in this corpus. That coincidence is itself worth knowing and is not guaranteed by anything: it
+      holds while receipts are the only self-sufficient archetype.
+    fixed_by: >
+      NOTHING IN THIS DESIGN. It would need a claim pairing a receipt with a payment document, which
+      the evidence resolver refuses for a reason that has nothing to do with this entry.
+
+  - id: KL-09
+    name: a claim's payer cannot always be cross-checked across its documents
+    predictor: none — a field that is deliberately empty on one variant
+    hurts: evaluation
+    subset: >
+      Claims whose payment document is an INTERNET-ACQUIRING confirmation. 👁 That variant does not
+      identify the payer and prints a HYPHEN as the value, which the label carries as the string
+      "-" — deliberately, because an extractor returns a string for it and returns nothing for a
+      captioned-but-empty field, and collapsing the two would make accuracy on empty fields
+      unmeasurable. The invoice beside it names the claimant, so the claim's two documents carry
+      two different payers and neither is wrong.
+    share_in_reference_run: >
+      FOUND BY THE CROSS-DOCUMENT SELF-CONSISTENCY CHECK on its first run, over the pipeline
+      fixture (`--seed 20260803 --personas 4 --claims-per-persona 8`): of 31 multi-document claims,
+      3 documents carried an unidentified payer. Not measured on the ×4 run, because the check that
+      finds it runs on the fixture; the rate follows `payment_confirmation.initiation_shares` in
+      config/generation.yaml, where acquiring is 👁 1 of 8.
+    why_it_is_deliberate: >
+      The document is right. 👁 An acquiring receipt genuinely does not name the payer, and printing
+      the persona there would be inventing a requisite that variant does not carry.
+    consequence: >
+      A consumer cross-checking the PARTIES of a claim's documents against each other must treat an
+      unidentified payer as absent rather than as a mismatch. A verifier that flagged such a claim as
+      contradictory would be flagging an ordinary acquiring payment.
+    how_to_stratify: >
+      By `payer == "-"` on the payment document — the value is `parties.empty_value` in
+      config/fiscal-rules.yaml.
+    fixed_by: >
+      NOTHING, AND NOTHING SHOULD. This is the corpus reproducing an observed document faithfully.
+      It is declared because the consequence for a cross-party check is real, not because the
+      document is wrong.
 
 
 # =============================================================================

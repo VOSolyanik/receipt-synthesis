@@ -31,8 +31,9 @@ from receipt_synth.claim_planner import (
     unrealizable_verdicts,
     why_no_claim,
 )
-from receipt_synth.config import load_vendors
+from receipt_synth.config import load_vendors, mismatch_delta_range
 from receipt_synth.content_builder import (
+    KOPIYKA,
     build_bank_statement,
     build_invoice,
     build_payment_confirmation,
@@ -43,8 +44,10 @@ from receipt_synth.content_builder import (
 from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
+    AMOUNT_MISMATCH,
     Ledger,
     evaluate_claim,
+    insufficient_evidence_causes,
     partially_covered_causes,
     verdict_mix,
 )
@@ -303,6 +306,38 @@ def _build_document(
     )
 
 
+def _amount_the_payment_states(
+    rng: random.Random, plan: ClaimPlan, subject_amount: Decimal
+) -> Decimal:
+    """What the payment document of this claim should state, given the subject's amount.
+
+    THE SAME AMOUNT ON AN ORDINARY CLAIM, which is what makes a pair one transaction:
+    `policy_engine._cross_checks` compares the two EXACTLY, and there is no tolerance anywhere in
+    this repository.
+
+    🔴 A DIFFERENT AMOUNT WHEN THE PLAN ASKED FOR ONE. A claim planned as `insufficient_evidence`
+    with the cause `amount_mismatch` is realized here and nowhere else: the label was chosen first
+    and the documents are built to make it true, which is the whole direction of this generator.
+    The delta is drawn from config/generation.yaml — the magnitude is a difficulty knob and changes
+    no label — and it is applied in whichever direction keeps the payment positive, because a
+    document stating a negative amount is a different defect from a document stating the wrong one.
+
+    The engine still decides. If a delta ever came out zero the claim would come back `covered`,
+    and `assembler._drift_lines` would report the target and the label disagreeing rather than
+    anybody assuming they agree — which is why the floor is in the configured range rather than in
+    an assertion here.
+    """
+    if plan.cause != AMOUNT_MISMATCH:
+        return subject_amount
+
+    low, high = mismatch_delta_range()
+    delta = Decimal(rng.randrange(int(low * 100), int(high * 100), 10)) / 100
+    if delta >= subject_amount:
+        # A payment of zero or less is not a mismatched payment, it is a broken document.
+        return (subject_amount + delta).quantize(KOPIYKA)
+    return (subject_amount + (delta if rng.random() < 0.5 else -delta)).quantize(KOPIYKA)
+
+
 def generate_dataset(
     *,
     seed: int,
@@ -382,7 +417,7 @@ def generate_dataset(
                         settles=settles,
                     )
                     if evidence_of(document_plan.archetype).proves_subject:
-                        settles = document.amount
+                        settles = _amount_the_payment_states(rng, plan, document.amount)
                     documents.append(document)
                 # The oracle, not the plan, decides the label. The plan's verdict was the
                 # target; where the two differ the balance report says so.
@@ -489,6 +524,7 @@ def balance_report(dataset: Dataset) -> str:
         )
 
     lines += _cause_lines(dataset)
+    lines += _insufficient_evidence_cause_lines(dataset)
 
     if missing:
         named = ", ".join(_target_share(verdict, mix) for verdict in missing)
@@ -571,6 +607,53 @@ def _cause_lines(dataset: Dataset) -> list[str]:
     lines.append(
         f"  {'both causes on one claim':<26} {both:>4}  {_share(both, total):>6}"
         "   policy.yaml declares no share for this"
+    )
+    return lines
+
+
+def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
+    """`insufficient_evidence` by cause, and WHAT THE CORPUS DOES NOT CONTAIN.
+
+    A second cause block rather than a generalization of the one above, because the two verdicts
+    differ in the thing that matters here: `partially_covered`'s causes can occur together on one
+    claim and are counted per claim for that reason, while these are mutually exclusive by
+    construction — a pair either disagrees about the amount or is dated backwards, and the planner
+    draws one.
+
+    🔴 THE THIRD CAUSE IS NAMED THOUGH IT NEVER OCCURS. `subject_not_evidenced` reaches this verdict
+    too and carries no share in policy.yaml, because nothing can plan a deliberately incomplete
+    claim. A report listing only what happened would let a reader take two causes for the whole
+    vocabulary, which is the reading `known_limitations` KL-07 exists to prevent.
+    """
+    shares = insufficient_evidence_causes()
+    counts = Counter(
+        cause
+        for claim in dataset.claims
+        if claim.verdict is Verdict.INSUFFICIENT_EVIDENCE
+        for cause in claim.imperfection
+    )
+    total = sum(counts.values())
+
+    lines = [
+        f"insufficient_evidence by cause — {total} claim(s); the two cross-check causes are "
+        "mutually exclusive"
+    ]
+    for cause, share in shares.items():
+        count = counts[cause]
+        lines.append(
+            f"  {cause:<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
+        )
+    for cause in sorted(set(counts) - set(shares)):
+        lines.append(
+            f"  {cause:<26} {counts[cause]:>4}  {_share(counts[cause], total):>6}"
+            "   !! realized with no share declared for it in policy.yaml"
+        )
+    lines.append(
+        f"  {'subject_not_evidenced':<26} {counts['subject_not_evidenced']:>4}"
+        "         NOT DRAWN — policy.yaml declares no share, because nothing can plan a"
+    )
+    lines.append(
+        "                                          deliberately incomplete claim. See KL-07."
     )
     return lines
 

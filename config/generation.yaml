@@ -648,6 +648,27 @@ payment_confirmation:
 
 
 # =============================================================================
+# A claim whose two documents disagree — the draw input, not the share
+# =============================================================================
+#
+# 🔴 WHICH FILE THIS BELONGS IN, because the neighbouring parameter is in the other one. HOW OFTEN a
+# claim's documents disagree is in config/policy.yaml, beside `verdict_mix`, because it SIZES A
+# LABELLED BUCKET: it decides what share of the corpus carries `insufficient_evidence` with the
+# cause `amount_mismatch`, which is a design parameter of an evaluation set. BY HOW MUCH they
+# disagree is here, because it changes no label at all — a claim whose payment is one hryvnia out
+# and one whose payment is four hundred out are the same verdict and the same cause.
+#
+# What it does change is how hard the disagreement is to SEE, so it is a difficulty knob, and a
+# difficulty knob is a property of the documents rather than of the policy.
+mismatch:
+  # In hryvnias, bounds included. The lower bound is deliberately well above a kopiyka: a rounding
+  # difference is a different phenomenon from a wrong payment, and this generator does not produce
+  # the first — the amounts of a matching pair are EQUAL, exactly, because one is copied from the
+  # other. A tolerance-sized difference would be a claim about rounding that nothing here models.
+  delta_range: ["20.00", "400.00"]
+
+
+# =============================================================================
 # Invoice — the draw inputs
 # =============================================================================
 #

@@ -398,6 +398,17 @@ def initiating_systems(language: str) -> tuple[str, ...]:
 # Recorded here as the next cleanup rather than left to be noticed.
 
 
+@cache
+def mismatch_delta_range() -> tuple[Decimal, Decimal]:
+    """By how much a deliberately mismatched pair disagrees, in hryvnias.
+
+    The SHARE governing how often that happens is in config/policy.yaml beside `verdict_mix`, and
+    the split is deliberate: a share sizes a labelled bucket, this magnitude changes no label.
+    """
+    low, high = (Decimal(str(value)) for value in load_generation()["mismatch"]["delta_range"])
+    return low, high
+
+
 def _invoice_generation() -> dict[str, Any]:
     return load_generation()["invoice"]
 
