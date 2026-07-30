@@ -21,6 +21,8 @@ from receipt_synth.assembler import balance_report, generate_dataset
 from receipt_synth.claim_planner import (
     ARCHETYPES,
     REALIZABLE_VERDICTS,
+    ClaimPlan,
+    DocumentPlan,
     _select_documents,
     archetypes_for,
     can_assemble_evidence,
@@ -53,6 +55,7 @@ from receipt_synth.schemas import (
     Capture,
     ClaimGroundTruth,
     Country,
+    DocType,
     Verdict,
     VerdictBasis,
 )
@@ -724,6 +727,51 @@ def test_every_document_of_a_claim_names_the_same_persona_and_the_same_vendor(da
             [d.doc_id for d in result.documents].index(doc_id)
         ].counterparty for doc_id in claim.documents}
         assert len(sellers) == 1, f"{claim.claim_id} names {sellers} across its documents"
+
+
+def test_the_assembler_builds_a_fiscal_receipt_and_tells_it_the_capture_channel(tmp_path):
+    """🔴 THE RECEIPT BRANCH OF THE ASSEMBLER, EXERCISED DIRECTLY — because no run-based fixture
+    reaches it any more.
+
+    Measured rather than assumed: the only category with a both-proving archetype is
+    `vitamins_nutrition`, and NO PERSONA of either pipeline fixture holds it. Since the invoice
+    activated the pair, every fixture claim is a two-document claim, so the whole
+    "one self-sufficient document" branch — including the `capture=` the receipt builder now
+    requires — runs in no test that drives `generate_dataset`.
+
+    Found by a mutation surviving: deleting `basket |= {"capture": capture}` left every test green,
+    and the reason was not a weak assertion but a fixture that cannot reach the code. Asserted here
+    on a hand-built plan, which is where the dispatch is decided rather than where a draw might
+    happen to land.
+    """
+    from receipt_synth import assembler
+    from receipt_synth.renderer import Renderer
+
+    receipt = next(
+        archetype for archetype in ARCHETYPES.values() if evidence_of(archetype) == (True, True)
+    )
+    persona = generate_persona(random.Random(4), persona_id="p001", country=Country.UA)
+    when = datetime(2026, 6, 15, 12, 0)
+    plan = ClaimPlan(
+        claim_id="p001_c1", persona_id="p001", category=receipt.categories[0],
+        verdict=Verdict.COVERED, issued_at=when,
+        documents=(DocumentPlan(archetype=receipt, issued_at=when),),
+    )
+    vendor = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
+
+    with Renderer() as renderer:
+        document = assembler._build_document(
+            random.Random(7), persona=persona, plan=plan, document_plan=plan.documents[0],
+            vendor=vendor, doc_id="p001_c1_d1", renderer=renderer, out_dir=tmp_path,
+        )
+
+    assert document.doc_type is DocType.FISCAL_RECEIPT
+    # The channel reached the builder: the VAT row's form is one the document's OWN capture allows.
+    allowed = jurisdiction("UA")["tax_line_forms_by_medium"][document.capture.medium.value]
+    assert document.vat_row_form in allowed, (
+        f"{document.vat_row_form!r} is not a form a {document.capture.value} may print"
+    )
+    assert (tmp_path / "images" / document.source_file).is_file()
 
 
 def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_dataset):

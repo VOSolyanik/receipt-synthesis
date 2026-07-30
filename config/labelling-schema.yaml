@@ -45,6 +45,28 @@
 #
 # Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 14 by A PRINTED REQUISITE GAINING A SECOND FORM, and by the label gaining the field
+# that says which. THREE consequences a consumer has to know about.
+#
+#   THE VAT SUMMARY ROW IS NOT ONE STRING. 👁 A Ukrainian receipt prints either `ПДВ А=20,00%` or
+#   `ПДВ А 20%`, and a corpus that carried one taught that one. A consumer whose extraction keyed on
+#   the equals sign — a reasonable thing to have done against every earlier version of this dataset
+#   — meets the other form now.
+#
+#   ONE NEW LABEL FIELD, `vat_row_form`: `equals` | `spaced`, `null` where there is no such row.
+#   Added so the variation is FILTERABLE: a system that learned one form fails on the other, and
+#   without this field nothing in the labels would explain why.
+#
+#   🔴 THE FORM FOLLOWS THE MEDIUM, ASYMMETRICALLY, AND THE ASYMMETRY IS DELIBERATE. Paper takes the
+#   equals form only — 👁 two independent installations, no counterexample — while an electronic
+#   document draws either, because there is 👁 ONE electronic observation and one observation cannot
+#   support a rule. A consumer must not read "electronic ⇒ spaced" out of the corpus: it is not
+#   what the generator does and not what the evidence says. See `known_limitations` KL-10 for what
+#   is unknown about the cause.
+#
+#   THE DRAW SHIFTED. This commit changes what a seed produces, so any figure measured on an
+#   earlier run describes a different corpus.
+#
 # Bumped to 13 by A VERDICT BECOMING DRAWABLE: `insufficient_evidence` is now a target the planner
 # AIMS AT, so the corpus contains claims whose two documents deliberately contradict each other.
 # FOUR consequences a consumer has to know about, and the first changes what is in the data.
@@ -379,7 +401,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 13
+version: 14
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -1920,6 +1942,39 @@ document_label:
         `payment_confirmation`. Such a document exists because a payment was made, so there is nothing
         for the field to distinguish. `null` is therefore a statement about the class and never a
         missing reading.
+
+    - name: vat_row_form
+      type: enum or null
+      required: false
+      normalize: closed_enum
+      vocabulary: [equals, spaced]
+      meaning: >
+        Which of the two 👁 observed forms the VAT summary row of a fiscal receipt is printed in:
+        `equals` for `ПДВ А=20,00%`, `spaced` for `ПДВ А 20%`. The letter and the rate are the
+        same fact either way; what differs is the punctuation and whether the rate carries two
+        decimals.
+      why_it_is_labelled: >
+        SO THAT THE VARIATION IS FILTERABLE. A corpus that printed one form would teach it, and a
+        system that learned it would fail on the other with nothing in the labels to explain why.
+        A consumer stratifying an extraction figure by this field can tell "the model cannot read
+        the tax row" from "the model learned one of its two forms".
+      the_medium_decides_it_asymmetrically: >
+        🔴 PAPER TAKES `equals` AND NOTHING ELSE — 👁 two of the author's own receipts, two
+        independent installations, no counterexample. AN ELECTRONIC DOCUMENT DRAWS EITHER, because
+        there is 👁 one electronic observation, and a rule cannot rest on one.
+
+        THE ASYMMETRY IS NOT AN OVERSIGHT AND MUST NOT BE TIDIED. "Electronic ⇒ spaced" would match
+        the paper rule in shape, read better, and be half unproven — it is exactly the n=1
+        over-claim that produced the single unconditional form this replaces. What the asymmetry
+        buys is that the combination PAPER + `spaced` is absent from the data BECAUSE IT WAS NEVER
+        OBSERVED, rather than because somebody guessed.
+
+        The medium of a capture channel is `schemas.Capture.medium`: `photo` and `scan` are paper,
+        `screenshot` is electronic.
+      null_on: >
+        every class but `fiscal_receipt`, and within that class every receipt whose seller is not
+        registered for ПДВ — such a document prints no tax block at all, so there is no row to take
+        a form. `null` is therefore the same statement the empty `line_items[].vat_letter` makes.
 
     - name: relevant_transaction
       type: string or null
@@ -3618,6 +3673,55 @@ known_limitations:
       NOTHING, AND NOTHING SHOULD. This is the corpus reproducing an observed document faithfully.
       It is declared because the consequence for a cross-party check is real, not because the
       document is wrong.
+
+
+  - id: KL-10
+    name: why the VAT row takes two forms is not established
+    predictor: none — an unexplained variation, not a leak
+    hurts: training
+    subset: >
+      Every `fiscal_receipt` of a registered payer. 👁 The VAT summary row is printed either as
+      `ПДВ А=20,00%` or as `ПДВ А 20%`, and WHAT CAUSES THE DIFFERENCE IS UNKNOWN. The generator
+      reproduces the association it can support — paper takes the equals form, electronic draws
+      either — without claiming that the medium is the CAUSE.
+    share_in_reference_run: >
+      MEASURED ON `--seed 42 --personas 48 --claims-per-persona 8`, 365 claims, 680 documents. Of
+      50 fiscal receipts, 47 carry a tax row: `equals` 26 (55.3% of those 47), `spaced` 21 (44.7%).
+      The other 3 are receipts of sellers not registered for ПДВ and carry no row, so
+      `vat_row_form` is `null` on them; it is `null` on all 630 non-receipt documents.
+
+      ⚠️ EVERY DOCUMENT OF THIS RUN IS A SCREENSHOT — the only calibrated capture channel — so the
+      whole corpus is on the ELECTRONIC side of the rule, where both forms are drawn. THE PAPER
+      SIDE IS UNEXERCISED BY ANY DATASET, and the near-even split above is the draw rather than any
+      observed frequency. When photo and scan capture arrive, receipts on those channels will carry
+      the equals form only, and this figure will move for that reason.
+    what_is_unknown: >
+      🔴 THE HYPOTHESES, AND WHY THE DATA CANNOT DISCRIMINATE THEM. The obvious explanation — that
+      it is each register's own configuration — is WEAKENED: two independent paper installations
+      print the same form. That leaves two candidates, and they are confounded by construction:
+
+        THE DELIVERY CHANNEL — a receipt shown on a screen is composed by different software from
+        one printed on a till roll;
+        THE ПРРО PROVIDER of the one online receipt — a provider's own formatting, which would have
+        nothing to do with the channel.
+
+      There is exactly ONE online receipt, so its channel and its provider are a single fact seen
+      once. No amount of care with the existing sample separates them; it would take a second online
+      receipt from a different provider, or a paper receipt from the first one's provider.
+    consequence: >
+      A consumer must not read a CAUSAL rule out of this corpus. "Electronic documents use the
+      spaced form" is false of the generator and unsupported by the evidence; what the corpus
+      contains is that paper never uses it. Nothing here licenses inferring a document's medium
+      from its VAT row, in either direction.
+    how_to_stratify: >
+      By `vat_row_form`, which is exactly why the field is labelled. An extraction figure for the
+      tax row split by this field distinguishes "cannot read the row" from "learned one of its two
+      forms".
+    fixed_by: >
+      MORE INDEPENDENT INSTALLATIONS, not more receipts. Eight receipts from one advance report are
+      one installation asked eight times — the mistake that produced the earlier unconditional form
+      — so what would settle this is a second ELECTRONIC receipt from a different provider, or a
+      paper receipt from the provider that produced the online one.
 
 
 # =============================================================================

@@ -79,12 +79,57 @@ class Direction(StrEnum):
     CREDIT = "credit"
 
 
+class Medium(StrEnum):
+    """What the document physically WAS before it was captured.
+
+    Not the same question as `Capture`, which is how it reached the verifier. A photograph and a
+    scan are two ways of capturing ONE medium — paper — and the distinction matters because 👁 at
+    least one printed requisite differs by medium rather than by capture: the VAT summary row of a
+    Ukrainian receipt takes one form on paper and either of two electronically. See
+    `tax_line_forms_by_medium` in config/fiscal-rules.yaml.
+    """
+
+    PAPER = "paper"
+    ELECTRONIC = "electronic"
+
+
 class Capture(StrEnum):
     """How the document reached the verifier — see docs/architecture.md#degradation."""
 
     SCREENSHOT = "screenshot"
     PHOTO = "photo"
     SCAN = "scan"
+
+    @property
+    def medium(self) -> Medium:
+        """What was captured: a sheet of paper, or a screen.
+
+        A PROPERTY OF THE CAPTURE CHANNEL rather than of a jurisdiction, which is why it is here
+        and not in config/fiscal-rules.yaml: photographing and scanning are two ways of capturing
+        paper in every country. What each medium then PRINTS is the jurisdiction's business and
+        does live in that file.
+
+        A member absent from the map raises rather than defaulting — a capture channel added
+        without deciding what it captures would silently be treated as a screen, and the receipt
+        requisite that depends on this would be chosen by an omission.
+        """
+        try:
+            return _CAPTURE_MEDIA[self]
+        except KeyError:  # pragma: no cover - unreachable while the map is complete
+            raise NotImplementedError(
+                f"capture channel {self.value!r} has no declared medium; add it to "
+                "`schemas._CAPTURE_MEDIA` deliberately rather than letting it default"
+            ) from None
+
+
+# What each capture channel captures. A future `digital_pdf` channel belongs on the electronic
+# side; it is not declared here because the channel does not exist, and a map entry for a member
+# of no enum would be a decision nothing can exercise.
+_CAPTURE_MEDIA: dict[Capture, Medium] = {
+    Capture.SCREENSHOT: Medium.ELECTRONIC,
+    Capture.PHOTO: Medium.PAPER,
+    Capture.SCAN: Medium.PAPER,
+}
 
 
 class Verdict(StrEnum):
@@ -289,6 +334,15 @@ class DocGroundTruth(BaseModel):
     # `document_code` above; `None` on every class whose document describes a single transaction,
     # where the document is the transaction and there is nothing to point at.
     relevant_transaction: str | None = None
+    # WHICH OF THE TWO OBSERVED FORMS the VAT summary row is printed in — `equals` for
+    # `ПДВ А=20,00%`, `spaced` for `ПДВ А 20%`. 👁 Both occur on real receipts and the MEDIUM
+    # decides asymmetrically: paper takes the equals form only, electronic draws either. Labelled
+    # so a consumer can FILTER on it — a system that learned one form would otherwise fail on the
+    # other with nothing in the labels to explain why.
+    #
+    # `None` wherever there is no such row: every class but `fiscal_receipt`, and a fiscal receipt
+    # whose seller is not registered for ПДВ, which prints no tax block at all.
+    vat_row_form: str | None = None
     # Код авторизації — six digits, and only where a card operation was authorized (👁 4 of 8).
     auth_code: str | None = None
     # EMPTY on a class that lists nothing — a payment confirmation proves one movement of money

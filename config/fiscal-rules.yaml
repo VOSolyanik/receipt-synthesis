@@ -11,9 +11,17 @@
 # `verified_against_own_receipts`; only layout facts are carried over, never the
 # concrete values printed on a real receipt.
 #
-# Kept separate from policy.yaml on purpose: policy.yaml describes a benefit
-# plan and may be loaded by downstream consumers; this file is fiscal law and
-# concerns document generation only.
+# Kept separate from policy.yaml on purpose, and the distinction is one of SUBJECT: policy.yaml
+# describes a benefit plan — what an employer chooses to reimburse — while this file describes
+# fiscal law and document form, which no employer chooses. Either could change without the other
+# meaning anything different.
+#
+# THAT SENTENCE USED TO SAY SOMETHING ELSE, and the correction is recorded rather than made
+# quietly: it distinguished the two files by WHO LOADS THEM — policy.yaml "may be loaded by
+# downstream consumers", this one "concerns document generation only". That became false. Both
+# files are vendored by the consuming repository under a sha lock, together with fx-rates.yaml and
+# vendors.json; the lock names four files and this is one of them. A distinction drawn by audience
+# goes stale the moment the audience changes, which is why the one above is drawn by subject.
 
 version: 1
 
@@ -67,14 +75,57 @@ jurisdictions:
     # IT: it is printed in the same right-hand column as every other amount on the receipt,
     # and folding it into this string is what used to leave the VAT amounts out of column.
     #
-    # THE EQUALS SIGN AND THE TWO DECIMALS ARE BOTH 👁 OBSERVED, on every open sample that
-    # carries the row: `ПДВ А=20,00%` (2/2 drawn specimens) and `ПДВ В=20,00%` (8/8 petrol
-    # receipts) — 10/10 with both. `{rate_2dp}` renders two decimals with THIS DOCUMENT's
-    # own decimal separator, drawn per document from `number_format` above, so the rate reads
-    # the same way as the amounts printed beside it; the one specimen whose line amounts are
-    # legible prints them with a comma too. `{rate:g}` is the bare number, still used by the
-    # jurisdictions where no such row has been observed.
-    tax_line_label_format: "{name} {letter}={rate_2dp}%"
+    # 🔴 THERE ARE TWO FORMS AND THE MEDIUM DECIDES WHICH, ASYMMETRICALLY. See
+    # `tax_line_forms_by_medium` below for the rule; here are the forms and their basis.
+    #
+    # THE BASIS, STATED EXACTLY, because an earlier version of this comment stated it wrongly and
+    # the wrong version is what produced a single unconditional form:
+    #
+    #   👁 THREE OF THE AUTHOR'S OWN RECEIPTS, each a SEPARATE INSTALLATION, which is what makes
+    #      them the strongest evidence available for a question about print format:
+    #        A — delivered ONLINE  — `ПДВ А 20%`      (spaced)
+    #        B — PAPER             — `ПДВ А=20,00%`   (equals)
+    #        C — PAPER             — `ПДВ А=20,00%`   (equals)
+    #   ⚠️ 2 buhplatforma specimens — DRAWN by an accountant as an illustration. Evidence of what
+    #      somebody drew, not of what a register prints. They show the equals form.
+    #   ⚠️ 8 petrol receipts — photographed on two pages of ONE advance report, so for a question
+    #      about print format they are ONE INSTALLATION asked eight times, not eight samples. They
+    #      show the equals form.
+    #
+    # THE EARLIER COMMENT CALLED THIS "10/10 open samples". Both halves of that denominator were
+    # wrong — drawings are not samples, and eight receipts from one report are one installation —
+    # and the author's own receipts then refuted the conclusion it supported.
+    #
+    # `{rate_2dp}` renders two decimals with THIS DOCUMENT's own decimal separator, drawn per
+    # document from `number_format` above, so the rate reads the same way as the amounts printed
+    # beside it. `{rate:g}` is the bare number.
+    tax_line_label_forms:
+      equals: "{name} {letter}={rate_2dp}%"
+      spaced: "{name} {letter} {rate:g}%"
+
+    # 🔴 WHICH FORMS A MEDIUM MAY DRAW FROM — AND IT IS DELIBERATELY NOT SYMMETRIC.
+    #
+    #   paper       → the equals form ONLY. 👁 Two independent installations, zero counterexamples.
+    #   electronic  → BOTH, drawn. 👁 One observation, and one observation cannot support a rule.
+    #
+    # THE ASYMMETRY IS THE POINT AND MUST NOT BE TIDIED AWAY. "Electronic ⇒ spaced" would read
+    # cleaner, match the paper rule in shape, and be HALF UNPROVEN — it would rest on the single
+    # online receipt, which is exactly the n=1 over-claim that produced the defect this block
+    # repairs. What the asymmetry buys is concrete: the combination PAPER + SPACED disappears from
+    # the data because it was never observed, while the electronic side stays drawn PRECISELY
+    # BECAUSE there is no evidence for either direction there.
+    #
+    # ⛔ THE CAUSE OF THE VARIATION IS NOT ESTABLISHED. The hypothesis that it is the individual
+    # register's configuration is WEAKENED — two independent paper installations agree — which
+    # leaves the DELIVERY CHANNEL and the ПРРО PROVIDER of that one online receipt. The data cannot
+    # tell them apart: there is one online receipt, so its channel and its provider are the same
+    # single fact. Recorded as a `known_limitations` entry rather than resolved here.
+    #
+    # A medium absent from this map is an error rather than a default, so a capture channel added
+    # without a decision fails loudly.
+    tax_line_forms_by_medium:
+      paper: ["equals"]
+      electronic: ["equals", "spaced"]
     # The letter is appended to the line item itself, e.g.
     # "Regular ticket    2 500.00 А".
     line_item_letter_position: suffix

@@ -234,6 +234,13 @@ def _build_document(
             f"produces it; assembler._BUILDERS knows {sorted(_BUILDERS)}"
         )
 
+    # ONE CAPTURE CHANNEL PER DOCUMENT, DECIDED ONCE. It reaches three places — the builder, which
+    # prints a requisite that depends on the medium; the degrader, which applies that channel's
+    # artefacts; and the label. Two literals for one fact is how they come to disagree, and this
+    # commit is the first in which they COULD disagree, since until now the channel changed nothing
+    # about what was printed.
+    capture = Capture.SCREENSHOT
+
     evidence = evidence_of(archetype)
     if evidence.proves_subject:
         if document_plan is not plan.subject_document:
@@ -261,6 +268,13 @@ def _build_document(
         # present at the till and no buyer is named — 👁 a fiscal receipt has no buyer field.
         if not evidence.proves_payment:
             basket |= {"buyer_name": persona.full_name, "buyer_tax_id": persona.tax_id}
+        else:
+            # 🔴 THE CAPTURE CHANNEL REACHES THE BUILDER, not only the degrader. 👁 The VAT summary
+            # row of a fiscal receipt takes one form on paper and either of two electronically, so
+            # the MEDIUM a document will be captured on decides a requisite that is printed while
+            # the document is built. Passed to the class that has the observed variation and to no
+            # other: nothing analogous has been observed on the invoice.
+            basket |= {"capture": capture}
         document = _BUILDERS[slug](rng, **basket)
     else:
         # A document that proves the payment and states no subject. It takes NO basket and no
@@ -293,7 +307,7 @@ def _build_document(
             cv2.imread(str(clean.image_path)),
             clean.field_bboxes,
             seed=rng.getrandbits(32),
-            capture=Capture.SCREENSHOT,
+            capture=capture,
         )
         image_path.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(image_path), degraded.image)
@@ -301,7 +315,7 @@ def _build_document(
     return document.ground_truth(
         doc_id=doc_id,
         source_file=image_path.name,
-        capture=Capture.SCREENSHOT,
+        capture=capture,
         field_bboxes=degraded.field_bboxes,
     )
 

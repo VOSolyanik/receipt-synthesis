@@ -87,6 +87,9 @@ def build(seed: int, vendor: dict = VENDOR, **kwargs):
         category_id="vitamins_nutrition",
         issued_at=ISSUED_AT,
         vendor=vendor,
+        # The channel is stated at every call site: the builder has no default, because one
+        # equal to the only live value hid a wiring break until a mutation survived.
+        capture=kwargs.pop("capture", Capture.SCREENSHOT),
         **kwargs,
     )
 
@@ -613,6 +616,7 @@ def test_a_covered_only_vendor_cannot_carry_a_mixed_basket():
             vendor=COVERED_ONLY,
             covered_only=False,
             coverage_target=Decimal("0.7"),
+            capture=Capture.SCREENSHOT,
         )
 
 

@@ -41,7 +41,7 @@ from receipt_synth.content_builder import (
     resolve_vendor,
     vendor_is_vat_payer,
 )
-from receipt_synth.schemas import LineItem
+from receipt_synth.schemas import Capture, LineItem
 
 ISSUED_AT = datetime(2026, 8, 3, 14, 22, 51)
 
@@ -91,6 +91,9 @@ def build(seed: int, vendor: dict, **kwargs):
         category_id="vitamins_nutrition",
         issued_at=ISSUED_AT,
         vendor=vendor,
+        # The channel is stated at every call site: the builder has no default, because one
+        # equal to the only live value hid a wiring break until a mutation survived.
+        capture=kwargs.pop("capture", Capture.SCREENSHOT),
         **kwargs,
     )
 

@@ -61,7 +61,14 @@ from receipt_synth.config import (
     unprintable_item_kinds,
     vendor_profile,
 )
-from receipt_synth.schemas import Capture, Direction, DocGroundTruth, DocType, LineItem
+from receipt_synth.schemas import (
+    Capture,
+    Direction,
+    DocGroundTruth,
+    DocType,
+    LineItem,
+    Medium,
+)
 
 KOPIYKA = Decimal("0.01")
 
@@ -507,6 +514,11 @@ class PrroReceipt:
     decimal_separator: str
     qr_payload: str
     footer: str
+    # WHICH OF THE TWO 👁 OBSERVED FORMS the VAT summary row takes — a key of
+    # `tax_line_label_forms` in config/fiscal-rules.yaml. `None` for a seller that is not
+    # registered for ПДВ, whose receipt has no tax block at all. Chosen from the document's MEDIUM
+    # rather than drawn freely; see `_draw_tax_line_form`.
+    vat_row_form: str | None
 
     @property
     def amount_due(self) -> Decimal:
@@ -578,7 +590,7 @@ class PrroReceipt:
                     # Two placeholders for the rate, and a jurisdiction picks one:
                     # `rate` is the bare number, `rate_2dp` two decimals written with this
                     # document's own separator — the form observed on Ukrainian receipts.
-                    "label": rules["tax_line_label_format"].format(
+                    "label": _tax_line_format(rules, self.vat_row_form).format(
                         name=rules["vat_letters"][line.letter]["name"],
                         letter=line.letter,
                         rate=line.rate,
@@ -636,6 +648,7 @@ class PrroReceipt:
             has_fiscal_number=True,
             capture=capture,
             field_bboxes=field_bboxes,
+            vat_row_form=self.vat_row_form,
         )
 
 
@@ -1182,6 +1195,51 @@ def _draw_from_pattern(rng: random.Random, pattern: str) -> str:
     return value
 
 
+def _tax_line_format(rules: dict, form: str | None) -> str:
+    """The format string for a tax summary row, by jurisdiction and by chosen form.
+
+    A jurisdiction declares EITHER a single `tax_line_label_format` — which is every jurisdiction
+    but Ukraine, where the variation has been observed — OR a map of named forms under
+    `tax_line_label_forms`, one of which the document chose. Two shapes rather than one because
+    only one jurisdiction has evidence of variation, and giving the others a one-entry map would
+    state a choice nobody has observed them making.
+    """
+    forms = rules.get("tax_line_label_forms")
+    if forms is None:
+        return rules["tax_line_label_format"]
+    if form not in forms:
+        raise ValueError(
+            f"{form!r} is not a tax-line form this jurisdiction declares; it has {sorted(forms)}"
+        )
+    return forms[form]
+
+
+def _draw_tax_line_form(rng: random.Random, rules: dict, medium: Medium) -> str | None:
+    """Which of the 👁 observed VAT-row forms this document prints.
+
+    🔴 THE MEDIUM DECIDES, AND ASYMMETRICALLY. Paper takes the equals form and nothing else — 👁 two
+    independent installations, no counterexample. Electronic draws between both, because there is
+    ONE electronic observation and one observation cannot support a rule; drawing is what "no
+    evidence either way" looks like once it has to be written down.
+
+    UNIFORM AMONG THE PERMITTED FORMS, and the uniformity is a consequence of the list rather than a
+    share somebody chose: `rng.choice` over what the medium allows. A weighted draw would be a claim
+    about how often each form occurs electronically, which one observation cannot support.
+
+    `None` where the jurisdiction declares no forms — every one but Ukraine.
+    """
+    forms = rules.get("tax_line_label_forms")
+    if forms is None:
+        return None
+    allowed = rules["tax_line_forms_by_medium"].get(medium.value)
+    if not allowed:
+        raise ValueError(
+            f"config/fiscal-rules.yaml declares no tax-line forms for the {medium.value!r} "
+            f"medium; it knows {sorted(rules['tax_line_forms_by_medium'])}"
+        )
+    return rng.choice(allowed)
+
+
 def build_prro_receipt(
     rng: random.Random,
     *,
@@ -1193,6 +1251,7 @@ def build_prro_receipt(
     coverage_target: Decimal | None = None,
     item_count: int | None = None,
     registrar: str = "prro",
+    capture: Capture,
 ) -> PrroReceipt:
     """Build one Ukrainian fiscal receipt — from a ПРРО or from a classic hardware РРО.
 
@@ -1217,6 +1276,18 @@ def build_prro_receipt(
 
     THE PAPER WIDTH IS NOT HERE. It is the one difference that is purely visual, so it lives in
     the stylesheet of each template, and two templates may therefore share a registrar.
+
+    ``capture`` IS NOT THE DEGRADER'S BUSINESS ALONE. It decides the document's MEDIUM, and 👁 the
+    VAT summary row takes one form on paper and either of two electronically — so the channel a
+    document will reach a verifier on has to be known while the document is BUILT, not only while
+    it is degraded. The assembler decides it once and passes the same value to both.
+
+    🔴 IT HAS NO DEFAULT, DELIBERATELY. It had one — `Capture.SCREENSHOT` — which equalled the only
+    channel the assembler produces, so a caller that stopped passing it produced IDENTICAL output
+    and no test could tell. That was found by a mutation surviving: removing the assembler's
+    `capture=` changed nothing observable, because the default silently supplied the same value.
+    A silent fallback that coincides with the live value is not a convenience, it is a wiring break
+    waiting to be invisible — so the parameter is required and a caller that omits it fails loudly.
     """
     rules = jurisdiction("UA")
     receipt_rules = rules["receipt"]
@@ -1379,7 +1450,12 @@ def build_prro_receipt(
             total=total,
         ),
         footer=receipt_rules["footer"],
-
+        # 👁 The VAT row's form follows the MEDIUM this document will reach a verifier on, and only
+        # a registered payer has such a row at all. `None` for a non-payer is the same statement
+        # its empty `tax_lines` makes: there is no tax block to take a form.
+        vat_row_form=(
+            _draw_tax_line_form(rng, rules, capture.medium) if vat_payer else None
+        ),
     )
 
 

@@ -33,7 +33,7 @@ from receipt_synth.content_builder import (
     resolve_vendor,
 )
 from receipt_synth.renderer import FONT_FILES, FONTS_DIR, TEMPLATES_DIR, Renderer, qr_svg
-from receipt_synth.schemas import DocType
+from receipt_synth.schemas import Capture, DocType
 
 TEMPLATE = "ua_prro_receipt"
 # Millimetres of paper per rendered pixel is fixed across the UA fiscal receipts: 640 px is
@@ -123,7 +123,8 @@ PAYER_SOLE_TRADER = resolve_vendor(
 )
 
 
-def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "prro"):
+def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "prro",
+                 capture: Capture = Capture.SCREENSHOT):
     return build_prro_receipt(
         random.Random(seed),
         category_id="vitamins_nutrition",
@@ -131,6 +132,9 @@ def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "p
         vendor=vendor,
         address="м. Київ, вул. Хрещатик, 22",
         registrar=registrar,
+        # STATED AT EVERY CALL SITE since the builder's default was removed: the channel decides
+        # the VAT row's form, and a default equal to the only live value hid a wiring break.
+        capture=capture,
     )
 
 
