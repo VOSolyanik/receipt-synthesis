@@ -31,10 +31,12 @@
 # inventing a caller. It is consumed by downstream tooling; its accuracy is maintained by being
 # re-checked against a freshly generated label file.
 #
-# TWO TESTS READ IT, and the sentence above used to say "nothing in this repository", which the
-# first of them made false. Both read the SAME block — the payment-date mapping — because it is the
-# one place where this file states something the generator has to obey rather than something it
-# merely records:
+# TESTS READ IT, and the sentence above used to say "nothing in this repository", which the first
+# of them made false. They fall in TWO GROUPS, and the difference decides what a failure means.
+#
+# THE FIRST GROUP CHECKS THE GENERATOR AGAINST THIS FILE. Both read the SAME block — the
+# payment-date mapping — because it is the one place where this file states something the
+# generator has to obey rather than something it merely records:
 #
 #   `tests/test_payment_date_split.py` loads this file and config/policy.yaml together, to check
 #   the property neither file can hold alone: the CONCEPT is named in the policy and the printed
@@ -43,8 +45,55 @@
 #   this file accepts, and that none is one it refuses. Without it the mapping could be correct and
 #   the documents could still carry a caption the contract says is not the payment date.
 #
-# Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
+# THE SECOND GROUP CHECKS THIS FILE AGAINST ITSELF and names no generator behaviour at all:
+#
+#   `tests/test_conformance_vectors.py` — every emitted normalization class carries cases, and no
+#   case names a class that does not exist.
+#   `tests/test_contract_indexes.py` — new in version 21. Every index this file offers a consumer
+#   resolves: a field's `normalize` names a real rule, every rule is named by at least one field,
+#   every `status` is a word of `status_vocabulary`, every `generator:` cell of a
+#   `prd_required_fields` table is a list of real label field names. It exists because a
+#   HAND-MAINTAINED index diverged from what it indexed eight times while under active attention,
+#   and the repair was to delete the index and keep the checks.
+#
+# None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 21 by THREE INDEXES OF THIS FILE BECOMING DATA. NO LABEL RECORD GAINED OR LOST A KEY,
+# NO COMPARISON RULE CHANGED, AND THE DRAW DID NOT MOVE — `src/` reads nothing here, so nothing
+# below can reach a document. What changes is what a consumer may key on, and one of the three was
+# blocking a consumer outright.
+#
+#   🔴 `normalization[field["normalize"]]` NOW RESOLVES FOR EVERY FIELD, AND RAISED BEFORE. Two of
+#   the 46 fields that carry a `normalize:` put a SENTENCE in it — "see `line_item`" and
+#   "identity per element" — so a consumer keying the rules by that value hit a `KeyError` on a
+#   valid contract. `line_items` now carries no `normalize:` at all, which is the honest shape for
+#   an array of records whose elements each name their own rule, and `documents` carries
+#   `normalize: identity` with "per element" moved to prose beside it.
+#
+#   🔴 `applies_to` IS DELETED FROM ALL 15 NORMALIZATION RULES, and a consumer that keyed on it
+#   must recompute rule → fields from the fields, which is three lines and is written out at
+#   `normalization`. IT WAS NOT STALE, WHICH IS WHY IT WAS REMOVED RATHER THAN CORRECTED: it was a
+#   hand-maintained REVERSE index over what `normalize:` already holds, it had diverged for 8 of
+#   the 15 rules over 11 fields, and version 10 rewrote one rule's entry for two of its own new
+#   fields while leaving three other rules untouched for four more — divergence during the very
+#   edit that caused it. Two tests replace what it was good for and cannot go stale, because they
+#   derive from the file rather than restate it: every rule is named by at least one field, and
+#   every field's rule exists. One thing it held that no field holds survived as data —
+#   `string_list_unordered.element_rule: closed_enum`.
+#
+#   🔴 THE `generator:` COLUMN OF EVERY `prd_required_fields` TABLE IS A YAML LIST OF FIELD NAMES,
+#   possibly empty, where it was prose mixing names with commentary. Punctuation had been
+#   structural: rearranging `has_qr, qr_is_fiscal (two booleans)` into `has_qr (boolean),
+#   qr_is_fiscal` reads as a stylistic edit and silently drops a field. `none` and `none, and none
+#   is wanted` are now `[]` with the distinction in `note:`. 27 rows over four document types.
+#
+#   ⚠️ `status_vocabulary` GAINS A FIFTH WORD, `resolved`, WHICH HAS BEEN IN USE SINCE VERSION 2
+#   WITHOUT BEING DECLARED — a consumer branching on the four declared words fell through on
+#   `divergence_counterparty_name` and read a settled question as unsettled. Separately, two
+#   `required_changes` entries held a whole SENTENCE in a `status:` slot; those move to `progress:`,
+#   because a sentence there is not a sixth word but a value nothing can branch on. `status:` is now
+#   a reserved word with exactly one meaning, enforced by a test rather than by care.
+#
 # Bumped to 20 by THE AUTHORITATIVE PROFILE MOVING. THREE consequences a consumer has to know about,
 # and NO LABEL RECORD GAINED A KEY, NO RULE CHANGED AND THE DRAW DID NOT MOVE.
 #
@@ -586,14 +635,20 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 20
+version: 21
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
-# wherever anything below says whether a thing exists yet or is disputed it uses these four
+# wherever anything below says whether a thing exists yet or is disputed it uses these five
 # words and no others — there is no second spelling of the distinction anywhere in this
 # file. Individual fields carry a `status` only where they differ from their section, or
 # inside a `divergence` block. Section 9 describes the DATASET rather than a label: nothing
 # in it exists or fails to exist, so it carries measurements instead of a status.
+#
+# 🔴 `status:` IS A RESERVED WORD WITH EXACTLY ONE MEANING, AND ITS VALUE IS ALWAYS ONE OF THE
+# FIVE. It is what a consumer branches on, so a sentence in a status slot compares against
+# nothing and no consumer can act on it. Two entries in `required_changes` carried one until
+# version 21; the sentences survive under `progress:` there, which is prose and is read rather
+# than indexed. The rule is enforced by a test in tests/test_contract_indexes.py, not by care.
 status_vocabulary:
   emitted: >
     Observed in the output of a real run, checked field by field. A consumer may rely on
@@ -613,6 +668,17 @@ status_vocabulary:
   divergent: >
     Both sides exist and disagree — on a name, a type, or a definition. Neither is chosen
     here. See `required_changes`.
+  resolved: >
+    A divergence that HAS been settled, and the settlement is written beside it under
+    `resolution`. The pair of statuses is the whole state machine of a `divergence` block: it
+    opens `divergent` and closes `resolved`, never by deletion — a divergence removed once
+    settled takes its reasoning with it, and the next reader re-opens the same argument.
+
+    ADDED TO THE VOCABULARY IN VERSION 21, having been in use since the file's first commit at
+    version 2 without ever being declared. A consumer branching on the four declared words fell
+    through on
+    `divergence_counterparty_name` and would have read a settled question as unsettled — which
+    is why an undeclared value is a defect and not a synonym.
   undecided: >
     Neither side settles it, and guessing would be indistinguishable from a decision.
 
@@ -657,6 +723,19 @@ sources:
 # must extract from this document type, EXPRESSED IN THE SHAPE THE REQUIREMENT DEMANDS rather
 # than in the generator's current shape, with the generator's counterpart named beside it.
 # That is what makes a divergence visible instead of inherited.
+#
+# 🔴 `generator:` IN THAT TABLE IS A LIST OF LABEL FIELD NAMES AND NOTHING ELSE — possibly empty,
+# never a sentence. It was a prose cell until version 21, mixing names with commentary, and the
+# punctuation was load-bearing: rearranging `has_qr, qr_is_fiscal (two booleans)` into
+# `has_qr (boolean), qr_is_fiscal` reads as a stylistic edit and drops a field from the schema.
+# As a list the same rearrangement is a no-op or a parse error, never a silent loss. Every
+# commentary that lived in such a cell moved into that row's `note:`, and a test holds that each
+# name is a real `document_label` field so a typo cannot pass either.
+#
+# ⚠️ `generator:` MEANS TWO OTHER THINGS ELSEWHERE IN THIS FILE, and neither is this list: at
+# `sources.generator` it names the modules the file was written from, and inside a `divergence`
+# block it is the generator's POSITION, standing against a `consumer:` paragraph. Both are prose
+# a reader reads. Only the table's column is indexed, so only it is data.
 
 document_types:
 
@@ -684,25 +763,26 @@ document_types:
         register: hardware       # classic РРО, 80 mm — the only archetype printing «ЗН»
     prd_required_fields:
       - prd: total
-        generator: amount
+        generator: [amount]
         status: emitted
         note: >
           The receipt prints FOUR amounts under the items — `СУМА`, `ЗНИЖКА`, `ЗАОКРУГЛЕННЯ`,
           `ДО СПЛАТИ` — and `amount` is the first. `amount_due` is the last; see its entry
           under `document_label`, and read the warning there before scoring it.
       - prd: date
-        generator: date
+        generator: [date]
         status: emitted
       - prd: seller_name
-        generator: counterparty
+        generator: [counterparty]
         status: divergent
         see: divergence_counterparty_name
       - prd: seller tax / fiscal number
-        generator: >
-          none — `seller_tax_code` and `seller_vat_number` exist as bbox keys with no labelled
-          value. THE REQUIREMENT NAMES ONE FIELD AND THE DOCUMENT CARRIES UP TO TWO NUMBERS
+        generator: []
         status: forward_contract
         note: >
+          NO LABELLED VALUE. `seller_tax_code` and `seller_vat_number` exist as bbox keys only,
+          and THE REQUIREMENT NAMES ONE FIELD WHILE THE DOCUMENT CARRIES UP TO TWO NUMBERS.
+
           `content_builder.Seller.tax_code` and `.vat_number` already hold them and
           `ground_truth()` discards both. Mechanical to add; see RC-04.
 
@@ -734,10 +814,10 @@ document_types:
           old sentence will now reject correct documents.
       - prd: FiscalScheme — the JURISDICTION of the fiscal scheme plus that scheme's own requisites
         prd_vocabulary: [ua_prro, pl_paragon, ar_factura, pt_atcud, sk_ekasa, hr_fiskalizacija, none, unknown]
-        generator: has_fiscal_number (boolean)
+        generator: [has_fiscal_number]
         status: divergent
         note: >
-          The consuming system requires the jurisdiction of the fiscal scheme rather than a
+          A BOOLEAN AGAINST A STRUCTURE. The consuming system requires the jurisdiction of the fiscal scheme rather than a
           boolean, on the reasoning that UA ПРРО, PL paragon, AR Factura, PT ATCUD, SK
           eKasa and HR fiskalizacija are all fiscal in their own systems by different
           requisites; a boolean `is_fiscal` is forbidden in that model. The generator emits
@@ -747,7 +827,7 @@ document_types:
           plans to build. A DE Kassenbon could only be labelled `unknown`, and an unknown
           fiscal scheme is routed to `in_review`. See RC-02.
       - prd: VAT amounts per letter — TaxAmount(letter, rate, amount), explicitly not a scalar tax
-        generator: none
+        generator: []
         status: forward_contract
         note: >
           `content_builder._build_tax_lines` computes exactly this — `TaxLine(letter, rate,
@@ -759,20 +839,20 @@ document_types:
           a zero-rate row. A consumer whose model requires at least one TaxAmount per fiscal
           receipt cannot represent that document.
       - prd: line items, required only where the category carries exception rules
-        generator: line_items
+        generator: [line_items]
         status: emitted
       - prd: DECODED QR CONTENT plus its type (fiscal_link / promotional / payment / unknown)
-        generator: has_qr, qr_is_fiscal (two booleans)
+        generator: [has_qr, qr_is_fiscal]
         status: divergent
         note: >
-          The consuming system requires the decoded payload and its type, on the ground
+          TWO BOOLEANS AGAINST A PAYLOAD AND A TYPE. The consuming system requires the decoded payload and its type, on the ground
           that mere presence is unusable as a fiscality signal — bank confirmations
           routinely carry promotional QR codes, so a document with a QR code says nothing
           about whether it is fiscal. `qr_is_fiscal` is a boolean collapse of a four-value
           type and cannot express `payment` or `unknown`. `PrroReceipt.qr_payload` already
           holds the decoded string and `ground_truth()` discards it. See RC-03.
       - prd: fiscality markers found in the text, positive and negative, with their position
-        generator: none
+        generator: []
         status: forward_contract
         note: >
           A rule of the consuming system: a NEGATIVE marker («НЕ ФІСКАЛЬНИЙ ЧЕК», «KOPIA
@@ -936,10 +1016,11 @@ document_types:
         would be untested by construction.
     prd_required_fields:
       - prd: amount
-        generator: amount — THE TRANSFER, and not the largest number printed
+        generator: [amount]
         status: forward_contract
         note: >
-          🔴 THE ONE FIELD OF THIS CLASS A CORRECT-LOOKING SYSTEM GETS WRONG. 👁 0 of 8 real
+          🔴 `amount` IS THE TRANSFER, AND NOT THE LARGEST NUMBER PRINTED — THE ONE FIELD OF THIS
+          CLASS A CORRECT-LOOKING SYSTEM GETS WRONG. 👁 0 of 8 real
           confirmations print a single amount: each prints the operation amount and the fee
           separately, and 1 of 8 also prints their sum in the largest type on the page. 📄 The
           National Bank's instruction on non-cash settlements names the amount of the OPERATION as
@@ -948,11 +1029,11 @@ document_types:
           `fee` and `total_charged` are labelled beside it, and an extractor that takes the most
           prominent figure is wrong by exactly the fee — measurably, which is the point.
       - prd: date
-        generator: date
+        generator: [date]
         status: forward_contract
         see: document_types.payment_confirmation.payment_date
       - prd: payer / payee
-        generator: payer, counterparty
+        generator: [payer, counterparty]
         status: forward_contract
         note: >
           THE DIVERGENCE IS RESOLVED, and this entry used to record it: `counterparty` is one
@@ -965,7 +1046,7 @@ document_types:
           nothing under it, which returns nothing. `payer` is `null` only where the class names one
           party — never for an unidentified payer, whose label carries the hyphen.
       - prd: payment purpose
-        generator: payment_purpose
+        generator: [payment_purpose]
         status: forward_contract
         note: >
           🔴 IT NEVER NAMES WHAT WAS BOUGHT — 👁 0 of 7 documents that carry the field. It names
@@ -981,7 +1062,7 @@ document_types:
           premise it rested on. The field is load-bearing for a different reason: it is what a
           consumer must NOT read a subject out of.
       - prd: authorization code
-        generator: auth_code
+        generator: [auth_code]
         status: forward_contract
         note: >
           👁 4 of 8 — the card operations, six digits in 4 of 4 of them. OPTIONAL BY NATURE: a
@@ -992,7 +1073,7 @@ document_types:
           only within an issuer and a time window; 👁 it is also absent from half the documents, and
           a key missing from half the cases is not a key. See `document_code`.
       - prd: bank document code
-        generator: document_code
+        generator: [document_code]
         status: forward_contract
         note: >
           👁 8 of 8, 📄 mandatory as "the number of the payment instruction", and 📄 the key the
@@ -1003,10 +1084,10 @@ document_types:
       - prd: >
           NOT ON THIS CLASS — an RRN and a payment form. Both were in an earlier field list for this
           type and 👁 neither appears on any of the eight documents reviewed.
-        generator: none, and none is wanted
+        generator: []
         status: forward_contract
         note: >
-          RECONCILED RATHER THAN SIMPLY DROPPED, because the earlier 0-of-8 finding read as a defect
+          NOTHING IS EMITTED AND NOTHING IS WANTED — RECONCILED RATHER THAN SIMPLY DROPPED, because the earlier 0-of-8 finding read as a defect
           in this generator and is not one. An RRN IS a requisite of a card operation — as printed
           inside a FISCAL RECEIPT, where this repository does print it, and 👁 where a real sole
           trader's receipt carries one. It is not a requisite of a bank confirmation. A payment form
@@ -1254,15 +1335,17 @@ document_types:
 
     prd_required_fields:
       - prd: amount
-        generator: amount — THE LABELLED ROW'S, not the document's
+        generator: [amount]
         status: forward_contract
+        note: THE LABELLED ROW'S amount, not the document's
         see: document_types.bank_statement.the_label_is_one_transaction
       - prd: date
-        generator: date — the labelled row's operation date
+        generator: [date]
         status: forward_contract
+        note: the labelled row's OPERATION date
         see: document_types.bank_statement.payment_date
       - prd: payee
-        generator: counterparty
+        generator: [counterparty]
         status: divergent
         see: divergence_counterparty_name
         note: >
@@ -1278,10 +1361,10 @@ document_types:
           distinguished from the sender of a refund — which for a reimbursement claim is the
           difference between proof of an expense and proof that the money came back.
       - prd: payment purpose
-        generator: payment_purpose
+        generator: [payment_purpose]
         status: forward_contract
         note: >
-          THE GENERATOR NOW HAS A COUNTERPART — this entry read `generator: none` until version 11,
+          THE GENERATOR NOW HAS A COUNTERPART — this entry emitted nothing until version 11,
           when the archetype began printing a purpose on every row and labelling the relevant one.
 
           🔴 IT NAMES ANOTHER DOCUMENT, NOT THE EXPENSE. 👁 Every observed purpose follows one
@@ -1294,7 +1377,7 @@ document_types:
       - prd: >
           NOT A REQUIRED FIELD, and named because the generator emits it: `direction`, and the
           pointer `relevant_transaction`.
-        generator: direction, relevant_transaction
+        generator: [direction, relevant_transaction]
         status: forward_contract
         note: >
           Neither is asked for by the requirement. `relevant_transaction` is forced by the shape of
@@ -1353,7 +1436,7 @@ document_types:
 
     prd_required_fields:
       - prd: total
-        generator: amount
+        generator: [amount]
         status: forward_contract
         note: >
           👁 ONE TOTAL BLOCK, and the amount is Σ over the line items exactly, as on a receipt. A
@@ -1361,7 +1444,7 @@ document_types:
           not a second amount and is not labelled: 📄 prices are VAT-inclusive, so the total is the
           whole of what is owed.
       - prd: date
-        generator: date
+        generator: [date]
         status: forward_contract
         note: >
           ⚠️ TWO SPELLINGS OF ONE DATE ON ONE PAGE. 👁 The title writes it in words — «Рахунок на
@@ -1370,17 +1453,17 @@ document_types:
           what settles the comparison: both sides parse to a calendar date and dates are compared,
           never strings.
       - prd: seller plus tax number
-        generator: counterparty (name only)
+        generator: [counterparty]
         status: divergent
         see: divergence_counterparty_name
         note: >
-          THE TAX NUMBER IS PRINTED AND NOT LABELLED — `seller_tax_code` carries a box and no value,
+          THE NAME ONLY. THE TAX NUMBER IS PRINTED AND NOT LABELLED — `seller_tax_code` carries a box and no value,
           as on a receipt. ⚠️ AND IT IS PRINTED TWICE: 👁 1/1 open invoices carry a filled-in SPECIMEN
           PAYMENT ORDER above the title, which repeats the recipient's name, code, bank and account.
           An extractor therefore has to choose between two identical strings, and the duplication is
           reproduced rather than smoothed away because a real invoice does it.
       - prd: subject / line items
-        generator: line_items
+        generator: [line_items]
         status: forward_contract
         note: >
           🔴 THIS IS THE CLASS'S REASON FOR EXISTING. An invoice STATES WHAT WAS BOUGHT, which is
@@ -1394,10 +1477,11 @@ document_types:
           A consumer must not read the absence as "not a VAT payer": the seller's status is visible
           in the column captions and in the tax line, not per line.
       - prd: PAYMENT STATUS (e.g. "Оплачено" / "Zapłacono")
-        generator: none, and none is wanted
+        generator: []
         status: divergent
         note: >
-          🔴 THE REQUIREMENT ASKS THIS TYPE FOR A FIELD THE DOCUMENT DOES NOT CARRY, and this row
+          NOTHING IS EMITTED AND NOTHING IS WANTED. 🔴 THE REQUIREMENT ASKS THIS TYPE FOR A FIELD THE
+          DOCUMENT DOES NOT CARRY, and this row
           RECORDS the disagreement rather than resolving it — which is what every `divergent` row in
           this file does. It was `forward_contract` until version 12, i.e. "the generator will
           produce this later". It will not.
@@ -1419,9 +1503,10 @@ document_types:
           part asks an invoice for a payment status while another states that an invoice does not
           prove payment. Both cannot hold. See RC-07.
       - prd: amount due
-        generator: none, and none is wanted
+        generator: []
         status: divergent
         note: >
+          NOTHING IS EMITTED ON THIS CLASS AND NOTHING IS WANTED.
           🔴 `amount_due` IS A RECEIPT REQUISITE AND HAS MOVED THERE. 📄 «ДО СПЛАТИ» is line 24 of the
           FISCAL RECEIPT form, where it differs from «СУМА» by the discount and the rounding, and 👁 a
           real receipt prints all four lines. 👁 An invoice has ONE total block — «Разом» plus the
@@ -1546,12 +1631,35 @@ extraction_thresholds:
 # `decided_here` marks a rule that is this file's own decision rather than something
 # determined by the generator or by a requirement. A consumer may disagree with one, but
 # then it has to say so too.
+#
+# 🔴 THERE IS ONE INDEX, AND IT POINTS FORWARD: `normalize:` on a field names its rule. THE
+# REVERSE INDEX WAS DELETED IN VERSION 21. Every rule below carried an `applies_to:` listing the
+# fields that name it — a hand-maintained copy of information the forward index already holds —
+# and it had diverged for 8 of the 15 rules over 11 fields, INCLUDING IN THE VERY VERSION THAT
+# ADDED SOME OF THEM: version 10 rewrote `identifier.applies_to` for two of its six new fields
+# and left `money`, `party_name` and `text_name` untouched for four others. A duplicate index
+# that diverges while under active attention is not stale, it is the wrong shape, and "update it
+# more carefully" repairs nothing.
+#
+# A consumer wanting rule → fields computes it, which is three lines over the field lists:
+#
+#     from collections import defaultdict
+#     rule_to_fields = defaultdict(list)
+#     for block in ("document_label", "line_item", "claim_label", "persona_record"):
+#         for field in contract[block]["fields"]:
+#             if "normalize" in field:
+#                 rule_to_fields[field["normalize"]].append((block, field["name"]))
+#
+# What the deleted index was actually good for is now held by two tests in
+# tests/test_contract_indexes.py, which cannot go stale because they read the file itself: every
+# field's `normalize` names a real rule here, and every rule here is named by at least one field.
+# The first is what a consumer's `normalization[field["normalize"]]` needs; the second catches an
+# orphan rule, which is the only thing a missing entry in the old index could ever have revealed.
 
 normalization:
 
   identity:
     status: emitted
-    applies_to: opaque dataset keys — doc_id, claim_id, persona_id, source_file
     rule: exact byte-for-byte comparison, no folding
     why: >
       Not extractable content. Nothing prints them and no extractor produces them; they
@@ -1559,16 +1667,12 @@ normalization:
 
   closed_enum:
     status: emitted
-    applies_to: >
-      doc_type, capture, verdict, verdict_basis members, imperfection members,
-      content_lost_edges members, content_complete, split
     form: lower_snake_case ASCII
     rule: exact match against the closed vocabulary declared in this file
     why: a value outside the vocabulary is an error, not a near miss to be scored partially
 
   policy_vocabulary:
     status: emitted
-    applies_to: item_kind, category, benefit_categories
     form: lower_snake_case ASCII
     rule: exact match against the vocabulary policy.yaml declares
     why: >
@@ -1578,7 +1682,6 @@ normalization:
 
   open_enum:
     status: divergent
-    applies_to: language, currency, home_currencies, languages
     label_side: >
       Always a concrete code. The generator builds the document, so it knows the language
       and the currency exactly and never needs a fallback. Today: `uk` and `UAH` only. Both
@@ -1604,7 +1707,6 @@ normalization:
 
   iso_date:
     status: emitted
-    applies_to: DocGroundTruth.date
     label_form: "YYYY-MM-DD"
     printed_form: >
       Per jurisdiction, from `date_format` in fiscal-rules.yaml: DD.MM.YYYY in UA, PL and
@@ -1619,7 +1721,6 @@ normalization:
 
   money:
     status: emitted
-    applies_to: DocGroundTruth.amount, LineItem.price, ClaimGroundTruth.reimbursable_amount
     label_form: >
       A JSON number. Amounts are exact `Decimal` inside the generator and are serialized
       through `float()`, so TRAILING ZEROS ARE LOST: 2607.80 is written 2607.8 and 1139.10
@@ -1641,7 +1742,6 @@ normalization:
 
   quantity:
     status: emitted
-    applies_to: LineItem.qty
     label_form: a JSON number, serialized as money is
     printed_form: "formatted with %g — an integral quantity prints as `1`, not `1.0`"
     rule: compare numerically
@@ -1651,7 +1751,6 @@ normalization:
 
   text_name:
     status: emitted
-    applies_to: LineItem.name
     rule: >
       Unicode NFC, trim, collapse internal whitespace runs to one space, then compare
       exactly and CASE-SENSITIVELY.
@@ -1662,7 +1761,6 @@ normalization:
 
   party_name:
     status: emitted
-    applies_to: DocGroundTruth.counterparty
     rule: >
       Unicode NFC, trim, collapse internal whitespace, strip the legal-form prefix and any
       enclosing quotation marks, then compare case-insensitively (Unicode casefold).
@@ -1693,7 +1791,6 @@ normalization:
 
   vat_letter:
     status: emitted
-    applies_to: LineItem.vat_letter
     rule: compare code points exactly, after NFC. Do not fold case, do not transliterate.
     why: >
       The Ukrainian VAT letters are Cyrillic, and two of the four are homoglyphs of Latin
@@ -1730,15 +1827,23 @@ normalization:
 
   identifier:
     status: forward_contract
-    applies_to: >
-      The registration and transaction identifiers a document prints — tax code, VAT number,
-      receipt number, RRN, authorization code, terminal id, and the bank's own document code.
+    note: >
+      WHAT KIND OF VALUE THIS RULE IS FOR, which is not the same question as which fields name it
+      — that is `normalize:` on each field, and this paragraph deliberately lists no field names.
+      The class is the registration and transaction identifiers a document prints: tax code, VAT
+      number, receipt number, RRN, authorization code, terminal id, and the bank's own document
+      code.
 
-      TWO OF THEM NOW CARRY A LABELLED VALUE, so this rule has something to normalize for the first
-      time: `document_code` and `auth_code` on a payment confirmation. The receipt's identifiers
-      still appear in `field_bboxes` as geometry only. The rule below was written before anything
-      carried a value and is unchanged by their arrival — which is the useful part, since a
-      comparison rule agreed in advance is one nobody had to fit to a field.
+      MOST OF THE CLASS STILL CARRIES NO LABELLED VALUE. The receipt's own identifiers appear in
+      `field_bboxes` as geometry only, which is why the rule's status is a forward contract while
+      some fields already name it. The rule was written before anything carried a value and is
+      unchanged by every arrival since — which is the useful part, since a comparison rule agreed
+      in advance is one nobody had to fit to a field.
+
+      (This paragraph counted the fields carrying a value — "TWO OF THEM" — until version 21, and
+      the count was wrong from the version after it was written: a third arrived with the bank
+      statement and nothing brought the sentence with it. It counts nothing now, for the same
+      reason the reverse index is gone.)
     rule: >
       Strip everything outside [0-9A-Za-z], then compare case-insensitively. Separators, spacing
       and the prefix printed beside an identifier (ІД and ПН on a Ukrainian receipt, which may
@@ -1750,12 +1855,11 @@ normalization:
       so normalizing them into one string and comparing would make two distinct fields
       indistinguishable.
     decided_here: >
-      All of it. Two identifiers are emitted as values now (see `applies_to`); the rule predates
-      them and was not adjusted for them.
+      All of it. The rule predates every field that names it and was not adjusted for any of them;
+      no source states a comparison rule for a printed identifier.
 
   fraction:
     status: emitted
-    applies_to: ClaimGroundTruth.covered_fraction
     label_form: >
       A JSON number in [0, 1], quantized to SIX decimal places before serialization
       (`ClaimEvaluation.fraction_as_label`). Observed: 1.0, 0.600109, 0.500048.
@@ -1763,7 +1867,6 @@ normalization:
 
   bbox:
     status: emitted
-    applies_to: DocGroundTruth.field_bboxes values
     label_form: "[x, y, width, height] in image pixels — the COCO convention"
     frame_of_reference: >
       The SHIPPED image, after degradation. Geometric transforms carry the boxes with them,
@@ -1776,15 +1879,20 @@ normalization:
 
   string_list_unordered:
     status: emitted
-    applies_to: ClaimGroundTruth.imperfection, ClaimGroundTruth.verdict_basis
     rule: compare as SETS
+    element_rule: closed_enum
+    element_rule_why: >
+      THE ONLY THING THE DELETED `applies_to` HELD THAT NO FIELD HOLDS. `imperfection` and
+      `verdict_basis` name THIS rule, so a consumer reading the forward index alone learns the
+      array is a set and nothing about what a member is. Each member is a value of a closed
+      vocabulary declared in this file, and is compared as `closed_enum` says. Carried as a rule
+      name rather than as a sentence, so it is looked up rather than parsed.
     why: >
       The emitted order is stable because it is append order in policy_engine.py, but
       nothing makes that order meaningful and a consumer must not score it.
 
   prose_not_comparable:
     status: emitted
-    applies_to: ClaimGroundTruth.policy_trace
     rule: >
       DO NOT COMPARE LITERALLY, in whole or line by line. The trace is prose, its wording is
       free to change between generator versions, and an exact-match score over it measures
@@ -2632,7 +2740,12 @@ document_label:
     - name: line_items
       type: array of line_item
       required: true
-      normalize: see `line_item`
+      # NO `normalize:` KEY, DELIBERATELY. `normalize:` names a rule in `normalization`, and there
+      # is none for an array of RECORDS: each element's own fields carry their own rule under
+      # `line_item` below. It read `see \`line_item\`` until version 21, which is a sentence in an
+      # index slot — `normalization[field.normalize]` raised on it. The pointer is prose and lives
+      # here, where a reader finds it and a lookup does not.
+      element_rules: see the `line_item` field list below; every element field names its own rule
       cardinality:
         emitted: at least one on every document produced so far
         forward_contract: >
@@ -3555,7 +3668,13 @@ claim_label:
     - name: documents
       type: array of string
       required: true
-      normalize: identity per element
+      normalize: identity
+      normalize_applies: >
+        PER ELEMENT. Each entry is a `doc_id`, compared under `identity` like any other opaque
+        dataset key; the array itself is a join and is not a comparable value. This key read
+        `normalize: identity per element` until version 21, which named no rule —
+        `normalization[field.normalize]` raised on it. The rule is now in the index and the
+        qualifier is here.
       answers: which document labels make up the evidence
       cardinality: >
         At least one; exactly one in every run so far, and that is a property of the
@@ -5253,6 +5372,16 @@ run_profiles:
 #   blocked_on: nothing   — withdrawn: the divergence was settled the other way, and nothing
 #                           in this repository changes. The entry stays so its id keeps
 #                           resolving and the decision stays visible.
+#
+# ⚠️ AN ENTRY HERE CARRIES NO `status:`, AND THE KEY THAT LOOKS LIKE ONE IS `progress:`. Two
+# entries spelled it `status:` until version 21 and put a SENTENCE in the slot — "done in version
+# 10, and NARROWER than it was asked for". `status:` is this file's reserved word for the five
+# words of `status_vocabulary`; a sentence there is not a sixth word but a value that compares
+# against nothing, so a consumer branching on the vocabulary could not act on it at all. The
+# sentences were worth keeping and the slot was wrong, which is why they moved rather than being
+# shortened into a word that would have said less than either. `progress:` is prose, appears only
+# where an entry is partly done, and is deliberately not a vocabulary: what "partly" means differs
+# per entry and the entry's own `change:` is where that is said.
 
 required_changes:
 
@@ -5304,7 +5433,7 @@ required_changes:
 
   - id: RC-06
     file: src/receipt_synth/schemas.py, content_builder.py
-    status: done in version 10, and NARROWER than it was asked for
+    progress: done in version 10, and NARROWER than it was asked for
     change: >
       DONE, in a form the original entry got partly wrong. The payment-confirmation fields are
       carried as values — `payer`, `counterparty` (the payee), `payment_purpose`, `document_code`,
@@ -5356,7 +5485,7 @@ required_changes:
 
   - id: RC-11
     file: src/receipt_synth/degrader.py, schemas.py
-    status: the recipes are done in version 17; the naming and the fourth value are not
+    progress: the recipes are done in version 17; the naming and the fourth value are not
     change: >
       DONE: `degrade` no longer raises. `photo` and `scan` have calibrated recipes, the channel is
       drawn per document, and all three values of `Capture` occur in the data.

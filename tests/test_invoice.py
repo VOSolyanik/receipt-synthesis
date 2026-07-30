@@ -376,8 +376,13 @@ def test_the_contract_records_the_payment_status_as_a_divergence_and_not_as_a_fi
     inherit it by omission.
 
     Two files again, two independently maintained sides: the requirement is restated in the
-    contract, and the generator's answer is `none`. A row that quietly acquired a generator
+    contract, and the generator emits NOTHING for it. A row that quietly acquired a generator
     counterpart would mean somebody had printed a status.
+
+    The emptiness is asserted on the LIST rather than on a sentence. That column was prose until
+    contract version 21 and this line read `== "none, and none is wanted"`, which pinned an
+    editorial phrasing: rewording the cell reddened the test while adding a field to it did not.
+    Now the two are the other way round, which is the direction that matters.
     """
     rows = contract_invoice()["prd_required_fields"]
     status_rows = [row for row in rows if "PAYMENT STATUS" in str(row["prd"]).upper()]
@@ -385,7 +390,7 @@ def test_the_contract_records_the_payment_status_as_a_divergence_and_not_as_a_fi
     assert len(status_rows) == 1, f"{len(status_rows)} of {len(rows)} rows mention a payment status"
     row = status_rows[0]
     assert row["status"] == "divergent"
-    assert row["generator"] == "none, and none is wanted"
+    assert row["generator"] == []
 
 
 def test_every_category_of_the_policy_can_be_invoiced():
