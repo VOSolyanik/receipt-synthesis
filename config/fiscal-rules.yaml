@@ -47,14 +47,26 @@ jurisdictions:
     # The letter -> tax-group mapping is assigned by the SELLER and printed on
     # the receipt, so this is a conventional mapping rather than a statutory one
     # (unlike PL, where PTU letters are fixed by law).
+    #
+    # EVERY LETTER HERE BELONGS TO A SELLER THAT IS REGISTERED FOR ПДВ. A seller that is
+    # not prints no letter at all — see the note beside `Г` — and the status itself is a
+    # property of the vendor, in config/vendors.json.
     vat_letters:
       А: { rate: 20.0, name: "ПДВ" }
       Б: { rate: 20.0, name: "ПДВ + АЗ" }   # АЗ — акцизний збір / excise duty
       В: { rate: 7.0,  name: "ПДВ" }
+      # THE ZERO-RATE GROUP OF A REGISTERED PAYER, AND NOT THE ANSWER FOR A NON-PAYER.
+      # A seller with no ПДВ registration prints no letter on the line and no tax row under
+      # the totals — 👁 observed, and "Без ПДВ" appears on no open sample even though it is
+      # 📄 named as permissible practice. Using `Г` for such a seller would print a
+      # "ПДВ Г 0%" row that no real receipt of that kind carries. The three sources that
+      # disagree about the non-payer's letter are recorded in config/generation.yaml.
       Г: { rate: 0.0,  name: "Без ПДВ" }
 
-    # Line in the tax summary block, e.g. "ПДВ А 20% 416.67".
-    tax_line_format: "{name} {letter} {rate:g}% {amount}"
+    # Label of a row in the tax summary block, e.g. "ПДВ А 20%". The AMOUNT IS NOT PART OF
+    # IT: it is printed in the same right-hand column as every other amount on the receipt,
+    # and folding it into this string is what used to leave the VAT amounts out of column.
+    tax_line_label_format: "{name} {letter} {rate:g}%"
     # The letter is appended to the line item itself, e.g.
     # "Regular ticket    2 500.00 А".
     line_item_letter_position: suffix
@@ -77,12 +89,80 @@ jurisdictions:
       default: А
 
     identifiers:
-      # ЄДРПОУ — legal entity registry code. Printed as "ІД".
+      # THE SELLER BLOCK CARRIES UP TO TWO IDENTIFIER LINES, AND THEY ARE NOT ALTERNATIVES.
+      #
+      #   ІД — identification code. OPTIONAL, and in fact the minority case: 👁 1/3.
+      #        legal entity -> ЄДРПОУ, 8 digits · sole trader -> РНОКПП, 10 digits.
+      #   ПН — VAT-payer number. Printed ONLY by a seller registered for ПДВ.
+      #        legal entity -> 12 digits · sole trader -> the same 10-digit РНОКПП.
+      #
+      # THE LENGTH FOLLOWS THE TYPE OF PERSON, NOT THE PREFIX. That is the whole of the rule,
+      # and it is what the older reading got wrong by hanging a length on each prefix.
+      #
+      # A CONFLICT BETWEEN SOURCES, RECORDED AS ONE — the same shape as the non-payer's VAT
+      # letter at the head of config/generation.yaml, and settled the same way:
+      #
+      #   📄 The Положення про форму та зміст розрахункових документів (наказ Мінфіну № 13,
+      #      редакція 11.01.2025), розділ II п. 2, describes the two lines separately: a
+      #      registered payer prints its individual VAT-payer number preceded by «ПН»; a seller
+      #      that is not a payer prints its tax number — or a passport series and number —
+      #      preceded by «ІД». 📄 A published table of the form then carries them as lines 4 and
+      #      5 with ALTERNATIVE example values, «ПН 123456789012» or «ІД 2345678901» — invented
+      #      sequences printed in that source, not values off any real document — from which it
+      #      is natural, and wrong, to read the two lines as mutually exclusive.
+      #   📄 A second published commentary (04.06.2026) states the split in the same shape: the
+      #      VAT-payer number is printed for payers and the tax number for non-payers.
+      #   👁 Real ПРРО output DISAGREES, and decisively. On the receipts examined: «ПН» appears
+      #      on 3 of 3; a receipt of a registered COMPANY prints «ПН» AND «ІД» together; and a
+      #      registered SOLE TRADER prints «ПН» carrying its ten-digit РНОКПП — the same number
+      #      its «ІД» line would carry — with the VAT block present as usual. So a payer is not
+      #      a seller without a tax number; it is a seller with one more line.
+      #
+      # 🔴 OBSERVATION WINS, because the dataset's job is to look like what a verifier receives.
+      # The samples are ПРРО vendor-software output examined by the author. Counts, stated as
+      # they were established and not rounded up: 👁 «ПН» 3/3 · 👁 «ІД» 1/3 · 👁 the ПН-before-ІД
+      # order 1/1 of the receipts carrying both · 👁 the prefix relation below 1/1.
+      #
+      # 🔴 «ІД» IS THE MINORITY CASE, AND THIS GENERATOR PRINTS IT ANYWAY. 👁 1/3 — two of the
+      # three receipts carry no «ІД» at all. It is printed on every document all the same,
+      # because it is the SUPERSET: the field is present, so an extraction step has something to
+      # look for, and a dataset that omitted it could not exercise the field at all. The cost is
+      # that the dataset OVERSTATES how often «ІД» appears, which is a sim-to-real gap and is
+      # declared as one in config/labelling-schema.yaml under `known_limitations` — a consumer
+      # must not infer a real-world frequency from this corpus.
+      #
+      # 🔴 THE AXIS OF VARIATION IS THE ПРРО SOFTWARE PROVIDER, NOT THE SELLER. Three receipts,
+      # three different providers, and exactly one of the three prints «ІД». Layout, line order
+      # and which optional requisites appear are each provider's own. So this is NOT a property
+      # of the vendor and must not become a flag on a vendor entry — that would model the wrong
+      # level. The variant belongs in a second template, and it is named as a gap below.
+      #
+      # WHAT IS MISSING, AS ONE GAP: a second provider template that prints NO «ІД» line. Until
+      # it exists the corpus shows one provider's set of optional requisites. `Seller.tax_code`
+      # is already `None`-able for exactly this, so the template is the whole of the work.
+      #
+      # ЄДРПОУ — legal entity registry code. Its identification code, printed under «ІД».
       edrpou: { length: 8, type: numeric, checksum: edrpou, label: "ІД" }
-      # РНОКПП (ex-ІПН) — individual taxpayer number, used by ФОП sellers.
-      rnokpp: { length: 10, type: numeric, checksum: rnokpp, label: "ІПН" }
-      # Taxpayer number of a VAT payer. Printed as "ПН".
-      vat_number: { length: 12, type: numeric, checksum: none, label: "ПН" }
+      # РНОКПП (formerly called ІПН) — individual taxpayer number, a sole trader's
+      # identification code, printed under the SAME «ІД» prefix as a company's ЄДРПОУ: the
+      # prefix names the requisite, not the register the number came from. This entry used to
+      # carry «ІПН», which is the old name of the number itself and not a prefix the form
+      # defines — so every sole-trader receipt printed a line the Положення does not describe.
+      rnokpp: { length: 10, type: numeric, checksum: rnokpp, label: "ІД" }
+      # ПН — VAT-payer number, printed only by a registered payer.
+      #
+      # `legal_entity_length` rather than `length`, because there is no single length: a sole
+      # trader's «ПН» is its РНОКПП, so the number is ten digits and is the same value its «ІД»
+      # line carries. A key named `length` would have quietly meant "for a company only".
+      #
+      # 👁 CONSISTENCY WITH «ІД» — 1/1, WHICH IS ONE DOCUMENT. On the one receipt that carries
+      # both lines, the «ІД» value is the FIRST EIGHT DIGITS of the twelve-digit «ПН», and that
+      # is what the builder constructs, so the two lines agree by construction instead of by
+      # luck. The count is 1 of 1 because only one observed receipt carries both — it is not a
+      # rate, and no source states the relation as a requirement. Independent numbers would
+      # contradict the one document there is. For a sole trader the relation is IDENTITY rather
+      # than prefix: one ten-digit number under both prefixes.
+      vat_number: { legal_entity_length: 12, type: numeric, checksum: none, label: "ПН" }
       # ФН ПРРО — fiscal number of the (software) registrar.
       fiscal_device_number: { length: 10, type: numeric, checksum: none, label: "ФН ПРРО" }
       # ЗН — factory/serial number of a classic hardware РРО.
@@ -92,6 +172,24 @@ jurisdictions:
       title: "ФІСКАЛЬНИЙ ЧЕК"
       # ПРРО vendors append their own tag to the title, e.g. "ФІСКАЛЬНИЙ ЧЕК WFP".
       title_suffixes: ["", "WFP", "CB", "VCH"]
+
+      # The four amount lines under the items, in printed order — 📄 lines 20 to 24 of the
+      # published form, where СУМА and ДО СПЛАТИ are separate requisites and differ by the two
+      # between them. Here rather than in the template because they are layout constants of a
+      # jurisdiction, like the acquiring-block labels and the tax-row label beside them, and
+      # because ONE OF THEM VARIES BETWEEN SOURCES and only a config value can carry that:
+      #
+      #   👁 the observed receipt prints ЗАОКРУГЛЕННЯ;
+      #   📄 the published table of the form writes the same line as ОКРУГЛЕННЯ.
+      #
+      # Observation wins, on the same reasoning as the VAT block (see config/generation.yaml).
+      # A literal in the markup could not have recorded the alternative at all.
+      totals_labels:
+        total: "СУМА"
+        discount: "ЗНИЖКА"
+        rounding: "ЗАОКРУГЛЕННЯ"
+        amount_due: "ДО СПЛАТИ"
+
       footer: "ДЯКУЄМО ЗА ПОКУПКУ"
       # A non-fiscal look-alike must carry this line — classification trap
       # (docs/architecture.md#document-archetypes, templates 12 and 13).
@@ -111,7 +209,11 @@ jurisdictions:
     # (docs/architecture.md#imperfection-catalogue).
     acquiring_block:
       fields:
-        - { key: acquirer,      label: "Екв.",           example: "АТ «Райффайзен Банк Аваль»" }
+        # Acquirer names come from `acquirers` in config/vendors.json and are drawn per
+        # document. There used to be an `example` here naming a bank whose legal form ceased
+        # to exist in 2021; nothing read it once the names moved, so it was dead data
+        # contradicting live data in the same file.
+        - { key: acquirer,      label: "Екв." }
         - { key: terminal_id,   label: "Термінал:",      pattern: "[A-Z][0-9]{7}" }
         - { key: operation,     label: "",               values: ["ПРОДАЖ", "ПОВЕРНЕННЯ"] }
         - { key: card_masked,   label: "ЕПЗ",            pattern: "[0-9]{4}X{8}[0-9]{4}" }
@@ -133,6 +235,16 @@ jurisdictions:
       - "VAT letter А = 20%, printed as suffix on the line item"
       - "tax summary line reads 'ПДВ А 20% <amount>'"
       - "ПН is 12 digits, ІД (ЄДРПОУ) is 8 digits, ФН ПРРО is 10 digits"
+      # Extends the line above rather than replacing it: that line was right, and what it did
+      # not say is which person the lengths belong to. ІД carries an ЄДРПОУ (8) for a legal
+      # entity and a РНОКПП (10) for a sole trader, so the length follows the TYPE OF PERSON and
+      # not the prefix. See `identifiers` above for the two lines appearing together.
+      - "ІД carries ЄДРПОУ (8 digits) for a legal entity, РНОКПП (10 digits) for a sole trader"
+      # The other half of the same refutation, and the headline of it: the entry above qualifies
+      # the ІД length, and «ПН is 12 digits» needed qualifying too. A REGISTERED SOLE TRADER
+      # prints ПН with TEN digits — its own РНОКПП, the same number its ІД line carries. So
+      # neither prefix has a length of its own; both follow the type of person.
+      - "ПН is 12 digits for a legal entity but 10 for a sole trader — its РНОКПП, the same number as its ІД"
       - "receipt number is an 11-character alphanumeric id, not sequential"
       - "time separated by dashes, not colons: 01.03.2026 09-14-22"
       - "title may carry a provider suffix: 'ФІСКАЛЬНИЙ ЧЕК WFP'"
@@ -160,7 +272,7 @@ jurisdictions:
       D: { rate: 0.0,  name: "PTU" }
       E: { rate: 0.0,  name: "PTU zw." }   # zwolniony — VAT exempt
 
-    tax_line_format: "{name} {letter} {rate:g}% {amount}"
+    tax_line_label_format: "{name} {letter} {rate:g}%"
     line_item_letter_position: suffix
 
     item_vat_letter:
@@ -202,7 +314,7 @@ jurisdictions:
       A: { rate: 19.0, name: "MwSt" }
       B: { rate: 7.0,  name: "MwSt" }
 
-    tax_line_format: "{name} {letter} {rate:g}% {amount}"
+    tax_line_label_format: "{name} {letter} {rate:g}%"
     line_item_letter_position: suffix
 
     # Note: medicines carry the STANDARD rate in Germany (19%), unlike Ukraine
@@ -254,7 +366,7 @@ jurisdictions:
       B: { rate: 10.0, name: "IVA" }
       C: { rate: 4.0,  name: "IVA" }
 
-    tax_line_format: "{name} {rate:g}% {amount}"
+    tax_line_label_format: "{name} {rate:g}%"
     line_item_letter_position: none
 
     item_vat_letter:
@@ -291,7 +403,7 @@ jurisdictions:
       thousands_separator: ","
 
     vat_rates: { standard: 21.0, reduced: 9.0, zero: 0.0 }
-    tax_line_format: "VAT {rate:g}% {amount}"
+    tax_line_label_format: "VAT {rate:g}%"
     line_item_letter_position: none
 
     identifiers:

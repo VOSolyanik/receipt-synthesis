@@ -92,66 +92,70 @@
   "vendors": {
     "$note": "Category keys must match the category ids in config/policy.yaml. `name` is the bare name; the legal form is prefixed at render time — a ТОВ prints ТОВ «Name», a ФОП prints ФОП Surname I. B. without quotes, because a sole trader's name is a person's name and not a firm's. Naming patterns are covered on purpose: legal entity vs sole trader, Cyrillic vs Latin vs mixed, chain vs single outlet.",
     "$note_names": "AN ENTRY WITH NO `name` TRADES UNDER A PERSON'S NAME, AND THAT NAME IS DRAWN, NEVER STORED. `content_builder.resolve_vendor` fills it with a seeded Faker draw in the jurisdiction's locale, once per vendor instance, when the vendor is chosen for a claim — every document of that claim then names the same seller. A stored list of invented personal names would be a standing liability instead: each entry is an unverified claim that no real person trades under it, and it has to be re-checked as the world changes. A seeded draw makes no claim at all, so there is nothing to verify and nothing to re-check. Entries that DO state a name are firms trading under a mark; absence is the signal rather than the legal form, because a German EK may trade under either. Several entries in one category are identical once the name is gone — that is not duplication, it is how many independent sole traders of that profile the draw may pick from, and it keeps their share against the named firms beside them.",
+    "$note_vat_payer": "`vat_payer` SAYS WHETHER THIS SELLER IS REGISTERED FOR ПДВ, and it is a property of the vendor — not of its legal form and not of the template. It decides two printed requisites at once: whether the seller block prints a VAT-payer number under «ПН» IN ADDITION to the «ІД» identification code every seller prints (see `identifiers` in config/fiscal-rules.yaml — the two lines are not alternatives, and the lengths follow the type of person), and whether the receipt has a VAT block at all. THE VALUES BELOW ARE A SIMPLIFICATION AND THE AUTHOR'S ASSUMPTION, NOT A STATISTIC: they follow general knowledge of the Ukrainian simplified system — a sole trader on it is usually not registered, a company usually is — and no published share of registered sellers was consulted. Nothing tunes an overall share: the mix of a rendered dataset is whatever the entries of the drawn category happen to be.",
+    "$note_vat_payer_departures": "THE FLAG IS PER ENTRY BECAUSE THAT GENERALISATION HAS EXCEPTIONS, AND ONE IS REPRESENTED: a ФОП on the general system, registered, printing a «ПН» line — carrying its own ten-digit РНОКПП, the same number its «ІД» line shows, which is what a registered sole trader does rather than the twelve-digit number a company prints. Its name is DRAWN rather than stored, so the receipt it produces designates nobody and asserts nothing about anyone's tax affairs. That single entry is what makes the status a property of the vendor rather than a rule over `legal_form` — remove it and the two become indistinguishable in the data. THE OPPOSITE DEPARTURE WAS WRITTEN AND THEN REMOVED, and the reason belongs here because the argument that justified it is one this repository has already rejected once. An unregistered COMPANY was configured on a stored name, defended on the ground that the name was invented rather than public. That defends how the value was produced; the objection is about what the rendered image SAYS, and an «ІД» line on a named ТОВ states that this firm is not VAT-registered — in Ukraine an assertion about its turnover and tax regime. Whether a real firm bears that name is unchecked, and a defence resting on inventedness is exactly the reasoning that once put a rare real surname on a published receipt (see `tasks/lessons.md`, 2026-07-29). A SECOND ARGUMENT FOR REMOVING IT HAS SINCE BEEN REFUTED AND IS WITHDRAWN HERE RATHER THAN LEFT STANDING: it said ⛔ no open sample showed a company printing «ІД» at all. One does — a registered company prints «ІД» beside its «ПН». What remains unobserved is narrower: a company that prints «ІД» and NO «ПН», i.e. an unregistered one. The removal stands on the naming argument above, which the correction does not touch. Removing it costs nothing that the surviving departure does not already provide. If a company non-payer is ever wanted, it needs a name that cannot designate a real firm, and a justification that argues from the image rather than from the provenance of the string. The code path is unaffected and remains exercised in tests: a non-payer company printing «ІД» + an ЄДРПОУ is what the Положення prescribes, so the builder must handle it even while no vendor entry produces one.",
+    "$note_vat_payer_scope": "ONLY THE UA LISTS CARRY THE FLAG: the requisites it drives are Ukrainian, and the PL / DE / ES lists are seeded rather than filled, so a key there would be shape nobody had filled — what a Polish or German seller's registration prints is that jurisdiction's own question. `content_builder.vendor_is_vat_payer` refuses an entry that omits the flag rather than defaulting it, so a non-UA archetype cannot start rendering before that question is answered.",
     "$note_ua_provenance": "Public chains named here: Аптека АНЦ, Подорожник, Бажаємо здоров'я, Аптека D.S., Аптека 911, Green Forest, Speak Up, Prometheus, Hillel IT School, Beetroot Academy, Книгарня Є, IT Arena, Rozetka, Prom.ua, Sport Life, 5 елемент, FitCurves, Treatfield, ARX, УНІКА, ІНГО, ТАС, Універсальна, Княжа. A public name is used only for a trade the company is publicly in — the same rule the brand vocabulary in config/generation.yaml follows. No ФОП is named here at all any more; those names are drawn, see `$note_names`. The remaining named entries are invented legal-entity names, which are a class of their own and carry no verification claim in this file — settling how they are assured is recorded as its own step.",
 
     "UA": {
       "medical_insurance": [
-        { "name": "ARX",           "legal_form": "PRAT", "profile": "insurer" },
-        { "name": "УНІКА",         "legal_form": "PRAT", "profile": "insurer" },
-        { "name": "ІНГО",          "legal_form": "PRAT", "profile": "insurer" },
-        { "name": "ТАС",           "legal_form": "PRAT", "profile": "insurer" },
-        { "name": "Універсальна",  "legal_form": "PRAT", "profile": "insurer" },
-        { "name": "Княжа",         "legal_form": "PRAT", "profile": "insurer" }
+        { "name": "ARX",           "legal_form": "PRAT", "profile": "insurer", "vat_payer": true },
+        { "name": "УНІКА",         "legal_form": "PRAT", "profile": "insurer", "vat_payer": true },
+        { "name": "ІНГО",          "legal_form": "PRAT", "profile": "insurer", "vat_payer": true },
+        { "name": "ТАС",           "legal_form": "PRAT", "profile": "insurer", "vat_payer": true },
+        { "name": "Універсальна",  "legal_form": "PRAT", "profile": "insurer", "vat_payer": true },
+        { "name": "Княжа",         "legal_form": "PRAT", "profile": "insurer", "vat_payer": true }
       ],
       "language_courses": [
-        { "name": "Green Forest",     "legal_form": "TOV", "profile": "language_school" },
-        { "name": "Speak Up",         "legal_form": "TOV", "profile": "language_school" },
-        { "name": "Контекст",         "legal_form": "TOV", "profile": "language_school" },
-        { "name": "Kyiv Exam Centre", "legal_form": "TOV", "profile": "exam_centre" },
-        { "legal_form": "FOP", "profile": "private_tutor" },
-        { "legal_form": "FOP", "profile": "private_tutor" }
+        { "name": "Green Forest",     "legal_form": "TOV", "profile": "language_school", "vat_payer": true },
+        { "name": "Speak Up",         "legal_form": "TOV", "profile": "language_school", "vat_payer": true },
+        { "name": "Контекст",         "legal_form": "TOV", "profile": "language_school", "vat_payer": true },
+        { "name": "Kyiv Exam Centre", "legal_form": "TOV", "profile": "exam_centre",     "vat_payer": true },
+        { "legal_form": "FOP", "profile": "private_tutor", "vat_payer": false },
+        { "legal_form": "FOP", "profile": "private_tutor", "vat_payer": false }
       ],
       "professional_development": [
-        { "name": "Prometheus",       "legal_form": "TOV", "profile": "online_learning_platform" },
-        { "name": "Hillel IT School", "legal_form": "TOV", "profile": "training_centre" },
-        { "name": "Beetroot Academy", "legal_form": "TOV", "profile": "training_centre" },
-        { "name": "Книгарня Є",       "legal_form": "TOV", "profile": "bookstore" },
-        { "name": "IT Arena",         "legal_form": "TOV", "profile": "conference_organizer" },
-        { "legal_form": "FOP", "profile": "training_centre" },
-        { "name": "Rozetka",          "legal_form": "TOV", "profile": "general_retailer" },
-        { "name": "Prom.ua",          "legal_form": "TOV", "profile": "general_retailer" }
+        { "name": "Prometheus",       "legal_form": "TOV", "profile": "online_learning_platform", "vat_payer": true },
+        { "name": "Hillel IT School", "legal_form": "TOV", "profile": "training_centre", "vat_payer": true },
+        { "name": "Beetroot Academy", "legal_form": "TOV", "profile": "training_centre", "vat_payer": true },
+        { "name": "Книгарня Є",       "legal_form": "TOV", "profile": "bookstore", "vat_payer": true },
+        { "name": "IT Arena",         "legal_form": "TOV", "profile": "conference_organizer", "vat_payer": true },
+        { "legal_form": "FOP", "profile": "training_centre", "vat_payer": false },
+        { "name": "Rozetka",          "legal_form": "TOV", "profile": "general_retailer", "vat_payer": true },
+        { "name": "Prom.ua",          "legal_form": "TOV", "profile": "general_retailer", "vat_payer": true }
       ],
       "sport": [
-        { "name": "Sport Life",     "legal_form": "TOV", "profile": "gym" },
-        { "name": "5 елемент",      "legal_form": "TOV", "profile": "pool" },
-        { "name": "FitCurves",      "legal_form": "TOV", "profile": "fitness_studio" },
-        { "name": "Простір",        "legal_form": "TOV", "profile": "fitness_studio" },
-        { "legal_form": "FOP", "profile": "fitness_studio" }
+        { "name": "Sport Life",     "legal_form": "TOV", "profile": "gym", "vat_payer": true },
+        { "name": "5 елемент",      "legal_form": "TOV", "profile": "pool", "vat_payer": true },
+        { "name": "FitCurves",      "legal_form": "TOV", "profile": "fitness_studio", "vat_payer": true },
+        { "name": "Простір",        "legal_form": "TOV", "profile": "fitness_studio", "vat_payer": true },
+        { "legal_form": "FOP", "profile": "fitness_studio", "vat_payer": false }
       ],
       "mental_health": [
-        { "name": "Treatfield",     "legal_form": "TOV", "profile": "mental_health_clinic" },
-        { "name": "Опора",          "legal_form": "TOV", "profile": "mental_health_clinic" },
-        { "legal_form": "FOP", "profile": "therapy_practice" },
-        { "legal_form": "FOP", "profile": "therapy_practice" },
-        { "legal_form": "FOP", "profile": "therapy_practice" }
+        { "name": "Treatfield",     "legal_form": "TOV", "profile": "mental_health_clinic", "vat_payer": true },
+        { "name": "Опора",          "legal_form": "TOV", "profile": "mental_health_clinic", "vat_payer": true },
+        { "legal_form": "FOP", "profile": "therapy_practice", "vat_payer": false },
+        { "legal_form": "FOP", "profile": "therapy_practice", "vat_payer": false },
+        { "legal_form": "FOP", "profile": "therapy_practice", "vat_payer": false }
       ],
       "vitamins_nutrition": [
-        { "name": "Аптека АНЦ",        "legal_form": "TOV", "profile": "pharmacy" },
-        { "name": "Подорожник",        "legal_form": "TOV", "profile": "pharmacy" },
-        { "name": "Бажаємо здоров'я",  "legal_form": "TOV", "profile": "pharmacy" },
-        { "name": "Аптека D.S.",       "legal_form": "TOV", "profile": "pharmacy" },
-        { "name": "Аптека 911",        "legal_form": "TOV", "profile": "pharmacy" },
-        { "name": "Vitamin Shop",      "legal_form": "TOV", "profile": "supplement_shop" },
-        { "legal_form": "FOP", "profile": "nutrition_practice" },
-        { "legal_form": "FOP", "profile": "nutrition_practice" }
+        { "name": "Аптека АНЦ",        "legal_form": "TOV", "profile": "pharmacy", "vat_payer": true },
+        { "name": "Подорожник",        "legal_form": "TOV", "profile": "pharmacy", "vat_payer": true },
+        { "name": "Бажаємо здоров'я",  "legal_form": "TOV", "profile": "pharmacy", "vat_payer": true },
+        { "name": "Аптека D.S.",       "legal_form": "TOV", "profile": "pharmacy", "vat_payer": true },
+        { "name": "Аптека 911",        "legal_form": "TOV", "profile": "pharmacy", "vat_payer": true },
+        { "name": "Vitamin Shop",      "legal_form": "TOV", "profile": "supplement_shop", "vat_payer": true },
+        { "legal_form": "FOP", "profile": "nutrition_practice", "vat_payer": false },
+        { "$note": "The second departure: a sole trader on the GENERAL system, who is registered and prints «ПН» like a company. The name is drawn, so no real trader is described. This entry is why the status cannot be a rule over `legal_form`.",
+          "legal_form": "FOP", "profile": "nutrition_practice", "vat_payer": true }
       ],
       "hobby": [
-        { "name": "Kreativ Studio",   "legal_form": "TOV", "profile": "art_studio" },
-        { "name": "Клубок",           "legal_form": "TOV", "profile": "craft_shop" },
-        { "name": "Ключ",             "legal_form": "TOV", "profile": "music_school" },
-        { "name": "Хід",              "legal_form": "TOV", "profile": "hobby_club" },
-        { "name": "Ракурс",           "legal_form": "TOV", "profile": "photo_school" },
-        { "legal_form": "FOP", "profile": "art_studio" }
+        { "name": "Kreativ Studio",   "legal_form": "TOV", "profile": "art_studio", "vat_payer": true },
+        { "name": "Клубок",           "legal_form": "TOV", "profile": "craft_shop", "vat_payer": true },
+        { "name": "Ключ",             "legal_form": "TOV", "profile": "music_school", "vat_payer": true },
+        { "name": "Хід",              "legal_form": "TOV", "profile": "hobby_club", "vat_payer": true },
+        { "name": "Ракурс",           "legal_form": "TOV", "profile": "photo_school", "vat_payer": true },
+        { "legal_form": "FOP", "profile": "art_studio", "vat_payer": false }
       ]
     },
 

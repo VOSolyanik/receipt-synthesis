@@ -2,10 +2,16 @@
   Ukrainian ПРРО fiscal receipt — програмний реєстратор розрахункових операцій, the
   software cash register that replaced hardware РРО.
 
-  Layout follows the UA block of config/fiscal-rules.yaml. Two orderings here are not
-  guesses and are listed under `verified_against_own_receipts`: the fiscal title sits
-  near the FOOT of the receipt rather than at the head, and the time is printed with
-  dashes (14-22-51), not colons.
+  Layout follows the UA block of config/fiscal-rules.yaml. Two details of it are evidenced
+  rather than guessed, and they have DIFFERENT sources, which this comment used to state
+  wrongly by attributing both to `verified_against_own_receipts` — a list that records
+  neither of them as such:
+
+    * the time is printed with dashes (14-22-51) and not colons — that IS in that list;
+    * the fiscal title sits near the FOOT of the receipt rather than at the head, which is
+      evidenced publicly instead: the published form makes the wording its LAST line, and
+      every open sample carries it at the bottom. The sequence WITHIN the foot block is a
+      separate question and a weaker one — see the comment on that block below.
 
   Every element a consumer would extract carries data-field="<name>". The renderer reads
   getBoundingClientRect() for each of them in the same pass as the screenshot, so the
@@ -37,8 +43,27 @@
   <header class="block centered">
     <div class="seller-name" data-field="seller_name">{{ seller_display }}</div>
     <div data-field="seller_address">{{ seller.address }}</div>
+    {# UP TO TWO identifier lines, each printed when the seller has that requisite — they are
+       not alternatives, and a registered payer carries one MORE line than a non-payer rather
+       than a different one. Every prefix comes from `identifiers` in config/fiscal-rules.yaml;
+       a template cannot know what this seller holds, and a prefix written in here is what once
+       put «ПН» on every sole trader's receipt.
+
+       ORDER: ПН then ІД. 👁 Observed on the one receipt that carries both lines (1/1), and it
+       agrees with 📄 the published table of the form, which numbers the VAT-payer number line 4
+       and the identification code line 5. Two independent sources, one of them a real document,
+       so the order is evidenced rather than inferred.
+
+       «ІД» is printed on every document although 👁 only 1 of 3 real receipts carries one — the
+       superset choice, and the overstatement it causes is declared under `known_limitations` in
+       config/labelling-schema.yaml. The axis is the ПРРО software PROVIDER, not the seller, so
+       the no-ІД variant is a second template rather than a flag. #}
+    {% if seller.vat_number %}
+    <div>{{ seller.vat_number_label }} <span data-field="seller_vat_number">{{ seller.vat_number }}</span></div>
+    {% endif %}
+    {% if seller.tax_code %}
     <div>{{ seller.tax_code_label }} <span data-field="seller_tax_code">{{ seller.tax_code }}</span></div>
-    <div>ПН <span data-field="seller_vat_number">{{ seller.vat_number }}</span></div>
+    {% endif %}
   </header>
 
   <div class="rule"></div>
@@ -55,7 +80,12 @@
         </span>
         <span class="item-sum">
           <span data-field="item_{{ loop.index0 }}_sum">{{ item.sum }}</span>
+          {# Omitted entirely, not left blank, when the seller is not registered for ПДВ: the
+             observed line ends with the amount. An empty element would print a gap and leave
+             a box pointing at nothing. #}
+          {% if item.vat_letter %}
           <span class="vat-letter" data-field="item_{{ loop.index0 }}_vat_letter">{{ item.vat_letter }}</span>
+          {% endif %}
         </span>
       </div>
     </div>
@@ -64,14 +94,46 @@
 
   <div class="rule"></div>
 
+  {# FOUR lines, not one. СУМА and ДО СПЛАТИ are separate requisites of the form (lines 20 and
+     24) and differ by the two between them; a merged "СУМА ДО СПЛАТИ" is neither of them. All
+     four are printed even while the middle two are zero, because that is what the observed
+     receipt does. Every label comes from `receipt.totals_labels` in config/fiscal-rules.yaml,
+     which is also where the ЗАОКРУГЛЕННЯ (👁) against ОКРУГЛЕННЯ (📄) divergence is recorded.
+
+     ORDER, AND WHAT IS NOT KNOWN ABOUT IT. The form numbers СУМА, then the tax rows, then the
+     rounding, then ДО СПЛАТИ, and that is the order here. Where ЗНИЖКА sits RELATIVE TO THE
+     TAX ROWS is not something any open sample shows: the one receipt observed to print
+     ЗНИЖКА was issued by a seller with no VAT block, so the two never appeared together.
+     Placing it immediately before ЗАОКРУГЛЕННЯ gives the same ORDER of these four lines as
+     that receipt — a claim about their sequence only, not about the rest of the render — and
+     follows the form's own numbering everywhere the form numbers a line. A seller that is not
+     registered for ПДВ has no tax rows here at all. #}
   <section class="block">
     <div class="row total">
-      <span>СУМА ДО СПЛАТИ</span>
+      <span>{{ totals_labels.total }}</span>
       <span data-field="total">{{ total }}</span>
     </div>
+    {# The row itself carries the box, as the acquiring block's `operation` row does, so that
+       one key still covers the whole requisite — the letter, the rate and the amount — while
+       the amount sits in the receipt's amount column instead of hard against the label. #}
     {% for line in tax_lines %}
-    <div class="row"><span data-field="tax_line_{{ loop.index0 }}">{{ line }}</span></div>
+    <div class="row" data-field="tax_line_{{ loop.index0 }}">
+      <span>{{ line.label }}</span>
+      <span>{{ line.amount }}</span>
+    </div>
     {% endfor %}
+    <div class="row">
+      <span>{{ totals_labels.discount }}</span>
+      <span data-field="discount">{{ discount }}</span>
+    </div>
+    <div class="row">
+      <span>{{ totals_labels.rounding }}</span>
+      <span data-field="rounding">{{ rounding }}</span>
+    </div>
+    <div class="row total">
+      <span>{{ totals_labels.amount_due }}</span>
+      <span data-field="amount_due">{{ amount_due }}</span>
+    </div>
   </section>
 
   <div class="rule"></div>
@@ -100,7 +162,35 @@
 
   <div class="rule"></div>
 
-  {# The fiscal identity of the document. On ПРРО receipts this block sits at the foot. #}
+  {# The fiscal identity of the document. On ПРРО receipts this block sits at the foot.
+     Two decisions here are contested by the sources, and both are settled the same way — by
+     the authority that covers the document being built, with the losing evidence named.
+
+     1. «ФІСКАЛЬНИЙ ЧЕК» IS PRINTED ON A NON-PAYER'S RECEIPT TOO, and that is a choice.
+        📄 The Положення makes the wording line 35 of the form with no exemption for anyone,
+        and 👁 8/8 open receipts of companies carry it. Against that, 👁 the single open
+        photograph of a sole trader's receipt does NOT carry the wording at all — but that
+        photograph is of the form in force BEFORE 01.03.2025, and ⛔ no post-change sole
+        trader's receipt has been seen, so it cannot say what today's form does. One
+        pre-change photograph does not outweigh a current norm plus eight current documents,
+        so the norm wins. Stated because this is the most expensive field on the receipt to
+        get wrong: it is what a classifier reads to decide the document is fiscal at all, and
+        an error would sit on every image of the class this template introduces.
+     2. THE SEQUENCE WITHIN THIS BLOCK is ФН → title → mode marker → QR → footer text, while
+        📄 the form's table numbers them QR 29, mode 31, ФН 33-34 and the title 35, last. So
+        the sequence does not follow the form's numbering, and NOTHING IN THIS REPOSITORY
+        RECORDS WHERE IT CAME FROM: every entry of `verified_against_own_receipts` in
+        config/fiscal-rules.yaml is a fact about a value, a format or a field set, and none is
+        an ordering — so a claim that the sequence is grounded there would be false. This
+        comment made exactly that claim in an earlier version, and the header comment above
+        made it too. (Stated as a property of the list rather than as a count of it: the list
+        grows, and a number written here would go stale without becoming visibly wrong.)
+
+        Left exactly as it is all the same, which is a decision rather than an oversight.
+        ⛔ No open sample shows where the QR sits relative to the fiscal block, so any
+        reordering would replace an unattributed arrangement with a guess, and the load-bearing
+        fact — the title near the foot rather than in the head — is separately evidenced and
+        already satisfied. What is fixed here is the false attribution, not the layout. #}
   <footer class="block centered">
     <div>ЧЕК № <span data-field="receipt_number">{{ receipt_number }}</span></div>
     <div>

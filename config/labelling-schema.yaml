@@ -31,6 +31,73 @@
 # adding one would be inventing a caller. It is consumed by downstream tooling; its
 # accuracy is maintained by being re-checked against a freshly generated label file.
 
+# Bumped to 7 by the VAT-PAYER STATUS OF THE SELLER becoming a modelled property, which changes
+# what a fiscal receipt CONTAINS. NINE consequences a consumer has to know about, and the first
+# three would otherwise look like defects in the dataset.
+#
+# WHAT THIS LIST IS CHECKED AGAINST, since a completeness claim has to say what it covers: a
+# key-set diff of this file against the previous version, the printed-field inventory, AND the
+# `known_limitations` section — the last was missing from the claim while two new limitations
+# were being added, so the summary was complete on the axis it named and silent on the one it
+# did not. Earlier drafts of it declared three of the nine, then six, then seven; each omission
+# was found by deriving the delta rather than by re-reading the summary, which is the argument
+# for deriving it:
+#
+#   THE SELLER'S TWO IDENTIFIER LINES ARE NOT ALTERNATIVES, and an earlier draft of THIS FILE
+#   said they were. Every seller prints an identification code under «ІД» — ЄДРПОУ (8 digits) for
+#   a legal entity, РНОКПП (10) for a sole trader, so the length follows the TYPE OF PERSON. A
+#   registered seller prints its VAT-payer number under «ПН» IN ADDITION: 12 digits for a legal
+#   entity, of which the first 8 are its ЄДРПОУ — OBSERVED ON ONE DOCUMENT, one of one that
+#   carries both lines, and not stated as a requirement by any source — and for a sole trader
+#   THE SAME 10-DIGIT РНОКПП its «ІД» line carries. So both bbox keys may be present; two identifier fields bearing
+#   identical digits is CORRECT on a sole trader's receipt; a 12-digit value is not a malformed
+#   ЄДРПОУ; and registration is read from the presence of «ПН», never from «ІД». The draft
+#   reading came from a published table of the form; real ПРРО output refuted it and observation
+#   decides. A consumer that built a validation rule from the old sentence will now reject
+#   correct documents. See `document_types.fiscal_receipt`.
+#
+#   AN INVARIANT IS LIFTED. `vat_letter: null` is now legitimate on a Ukrainian receipt — this
+#   file used to state that it was a builder bug, so the contract FORBADE the correct
+#   behaviour. A seller that is not registered for ПДВ prints no letter on any line and no tax
+#   row at all. See `normalization.vat_letter.nullability`.
+#
+#   `field_bboxes` IS NO LONGER THE SAME KEY SET ON EVERY DOCUMENT. A registered seller prints a
+#   `seller_vat_number` line IN ADDITION to the `seller_tax_code` line every seller prints, and
+#   the VAT keys are absent from an unregistered seller's document entirely. A key's absence is
+#   now information rather than an error. See `printed_fields`.
+#
+#   ONE NEW LABEL FIELD, `amount_due`, WHICH MUST NOT BE SCORED YET. The merged "СУМА ДО
+#   СПЛАТИ" line became the four lines the form actually defines. The field equals `amount`
+#   in this version, so it discriminates nothing; the entry says so and says why the
+#   divergence is deferred.
+#
+#   TWO NEW BBOX KEYS ON EVERY RECEIPT, `discount` and `rounding` — the two amount lines
+#   between `СУМА` and `ДО СПЛАТИ`. Both are zero in this version and neither carries a
+#   labelled value. A consumer that vendored version 6 and asserted a fixed key set for the
+#   archetype breaks on them, which is the same lesson as the entry above: derive the key set
+#   from the document rather than pinning it. See `printed_fields.bbox_only`.
+#
+#   ONE BBOX GEOMETRY CHANGED: `tax_line_<i>` now spans the full width of its row rather than
+#   hugging its text on the left, because the VAT amount moved into the receipt's amount column
+#   with the other amounts. Same key, same content, wider box — an IoU comparison against
+#   version 6 boxes will not agree. See `printed_fields.tax_row_geometry`.
+#
+#   ONE NEW `required_changes` ENTRY, RC-16: make `amount_due` differ from `amount`, blocked on
+#   a policy decision about distributing a discount across covered and non-covered lines.
+#   RC-07 is amended in the same breath, its `amount_due` half no longer being open.
+#
+#   TWO NEW `known_limitations`, BOTH CREATED BY THIS VERSION'S OWN CHANGES. KL-04: `vat_letter`
+#   became nullable, and its nullability is fully predicted by the counterparty string on 73% of
+#   the corpus — 34 of 34 stored vendor names are registered payers, so the shortcut holds at any
+#   size. KL-05: every document prints an identification code while only 1 of 3 real receipts
+#   does, so the corpus OVERSTATES that field's presence; it is printed as the superset and the
+#   overstatement is declared rather than left for a consumer to discover.
+#
+#   EVERY REFERENCE-RUN FIGURE IN `known_limitations` MOVED, mechanisms unchanged. The seller's
+#   identifiers are built differently now, so the same seed reaches the basket draw in a
+#   different state: the run is 146 documents rather than 147. Each figure names its run and says
+#   what it was before.
+#
 # Bumped to 6 by TWO CHANGES that arrived together, stated separately because they are
 # separate and a consumer that regresses needs to know which one to look at.
 #
@@ -54,7 +121,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 6
+version: 7
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -133,6 +200,10 @@ document_types:
       - prd: total
         generator: amount
         status: emitted
+        note: >
+          The receipt prints FOUR amounts under the items — `СУМА`, `ЗНИЖКА`, `ЗАОКРУГЛЕННЯ`,
+          `ДО СПЛАТИ` — and `amount` is the first. `amount_due` is the last; see its entry
+          under `document_label`, and read the warning there before scoring it.
       - prd: date
         generator: date
         status: emitted
@@ -141,11 +212,40 @@ document_types:
         status: divergent
         see: divergence_counterparty_name
       - prd: seller tax / fiscal number
-        generator: none — `seller_tax_code` exists as a bbox key with no labelled value
+        generator: >
+          none — `seller_tax_code` and `seller_vat_number` exist as bbox keys with no labelled
+          value. THE REQUIREMENT NAMES ONE FIELD AND THE DOCUMENT CARRIES UP TO TWO NUMBERS
         status: forward_contract
         note: >
-          `content_builder.Seller.tax_code` already holds a checksum-correct ЄДРПОУ or
-          РНОКПП and `ground_truth()` discards it. Mechanical to add; see RC-04.
+          `content_builder.Seller.tax_code` and `.vat_number` already hold them and
+          `ground_truth()` discards both. Mechanical to add; see RC-04.
+
+          TWO LINES, NOT A CHOICE BETWEEN TWO. Every seller prints an identification code under
+          «ІД» (bbox key `seller_tax_code`) — a checksum-correct eight-digit ЄДРПОУ for a legal
+          entity, a ten-digit РНОКПП for a sole trader, so the LENGTH FOLLOWS THE TYPE OF PERSON
+          rather than the prefix. A seller registered for ПДВ prints, IN ADDITION, its VAT-payer
+          number under «ПН» (bbox key `seller_vat_number`): twelve digits for a legal entity, of
+          which the first eight are its ЄДРПОУ; and for a sole trader THE SAME TEN-DIGIT РНОКПП
+          its ІД line carries — one number under two prefixes.
+
+          THE PREFIX RELATION RESTS ON ONE DOCUMENT — one of the one observed receipt that
+          carries both lines. It is a construction this generator applies so that its two printed
+          identifiers cannot contradict each other, NOT a rule any source states, and a consumer
+          must not validate real documents against it. The LENGTHS are the certain part.
+
+          Consequences for a consumer, none of them cosmetic: a document may legitimately carry
+          BOTH keys; two identifier fields bearing identical digits is correct on a sole
+          trader's receipt and must not be deduplicated; a twelve-digit value is not a malformed
+          ЄДРПОУ; and the absence of «ПН» rather than the presence of «ІД» is what says the
+          seller is not registered. If the requirement keeps one scalar field for the seller's
+          tax number, it cannot represent a registered company at all, and which of the two
+          numbers it should hold is undecided here.
+
+          AN EARLIER VERSION OF THIS CONTRACT SAID THE TWO WERE MUTUALLY EXCLUSIVE, on a
+          published table of the form that lists them as rows 4 and 5 with alternative example
+          values. Real ПРРО output prints both together, and observation decides. Recorded
+          rather than quietly amended, because a consumer that built a validation rule from the
+          old sentence will now reject correct documents.
       - prd: FiscalScheme — the JURISDICTION of the fiscal scheme plus that scheme's own requisites
         prd_vocabulary: [ua_prro, pl_paragon, ar_factura, pt_atcud, sk_ekasa, hr_fiskalizacija, none, unknown]
         generator: has_fiscal_number (boolean)
@@ -167,6 +267,11 @@ document_types:
           `content_builder._build_tax_lines` computes exactly this — `TaxLine(letter, rate,
           gross, vat)`, one row per letter present — and `DocGroundTruth` has no field to
           put it in, so it is rendered and thrown away. Mechanical; see RC-05.
+
+          AND THERE IS A DOCUMENT WITH NO SUCH ROW AT ALL: a seller that is not registered for
+          ПДВ prints no tax block, so the correct extraction is an EMPTY collection rather than
+          a zero-rate row. A consumer whose model requires at least one TaxAmount per fiscal
+          receipt cannot represent that document.
       - prd: line items, required only where the category carries exception rules
         generator: line_items
         status: emitted
@@ -507,9 +612,31 @@ normalization:
       that normalizes Cyrillic to Latin turns a correct read of А into a mismatch; one that
       does the reverse turns a wrong read into a match. Hence code points.
     nullability: >
-      `null` where the jurisdiction prints no per-line letter — `line_item_letter_position:
-      none`, the ES and EU case. On a UA receipt a null letter is a builder bug and
-      content_builder raises rather than emitting one.
+      `null` in TWO legitimate cases, and neither is an error to be repaired by a consumer.
+
+      FIRST, where the jurisdiction prints no per-line letter at all —
+      `line_item_letter_position: none`, the ES and EU case.
+
+      SECOND, and new in version 7: WHERE THE SELLER IS NOT REGISTERED FOR ПДВ. Such a receipt
+      carries no VAT block whatever — no letter after the line amount, no `ПДВ …%` row under
+      the totals, and no "Без ПДВ" in their place. `null` therefore means the ABSENCE OF THE
+      WHOLE BLOCK and never an empty letter beside a present zero-rate row.
+    invariant_lifted_in_version_7: >
+      THIS FILE PREVIOUSLY FORBADE THE CORRECT BEHAVIOUR. It stated that a null letter on a UA
+      receipt was a builder bug and that content_builder raised on one — which was true of the
+      code and wrong about Ukrainian receipts, and it made every sole trader in the dataset a
+      simplified-system seller printing a rate group it cannot have assigned. The raise has
+      become two narrower guards, both still builder bugs: a null letter on a REGISTERED
+      seller's receipt, and a letter present on a non-payer's. Recorded here rather than
+      silently amended because a consumer that built a validation rule from the old sentence
+      will now reject correct documents.
+    why_observation_decided_it: >
+      The sources conflict, and the conflict is recorded in full at the head of
+      config/generation.yaml: the Положення requires the letter with no reservation for
+      non-payers, the tax service's own clarification permits non-payers to leave the fields of
+      that tax unfilled, and the one open photograph of a real sole trader's receipt has no VAT
+      block at all. Observation decides, because the dataset's job is to look like what a
+      verifier actually receives.
 
   identifier:
     status: forward_contract
@@ -520,9 +647,15 @@ normalization:
       yet. The requirements document makes several of them fields a consuming system must
       extract; see `required_changes`.
     rule: >
-      Strip everything outside [0-9A-Za-z], then compare case-insensitively. Separators,
-      spacing and the label printed beside an identifier (ІД / ІПН on a Ukrainian receipt,
-      the leading country letters of a VAT number) are formatting, not identity.
+      Strip everything outside [0-9A-Za-z], then compare case-insensitively. Separators, spacing
+      and the prefix printed beside an identifier (ІД and ПН on a Ukrainian receipt, which may
+      both be present — see `document_types.fiscal_receipt` — and the leading country letters of
+      a VAT number) are formatting, not identity.
+
+      THE PREFIX IS NOT PART OF THE VALUE BUT IT IS PART OF THE FIELD'S IDENTITY: «ІД 1234567890»
+      and «ПН 1234567890» on one sole trader's receipt are the same digits under two requisites,
+      so normalizing them into one string and comparing would make two distinct fields
+      indistinguishable.
     decided_here: all of it. Nothing emits an identifier value yet.
 
   fraction:
@@ -664,6 +797,38 @@ document_label:
           VAT-inclusive jurisdiction, and this file cannot reconcile them. Raised as a
           question for the requirement, not as a generator change.
 
+    - name: amount_due
+      type: number or null
+      required: false
+      normalize: money
+      status: emitted
+      meaning: >
+        ДО СПЛАТИ — what the customer actually pays: the basket total less any discount, plus
+        cash rounding. `null` on a document type whose form has no such line; populated on
+        every `fiscal_receipt`.
+      do_not_report_its_accuracy: >
+        🔴 THE FIELD DISCRIMINATES NOTHING IN THIS VERSION AND ITS ACCURACY IS NOT TO BE
+        REPORTED AS A METRIC. Discount and rounding are both zero, so `amount_due` equals
+        `amount` on every document produced — which means an extractor satisfies it perfectly
+        by echoing the total, having read nothing, and any F1 or exact-match figure quoted for
+        it measures the total again under a second name. Score it once the dataset contains
+        documents where the two differ, and not before. Same refusal as the one that keeps a
+        bank statement's four summary totals printed but unlabelled: a number nobody can get
+        wrong is not a measurement.
+      why_the_divergence_is_deferred: >
+        NOT because the printing is hard, and not because the oracle is delicate — BECAUSE THE
+        POLICY IS SILENT. Coverage is decided per line item, the line items sum to `СУМА`, and a
+        discount applies to the BASKET; reaching a genuine `ДО СПЛАТИ` therefore requires a rule
+        for DISTRIBUTING that discount between covered and non-covered lines, and policy.yaml
+        contains no such rule. Choosing one here would wire an interpretation the policy does
+        not have into the ground truth, which is the one thing a label-first generator must
+        never do. See RC-16 for what closing it needs.
+      why_the_line_is_printed_at_all: >
+        Because the form has both: `СУМА` is line 20 and `ДО СПЛАТИ` line 24, they differ by
+        `ЗНИЖКА` and `ЗАОКРУГЛЕННЯ`, and the observed receipt prints all four. The generator
+        printed ONE merged "СУМА ДО СПЛАТИ" line until version 7, which is neither of the two
+        requisites — a defect on every image, and one no label could have revealed.
+
     - name: date
       type: string
       required: true
@@ -780,8 +945,23 @@ document_label:
       normalize: bbox
       keys: see `printed_fields`
       note: >
-        A key is present only when its element was rendered. Every key listed below appears
-        on every document produced so far.
+        A key is present only when its element was rendered, AND SINCE VERSION 7 THAT IS NO
+        LONGER THE SAME SET ON EVERY DOCUMENT. A missing key is information — the element is not
+        on that document — and never an omission to be repaired.
+
+        THREE KEY FAMILIES VARY, and all three vary together, with the seller's ПДВ
+        registration: `seller_vat_number`, `item_<i>_vat_letter` and `tax_line_<i>` are present
+        for a registered seller and absent for an unregistered one.
+
+        `seller_tax_code` DOES NOT VARY. It is on every document this generator produces, which
+        is why a consumer must read registration from the presence of `seller_vat_number` and
+        never from the absence of `seller_tax_code`.
+
+        An earlier draft of this note said the two identifier keys were alternatives. Measured on
+        a 146-document run: `seller_tax_code` 146 of 146, `seller_vat_number` 125 of 146, and
+        BOTH TOGETHER on 125 of 146 — so the draft was false on the majority of the corpus, and
+        its count of varying keys corresponded to nothing. See
+        `printed_fields.varies_with_vat_payer_status`.
 
     - name: synthetic
       type: boolean
@@ -818,19 +998,29 @@ document_label:
     with_a_labelled_value:
       seller_name: counterparty          # differs by legal form and quotation marks
       total: amount
+      amount_due: amount_due             # equal to `amount` in this version — do not score it
       paid_amount: amount                # the same value, printed a second time
       date: date                         # printed DD.MM.YYYY, labelled YYYY-MM-DD
       item_<i>_name: line_items[i].name
       item_<i>_qty: line_items[i].qty
       item_<i>_price: line_items[i].price
-      item_<i>_vat_letter: line_items[i].vat_letter
+      item_<i>_vat_letter: line_items[i].vat_letter   # absent on a non-payer's receipt
     bbox_only:
       # No ground-truth value exists for any of these. Indices are zero-based and dense.
       - seller_address
-      - seller_tax_code                  # ЄДРПОУ or РНОКПП, checksum-correct; consumer-required
-      - seller_vat_number                # ПН — the VAT payer number
+      - seller_tax_code                  # «ІД» + ЄДРПОУ (8) or РНОКПП (10), checksum-correct.
+                                         # On EVERY receipt this generator builds — oftener than
+                                         # reality, see KL-05
+      - seller_vat_number                # «ПН». 12 digits for a legal entity, whose first 8 are
+                                         # its ЄДРПОУ (a construction from ONE observed document,
+                                         # not a rule — see `document_types.fiscal_receipt`); the
+                                         # same РНОКПП as `seller_tax_code` for a sole trader.
+                                         # REGISTERED PAYER ONLY
       - item_<i>_sum                     # qty × price
-      - tax_line_<i>                     # one row per VAT letter; the consumer requires the amounts
+      - tax_line_<i>                     # one row per VAT letter; none at all for a non-payer.
+                                         # Box spans the whole row — see `tax_row_geometry`
+      - discount                         # ЗНИЖКА — zero in this version
+      - rounding                         # ЗАОКРУГЛЕННЯ — zero in this version
       - payment_method                   # payment form; consumer-required on payment_confirmation
       - acquirer
       - terminal_id
@@ -846,6 +1036,49 @@ document_label:
       - mode_marker                      # Онлайн / Офлайн
       - qr
       - footer_text
+    tax_row_geometry:
+      status: emitted
+      changed_in_version_7: >
+        `tax_line_<i>`'s BOX GREW, while its key and its content stayed the same. The row used
+        to be a single string starting at the left margin — "ПДВ А 20% 111,32" — and its box
+        hugged that text. The VAT amount now sits in the same right-hand column as `total`,
+        `discount`, `rounding` and `amount_due`, so the box spans the full width of the row,
+        from the label to the amount, in the way `operation` in the acquiring block already did.
+
+        A consumer comparing boxes across versions by IoU will see a mismatch here and nowhere
+        else. The label content of the row is unchanged, so nothing that reads text is affected.
+      why: >
+        The amount is a COLUMN on the paper rather than part of the label, and folding it into
+        the label string left the VAT amounts floating mid-line between two right-aligned
+        totals — visibly wrong on every registered seller's receipt, and invisible to every
+        label. `receipt.totals_labels` and `tax_line_label_format` in config/fiscal-rules.yaml
+        are where the wording of both now lives.
+
+    varies_with_vat_payer_status:
+      status: emitted
+      note: >
+        THE ONE CONDITIONAL THAT IS OBSERVED RATHER THAN PLANNED, unlike the acquiring block
+        below. Both varieties are produced today, because config/vendors.json carries sellers of
+        each kind in the one category that has an archetype.
+
+        EVERY receipt carries `seller_tax_code` — the ІД identification code. That is MORE OFTEN
+        THAN REALITY: only 1 of 3 observed real receipts prints the line at all, and KL-05
+        declares the overstatement. It is printed as the superset so the field can be exercised.
+
+        A REGISTERED ПДВ PAYER carries, IN ADDITION, `seller_vat_number`, one
+        `item_<i>_vat_letter` per line, and one `tax_line_<i>` per letter present.
+
+        A SELLER THAT IS NOT REGISTERED carries none of those three families: its lines end at
+        the amount and there is no tax block under the totals.
+
+        So a fiscal receipt's key set answers a question about the seller, and code that asserts
+        a fixed key set for the archetype is wrong rather than strict. The status itself is not
+        in the label; a consumer reads it from the PRESENCE OF `seller_vat_number`, never from
+        `seller_tax_code`, which says nothing about registration because every seller has one.
+        An earlier version of this entry made the two identifier keys alternatives and would have
+        had a consumer read the status off which one appeared — see
+        `document_types.fiscal_receipt`.
+
     acquiring_block_is_conditional:
       status: forward_contract
       note: >
@@ -923,6 +1156,11 @@ line_item:
       required: false
       normalize: vat_letter
       meaning: ПДВ-літера — the VAT rate code printed at the end of the line
+      null_is_legitimate: >
+        AND IS THE WHOLE OF THE VAT BLOCK BEING ABSENT, not an unread letter. Every line of a
+        receipt issued by a seller that is not registered for ПДВ carries `null`, and that
+        document has no tax rows either. See `normalization.vat_letter.nullability`, which
+        also records that this file forbade the case until version 7.
       not_a_shortcut_to_coverage: >
         The coverage boundary deliberately does not coincide with the VAT boundary, so a
         consumer cannot derive `covered` from this field and has to read the line.
@@ -1764,8 +2002,14 @@ artifacts:
 # REFERENCE RUN for every share below — one archetype is registered, so the whole dataset is
 # Ukrainian pharmacy-and-nutrition receipts:
 #   generate-dataset --seed 20260803 --personas 30 --claims-per-persona 5
-#   -> 147 documents, 147 claims, 46 distinct counterparties,
-#      24 documents carrying a visible non-covered line.
+#   -> 146 documents, 146 claims, 46 distinct counterparties,
+#      35 documents carrying a visible non-covered line.
+#
+# RE-MEASURED FOR VERSION 7, and the figures moved because the generator's DRAW ORDER changed:
+# the seller's identifiers are now built differently, so the same seed reaches the basket draw in
+# a different state. Nothing about the mechanisms below changed — only which documents this seed
+# produces. Previously stated as 147 documents and 24 with a non-covered line. A figure quoted
+# against a seed is only as stable as the stream, which is why each one names its run.
 #
 # Of those 46 counterparties, 6 are named firms and 40 are sole traders whose names are
 # DRAWN rather than stored — a fresh one per claim, since a `ФОП` entry in vendors.json
@@ -1790,17 +2034,19 @@ known_limitations:
       document it issues is fully covered by construction and its name alone settles the
       question.
     share_in_reference_run: >
-      TWO FIGURES, AND THEY DIFFER BY A LOT. Structurally 0 of 147: the one category with a
+      TWO FIGURES, AND THEY DIFFER BY A LOT. Structurally 0 of 146: the one category with a
       registered archetype has no covered-only vendor left, because `nutrition_practice`
       sells `medical_device` and its sole traders issue mixed receipts like any pharmacy.
 
-      Empirically 34 of 147, on 34 of the 46 counterparties — and every one of those 34 is a
+      Empirically 32 of 146, on 32 of the 46 counterparties — and every one of those 32 is a
       sole trader carrying a single document. All 6 counterparties that carry more than one
-      document appear on both fully covered and partially covered ones.
+      document appear on both fully covered and partially covered ones. (Re-measured for version
+      7 on the run named above; previously 34 of 147, on 34 counterparties. The shape is
+      identical — the stream moved, not the mechanism.)
 
       The gap is the whole point of stating both, and it widened when sole-trader names
       became a per-claim draw: a counterparty that appears once is trivially "never seen
-      partially covered", so the cross-tabulation now produces 34 hits of which none is
+      partially covered", so the cross-tabulation now produces 32 hits of which none is
       evidence of anything.
 
       A vendor that CANNOT sell an excluded kind is a permanent property of the data: it
@@ -1827,6 +2073,8 @@ known_limitations:
       profile cannot be recovered — a consumer reading only the labels cannot — treat a
       counterparty with a handful of documents as uninformative rather than as a finding,
       and read the structural figure above instead of computing your own.
+      Do not group by the counterparty string for KL-04 either, and for a different reason:
+      there the string is informative, which is precisely the defect.
     fixed_by: >
       An affinity invariant enforced in the test suite: for every jurisdiction that has a
       registered archetype, every covered item kind must be sold by a vendor that also sells
@@ -1843,8 +2091,9 @@ known_limitations:
       families, and a consumer that learns those three scores as well here as one that reads
       the article and resolves it against the policy.
     share_in_reference_run: >
-      100% of non-covered lines. In the reference run 24 of 147 documents carried one — 26
-      distinct printed strings, drawn from the 398 those three kinds can produce.
+      100% of non-covered lines. In the reference run 35 of 146 documents carried one — 32
+      distinct printed strings, drawn from the 398 those three kinds can produce. (Re-measured
+      for version 7; previously 24 of 147 and 26 strings, on the older draw order.)
     why_it_is_not_a_defect: >
       It IS the coverage rule of the one category that has an archetype, not an accident of
       the vendor data: `excluded_items` in policy.yaml is what the plan does not pay for. No
@@ -1886,7 +2135,7 @@ known_limitations:
       unlike KL-01 — a consumer picks the shortcut up without ever looking at the
       counterparty.
     share_in_reference_run: >
-      0 of 147. `online_course` and `certification_exam` had this shape (both selling
+      0 of 146. `online_course` and `certification_exam` had this shape (both selling
       profiles were covered-only) and `instrument_rent` likewise; the affinity data was
       changed so that a training centre also sells travel and a music school also sells
       refreshments. Neither kind reaches a dataset yet in any case.
@@ -1908,6 +2157,90 @@ known_limitations:
       appearing only on fully covered documents is a shortcut; exclude it, or report on it
       separately, before quoting a coverage metric.
     fixed_by: same invariant as KL-01, stated over item kinds rather than over vendors
+
+
+  - id: KL-04
+    name: the counterparty foretells whether the document has a VAT block
+    predictor: counterparty
+    hurts: training, evaluation
+    subset: >
+      Every document issued by a counterparty whose name is STORED in config/vendors.json. All
+      of them are registered ПДВ payers, so a stored name guarantees a per-line `vat_letter`, a
+      tax block and a `seller_vat_number` box — and their absence is guaranteed by a name that is
+      not in that file. New in version 7: before it, `vat_letter` was never null, so there was
+      nothing to predict.
+    share_in_reference_run: >
+      TWO FIGURES, AS KL-01 STATES THEM, AND HERE THEY AGREE INSTEAD OF DIVERGING.
+
+      STRUCTURALLY 34 of 34: every vendor entry in the UA lists that states a `name` carries
+      `vat_payer: true`, and there is not one named non-payer. The cross-tabulation of all 44
+      entries is (TOV, payer) 28, (ПрАТ, payer) 6, (ФОП, non-payer) 9, (ФОП, payer) 1 — so
+      NAMED implies PAYER with no exceptions, at any size, under any seed. That is leakage in
+      KL-01's sense: a permanent property of the data rather than a sampling artifact.
+
+      EMPIRICALLY 106 of 146 documents carry a stored name, and 106 of those 106 have a VAT
+      block — zero exceptions on 73% of the corpus. The other 40 documents carry drawn
+      sole-trader names and are mixed: 19 payers, 21 non-payers.
+    the_leak_is_one_directional: >
+      Worth stating because it bounds what a consumer can do with it. A STORED name implies a VAT
+      block with certainty; a DRAWN name implies nothing, being 19 payers to 21 non-payers. So a
+      model can shortcut the positive case only — which is the larger half, and enough to inflate
+      any metric conditioned on the VAT block.
+    how_to_stratify: >
+      Report anything that depends on `vat_letter`, on the tax block or on `seller_vat_number`
+      SEPARATELY for documents with a stored counterparty and documents with a drawn one, and
+      never as a single figure over the corpus. The two subsets are 73% and 27% here and neither
+      is representative. A consumer reading only the labels cannot tell the two apart — the
+      vendor file is what distinguishes them, exactly as in KL-01 — so the split has to be taken
+      from config/vendors.json rather than computed from the labels.
+    fixed_by: >
+      NOTHING TODAY, and the obvious fix is blocked for a reason worth knowing. Closing it means
+      a named vendor that is not a ПДВ payer, and such an entry asserts of a real-sounding firm
+      that it is not VAT-registered — a claim about its turnover and tax regime. One existed and
+      was removed for exactly that reason; `$note_vat_payer_departures` in config/vendors.json
+      carries the argument. So the honest routes are a stored name that cannot designate any real
+      firm, or more drawn entries on both sides, and neither is a decision this file takes.
+    why_it_is_not_the_same_as_KL_01: >
+      KL-01 is about COVERAGE being foretold by the counterparty; this is about the VAT BLOCK.
+      They share a predictor and nothing else: a document can be fully covered and have no VAT
+      block, or partially covered and have one. Two mechanisms behind one visible string.
+
+  - id: KL-05
+    name: the dataset overstates how often a receipt prints an identification code
+    predictor: none — a distribution gap rather than a label leak
+    hurts: training, evaluation
+    subset: >
+      EVERY document. All of them print the «ІД» identification code (bbox key
+      `seller_tax_code`), while of the real ПРРО receipts examined only 1 of 3 carries one: two
+      of three print no such line at all.
+    share_in_reference_run: 146 of 146 documents, against an observed real-world 1 of 3.
+    why_it_is_deliberate: >
+      «ІД» is printed because it is the SUPERSET. A field that is present can be looked for and
+      scored; a field the corpus never prints cannot be exercised at all, and its absence would
+      be indistinguishable from an extractor that simply never finds it. The cost is this entry.
+    consequence: >
+      A system tuned on this corpus will expect an identification code where most real receipts
+      have none, and will read the field's absence as a defect rather than as the ordinary case.
+      Any measured recall on it is measured on a distribution the real flow does not have. This is
+      the same refusal as `document_label.amount_due` not being scoreable and as a bank
+      statement's four summary totals being printed but unlabelled: state what the corpus does
+      not represent, rather than letting a number stand for something it never measured.
+    why_this_entry_breaks_the_template: >
+      It carries `predictor: none`, and the other four entries in this section all name one. That
+      is informative rather than untidy: the other entries say "something in the document gives
+      the label away", and this one says "the document population is not the real population".
+      Fitting it to the template by inventing a predictor would have hidden the difference.
+    how_to_stratify: >
+      Nothing to stratify — there is no subset without the field. Do not report presence or
+      recall figures for `seller_tax_code` as estimates of real-world behaviour, and treat any
+      model that learned to require the line as untested against the majority of real receipts.
+    fixed_by: >
+      A SECOND PROVIDER TEMPLATE THAT PRINTS NO «ІД» LINE. The axis of the variation is the ПРРО
+      software provider — three observed receipts, three providers, and exactly one prints it —
+      so it is NOT a property of the seller and must not become a flag on a vendor entry, which
+      would model the wrong level and put a provider's layout choice on the merchant.
+      `content_builder.Seller.tax_code` is already nullable for precisely this, so the template
+      is the whole of the remaining work. Named as one gap in config/fiscal-rules.yaml.
 
 
 # =============================================================================
@@ -1986,7 +2319,12 @@ required_changes:
 
   - id: RC-07
     file: src/receipt_synth/schemas.py
-    change: "Add invoice payment status and amount due. No counterpart of any kind exists."
+    change: >
+      Add INVOICE payment status. The `amount_due` half of this entry is no longer "no
+      counterpart of any kind exists": the field is on `DocGroundTruth` and is populated on
+      fiscal receipts, where the published form actually defines the line. Nothing about the
+      invoice changed — no invoice archetype exists, and whether a Ukrainian invoice prints a
+      payment status at all is itself disputed.
     blocked_on: decision
 
   - id: RC-08
@@ -2083,6 +2421,33 @@ required_changes:
       them — amount agreement and date order — are now performed and reported as
       `imperfection` causes on the claim; the rest need fields that do not exist. See
       `claim_label.linked.partly_closed`.
+    blocked_on: decision
+
+  - id: RC-16
+    file: config/policy.yaml first, then src/receipt_synth/content_builder.py
+    change: >
+      MAKE `amount_due` DIFFER FROM `amount`, so that the field measures something. Two pieces,
+      in this order and not the other:
+
+      FIRST, POLICY. A discount applies to the basket while coverage is decided per line, so
+      `covered_fraction` is undefined until policy.yaml states how a basket-level discount is
+      DISTRIBUTED across covered and non-covered lines — pro rata by line value, against the
+      non-covered lines first, or some other rule. This is a policy decision and cannot be
+      taken in the generator: whichever rule the code picked would become ground truth for a
+      question the policy never answered.
+
+      THEN THE BUILDER. `PrroReceipt.discount` and `.rounding` are fixed at zero and
+      `amount_due` is derived from them. The derivation and the sign of each term are pinned by
+      `test_amount_due_is_the_total_less_the_discount_plus_the_rounding`, on a receipt whose
+      adjustments are set by hand — so whoever unfixes the two values gets told if the
+      arithmetic is wrong, which no test could see while both were zero. That is the extent of
+      the claim: the plumbing is in place, not that the change is free.
+      Two more places print `amount` today and must follow `amount_due` at that point rather
+      than before: the `paid_amount` line of the payment block, and the amount in words. Both
+      state what the customer parted with, so both are wrong the moment a discount is non-zero
+      — and both are correct while it is zero, which is why they were left alone.
+
+      Until then the field's accuracy is not a metric; see `document_label.amount_due`.
     blocked_on: decision
 
 # Two items belong on the consumer's side and are recorded so they are not lost:

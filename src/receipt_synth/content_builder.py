@@ -362,17 +362,41 @@ def vat_rate_for_letter(letter: str, country: str) -> float:
 class Seller:
     """The party issuing the receipt.
 
-    ``tax_code`` is not named after either identifier because it is whichever one
-    applies: a ТОВ prints its ЄДРПОУ labelled "ІД", a ФОП prints its РНОКПП labelled
-    "ІПН".
+    UP TO TWO IDENTIFIER LINES, AND THEY ARE NOT ALTERNATIVES. Each is optional on its own:
+
+    * ``tax_code`` is the ІД — the seller's identification code. An eight-digit ЄДРПОУ for a
+      legal entity, a ten-digit РНОКПП for a sole trader: the length follows the TYPE OF PERSON
+      and not the prefix. ``None`` models a receipt that omits the line, which real receipts
+      may do — 👁 only 1 of 3 real receipts carries one, and this generator prints it on every
+      document anyway, as the superset. That overstatement is declared under
+      ``known_limitations`` in config/labelling-schema.yaml; the axis of the variation is the
+      ПРРО software provider rather than the seller, so the variant is a second template. See
+      ``identifiers`` in config/fiscal-rules.yaml.
+    * ``vat_number`` is the ПН — the VAT-payer number, and ``None`` unless the seller is
+      registered. Twelve digits for a legal entity, of which the first eight are its ЄДРПОУ, so
+      the two lines agree by construction — 👁 1/1, MEANING ONE DOCUMENT: only one observed
+      receipt carries both lines, and no source states the relation as a requirement. For a sole
+      trader it is THE SAME ten-digit РНОКПП the ІД line carries — one number under two
+      prefixes, not two numbers.
+
+    A registered payer therefore prints one line MORE than a non-payer, not a different one.
+    An earlier version of this model had them mutually exclusive, on a published table of the
+    form that lists them as rows 4 and 5 with alternative examples; real ПРРО output prints both
+    together and refuted it.
+
+    ``vat_payer`` is carried on the seller rather than looked up again at render time because it
+    decides two requisites of the same document — whether ПН is printed at all, and whether the
+    receipt has a VAT block — and the two must not be able to disagree.
     """
 
     name: str
     legal_form: str
     address: str
-    tax_code: str
+    vat_payer: bool  # платник ПДВ: registered for VAT, so the receipt carries a VAT block
+    tax_code: str | None
     tax_code_label: str
-    vat_number: str  # ПН — the taxpayer number of a registered VAT payer
+    vat_number: str | None
+    vat_number_label: str
 
 
 @dataclass(frozen=True)
@@ -413,6 +437,11 @@ class PrroReceipt:
     fiscal_device_number: str  # ФН ПРРО
     line_items: list[LineItem]
     total: Decimal
+    # СУМА and ДО СПЛАТИ are two different lines of the form (20 and 24) and genuinely differ
+    # by these two. Both are zero in this version, so `amount_due` equals `total` — see
+    # `amount_due` below for why the divergence is deferred rather than merely unimplemented.
+    discount: Decimal  # ЗНИЖКА
+    rounding: Decimal  # ЗАОКРУГЛЕННЯ — cash rounding to the nearest printable unit
     amount_in_words: str
     tax_lines: list[TaxLine]
     payment_method: str
@@ -420,6 +449,29 @@ class PrroReceipt:
     decimal_separator: str
     qr_payload: str
     footer: str
+
+    @property
+    def amount_due(self) -> Decimal:
+        """ДО СПЛАТИ — what the customer actually pays: the basket less any discount, plus
+        cash rounding.
+
+        DERIVED, NOT STORED, so that the two amounts cannot drift apart — and the derivation is
+        exercised rather than merely asserted: every receipt this builder produces fixes both
+        adjustments at zero, so the arithmetic and the sign of each term would be invisible to
+        the whole suite were it not for
+        ``test_amount_due_is_the_total_less_the_discount_plus_the_rounding``, which sets them by
+        hand. It equals ``total`` for as long as both adjustments are zero, and that is
+        deliberate: reaching a genuine
+        divergence needs a rule for DISTRIBUTING a basket-level discount across covered and
+        non-covered lines, because coverage is decided per line and the lines sum to
+        ``total`` — and config/policy.yaml says nothing about how. Choosing here would wire an
+        interpretation the policy does not contain into the ground truth.
+
+        The consequence for a consumer is stated in config/labelling-schema.yaml, where it
+        matters: while the two coincide the field DISCRIMINATES NOTHING, so its accuracy must
+        not be reported as a metric.
+        """
+        return (self.total - self.discount + self.rounding).quantize(KOPIYKA)
 
     # -- rendering ------------------------------------------------------------
 
@@ -455,16 +507,26 @@ class PrroReceipt:
                 }
                 for item in self.line_items
             ],
+            # Label and amount separately, because the amount belongs in the same right-hand
+            # column as every other amount on the paper. One string for the whole row is what
+            # left the VAT amounts floating mid-line while the four totals beside them were
+            # flush right.
             "tax_lines": [
-                rules["tax_line_format"].format(
-                    name=rules["vat_letters"][line.letter]["name"],
-                    letter=line.letter,
-                    rate=line.rate,
-                    amount=self._amount(line.vat),
-                )
+                {
+                    "label": rules["tax_line_label_format"].format(
+                        name=rules["vat_letters"][line.letter]["name"],
+                        letter=line.letter,
+                        rate=line.rate,
+                    ),
+                    "amount": self._amount(line.vat),
+                }
                 for line in self.tax_lines
             ],
             "total": self._amount(self.total),
+            "discount": self._amount(self.discount),
+            "rounding": self._amount(self.rounding),
+            "amount_due": self._amount(self.amount_due),
+            "totals_labels": rules["receipt"]["totals_labels"],
             "amount_in_words": self.amount_in_words,
             "payment_method": self.payment_method,
             "acquiring": self.acquiring,
@@ -499,6 +561,7 @@ class PrroReceipt:
             language="uk",
             currency="UAH",
             amount=self.total,
+            amount_due=self.amount_due,
             date=self.issued_at.date(),
             counterparty=self.seller.name,
             line_items=self.line_items,
@@ -684,6 +747,59 @@ def resolve_vendor(rng: random.Random, vendor: dict, country: str = "UA") -> dic
     return {**vendor, "name": sole_trader_name(rng, country)}
 
 
+def _vat_number(rng: random.Random, id_code: str, *, is_sole_trader: bool) -> str:
+    """The ПН — VAT-payer number — of a registered seller, built FROM its ІД.
+
+    A sole trader's ПН simply IS its РНОКПП: 👁 one ten-digit number appears under both
+    prefixes, so there is nothing to draw.
+
+    A legal entity's is twelve digits, and 👁 the first eight of them are its ЄДРПОУ on the one
+    company receipt observed. So the remaining digits are drawn and appended rather than a
+    fresh number being made up: independent numbers would contradict that document, and would
+    also let a consumer's cross-check between the two printed lines fail on a document this
+    generator calls honest. Derived rather than stored for the same reason `amount_due` is —
+    two values that must agree should not be two values.
+
+    The relation rests on a SINGLE observation, and no source states it as a requirement. What
+    is certain is the length, which config/fiscal-rules.yaml holds.
+    """
+    if is_sole_trader:
+        return id_code
+
+    length = jurisdiction("UA")["identifiers"]["vat_number"]["legal_entity_length"]
+    tail = length - len(id_code)
+    if tail < 0:
+        raise ValueError(
+            f"a ПН of {length} digits cannot begin with a {len(id_code)}-digit ІД — check "
+            "`identifiers` in config/fiscal-rules.yaml"
+        )
+    return id_code + f"{rng.randint(0, 10**tail - 1):0{tail}d}"
+
+
+def vendor_is_vat_payer(vendor: dict) -> bool:
+    """Whether this vendor is registered for ПДВ — податок на додану вартість, value added tax.
+
+    Read from the vendor entry, never derived from ``legal_form``. It decides two printed
+    requisites at once — which tax identifier the seller block carries and under which prefix,
+    and whether the receipt has a VAT block at all — and both have exceptions in either
+    direction: a ФОП on the general system is registered, a small company on the simplified
+    system is not. A rule over the legal form would print a configuration the entry
+    contradicts, which is the shape of the defect this replaced.
+
+    A MISSING FLAG IS REFUSED RATHER THAN DEFAULTED. A default would quietly make the status a
+    property of the legal form again for every entry nobody thought about — and the printed
+    consequence would be a plausible-looking document rather than a failure.
+    """
+    if "vat_payer" not in vendor:
+        raise ValueError(
+            f"vendor entry {vendor!r} states no `vat_payer`. Whether the seller is registered "
+            "for ПДВ decides its tax-identifier line and whether the receipt carries a VAT "
+            "block at all, and it does not follow from the legal form — state it on the entry "
+            "in config/vendors.json"
+        )
+    return bool(vendor["vat_payer"])
+
+
 def vendor_can_carry(vendor: dict, category_id: str, *, mixed: bool) -> bool:
     """Whether this vendor can issue the receipt a plan asks for.
 
@@ -711,7 +827,7 @@ def _minor(amount: Decimal) -> int:
 
 
 def _build_line_item(
-    item_kind: str, templates: list[str], rng: random.Random, *, covered: bool
+    item_kind: str, templates: list[str], rng: random.Random, *, covered: bool, vat_payer: bool
 ) -> LineItem:
     names = [_fill_placeholders(template, item_kind, rng) for template in templates]
 
@@ -724,7 +840,11 @@ def _build_line_item(
         # kopiykas, and an exact integer keeps the sum exact.
         price=Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100,
         covered=covered,
-        vat_letter=vat_letter_for_kind(item_kind, "UA", rng),
+        # A seller with no ПДВ registration has assigned no rate group to anything, so the
+        # line carries no letter — and nothing takes its place: 👁 the line ends with the
+        # amount. Not the zero-rate letter «Г», not "Без ПДВ". See the note at the head of
+        # config/generation.yaml for the three sources that disagree about this.
+        vat_letter=vat_letter_for_kind(item_kind, "UA", rng) if vat_payer else None,
     )
 
 
@@ -734,7 +854,13 @@ _DISTINCT_DRAW_LIMIT = 40
 
 
 def _draw_distinct_items(
-    rng: random.Random, kinds: list[str], catalogue: dict, count: int, *, covered: bool
+    rng: random.Random,
+    kinds: list[str],
+    catalogue: dict,
+    count: int,
+    *,
+    covered: bool,
+    vat_payer: bool,
 ) -> list[LineItem]:
     """Line items with distinct printed names.
 
@@ -754,7 +880,9 @@ def _draw_distinct_items(
         if len(items) == count:
             break
         kind = rng.choice(kinds)
-        item = _build_line_item(kind, catalogue[kind]["uk"], rng, covered=covered)
+        item = _build_line_item(
+            kind, catalogue[kind]["uk"], rng, covered=covered, vat_payer=vat_payer
+        )
         if item.name not in seen:
             seen.add(item.name)
             items.append(item)
@@ -826,9 +954,15 @@ def _build_mixed_basket(
     spec = category(category_id)
     covered_catalogue = spec["covered_items"]
     excluded_catalogue = spec["excluded_items"]
+    vat_payer = vendor_is_vat_payer(vendor)
 
     covered = _draw_distinct_items(
-        rng, sellable_kinds(covered_catalogue, vendor), covered_catalogue, count, covered=True
+        rng,
+        sellable_kinds(covered_catalogue, vendor),
+        covered_catalogue,
+        count,
+        covered=True,
+        vat_payer=vat_payer,
     )
     if not covered:
         raise ValueError(f"category {category_id!r} produced no covered line")
@@ -849,7 +983,7 @@ def _build_mixed_basket(
     wanted = max(rng.choice(excluded_line_counts()), math.ceil(budget(covered) / ceiling))
     excluded = _draw_distinct_items(
         rng, excluded_kinds, excluded_catalogue,
-        min(wanted, MAX_LINE_ITEMS - len(covered)), covered=False,
+        min(wanted, MAX_LINE_ITEMS - len(covered)), covered=False, vat_payer=vat_payer,
     )
     if not excluded:
         raise ValueError(f"category {category_id!r} produced no non-covered line")
@@ -872,19 +1006,39 @@ def _build_mixed_basket(
     return items
 
 
-def _build_tax_lines(items: list[LineItem]) -> list[TaxLine]:
+def _build_tax_lines(items: list[LineItem], *, vat_payer: bool) -> list[TaxLine]:
     """One row per VAT letter present, in the order the jurisdiction declares them.
 
     Ukrainian receipts print VAT-inclusive prices, so the tax is extracted from the
     gross rather than added on top: vat = gross − gross / (1 + rate/100).
+
+    EMPTY FOR A SELLER THAT IS NOT REGISTERED FOR ПДВ, which is a document with no VAT block
+    at all rather than one with an empty block. That case used to raise; the raise has become
+    two narrower guards, because both directions are now a builder bug:
+
+    * a line with NO letter on a REGISTERED seller's receipt — turnover would be left out of
+      the tax block silently, which is the case the original raise was written for;
+    * a line WITH a letter on a non-payer's receipt — the seller has assigned no rate group to
+      anything, so the letter contradicts the document's own seller block.
+
+    A jurisdiction with ``line_item_letter_position: none`` (ES, EU) prints no per-line letter
+    at all; nothing calls this function for one.
     """
+    if not vat_payer:
+        lettered = [item.name for item in items if item.vat_letter is not None]
+        if lettered:
+            raise ValueError(
+                f"line items {lettered!r} carry a ПДВ-літера on a receipt whose seller is not "
+                "registered for ПДВ"
+            )
+        return []
+
     gross_by_letter: defaultdict[str, Decimal] = defaultdict(lambda: Decimal(0))
     for item in items:
         if item.vat_letter is None:
-            # Only jurisdictions with `line_item_letter_position: none` (ES, EU) print
-            # lines without a letter. On a UA receipt this is a builder bug, and a
-            # silently untaxed line would corrupt the tax block rather than fail.
-            raise ValueError(f"line item {item.name!r} carries no ПДВ-літера")
+            raise ValueError(
+                f"line item {item.name!r} carries no ПДВ-літера on a registered payer's receipt"
+            )
         gross_by_letter[item.vat_letter] += (item.qty * item.price).quantize(KOPIYKA)
 
     lines = []
@@ -917,12 +1071,15 @@ def build_prro_receipt(
     covered items alone; for ``partially_covered`` by ``mixed_items`` the caller clears
     the flag and states the ``coverage_target`` the basket should come to.
 
-    ``vendor`` is an entry of `config/vendors.json`: its ``profile`` decides which item
-    kinds may appear on the receipt, and its ``legal_form`` decides which identifier the
-    seller block prints. Ask `vendor_can_carry` before choosing one for a mixed basket.
+    ``vendor`` is an entry of `config/vendors.json`: its ``profile`` decides which item kinds may
+    appear on the receipt, its ``vat_payer`` decides whether the seller block prints a ПН line
+    beside the ІД line it always prints and whether the document has a VAT block, and its
+    ``legal_form`` decides how the name is printed and which register both identifiers come from.
+    Ask `vendor_can_carry` before choosing one for a mixed basket.
     """
     rules = jurisdiction("UA")
     receipt_rules = rules["receipt"]
+    vat_payer = vendor_is_vat_payer(vendor)
 
     # -- what was bought
     count = item_count if item_count is not None else rng.randint(2, 4)
@@ -942,7 +1099,9 @@ def build_prro_receipt(
                 f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
                 f"category {category_id!r} covers"
             )
-        items = _draw_distinct_items(rng, kinds, catalogue, count, covered=True)
+        items = _draw_distinct_items(
+            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
+        )
     else:
         if coverage_target is None:
             raise ValueError(
@@ -964,18 +1123,29 @@ def build_prro_receipt(
 
     # -- who sold it
     #
-    # Which identifier is printed follows the legal form, and it is not cosmetic: a ФОП has
-    # no ЄДРПОУ at all, so printing one under the "ІД" label would put an identifier on the
-    # document that no register could resolve to the seller named beside it.
+    # TWO possible identifier lines, and a registered payer prints one MORE than a non-payer
+    # rather than a different one. The ІД is the seller's identification code and its register
+    # follows the legal form — a ФОП has no ЄДРПОУ at all, so an eight-digit code there would
+    # put an identifier on the document that no register could resolve to the seller named
+    # beside it. The ПН exists only for a registered payer, and is derived from the ІД rather
+    # than drawn independently, so the two lines cannot contradict each other. See `identifiers`
+    # in config/fiscal-rules.yaml for the sources and for what is not settled.
     is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
-    identifier = rules["identifiers"]["rnokpp" if is_sole_trader else "edrpou"]
+    id_code_rules = rules["identifiers"]["rnokpp" if is_sole_trader else "edrpou"]
+    vat_number_rules = rules["identifiers"]["vat_number"]
+
+    tax_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
     seller = Seller(
         name=vendor["name"],
         legal_form=vendor["legal_form"],
         address=address,
-        tax_code=generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng),
-        tax_code_label=identifier["label"],
-        vat_number=f"{rng.randint(0, 10**12 - 1):012d}",
+        vat_payer=vat_payer,
+        tax_code=tax_code,
+        tax_code_label=id_code_rules["label"],
+        vat_number=(
+            _vat_number(rng, tax_code, is_sole_trader=is_sole_trader) if vat_payer else None
+        ),
+        vat_number_label=vat_number_rules["label"],
     )
 
     # -- how it was paid for
@@ -1007,8 +1177,13 @@ def build_prro_receipt(
         fiscal_device_number=fiscal_device_number,
         line_items=items,
         total=total,
+        # Zero this version, and the reason is the policy's silence rather than the arithmetic
+        # — see `PrroReceipt.amount_due`. The lines are printed all the same, because 👁 all
+        # four appear on the observed receipt.
+        discount=Decimal(0),
+        rounding=Decimal(0),
         amount_in_words=amount_in_words_uk(total),
-        tax_lines=_build_tax_lines(items),
+        tax_lines=_build_tax_lines(items, vat_payer=vat_payer),
         payment_method=acquiring_rules["payment_method_labels"][0],
         acquiring=acquiring,
         decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),

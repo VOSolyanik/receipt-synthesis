@@ -64,6 +64,43 @@
 version: 1
 
 # =============================================================================
+# A CONFLICT BETWEEN SOURCES, RECORDED RATHER THAN RESOLVED:
+# what a seller that is NOT registered for ПДВ prints where the VAT letter goes
+# =============================================================================
+#
+# Comment only — there is nothing here for a loader to read. It is a decision about what the
+# generated documents LOOK LIKE, which is this file's subject; the letters themselves are law
+# and live in `vat_letters` in config/fiscal-rules.yaml, and law cannot record a deliberate
+# departure from itself.
+#
+# THREE SOURCES, THREE ANSWERS, AND THEY DO NOT RECONCILE:
+#
+#   📄 Положення про форму та зміст розрахункових документів (наказ Мінфіну № 13, редакція
+#      11.01.2025), п. 2, the line-item requisite: "назва товару (послуги) […] вартість,
+#      літерне позначення ставки ПДВ" — the letter is required, with NO reservation limiting
+#      it to registered payers. Read alone, every line of every receipt carries one.
+#   📄 The tax service's own clarification (ДПС, база знань / ЗІР 109.10, quoted in Factor
+#      № 97, 12.2025): sellers that are not ПДВ payers "узагалі можуть не заповнювати поля
+#      фіскальних чеків, що містять інформацію щодо цього податку" — they MAY leave the
+#      fields concerning that tax unfilled. Permission, not instruction, so it settles
+#      nothing on its own either.
+#   👁 The one open photograph of a real ФОП receipt (1/1): there is no VAT block at all. The
+#      line ends with the amount and nothing follows it; then СУМА / ЗНИЖКА / ЗАОКРУГЛЕННЯ /
+#      ДО СПЛАТИ, with no ПДВ row anywhere. No letter, no zero-rate group, and no "Без ПДВ".
+#
+# OBSERVATION DECIDES, and the reason is what this generator is for: a dataset whose images
+# must be indistinguishable from real ones is answerable to what real documents show, not to
+# what the norm permits. A receipt built to the first reading would carry a requisite no
+# observed receipt of that kind carries, on every image, and a model trained on it would
+# learn to expect one.
+#
+# WHAT IS NOT CLAIMED. "Без ПДВ" and the exempt-group letter «Д» are 📄 named as permissible
+# practice and were seen on no open sample ⛔ — so their absence here is a statement about the
+# sample, not a claim that no printer emits them. And the observed receipt is ONE document, on
+# the form in force BEFORE 01.03.2025; it is evidence about the VAT block, which that revision
+# did not touch, and not about the completeness of the line set.
+
+# =============================================================================
 # Line-item placeholder vocabulary
 # =============================================================================
 #

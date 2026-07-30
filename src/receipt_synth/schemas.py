@@ -177,7 +177,17 @@ class LineItem(BaseModel):
 
 
 class DocGroundTruth(BaseModel):
-    """The label record of a single rendered document."""
+    """The label record of a single rendered document.
+
+    ``amount_due`` is ``None`` for a document type that prints no such line, and is EQUAL TO
+    ``amount`` wherever it is populated today, because the discount and the rounding that make
+    the two differ are zero in this version. A consumer must therefore not report accuracy on
+    it: a system that echoes ``amount`` satisfies it perfectly while having read nothing. The
+    reason the divergence is deferred is the policy's silence about distributing a
+    basket-level discount over per-line coverage, not the difficulty of printing it — see
+    ``content_builder.PrroReceipt.amount_due`` and the field's entry in
+    config/labelling-schema.yaml.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -187,6 +197,8 @@ class DocGroundTruth(BaseModel):
     language: str
     currency: str
     amount: Money
+    # ДО СПЛАТИ on a Ukrainian receipt: the total less any discount, plus cash rounding.
+    amount_due: Money | None = None
     date: date
     counterparty: str
     line_items: list[LineItem]

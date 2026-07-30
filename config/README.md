@@ -288,10 +288,21 @@ Two blocks besides the names themselves:
 The `aggregators` block holds payment intermediaries — payees that break the visible link between a payment
 and the merchant, which drives the "paid through an aggregator" imperfection.
 
-`legal_form` decides how the name is printed and which identifier the seller block carries: a ТОВ prints
-`ТОВ «Name»` with its ЄДРПОУ, a ФОП prints `ФОП Surname I. B.` without quotes and with its РНОКПП. The
-names cover naming patterns on purpose — legal entity vs sole trader, Cyrillic vs Latin vs mixed, chain vs
-single outlet — because that is what counterparty extraction is trained on.
+`legal_form` decides how the name is printed: a ТОВ prints `ТОВ «Name»`, a ФОП prints `ФОП Surname I. B.`
+without quotes, because a sole trader's name is a person's. The names cover naming patterns on purpose —
+legal entity vs sole trader, Cyrillic vs Latin vs mixed, chain vs single outlet — because that is what
+counterparty extraction is trained on.
+
+`vat_payer` decides **whether the seller block prints a VAT-payer number, and whether the receipt has a VAT
+block at all**. Every seller prints an identification code under `ІД` — an ЄДРПОУ (8 digits) for a company, a
+РНОКПП (10 digits) for a ФОП, so the length follows the type of person. A **registered** seller prints, *in
+addition*, its VAT-payer number under `ПН`: 12 digits for a company, and for a ФОП the same 10-digit РНОКПП
+its `ІД` line carries. A seller that is not registered prints no `ПН`, no per-line VAT letter and no tax
+summary. **The two identifier lines are not alternatives** — a payer carries one line more, not a different
+one. `vat_payer` is a separate field from `legal_form` because the two do not coincide: a ФОП on the general
+system is registered, a small company on the simplified system is not. The assigned values are the author's assumption rather than a
+statistic, stated as such in `$note_vat_payer`, and an entry that omits the field is refused rather than
+defaulted.
 
 ---
 

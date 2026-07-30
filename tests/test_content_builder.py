@@ -35,7 +35,6 @@ from receipt_synth.content_builder import (
     _fill_placeholders,
     build_prro_receipt,
     estimated_line_value,
-    is_valid_edrpou,
     is_valid_rnokpp,
     legal_name,
     personal_surname,
@@ -51,17 +50,25 @@ from receipt_synth.policy_engine import covered_total, resolved_coverage, verdic
 from receipt_synth.schemas import Capture, DocType, Verdict
 
 ISSUED_AT = datetime(2026, 8, 3, 14, 22, 51)
-VENDOR = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy"}
+# `vat_payer` is as load-bearing as `legal_form`: it decides the seller's tax-identifier line
+# and whether the receipt has a VAT block at all. A pharmacy chain is registered; a sole
+# trader on the simplified system is not. The variety itself is exercised in
+# tests/test_vat_payer_status.py — here the flag is only what these fixtures need to build.
+VENDOR = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
 # Sole-trader names are drawn, never written down — so the fixtures resolve one instead of
 # stating it, exactly as the assembler does when it picks a vendor for a claim.
 SOLE_TRADER = resolve_vendor(
-    random.Random(11), {"legal_form": "FOP", "profile": "nutrition_practice"}, "UA"
+    random.Random(11),
+    {"legal_form": "FOP", "profile": "nutrition_practice", "vat_payer": False},
+    "UA",
 )
 # A profile that sells nothing its category excludes. `private_tutor` is one on purpose —
 # a tutor sells lessons and no goods — and it is the residual leak recorded under
 # `known_limitations` in config/labelling-schema.yaml.
 COVERED_ONLY = resolve_vendor(
-    random.Random(12), {"legal_form": "FOP", "profile": "private_tutor"}, "UA"
+    random.Random(12),
+    {"legal_form": "FOP", "profile": "private_tutor", "vat_payer": False},
+    "UA",
 )
 
 # ФОП Прізвище І. П. — surname, then two initials, as a Ukrainian document prints it.
@@ -106,21 +113,24 @@ def test_all_invariants_hold(seed):
 
     assert validate_line_item_sum(receipt.line_items, receipt.total)
     assert validate_amount_in_words(receipt.amount_in_words, receipt.total)
-    # A ТОВ seller is identified by its ЄДРПОУ, printed as "ІД".
+    # A registered ПДВ payer prints its identification code under "ІД" AND its VAT-payer number
+    # under "ПН" — two lines, not one. Which lines a seller carries, their lengths and the whole
+    # of the VAT block are tests/test_vat_payer_status.py.
     assert receipt.seller.tax_code_label == "ІД"
-    assert is_valid_edrpou(receipt.seller.tax_code)
+    assert receipt.seller.vat_number is not None
     for item in receipt.line_items:
         assert validate_vat_letter(item.item_kind, item.vat_letter, "UA")
 
 
 @pytest.mark.parametrize("seed", range(10))
 def test_a_sole_trader_prints_a_rnokpp_and_no_quotes(seed):
-    """The identifier follows the legal form. A ФОП has no ЄДРПОУ at all, so an eight-digit
-    code under the "ІД" label would name the seller with an identifier no register could
-    resolve to them — and a sole trader's name is a person's, printed without quotes."""
+    """A non-payer prints its own tax number, and for a ФОП that number is the РНОКПП: there
+    is no ЄДРПОУ to print, so an eight-digit code would name the seller with an identifier no
+    register could resolve to them. A sole trader's name is a person's, printed without
+    quotes."""
     receipt = build(seed, vendor=SOLE_TRADER)
 
-    assert receipt.seller.tax_code_label == "ІПН"
+    assert receipt.seller.tax_code_label == "ІД"
     assert is_valid_rnokpp(receipt.seller.tax_code)
     assert legal_name(receipt.seller) == f"ФОП {SOLE_TRADER['name']}"
     assert SOLE_TRADER_NAME.fullmatch(SOLE_TRADER["name"]), SOLE_TRADER["name"]
@@ -322,7 +332,9 @@ def test_a_sole_trader_name_is_drawn_once_per_vendor_instance_and_carried():
     claim, and carried into every document; here the same instance is asked for two receipts
     with different generators, which is what a second document of the claim would do.
     """
-    vendor = resolve_vendor(random.Random(3), {"legal_form": "FOP", "profile": "pharmacy"}, "UA")
+    vendor = resolve_vendor(
+        random.Random(3), {"legal_form": "FOP", "profile": "pharmacy", "vat_payer": False}, "UA"
+    )
 
     first = build(1, vendor=vendor)
     second = build(2, vendor=vendor)

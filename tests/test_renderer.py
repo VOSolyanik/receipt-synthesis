@@ -22,18 +22,40 @@ import pytest
 from jinja2 import UndefinedError
 from PIL import Image
 
-from receipt_synth.content_builder import build_prro_receipt
+from receipt_synth.config import jurisdiction
+from receipt_synth.content_builder import build_prro_receipt, resolve_vendor
 from receipt_synth.renderer import FONT_FILES, FONTS_DIR, TEMPLATES_DIR, Renderer, qr_svg
 
 TEMPLATE = "ua_prro_receipt"
 
+# A registered ПДВ payer and an unregistered seller. Both are ordinary — a pharmacy chain is
+# registered, a sole trader on the simplified system is not — and the two print DIFFERENT
+# REQUISITES, which is what the pair is here to exercise.
+#
+# The unregistered one is a SOLE TRADER with a DRAWN name, matching the only unregistered
+# variety config/vendors.json configures. Nothing rendered from it names a firm, which matters
+# because an «ІД» line asserts that its seller is not VAT-registered.
+PAYER = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
+NON_PAYER = resolve_vendor(
+    random.Random(11),
+    {"legal_form": "FOP", "profile": "nutrition_practice", "vat_payer": False},
+    "UA",
+)
+# A REGISTERED sole trader — on the general system rather than the simplified one. Its ПН is its
+# РНОКПП, so both identifier lines carry the same ten digits.
+PAYER_SOLE_TRADER = resolve_vendor(
+    random.Random(11),
+    {"legal_form": "FOP", "profile": "nutrition_practice", "vat_payer": True},
+    "UA",
+)
 
-def make_receipt(seed: int = 20260803):
+
+def make_receipt(seed: int = 20260803, vendor: dict = PAYER):
     return build_prro_receipt(
         random.Random(seed),
         category_id="vitamins_nutrition",
         issued_at=datetime(2026, 8, 3, 14, 22, 51),
-        vendor={"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy"},
+        vendor=vendor,
         address="м. Київ, вул. Хрещатик, 22",
     )
 
@@ -156,6 +178,230 @@ def test_the_total_box_sits_below_the_line_items(rendered):
         box[1] for name, box in rendered.field_bboxes.items() if name.endswith("_name")
     )
     assert rendered.field_bboxes["total"][1] > last_item
+
+
+def test_the_four_total_lines_are_printed_in_the_order_of_the_form(rendered):
+    """`СУМА`, `ЗНИЖКА`, `ЗАОКРУГЛЕННЯ`, `ДО СПЛАТИ` are four lines of the published form,
+    in that order. They were one merged line until this version, which is neither of the two
+    the form defines."""
+    order = ("total", "discount", "rounding", "amount_due")
+    tops = [rendered.field_bboxes[name][1] for name in order]
+    assert tops == sorted(tops), "the totals are not in the order the form gives them"
+    assert len(set(tops)) == 4, "four separate lines, not one row of four values"
+
+
+# --------------------------------------------------- VAT-payer status on the page --
+
+
+@pytest.fixture(scope="module")
+def rendered_non_payer(renderer, tmp_path_factory):
+    context = make_receipt(vendor=NON_PAYER).render_context()
+    output = tmp_path_factory.mktemp("render_non_payer") / "receipt.png"
+    return renderer.render(TEMPLATE, context, output)
+
+
+def marked_fields(html: str) -> set[str]:
+    """The `data-field` names present in a RENDERED page — which is what exists on this
+    document, as opposed to what the template can print for some other seller."""
+    return set(re.findall(r'data-field="([^"]+)"', html))
+
+
+def printed_text(html: str) -> str:
+    """The markup after the inlined stylesheet, so that a Ukrainian term in a CSS comment
+    cannot be mistaken for one printed on the paper."""
+    head, _, body = html.rpartition("</style>")
+    assert head, "the page should carry an inlined stylesheet"
+    return body
+
+
+def test_the_identifier_prefix_is_not_written_into_the_template():
+    """Both prefixes come from `identifiers` in config/fiscal-rules.yaml, chosen by the
+    seller's VAT status. A prefix in the markup is the whole cause of the defect this
+    version fixes: the template cannot know the status, so one of the two lines it printed
+    was always a requisite the seller cannot hold."""
+    source = (TEMPLATES_DIR / f"{TEMPLATE}.html").read_text(encoding="utf-8")
+    body = re.sub(r"\{#.*?#\}", "", source, flags=re.DOTALL)
+
+    assert "ПН" not in body, "the VAT-payer prefix is hardcoded in the markup"
+    assert "ІД" not in body, "the tax-number prefix is hardcoded in the markup"
+
+
+def test_the_totals_labels_come_from_the_configuration():
+    """The four amount lines under the items are receipt layout constants, so they live in
+    `receipt.totals_labels` in config/fiscal-rules.yaml beside the acquiring-block labels and
+    the tax-row label — not as literals in the markup.
+
+    It is not tidiness: ONE OF THE FOUR VARIES BETWEEN SOURCES. `ЗАОКРУГЛЕННЯ` is what the
+    observed receipt prints and `ОКРУГЛЕННЯ` is what the published table of the form writes, and
+    a config value can carry that alternative with the evidence for each side while a literal
+    cannot. Asserted from the config rather than restated here, so the two cannot drift.
+    """
+    labels = jurisdiction("UA")["receipt"]["totals_labels"]
+    assert set(labels) == {"total", "discount", "rounding", "amount_due"}
+
+    source = (TEMPLATES_DIR / f"{TEMPLATE}.html").read_text(encoding="utf-8")
+    body = re.sub(r"\{#.*?#\}", "", source, flags=re.DOTALL)
+    for key, label in labels.items():
+        assert label not in body, f"{key} label {label!r} is hardcoded in the markup"
+
+
+def test_the_configured_totals_labels_are_what_gets_printed(renderer):
+    """Positive counterpart: the labels are absent from the template because they arrive from
+    config, not because they stopped being printed."""
+    html = printed_text(renderer.build_html(TEMPLATE, make_receipt().render_context()))
+    for label in jurisdiction("UA")["receipt"]["totals_labels"].values():
+        assert label in html
+
+
+def test_a_tax_row_puts_its_amount_in_the_receipts_amount_column(renderer, rendered):
+    """The VAT amounts belong in the same right-hand column as every other amount. While the
+    whole row was one string it sat hard against the label, so `111,32` floated mid-line with
+    `1 545,70` flush right two lines above — correct and ugly, which is still a defect on every
+    image of a registered seller.
+
+    TWO CHECKS, because neither alone is enough. The geometric one says the row's box spans to
+    the amount column — but a full-width box would satisfy that however its text were laid out,
+    so it cannot see the alignment on its own. The structural one says why the amount lands
+    there: the row is a `row` like the totals beside it, and the amount is its own trailing
+    element rather than the tail of one string, which is what the flex rule right-aligns.
+    """
+    total_right = sum(rendered.field_bboxes["total"][i] for i in (0, 2))
+    tax_rows = [name for name in rendered.field_bboxes if name.startswith("tax_line_")]
+    assert tax_rows, "a registered payer's receipt should carry at least one tax row"
+
+    for name in tax_rows:
+        x, _, width, _ = rendered.field_bboxes[name]
+        assert x + width == pytest.approx(total_right, abs=1), (
+            f"{name} does not reach the amount column"
+        )
+
+    html = renderer.build_html(TEMPLATE, make_receipt().render_context())
+    row = re.search(
+        r'<div class="(?P<cls>[^"]*)" data-field="tax_line_0">(?P<body>.*?)</div>',
+        html,
+        re.DOTALL,
+    )
+    assert row, "the tax row should carry the box on the row element"
+    assert "row" in row["cls"].split(), "the tax row is not laid out as a row"
+    assert len(re.findall(r"<span>", row["body"])) == 2, (
+        "label and amount must be separate children, or the flex rule has nothing to push apart"
+    )
+
+
+@pytest.mark.parametrize(
+    ("vendor", "expected"),
+    [
+        (PAYER, {"seller_vat_number", "seller_tax_code"}),
+        (NON_PAYER, {"seller_tax_code"}),
+    ],
+    ids=["payer", "non_payer"],
+)
+def test_a_registered_seller_renders_both_identifier_lines(renderer, vendor, expected):
+    """REWRITTEN, AND THE OLD ASSERTION WAS FALSE. This test used to require EXACTLY ONE
+    identifier line, on a published table of the form that lists the VAT-payer number and the
+    identification code as rows 4 and 5 with alternative examples. 👁 Real ПРРО output prints
+    both on a registered company's receipt, so the old assertion forbade the very document the
+    generator must produce.
+
+    A payer carries one line MORE than a non-payer; a non-payer still carries its ІД.
+    """
+    context = make_receipt(vendor=vendor).render_context()
+    fields = marked_fields(renderer.build_html(TEMPLATE, context))
+
+    assert fields & {"seller_vat_number", "seller_tax_code"} == expected
+
+
+@pytest.mark.parametrize(
+    ("vendor", "prefix", "field"),
+    [
+        (PAYER, "ПН", "seller_vat_number"),
+        (PAYER, "ІД", "seller_tax_code"),
+        (NON_PAYER, "ІД", "seller_tax_code"),
+    ],
+    ids=["payer_pn", "payer_id", "non_payer_id"],
+)
+def test_the_prefix_printed_beside_each_identifier_is_the_one_the_form_prescribes(
+    renderer, vendor, prefix, field
+):
+    html = renderer.build_html(TEMPLATE, make_receipt(vendor=vendor).render_context())
+    assert f'{prefix} <span data-field="{field}"' in html
+
+
+def test_a_registered_sole_trader_prints_the_same_number_under_both_prefixes(renderer):
+    """👁 A sole trader's ПН is its РНОКПП, so the two lines carry identical digits. Worth its
+    own rendering test: the page must show the value twice under different prefixes, and code
+    that deduplicated identical identifier values would silently drop a requisite."""
+    receipt = make_receipt(vendor=PAYER_SOLE_TRADER)
+    html = renderer.build_html(TEMPLATE, receipt.render_context())
+    number = receipt.seller.tax_code
+
+    assert receipt.seller.vat_number == number
+    assert f'ПН <span data-field="seller_vat_number">{number}</span>' in html
+    assert f'ІД <span data-field="seller_tax_code">{number}</span>' in html
+
+
+def test_a_non_payers_page_carries_no_vat_block_at_all(renderer):
+    """👁 The observed line ends with the amount: no letter after it, no `ПДВ …%` summary
+    row, and no "Без ПДВ" either. The last is worth asserting separately — it is permitted
+    in writing and appears on no open sample, so printing it would be a plausible-looking
+    invention."""
+    html = renderer.build_html(TEMPLATE, make_receipt(vendor=NON_PAYER).render_context())
+    fields = marked_fields(html)
+
+    assert not [name for name in fields if name.endswith("_vat_letter")]
+    assert not [name for name in fields if name.startswith("tax_line_")]
+    assert "ПДВ" not in printed_text(html)
+    assert "Без ПДВ" not in printed_text(html)
+
+
+def test_a_payers_page_does_carry_one(renderer):
+    """The positive half. Without it the test above passes on a template that prints no VAT
+    block for anyone."""
+    html = renderer.build_html(TEMPLATE, make_receipt(vendor=PAYER).render_context())
+    fields = marked_fields(html)
+
+    assert "item_0_vat_letter" in fields
+    assert "tax_line_0" in fields
+    assert "ПДВ" in printed_text(html)
+
+
+def test_a_non_payers_boxes_lack_exactly_what_is_not_on_the_document(
+    renderer, rendered, rendered_non_payer
+):
+    """The bbox invariant, and the distinction it turns on: a key is absent because the
+    ELEMENT DOES NOT EXIST on this document, never because a box was lost.
+
+    Those two are told apart by comparing each document's boxes against ITS OWN rendered
+    markup — the template is the authority on what that document contains. The delta between
+    the two documents is then checked against the model rather than against whatever was
+    produced: a non-payer loses the ПН line, every per-line letter and every tax row, and gains
+    NOTHING, because its ІД line is on the payer's document too.
+
+    That last clause is the part this round corrected. While the two identifier lines were
+    modelled as alternatives the non-payer was expected to gain `seller_tax_code`, and asserting
+    that gain would now pass only on a document no real seller issues.
+    """
+    payer_fields = marked_fields(renderer.build_html(TEMPLATE, make_receipt().render_context()))
+    non_payer_fields = marked_fields(
+        renderer.build_html(TEMPLATE, make_receipt(vendor=NON_PAYER).render_context())
+    )
+
+    # Nothing lost on either document: every marked field of the page has a box, and no box
+    # exists for a field the page does not carry.
+    assert set(rendered.field_bboxes) == payer_fields
+    assert set(rendered_non_payer.field_bboxes) == non_payer_fields
+
+    vat_fields = {
+        name for name in payer_fields
+        if name.endswith("_vat_letter") or name.startswith("tax_line_")
+    }
+    assert vat_fields, "the payer's page carries no VAT fields, so the delta proves nothing"
+
+    assert payer_fields - non_payer_fields == {"seller_vat_number"} | vat_fields
+    assert non_payer_fields - payer_fields == set(), (
+        "a non-payer's page carries no field the payer's does not — its ІД line is on both"
+    )
+    assert "seller_tax_code" in payer_fields & non_payer_fields
 
 
 # ---------------------------------------------------- fonts and determinism --

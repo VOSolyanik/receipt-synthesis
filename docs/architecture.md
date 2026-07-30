@@ -101,6 +101,19 @@ Fills the plan with concrete, valid data: checksum-correct tax identifiers, the 
 item kind, an amount in words that matches the amount in digits, line items that sum to the stated total,
 dates consistent with the claimed period.
 
+**Not every requisite is on every document, and absence is modelled rather than tolerated.** Whether the
+seller is registered for VAT is a property of the vendor (`vat_payer` in `config/vendors.json`), and it decides
+two things at once: whether the seller block prints a VAT-payer number *in addition to* the identification code
+every seller prints, and whether the receipt carries a VAT block at all. A seller that is not registered prints
+no per-line VAT letter, no tax-summary row and nothing in their place, so `vat_letter` is legitimately `null`
+and the corresponding bounding boxes are legitimately absent.
+
+The identifier lines are worth spelling out, because a plausible reading of the published form makes them
+mutually exclusive and real receipts are not: a registered company prints both, and a registered sole trader's
+VAT-payer number is the same ten-digit taxpayer number its identification-code line carries. The lengths
+follow the **type of person**, not the prefix. `config/fiscal-rules.yaml` records the conflict and which side
+decided it.
+
 For fraud and trap archetypes it breaks these invariants **on purpose**. A broken invariant is always an
 explicit, labelled choice — never an accident. The same invariant validators are exercised by the test suite.
 
@@ -202,6 +215,7 @@ These are the most valuable examples in the dataset.
   "language": "uk",
   "currency": "UAH",
   "amount": 1250.00,
+  "amount_due": 1250.00,
   "date": "2026-08-03",
   "counterparty": "<vendor>",
   "line_items": [
@@ -219,6 +233,11 @@ These are the most valuable examples in the dataset.
 
 Every record carries `synthetic: true` and the generator version. This is not decoration — it is what makes
 the provenance of any individual file unambiguous once it leaves this repository.
+
+`amount_due` is the receipt's `ДО СПЛАТИ` line: the total less any discount, plus cash rounding. It is
+**equal to `amount` in the current version**, because both adjustments are zero — so it discriminates nothing
+and its accuracy is not a meaningful metric yet. `config/labelling-schema.yaml` says so in the field's own
+entry, and says why the divergence waits on a policy decision rather than on code.
 
 ### Claim level
 
