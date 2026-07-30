@@ -7,14 +7,31 @@ is photographed badly — so one rendered document yields several training examp
 Two libraries, with a strict division of labour:
 
 * **Augraphy** applies paper, ink and sensor effects. Only non-geometric ones are used
-  here, so it never has to move a bounding box.
-* **Albumentations** owns every geometric operation, and the boxes travel through its
-  own bbox pipeline.
+  here, so it never has to move a bounding box. ⚠️ And only DETERMINISTIC ones: an Augraphy
+  effect is free to ignore `random_seed`, and one that fits this dataset well does. See
+  `_paper_pipeline`.
+* **Albumentations** owns every geometric operation, and the coordinates travel through its
+  own keypoint pipeline — not its bbox pipeline, for the reason `carry_boxes` gives.
 
-The split is the point. Perspective, rotation and crop all invalidate coordinates, and
+The split is the point. Perspective, rotation and padding all invalidate coordinates, and
 having exactly one library responsible for transforming them is what keeps annotations
-aligned once those steps arrive. This skeleton applies no geometry at all — the boxes
-come back unchanged — but they are routed through the mechanism that will move them.
+aligned. `carry_boxes` is that one route, and it is the function the known-answer gate in
+`tests/test_bbox_gate.py` exercises — deliberately, so the gate measures the production
+carrier rather than a pipeline assembled inside a test.
+
+🔴 WHY A BBOX/GEOMETRY DESYNC GETS ITS OWN GATE RATHER THAN A TEST AT THE END. A box that
+does not follow its pixels corrupts the ground truth of every image in the dataset and is
+invisible in every metric: downstream it reads as poor extraction accuracy, not as a
+coordinate defect. And with three channels in place one desync produces three different
+wrong answers, so telling "the transform is wrong" from "this channel is wrong" stops being
+cheap. Hence: one channel, one transform, one hand-computed answer, before anything fanned
+out.
+
+THREE CHANNELS, FOUR MEDIA. `Capture` has three members and every one of them is a way a
+document was DAMAGED on its way to the verifier. A natively generated PDF is the fourth
+medium a consumer's file may be in and is NOT a fourth channel — it is the undamaged
+original, the absence of degradation rather than a kind of it. See RC-11 in
+config/labelling-schema.yaml, and `capture.divergence` beside it.
 """
 
 from __future__ import annotations
@@ -22,8 +39,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import albumentations as A
+import cv2
 import numpy as np
-from augraphy import AugraphyPipeline, BrightnessTexturize, NoiseTexturize, SubtleNoise
+from augraphy import (
+    AugraphyPipeline,
+    BrightnessTexturize,
+    LightingGradient,
+    NoiseTexturize,
+    NoisyLines,
+    ShadowCast,
+    SubtleNoise,
+)
 
 from receipt_synth.schemas import BBox, Capture
 
@@ -33,6 +59,11 @@ from receipt_synth.schemas import BBox, Capture
 # to know about.
 _C_INT_MAX = 2**31 - 1
 
+# The surface a photographed document lies on: mid grey rather than black, so the paper
+# has an edge a detector could find. A constant rather than a draw — the colour of somebody's
+# desk is not a parameter this dataset makes a claim about.
+_SURFACE = 128
+
 
 @dataclass(frozen=True)
 class DegradedDocument:
@@ -40,44 +71,278 @@ class DegradedDocument:
     field_bboxes: dict[str, BBox]
 
 
-def _paper_pipeline(seed: int) -> AugraphyPipeline:
-    """Paper and sensor character. Procedural, and deliberately free of geometry.
+def _paper_pipeline(capture: Capture, seed: int) -> AugraphyPipeline:
+    """Paper, ink and sensor character for one channel. Procedural, and free of geometry.
 
-    Every effect here is mild: the receipt is meant to look like a real capture of a
-    thermal print, not like a damaged artifact. Heavier settings belong to the `photo`
-    and `scan` modes.
+    Each channel gets the artefacts of the device that produced it, and only those:
+
+    * `screenshot` — a screen capture of an electronic document. Almost clean: the pixels
+      were never light on paper, so the only real losses are the compression of whatever
+      viewer produced it and a little sensor-free noise.
+    * `photo` — a hand-held camera over paper on a desk. Uneven illumination and a cast
+      shadow are the characteristic losses, and they are the ones that actually cost an OCR
+      system accuracy.
+    * `scan` — a flatbed. Evenly lit by construction, so no lighting gradient; what it adds
+      instead is the faint streaking of the transport, along the direction of travel.
+
+    ⚠️ THE SETTINGS ARE PLAUSIBLE RATHER THAN MEASURED. No corpus of real captures was
+    available to fit them against, so they are a designer's choice of what each device does,
+    not a calibration. A consumer must not read the difficulty of a channel here as an
+    estimate of the difficulty of that channel in the field.
+
+    🔴 `DirtyRollers` IS DELIBERATELY ABSENT FROM THE SCAN RECIPE, and it is the effect that
+    names what a scanner does. It IGNORES `random_seed`: two pipelines built with the same
+    seed produce different pixels, measured directly rather than suspected. Determinism under
+    `--seed` is an invariant of this generator, so the effect cannot be used however well it
+    fits, and `NoisyLines` carries the streaking instead. Every other effect named in this
+    function was checked the same way and is reproducible.
     """
-    return AugraphyPipeline(
-        ink_phase=[],
-        paper_phase=[
+    if capture is Capture.SCREENSHOT:
+        paper = [
             NoiseTexturize(sigma_range=(2, 5), turbulence_range=(3, 7), p=1.0),
             BrightnessTexturize(texturize_range=(0.9, 0.99), deviation=0.03, p=1.0),
-        ],
-        post_phase=[SubtleNoise(subtle_range=8, p=1.0)],
-        random_seed=seed,
+        ]
+        post = [SubtleNoise(subtle_range=8, p=1.0)]
+    elif capture is Capture.PHOTO:
+        paper = [
+            NoiseTexturize(sigma_range=(3, 8), turbulence_range=(3, 9), p=1.0),
+            BrightnessTexturize(texturize_range=(0.85, 0.98), deviation=0.06, p=1.0),
+        ]
+        post = [
+            LightingGradient(
+                light_position=None, direction=90, max_brightness=250, min_brightness=0,
+                mode="gaussian", transparency=0.5, p=1.0,
+            ),
+            ShadowCast(
+                shadow_side="random", shadow_vertices_range=(2, 3),
+                shadow_width_range=(0.5, 0.8), shadow_height_range=(0.5, 0.8),
+                shadow_color=(0, 0, 0), shadow_opacity_range=(0.3, 0.4),
+                shadow_iterations_range=(1, 2), shadow_blur_kernel_range=(101, 301), p=1.0,
+            ),
+            SubtleNoise(subtle_range=14, p=1.0),
+        ]
+    elif capture is Capture.SCAN:
+        paper = [
+            NoiseTexturize(sigma_range=(2, 6), turbulence_range=(3, 7), p=1.0),
+            BrightnessTexturize(texturize_range=(0.92, 1.0), deviation=0.04, p=1.0),
+        ]
+        post = [
+            NoisyLines(
+                noisy_lines_direction=0,  # horizontal: the direction a sheet travels
+                noisy_lines_location="random",
+                noisy_lines_number_range=(2, 5),
+                noisy_lines_thickness_range=(1, 1),
+                noisy_lines_random_noise_intensity_range=(0.01, 0.04),
+                p=1.0,
+            ),
+            SubtleNoise(subtle_range=6, p=1.0),
+        ]
+    else:
+        raise NotImplementedError(_unknown(capture))
+
+    return AugraphyPipeline(
+        ink_phase=[], paper_phase=paper, post_phase=post, random_seed=seed
     )
 
 
-def _geometry_pipeline(seed: int) -> A.Compose:
-    """Capture artifacts, and the carrier for bounding boxes.
+def _geometry(capture: Capture) -> list[A.BasicTransform]:
+    """The geometry of one channel — and the reason the three differ is the device, not taste.
 
-    Only JPEG compression for now. It is listed as a geometric-pipeline step even though
-    it moves nothing, so that the boxes are already flowing through the transform that
-    will later also rotate and warp them.
+    * `screenshot` — NONE. A screen capture is axis-aligned by construction; there is no hand
+      holding it and no sheet to lie crooked. Its boxes still go through this pipeline, so the
+      channel that moves nothing takes the same route as the two that do.
+    * `photo` — the paper is first padded onto a surface, because a photograph frames a
+      document with the desk around it and a full-bleed render has no room to rotate into.
+      Then a small perspective (the camera is not parallel to the page), a small rotation
+      (nobody holds it square), and the blur and compression of a phone.
+    * `scan` — a rotation of a degree or so onto a narrow white margin, and nothing else. A
+      flatbed is parallel to the page by construction; what it gets wrong is only how straight
+      the sheet was laid.
+
+    🔴 THE PADDING IS PART OF THE GEOMETRY, NOT A COSMETIC FRAME, AND ITS SIZE IS THE ONE
+    SETTING HERE THAT WAS TUNED RATHER THAN CHOSEN. A render is full-bleed: the viewport is
+    fitted to the document, so the paper's edge IS the image's edge and there is nothing for a
+    rotation or a perspective to turn into. Too little padding and every photographed document
+    loses content — measured at 60 of 60 with a 48-pixel margin, which would make
+    `content_complete` a constant `false` and the flag worthless. Too much and none ever does,
+    which makes it a constant `true` and worthless the other way.
+
+    The measurement that settled it — 60 seeds on each of four page shapes, from a 58 mm roll
+    to an A4 statement, against a text extent inset 3% and 2% from the paper's edges:
+
+        absolute 48 px    29 / 25 / 37 / 15 of 60
+        6–10% per side    12 / 11 / 11 / 12 of 60
+        10–16% per side    4 /  3 /  3 /  4 of 60
+
+    The middle row is chosen, and the top row is the reason the margin is a PROPORTION: at a
+    fixed 48 pixels the crop rate runs from a quarter to nearly two thirds depending on how big
+    the paper is, so the same setting would mean a different photographer for each archetype.
+    A PHOTOGRAPH THAT CUTS AN EDGE IS THEN AN OUTCOME THE LABEL REPORTS, at about one document
+    in five, instead of a property of the render that nobody chose.
+
+    `scan` is padded too, but only slightly and to white: a flatbed lays the whole sheet on the
+    platen, so it is not expected to crop at all, and it does not.
     """
-    return A.Compose(
-        [A.ImageCompression(compression_type="jpeg", quality_range=(70, 88), p=1.0)],
-        bbox_params=A.BboxParams(
-            format="coco",  # [x, y, width, height] in pixels — what the renderer emits
+    if capture is Capture.SCREENSHOT:
+        return [
+            # THE IDENTITY, WRITTEN DOWN. "No geometry" is a decision about this channel, and
+            # `A.NoOp` is how the pipeline states it rather than leaves it implicit. It is not
+            # decoration either: Albumentations warns, correctly, when a compose is given
+            # coordinates and holds no transform that touches them, and a warning once per
+            # document is how a real one stops being read.
+            A.NoOp(p=1.0),
+            A.ImageCompression(compression_type="jpeg", quality_range=(70, 88), p=1.0),
+        ]
+    if capture is Capture.PHOTO:
+        return [
+            # A PROPORTION AND NOT A PIXEL COUNT, sampled per side. A fixed margin is a
+            # different amount of framing on a 58 mm receipt and on an A4 invoice, so a fixed
+            # margin would make the crop rate a function of the archetype's paper size — a
+            # dependency nothing in the design intends and nobody would look for.
+            A.CropAndPad(
+                percent=(0.06, 0.10), keep_size=False, sample_independently=True,
+                border_mode=cv2.BORDER_CONSTANT, fill=_SURFACE, p=1.0,
+            ),
+            A.Perspective(
+                scale=(0.01, 0.035), keep_size=True, fit_output=False,
+                border_mode=cv2.BORDER_CONSTANT, fill=_SURFACE, p=1.0,
+            ),
+            A.Affine(
+                rotate=(-3.0, 3.0), border_mode=cv2.BORDER_CONSTANT, fill=_SURFACE, p=1.0
+            ),
+            A.MotionBlur(blur_limit=(3, 5), p=1.0),
+            A.ImageCompression(compression_type="jpeg", quality_range=(45, 75), p=1.0),
+        ]
+    if capture is Capture.SCAN:
+        return [
+            A.CropAndPad(
+                percent=(0.02, 0.04), keep_size=False, sample_independently=True,
+                border_mode=cv2.BORDER_CONSTANT, fill=255, p=1.0,
+            ),
+            A.Affine(rotate=(-1.5, 1.5), border_mode=cv2.BORDER_CONSTANT, fill=255, p=1.0),
+            A.ImageCompression(compression_type="jpeg", quality_range=(60, 85), p=1.0),
+        ]
+    raise NotImplementedError(_unknown(capture))
+
+
+def _unknown(capture: object) -> str:
+    """The refusal both recipe tables share.
+
+    Typed as `object` rather than `Capture` on purpose: the case it exists for is a channel
+    that is NOT a member — a new enum value with no branch, or a caller passing a string — and
+    a signature that promised `Capture` would make the raise look unreachable to a reader.
+    """
+    return (
+        f"capture channel {getattr(capture, 'value', capture)!r} has no recipe; add one "
+        "deliberately rather than letting a channel fall through to another's artefacts"
+    )
+
+
+def corners_of(box: BBox) -> tuple[tuple[float, float], ...]:
+    """The four corner PIXELS of a box, clockwise from the top left.
+
+    🔴 THE CORNER PIXELS, NOT THE CORNER EDGES, and the difference is a whole pixel on every
+    box in the dataset. A COCO box's far edge is EXCLUSIVE — (20, 30, 40, 10) covers columns
+    20 … 59, and 60 is the boundary after the last one — while a keypoint names a PIXEL.
+    Handing 60 to the keypoint pipeline asks it where a boundary went, and it answers about
+    pixel 60, which belongs to whatever is next to the box.
+
+    Measured on the gate rather than reasoned about: under a horizontal flip of a 200-wide
+    image the library maps a keypoint x to 199 - x, so the edge 60 came back as 139 and the
+    box was rebuilt one column left of its ink. The inclusive corner 59 gives 140, which is
+    where the pixels are.
+    """
+    x, y, w, h = box
+    far_x, far_y = x + max(w - 1, 0), y + max(h - 1, 0)
+    return ((x, y), (far_x, y), (far_x, far_y), (x, far_y))
+
+
+def hull_of(points: list[tuple[float, float]]) -> BBox:
+    """The smallest axis-aligned box containing some points, in the COCO convention.
+
+    The `+ 1` is the inverse of `corners_of`: the points are the FIRST and LAST pixel, and a
+    box covering columns 140 … 179 is 40 wide. Rounded first and the size derived from the
+    rounded corners, so `x + width` is exactly the far edge a frame comparison uses.
+    """
+    left, right = round(min(p[0] for p in points)), round(max(p[0] for p in points))
+    top, bottom = round(min(p[1] for p in points)), round(max(p[1] for p in points))
+    return (float(left), float(top), float(right - left + 1), float(bottom - top + 1))
+
+
+def carry_boxes(
+    transforms: list[A.BasicTransform],
+    image: np.ndarray,
+    field_bboxes: dict[str, BBox],
+    *,
+    seed: int,
+) -> tuple[np.ndarray, dict[str, BBox]]:
+    """🔴 THE ONE ROUTE COORDINATES TAKE THROUGH GEOMETRY. Every box in the dataset comes
+    out of this function, and nothing else in the generator moves a coordinate.
+
+    Public rather than private because the known-answer gate drives it directly with a
+    transform whose answer is computed by hand. A gate that built its own `A.Compose` would
+    prove that Albumentations is correct — which is not the thing at risk.
+
+    🔴 THE BOXES TRAVEL AS FOUR CORNER KEYPOINTS, NOT AS BOXES, AND THAT IS NOT A STYLISTIC
+    CHOICE. Albumentations' bbox pipeline CLIPS every box to the image in `postprocess`, on
+    every path — `filter_bboxes` returns `clipped_bboxes[mask]`, and neither `clip=False` nor
+    `filter_invalid_bboxes=False` nor `check_each_transform=False` reaches it. Measured, not
+    assumed: a box at (20, 30, 40, 10) translated 30 pixels left came back as
+    (0, 30, 30, 10) under all three of those settings.
+
+    That value is a LIE OF EXACTLY THE KIND THIS MODULE MUST NOT TELL. It is what a document
+    that lost a tenth of its content looks like AND what a document that lost nothing looks
+    like, so a completeness measurement built on it would return `True` for every image in
+    the corpus and nothing would ever go red. The keypoint pipeline with
+    `remove_invisible=False` preserves the true coordinate, negative or past the edge, and
+    the box is rebuilt from the four corners here.
+
+    A box in the result MAY LIE PARTLY OUTSIDE THE IMAGE. That is information, not damage: a
+    consumer that wants an index into the image clips it, and the clipped form can be derived
+    from this one while this one cannot be derived from the clipped form.
+
+    Under a rotation or a perspective the rebuilt box is the AXIS-ALIGNED HULL of the four
+    transformed corners, so it is a little larger than the ink it covers. That is inherent to
+    an axis-aligned annotation of a rotated rectangle, and is what Albumentations' own bbox
+    handling does too; the alternative is a quadrilateral, which the label schema does not
+    carry.
+    """
+    names = list(field_bboxes)
+    corners: list[list[float]] = []
+    owners: list[str] = []
+    for name in names:
+        corners += [list(point) for point in corners_of(field_bboxes[name])]
+        owners += [name] * 4
+
+    pipeline = A.Compose(
+        transforms,
+        keypoint_params=A.KeypointParams(
+            format="xy",
             label_fields=["field_names"],
-            # A field box is kept however small or however far off the edge a transform
-            # pushes it. Dropping one would leave a document whose labels claim a field
-            # the annotation no longer locates.
-            min_area=0.0,
-            min_visibility=0.0,
+            # The whole reason this pipeline is keypoints rather than boxes — see above.
+            remove_invisible=False,
         ),
         seed=seed,
     )
+    result = pipeline(image=image, keypoints=corners, field_names=owners)
+
+    # Regrouped by the returned labels rather than by position: a transform is allowed to
+    # reorder its targets, and pairing by index would silently mix one field's corners with
+    # another's — which would look like a box in a plausible-but-wrong place rather than
+    # like an error.
+    grouped: dict[str, list[tuple[float, float]]] = {name: [] for name in names}
+    for name, point in zip(result["field_names"], result["keypoints"], strict=True):
+        grouped[str(name)].append((float(point[0]), float(point[1])))
+
+    moved: dict[str, BBox] = {}
+    for name, points in grouped.items():
+        if len(points) != 4:
+            raise ValueError(
+                f"field {name!r} came back with {len(points)} corners instead of 4; the "
+                "keypoint pipeline dropped or duplicated one and the box cannot be rebuilt"
+            )
+        moved[name] = hull_of(points)
+    return result["image"], moved
 
 
 def degrade(
@@ -87,37 +352,40 @@ def degrade(
     seed: int,
     capture: Capture = Capture.SCREENSHOT,
 ) -> DegradedDocument:
-    """Apply one capture mode to a rendered document and its bounding boxes."""
-    if capture is not Capture.SCREENSHOT:
-        raise NotImplementedError(
-            f"capture mode {capture.value!r} needs its own calibrated recipe; "
-            "this skeleton ships only 'screenshot'"
-        )
-
+    """Apply one capture channel to a rendered document and its bounding boxes."""
     seed %= _C_INT_MAX
-    degraded = _paper_pipeline(seed)(image)
-
-    names = list(field_bboxes)
-    result = _geometry_pipeline(seed)(
-        image=degraded,
-        bboxes=[list(field_bboxes[name]) for name in names],
-        field_names=names,
+    degraded = _paper_pipeline(capture, seed)(image)
+    moved_image, moved_boxes = carry_boxes(
+        _geometry(capture), degraded, field_bboxes, seed=seed
     )
+    return DegradedDocument(image=moved_image, field_bboxes=moved_boxes)
 
-    # Rebuilt from the returned labels rather than by zipping with `names`: a transform
-    # is allowed to drop or reorder boxes, and pairing by position would silently
-    # mislabel every field after the first one lost.
-    #
-    # Rounded, because Albumentations normalizes coordinates to [0, 1] and back, which
-    # leaves 26 as 25.999999217689037. The renderer emits whole pixels for a reason — a
-    # box indexes an image — and passing through the degrader must not quietly undo that.
-    moved = {
-        str(name): (
-            float(round(box[0])),
-            float(round(box[1])),
-            float(round(box[2])),
-            float(round(box[3])),
-        )
-        for name, box in zip(result["field_names"], result["bboxes"], strict=True)
-    }
-    return DegradedDocument(image=result["image"], field_bboxes=moved)
+
+def clipped_edges(box: BBox, width: int, height: int) -> tuple[str, ...]:
+    """Which edges of the image a box crosses — empty when it is wholly on the page.
+
+    The arithmetic is deliberately trivial and deliberately here rather than in the caller:
+    it is the definition of what "the content survived" means, and a definition that lives
+    beside the transform that can break it is one a reader can check in one place.
+
+    Named edges rather than a bare boolean because a consumer filtering a corpus wants to know
+    WHAT left: a document missing its bottom is a different training example from one missing
+    its left margin, and reconstructing that from a box and an image size is work every
+    consumer would otherwise repeat.
+
+    A box flush with the far edge is INSIDE. Its last pixel is then column `width - 1`, which
+    exists; `x + width_of_box` equalling the frame width is the boundary after it. That
+    off-by-one is the likeliest defect in the whole function, so the gate pins the flush case
+    explicitly rather than only the crossing ones.
+    """
+    x, y, w, h = box
+    edges = []
+    if x < 0:
+        edges.append("left")
+    if y < 0:
+        edges.append("top")
+    if x + w > width:
+        edges.append("right")
+    if y + h > height:
+        edges.append("bottom")
+    return tuple(edges)

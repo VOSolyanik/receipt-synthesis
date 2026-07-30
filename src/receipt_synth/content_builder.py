@@ -627,6 +627,7 @@ class PrroReceipt:
         field_bboxes: dict[str, tuple[float, float, float, float]],
         reference_text: str = "",
         content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
     ) -> DocGroundTruth:
         """The label record for this receipt.
 
@@ -654,6 +655,7 @@ class PrroReceipt:
             # describe the page that was produced from it.
             reference_text=reference_text,
             content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
             vat_row_form=self.vat_row_form,
         )
 
@@ -1745,6 +1747,7 @@ class PaymentConfirmation:
         field_bboxes: dict[str, tuple[float, float, float, float]],
         reference_text: str = "",
         content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
     ) -> DocGroundTruth:
         """The label record for this confirmation.
 
@@ -1790,6 +1793,7 @@ class PaymentConfirmation:
             # describe the page that was produced from it.
             reference_text=reference_text,
             content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
         )
 
 
@@ -2306,6 +2310,7 @@ class BankStatement:
         field_bboxes: dict[str, tuple[float, float, float, float]],
         reference_text: str = "",
         content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
     ) -> DocGroundTruth:
         """The label record for this statement — one transaction, not one document.
 
@@ -2357,6 +2362,7 @@ class BankStatement:
             # describe the page that was produced from it.
             reference_text=reference_text,
             content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
         )
 
 
@@ -2792,6 +2798,7 @@ class Invoice:
         field_bboxes: dict[str, tuple[float, float, float, float]],
         reference_text: str = "",
         content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
     ) -> DocGroundTruth:
         """The label record for this invoice.
 
@@ -2823,6 +2830,7 @@ class Invoice:
             # describe the page that was produced from it.
             reference_text=reference_text,
             content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
         )
 
 

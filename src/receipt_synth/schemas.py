@@ -18,7 +18,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, computed_field
 
 from receipt_synth import __version__
 
@@ -370,12 +370,48 @@ class DocGroundTruth(BaseModel):
     # of the rendered TEXT. ⚠️ Its scope is text and only text — a QR, a stamp and a signature are
     # ink it does not cover — because it is the geometric counterpart of `reference_text`, which is
     # also text only.
+    #
+    # 🔴 IT MAY LIE PARTLY OUTSIDE THE IMAGE, and that is the point. `degrader.carry_boxes` carries
+    # coordinates as keypoints precisely so a box pushed off the edge comes back off the edge
+    # instead of being trimmed flush with it — a trimmed box is what a document that lost a tenth
+    # of its text looks like AND what a document that lost nothing looks like.
     content_bbox: BBox | None = None
+    # WHICH EDGES OF THE IMAGE THE TEXT CROSSES after degradation — empty when it is wholly on the
+    # page. Named rather than counted, because a document missing its bottom is a different
+    # training example from one missing its left margin.
+    #
+    # ⚠️ ITS SCOPE IS THE SCOPE OF `content_bbox`: TEXT. A photograph that cut off a QR code while
+    # keeping every character reports no lost edge, and truthfully — this says the TEXT survived,
+    # never that everything printed did. A completeness measure cannot claim more than the extent
+    # it is built on.
+    content_lost_edges: list[str] = Field(default_factory=list)
 
     # Provenance. Not decoration: this is what keeps the origin of an individual file
     # unambiguous once it leaves this repository.
     synthetic: bool = True
     generator_version: str = __version__
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def content_complete(self) -> bool | None:
+        """Did all the printed TEXT survive the capture — per document, as one answer.
+
+        DERIVED RATHER THAN STORED, so it cannot disagree with `content_lost_edges`. Two fields
+        stating one fact is how they come apart, and this one would come apart in the direction
+        that matters: a stale `true` beside a populated edge list would send a consumer to measure
+        a character error rate against text that is not in the image.
+
+        🔴 `None` MEANS UNMEASURED AND IS NOT `false`. A document with no `content_bbox` has no
+        extent to compare against a frame, so nothing is known about whether its content survived.
+        Reporting that as incomplete would put a fabricated measurement into a metric; reporting it
+        as complete would put an unearned one. Both are answers to a question nobody asked.
+
+        ⚠️ IT IS ABOUT TEXT. See `content_lost_edges` — a QR, a stamp and a signature are outside
+        the extent this is computed from, so a capture that lost one of those is `true` here.
+        """
+        if self.content_bbox is None:
+            return None
+        return not self.content_lost_edges
 
 
 class ClaimGroundTruth(BaseModel):

@@ -148,10 +148,12 @@ Output: a clean image plus its ground-truth record.
 
 Real documents reach a verification system as a screenshot, a photo taken at an angle, or a flatbed scan.
 Augraphy supplies paper, ink and shadow effects; Albumentations supplies perspective, blur and JPEG
-artifacts.
+artifacts, and **owns every geometric operation** — exactly one library moves a coordinate.
 
 Labels are unchanged by degradation, so **one rendered document yields several training examples**.
-Bounding boxes are transformed together with the image under geometric operations.
+Bounding boxes are transformed together with the image under geometric operations, and a known-answer
+test with hand-computed corners guards that pairing: a box that does not follow its pixels corrupts the
+ground truth of every image while being invisible in every metric.
 
 ### 6. `assembler`
 
@@ -232,10 +234,14 @@ These are the most valuable examples in the dataset.
   "has_qr": true,
   "qr_is_fiscal": false,
   "has_fiscal_number": true,
-  "capture": "screenshot",
+  "capture": "photo",
   "field_bboxes": { "amount": [0, 0, 0, 0], "date": [0, 0, 0, 0] },
+  "reference_text": "…every printed character of the page, in reading order…",
+  "content_bbox": [0, 0, 0, 0],
+  "content_lost_edges": [],
   "synthetic": true,
-  "generator_version": "0.1.0"
+  "generator_version": "0.1.0",
+  "content_complete": true
 }
 ```
 
@@ -572,17 +578,33 @@ short. Each mechanism is a parameter of `claim_planner`, combined with a target 
 
 ## Degradation
 
-Three capture modes, each a different composition of effects:
+Three capture channels, each the artifacts of the device that produced it. A fourth *medium* — a natively
+generated PDF — is the undamaged original and therefore not a channel at all: **four media, three channels.**
 
-| Mode | Character |
-|---|---|
-| `screenshot` | Clean, native resolution, mild compression |
-| `photo` | Perspective, uneven lighting, shadow, camera noise, motion blur |
-| `scan` | Paper texture, slight rotation, dust, scanner banding |
+| Channel | Medium | Character |
+|---|---|---|
+| `screenshot` | electronic | Native resolution, mild compression, no geometry — a screen capture is square by construction |
+| `photo` | paper | The page on a surface, a perspective, a few degrees of rotation, uneven light, a cast shadow, motion blur |
+| `scan` | paper | Evenly lit, faint transport streaking, a degree or so of skew |
 
 Geometric transforms carry the bounding boxes with them, so annotations stay aligned. The label is invariant
 under degradation by construction: nothing about *what the document says* changes when it is photographed
-badly.
+badly — with one exception that is a property of the *medium* rather than of the reading: a paper receipt
+prints its VAT summary row in one form only, while an electronic one may print either.
+
+**A box may end up partly outside the image, and that is deliberate.** Albumentations clips boxes to the frame
+on every path, and a clipped box is indistinguishable from one that never left — which is exactly how a crop
+comes to be reported as complete. Coordinates therefore travel as corner keypoints and the boxes are rebuilt
+from them.
+
+**What the capture cost is recorded per document.** `content_bbox` is the extent of the printed *text*;
+`content_lost_edges` names which edges of the image that extent crosses, and `content_complete` is derived
+from it. A character error rate against `reference_text` is defined only where the content survived, so **the
+size of that subset per channel is part of the result** — a rate quoted without it is not one.
+
+The mix of channels is **uniform, and that is a placeholder rather than a measurement**: no survey of how real
+reimbursement evidence arrives was available, and a weighted split would be an invented frequency. Any figure
+aggregated over a whole corpus is weighted by that arbitrary marginal, so report per channel.
 
 ---
 

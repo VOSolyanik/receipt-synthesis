@@ -45,6 +45,49 @@
 #
 # Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 17 by THE OTHER TWO CAPTURE CHANNELS ARRIVING. FIVE consequences a consumer has to know
+# about, and the first of them changes every image in the corpus.
+#
+#   `capture` NOW TAKES ALL THREE OF ITS DECLARED VALUES. `photo` and `scan` used to raise
+#   `NotImplementedError`, so the vocabulary existed and two thirds of it was unreachable; both now
+#   have recipes and the channel is drawn per document. A consumer that pinned "every document is a
+#   screenshot" — or that inferred it from the data rather than from this file — meets paper media,
+#   rotation, perspective and a cast shadow at once. 🔴 THE MEDIUM FOLLOWS: `photo` and `scan` are
+#   PAPER, so the asymmetric VAT-row rule finally has documents on its paper side, where only the
+#   `equals` form occurs. See `known_limitations` KL-10, whose detection note this version corrects.
+#
+#   ⚠️ `digital_pdf` IS STILL NOT A VALUE, AND THAT IS A POSITION RATHER THAN AN OMISSION. The
+#   consumer's `medium` vocabulary has four members; a natively generated PDF is the UNDAMAGED
+#   ORIGINAL — the absence of a capture channel, not one of them — so it cannot be produced by
+#   adding a fourth recipe here. Four media, three channels. See RC-11.
+#
+#   ONE NEW LABEL FIELD, `content_lost_edges`, and one DERIVED field beside it,
+#   `content_complete`. Per document: did all the printed TEXT survive the capture, and if not,
+#   which edges of the image it crosses. The second is computed from the first inside the model, so
+#   the two cannot disagree; `content_complete` is `null` where there is no extent to measure, which
+#   is NOT `false`. ⚠️ Its scope is the scope of `content_bbox` — TEXT — so a capture that cut off a
+#   QR while keeping every character reports complete, truthfully.
+#
+#   🔴 A BOUNDING BOX MAY NOW LIE PARTLY OUTSIDE THE IMAGE, and a consumer that assumed otherwise
+#   has to clip. This is the change that makes the field above mean anything: Albumentations clips
+#   every box to the frame on every path, so a box trimmed flush with the edge is what a document
+#   that lost a tenth of its content looks like AND what a document that lost nothing looks like.
+#   The generator therefore carries coordinates as corner keypoints and rebuilds the box itself. The
+#   clipped form can be derived from what is emitted; the emitted form cannot be derived from the
+#   clipped one.
+#
+#   🔴 THE CHARACTER ERROR RATE IS DEFINED ONLY ON A SUBSET, AND THE SIZE OF THAT SUBSET PER CHANNEL
+#   IS PART OF THE RESULT. `reference_text` is the reference side of a distance over the whole page,
+#   and that distance means nothing where the text is not in the picture. "CER on photo = X" is not
+#   a result. See `known_limitations` KL-12, and the per-channel completeness counts in
+#   `run_profiles`.
+#
+#   THE DRAW MOVED. The capture channel is drawn per document, so a seed produces different
+#   documents from the ones it produced under version 16 — not different RULES, different DRAWS.
+#   Every figure in `run_profiles` recorded before this version describes a corpus no seed now
+#   reproduces; the profiles say which version they were taken on, and a new one is added rather
+#   than the old ones edited.
+#
 # Bumped to 16 by THE COMPARISON RULES BECOMING EXECUTABLE. FOUR consequences a consumer has to
 # know about, and none of them is a change to the data.
 #
@@ -465,7 +508,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 16
+version: 17
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -1438,7 +1481,9 @@ normalization:
 
   closed_enum:
     status: emitted
-    applies_to: doc_type, capture, verdict, verdict_basis members, imperfection members
+    applies_to: >
+      doc_type, capture, verdict, verdict_basis members, imperfection members,
+      content_lost_edges members, content_complete
     form: lower_snake_case ASCII
     rule: exact match against the closed vocabulary declared in this file
     why: a value outside the vocabulary is an error, not a near miss to be scored partially
@@ -2398,8 +2443,60 @@ document_label:
         Through the SAME geometric transform, under a reserved key that is removed before the label
         is written. A box moved by a second route would drift from the fields the moment a real
         geometric degradation step arrives — which is exactly when a measurement built on it would
-        begin to be quietly wrong.
+        begin to be quietly wrong. Since version 17 that moment has arrived: `photo` and `scan`
+        rotate and warp.
+      it_may_lie_outside_the_image: >
+        🔴 SINCE VERSION 17, and this is the property `content_complete` is computed from. A
+        consumer that wants an index into the image clips it; the clipped form can be derived from
+        this one, and this one cannot be derived from the clipped form.
       null_on: nothing today; nullable so a page with no text at all is expressible
+
+    - name: content_lost_edges
+      type: array of string
+      required: true
+      normalize: closed_enum
+      vocabulary: [left, top, right, bottom]
+      status: emitted
+      meaning: >
+        WHICH EDGES OF THE IMAGE THE TEXT CROSSES after degradation — empty when the text is wholly
+        on the page. Derived from `content_bbox` against the degraded image's own dimensions.
+      its_scope_is_text: >
+        ⚠️ THE SCOPE OF `content_bbox`, AND NO WIDER. A capture that cut off a QR code, a stamp or a
+        signature while keeping every character reports NO lost edge, and truthfully. A completeness
+        measure cannot claim more than the extent it is built on.
+      why_named_edges_and_not_a_count: >
+        A consumer filtering a corpus wants to know WHAT left: a document missing its bottom is a
+        different training example from one missing its left margin, and reconstructing that from a
+        box and an image size is work every consumer would otherwise repeat.
+      observed: >
+        Non-empty only on `photo`. `screenshot` applies no geometry at all, and `scan` applies a
+        rotation of a degree or so onto a margin wide enough to absorb it — a flatbed lays the whole
+        sheet on the platen and is not expected to crop.
+      null_on: never; the empty array is the statement that nothing was lost
+
+    - name: content_complete
+      type: boolean or null
+      required: true
+      normalize: closed_enum
+      status: emitted
+      meaning: >
+        Did all the printed TEXT survive the capture — the per-document answer, and the FILTER a
+        consumer applies before computing a character error rate.
+      derived_not_stored: >
+        Computed from `content_lost_edges` inside the model rather than written beside it. Two
+        fields stating one fact is how they come apart, and this pair would come apart in the
+        direction that matters: a stale `true` beside a populated edge list sends a consumer to
+        measure a distance against text that is not in the image.
+      null_is_not_false: >
+        🔴 `null` MEANS UNMEASURED. A document with no `content_bbox` has no extent to compare
+        against a frame, so nothing is known about whether its content survived. Reporting that as
+        `false` puts a fabricated measurement into a metric and reporting it as `true` puts an
+        unearned one; both answer a question nobody asked.
+      what_it_is_for: >
+        🔴 THE CHARACTER ERROR RATE IS DEFINED ONLY WHERE THIS IS `true`, AND THE SIZE OF THAT
+        SUBSET PER CHANNEL IS PART OF THE RESULT. See `known_limitations` KL-12; the counts are in
+        `run_profiles`.
+      null_on: nothing today; every archetype produces a content extent
 
     - name: relevant_transaction
       type: string or null
@@ -2481,19 +2578,33 @@ document_label:
       vocabulary: [screenshot, photo, scan]
       meaning: how the document reached the verifier
       observed: >
-        `screenshot` ONLY, and the other two are not merely unused: `degrader.degrade`
-        RAISES `NotImplementedError` for any capture mode other than `screenshot`. The
-        vocabulary exists; the recipes do not.
+        ALL THREE, since version 17. Each is drawn per document and each has its own recipe:
+        `screenshot` is a screen capture and applies no geometry at all; `photo` is a hand-held
+        camera over paper on a desk — uneven light, a cast shadow, a perspective, a small rotation
+        and a surface around the page; `scan` is a flatbed — evenly lit, faint transport streaking,
+        a degree or so of skew.
+      the_mix_is_uniform_and_that_is_a_placeholder: >
+        ⚠️ THE THREE ARE DRAWN WITH EQUAL WEIGHT, and that split claims NOTHING about how real
+        reimbursement evidence arrives. No survey of the field was available, and any other split
+        would be a made-up frequency wearing the authority of a config key. See
+        `known_limitations` KL-11.
       label_invariance: >
         Capture mode changes pixels and boxes, never content — so one rendered document may
-        yield several examples sharing every other field of this record.
+        yield several examples sharing every other field of this record. 🔴 WITH ONE EXCEPTION,
+        AND IT IS NOT A BREACH OF THE RULE ABOVE: what a document PRINTS may depend on its
+        MEDIUM, which the channel determines. A paper capture prints the `equals` VAT row only.
+        The label still describes the image; it is the image that differs, not the reading of it.
+        See `vat_row_form`.
       divergence:
         status: divergent
         consumer: >
           The requirement calls this `medium` and puts it on `ClaimFile` (the binary) rather
           than on the logical document, with FOUR values: digital_pdf / screenshot / photo /
-          scan. `digital_pdf` has no counterpart in `Capture`, and a natively generated PDF
-          is not a degradation mode at all — it is the absence of one. See RC-11.
+          scan. 🔴 THE FOURTH IS NOT A MISSING RECIPE. A natively generated PDF is the
+          UNDAMAGED ORIGINAL — the absence of a capture channel rather than one of them — so
+          the gap cannot be closed by adding a fourth entry here, and adding one would put a
+          document with no degradation into a vocabulary whose every member names a kind of
+          degradation. Four media, three channels. See RC-11.
 
     - name: field_bboxes
       type: map<string, [number, number, number, number]>
@@ -2526,6 +2637,13 @@ document_label:
         and each names the version it was taken on. A statement about the past cannot go stale,
         which is why they stay outside `run_profiles` while every live count moved into it. A
         later reader who refreshes them against a new run destroys the only thing they are for.
+
+        🔴 SINCE VERSION 17 A BOX MAY LIE PARTLY OR WHOLLY OUTSIDE THE IMAGE, with a negative
+        coordinate or a far edge past the frame. `photo` and `scan` move boxes, and a value trimmed
+        flush with the edge would be indistinguishable from one that never left — which is exactly
+        how a crop comes to be reported as complete. A consumer indexing an image with these must
+        clip them itself; the clipped form is derivable from what is emitted and the emitted form is
+        not derivable from the clipped one, so the emitted form is the one that carries information.
 
         SINCE VERSION 11 THE KEY COUNT ALSO VARIES WITH THE ROW COUNT of a bank statement. Each
         operation carries an indexed box over its whole row rect — `operation_<i>`, counted down the
@@ -4081,11 +4199,13 @@ known_limitations:
       either — without claiming that the medium is the CAUSE.
     how_a_consumer_detects_it: >
       Both forms occur among the receipts of any corpus, and `vat_row_form` says which each document
-      carries. ⚠️ THE SPLIT A PROFILE REPORTS IS THE DRAW AND NOT AN OBSERVED FREQUENCY: while
-      `screenshot` is the only calibrated capture channel, every document is on the ELECTRONIC side
-      of the rule, where both forms are drawn — so the paper side, which admits one form only, is
-      unexercised by any corpus. That is a property of which capture channels exist, not of a run's
-      size, and it will change when photo and scan arrive rather than when a seed does.
+      carries. ⚠️ THE SPLIT A PROFILE REPORTS IS THE DRAW AND NOT AN OBSERVED FREQUENCY. Since
+      version 17 BOTH SIDES OF THE RULE ARE EXERCISED — `photo` and `scan` are paper and admit the
+      `equals` form only, `screenshot` is electronic and draws either — so the realized split is now
+      a mixture of a one-sided rule and a two-sided draw, weighted by a CAPTURE MIX that is itself
+      an arbitrary placeholder (KL-11). Reading a frequency out of it measures the capture mix, not
+      the world. Until version 16 the paper side was unexercised entirely, because `screenshot` was
+      the only calibrated channel; a profile taken then reports the electronic draw alone.
     see_profile: run_profiles
     what_is_unknown: >
       🔴 THE HYPOTHESES, AND WHY THE DATA CANNOT DISCRIMINATE THEM. The obvious explanation — that
@@ -4114,6 +4234,75 @@ known_limitations:
       one installation asked eight times — the mistake that produced the earlier unconditional form
       — so what would settle this is a second ELECTRONIC receipt from a different provider, or a
       paper receipt from the provider that produced the online one.
+
+
+  - id: KL-11
+    name: the capture mix is uniform, and uniform is a placeholder rather than a measurement
+    predictor: none — an arbitrary marginal, not a leak
+    hurts: reporting
+    subset: >
+      EVERY DOCUMENT. The three capture channels are drawn with equal weight, so each holds about a
+      third of any corpus. ⚠️ NOTHING IS KNOWN ABOUT HOW REAL REIMBURSEMENT EVIDENCE ARRIVES. No
+      survey of the field was available to this repository, so a weighted split would have been a
+      made-up frequency with a config key's authority behind it, while an equal one claims nothing
+      and leaves every channel large enough to measure.
+    how_a_consumer_detects_it: >
+      By reading `capture` across the corpus and finding the three channels at roughly a third
+      each. That near-equality is itself the tell — a real population of submitted evidence is not
+      uniform, whatever its true shape is, so a corpus that looks uniform is reporting a draw rather
+      than a world. There is nothing else to look for: the mix leaves no other trace, which is
+      exactly why it has to be declared here instead of being noticed later.
+    see_profile: run_profiles
+    consequence: >
+      ANY FIGURE AGGREGATED OVER THE WHOLE CORPUS IS WEIGHTED BY THIS MARGINAL, and the marginal is
+      arbitrary. A single accuracy number over a corpus whose channels differ in difficulty says as
+      much about the mix as about the system. A consumer reporting one number must either report
+      per channel as well, or state that the aggregate is over an equal mix. It also propagates:
+      `vat_row_form`'s realized split is a function of it (KL-10), because the medium follows the
+      channel.
+    how_to_stratify: >
+      By `capture`, which is exactly why the field is labelled. Report per channel and the marginal
+      stops mattering.
+    fixed_by: >
+      A DECLARED MIX WITH A STATED BASIS, in config/policy.yaml beside `verdict_mix` — a share that
+      decides what fraction of a corpus carries a given LABEL VALUE sizes a labelled bucket, and
+      that is where such shares live in this repository. It is not in a config file today
+      DELIBERATELY: the honest home for it is the one file this step was not permitted to change,
+      and putting it in the nearest file that would accept it is how a configuration split stops
+      meaning anything. Recorded as an open question rather than settled by whoever was passing.
+
+
+  - id: KL-12
+    name: the character error rate is defined on a subset, and the subset differs by channel
+    predictor: none — a coverage gap in one metric, not a leak
+    hurts: reporting
+    subset: >
+      🔴 THE DOCUMENTS WHOSE TEXT LEFT THE FRAME. `reference_text` is the reference side of a
+      character error rate over the whole page, and that distance is meaningless where some of the
+      text it references is not in the picture: a system that read everything visible would score as
+      though it had failed. The affected documents are exactly those with `content_complete: false`,
+      and they are concentrated in `photo` — a photographer cuts an edge, a flatbed does not.
+    how_a_consumer_detects_it: >
+      By `content_complete` and `content_lost_edges` on each document: the affected subset is
+      LABELLED rather than inferred, which is the whole point of the two fields. Without them the
+      symptom is indistinguishable from a bad reading — a system scoring poorly on a photograph
+      looks like a system that cannot read a photograph, when part of what it was scored against was
+      never in the picture. Group by `capture` and the concentration in one channel is immediate.
+    see_profile: run_profiles
+    consequence: >
+      🔴 A CHARACTER ERROR RATE WITHOUT ITS DENOMINATOR IS NOT A RESULT. "CER on photo = X" conceals
+      that X was computed on some fraction of that channel and says nothing about the rest; the
+      honest form names both — "CER on the N of M photos whose content survived, the other M − N
+      unmeasured". The denominator differs per channel by construction, so one denominator for the
+      corpus will not do either.
+    how_to_stratify: >
+      Filter on `content_complete` before computing the rate, and report the size of what was
+      filtered out, per channel. `run_profiles` records those counts for the runs it describes.
+    fixed_by: >
+      NOTHING, AND NOTHING SHOULD. A photograph that cuts an edge is a real capture and belongs in a
+      corpus meant to be realistic; removing it would make the dataset easier than the world and
+      would remove the one signal that tells a cropped capture from a bad reading. What is fixable
+      is the reporting, which is what this entry is for.
 
 
 # =============================================================================
@@ -4153,7 +4342,105 @@ run_profiles:
     Until then every figure below is an EXAMPLE of how a quantity behaves, and none of them
     describes the data anybody received.
 
+  a_profile_describes_the_version_it_names: >
+    🔴 TWO PROFILES BELOW CARRY THE SAME COMMAND AND DIFFERENT NUMBERS, AND THAT IS NOT A
+    CONTRADICTION. RP-01 and RP-03 were both taken from `--seed 42 --personas 48
+    --claims-per-persona 8`. Version 17 added a per-document draw — the capture channel — so the
+    same seed no longer produces the same documents: `generator_version_at_measurement` on each
+    profile is what tells them apart, and the LATEST version's profile is the one that describes
+    what the command does now.
+
+    Earlier profiles are kept rather than refreshed. A profile is a record of a run that happened,
+    and a run that happened does not go stale; rewriting one to match a newer version would destroy
+    the only thing it is evidence of. A new version adds a profile.
+
   profiles:
+    - id: RP-03
+      authoritative: false
+      purpose: >
+        The first run with all three capture channels live. Supersedes RP-01 as the example of what
+        the reference command produces — same command, moved draw.
+      command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8"
+      seed: 42
+      generator_version_at_measurement: contract version 17
+      claims_ordered: 384
+      claims_built: 359
+      documents: 666
+      document_types:
+        invoice: 307
+        bank_statement: 154
+        payment_confirmation: 153
+        fiscal_receipt: 52
+        note: >
+          Denominator 666 documents. `other` is empty: no archetype of a non-target class is
+          registered. All four target classes are above 30, the size below which a per-class figure
+          should not be quoted — but that threshold is a property of the DELIVERED corpus and has to
+          be re-checked on its own profile.
+      claim_shapes:
+        two_documents: 307
+        one_document: 52
+        note: denominator 359 claims; `linked` is true on the 307
+      verdicts:
+        covered: 165
+        partially_covered: 155
+        insufficient_evidence: 39
+        note: >
+          Denominator 359. The three sum to the whole because `not_proof_of_payment`,
+          `partially_paid` and `rejected` are not drawn — 20% of the declared mix is absent.
+      imperfection_causes:
+        limit_exhausted: 107
+        mixed_items: 61
+        payment_precedes_subject: 21
+        amount_mismatch: 18
+        subject_not_evidenced: 0
+        outside_period: 0
+        note: >
+          Denominator 359 claims. The first two sum past their verdict's count because a claim may
+          carry both.
+      capture_channels:
+        screenshot: 231
+        photo: 205
+        scan: 230
+        note: >
+          Denominator 666. Roughly equal BY CONSTRUCTION and not by observation — the three are
+          drawn with equal weight, which is a placeholder rather than a measurement. See KL-11.
+          Every figure in this profile that is aggregated over documents is weighted by this
+          marginal.
+      content_complete:
+        screenshot: 231 of 231
+        scan: 230 of 230
+        photo: 187 of 205
+        unmeasured: 0
+        lost_edges:
+          right: 15
+          bottom: 3
+        note: >
+          🔴 THIS IS THE DENOMINATOR OF ANY CHARACTER ERROR RATE ON THIS CORPUS, per channel, and it
+          is part of the result rather than a caveat to it — see KL-12. 18 of 205 photographs lost
+          some TEXT off the frame; the other two channels lost none, `screenshot` because it applies
+          no geometry and `scan` because a flatbed's margin absorbs its own skew. ⚠️ TEXT ONLY: a
+          capture that cut off a QR or a stamp is counted complete.
+      vat_row_form:
+        paper_photo_equals: 19
+        paper_scan_equals: 9
+        paper_spaced: 0
+        electronic_spaced: 14
+        electronic_equals: 5
+        null_because_the_seller_is_not_registered: 5
+        note: >
+          Denominator 52 fiscal receipts, of which 47 carry a tax row. 🔴 THE FIRST RUN IN WHICH
+          BOTH SIDES OF THE ASYMMETRIC RULE ARE EXERCISED: paper — `photo` and `scan` — produced the
+          `equals` form 28 times and the spaced form NEVER, which is the rule's one-sided half
+          appearing in data; electronic drew both. The paper/electronic split here is the capture
+          mix, so it measures KL-11 and not the world.
+      cross_check_denominators:
+        fiscal_receipts_in_a_multi_document_claim: 0
+        multi_document_claims: 307
+        note: Zero of 307 — see KL-08 for why it is zero BY CONSTRUCTION rather than by outcome.
+      unidentified_payers:
+        documents: 13
+        note: 13 of 666 documents carry a payer of "-" — see KL-09.
+
     - id: RP-01
       authoritative: false
       purpose: the smallest run that exercises every mechanism; used for most examples below
@@ -4351,12 +4638,25 @@ required_changes:
 
   - id: RC-11
     file: src/receipt_synth/degrader.py, schemas.py
+    status: the recipes are done in version 17; the naming and the fourth value are not
     change: >
-      `degrade` raises `NotImplementedError` for `photo` and `scan`, so two thirds of the
-      `Capture` vocabulary is unreachable. The consumer additionally requires a fourth value,
-      `digital_pdf`, and calls the field `medium` on the file rather than on the document — a
-      natively generated PDF is the absence of a capture mode, not one of them.
-    blocked_on: none for the recipes; decision for the name and the fourth value
+      DONE: `degrade` no longer raises. `photo` and `scan` have calibrated recipes, the channel is
+      drawn per document, and all three values of `Capture` occur in the data.
+
+      STILL OPEN, and it is one question rather than two. The consumer calls the field `medium`,
+      puts it on `ClaimFile` (the binary) rather than on the logical document, and gives it FOUR
+      values including `digital_pdf`.
+
+      🔴 THE FOURTH VALUE CANNOT BE CLOSED BY A FOURTH RECIPE, and this entry used to imply it
+      could. Every member of `Capture` names a way a document was DAMAGED on its way to the
+      verifier; a natively generated PDF is the undamaged original — the absence of a capture
+      channel, not one of them. Adding it to this enum would put "nothing happened" in a
+      vocabulary of things that happen. Four media, three channels. What it actually needs is
+      either a separate field on the file, or the consumer's shape adopted whole, and that is a
+      modelling decision rather than a missing branch.
+    blocked_on: >
+      decision — for the field's name, its home (file or document), and how the undamaged case is
+      expressed. The recipes are no longer part of this entry.
 
   - id: RC-12
     file: src/receipt_synth/assembler.py, schemas.py

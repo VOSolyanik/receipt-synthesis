@@ -41,7 +41,7 @@ from receipt_synth.content_builder import (
     resolve_vendor,
     vendor_can_carry,
 )
-from receipt_synth.degrader import degrade
+from receipt_synth.degrader import clipped_edges, degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
@@ -77,6 +77,27 @@ UNATTRIBUTED = "not attributed — planning stopped for a reason claim_planner c
 # `data-field` name — those are printed-field names, and none begins that way — and the collision is
 # checked rather than assumed.
 _CONTENT_BBOX_KEY = "__content_extent__"
+
+# HOW A DOCUMENT REACHED THE VERIFIER — drawn per document, UNIFORMLY over the three channels.
+#
+# 🔴 UNIFORM IS A PLACEHOLDER, NOT A MEASUREMENT, and saying so is the whole of the comment. No
+# survey of how real reimbursement evidence arrives was available to this repository, so any other
+# split would be a made-up frequency wearing the authority of a config key. An equal draw claims
+# nothing about the world and makes every channel large enough to measure, which is what a corpus
+# built for evaluation needs from it.
+#
+# 🔴 WHY IT IS IN CODE AND NOT IN A CONFIG FILE, which is a question this repository normally
+# answers the other way. A share that decides what fraction of the corpus carries a given LABEL
+# VALUE sizes a labelled bucket, and config/generation.yaml says in its own words that such a share
+# belongs beside `verdict_mix` in config/policy.yaml — `mismatch.delta_range` is there precisely
+# because it changes no label. `capture` IS a label. So the honest home for a capture mix is
+# policy.yaml, that file is the author's to change, and inventing a home for it in the nearest
+# file that would accept it is how a config split stops meaning anything. Recorded as an open
+# question rather than settled by whoever was passing.
+#
+# The tuple order is part of the seed's meaning: reordering it changes which document gets which
+# channel for a given seed, exactly as reordering any drawn-from list in this repository does.
+CAPTURE_CHANNELS = (Capture.SCREENSHOT, Capture.PHOTO, Capture.SCAN)
 
 
 @dataclass(frozen=True)
@@ -242,10 +263,8 @@ def _build_document(
 
     # ONE CAPTURE CHANNEL PER DOCUMENT, DECIDED ONCE. It reaches three places — the builder, which
     # prints a requisite that depends on the medium; the degrader, which applies that channel's
-    # artefacts; and the label. Two literals for one fact is how they come to disagree, and this
-    # commit is the first in which they COULD disagree, since until now the channel changed nothing
-    # about what was printed.
-    capture = Capture.SCREENSHOT
+    # artefacts; and the label. Two literals for one fact is how they come to disagree.
+    capture = rng.choice(CAPTURE_CHANNELS)
 
     evidence = evidence_of(archetype)
     if evidence.proves_subject:
@@ -326,6 +345,14 @@ def _build_document(
         )
         boxes = dict(moved.field_bboxes)
         content_bbox = boxes.pop(_CONTENT_BBOX_KEY)
+        # 🔴 GATE 2 OF THE FIDELITY MATRIX: DID THE CONTENT SURVIVE THE CAPTURE. Measured against
+        # the DEGRADED image, because that is the file a consumer receives, and from the CONTENT
+        # extent rather than from the field boxes — a document whose every labelled field came
+        # through while a crop took the footer with the fiscal wording would report as complete
+        # measured on the fields, and would then hand a system a falsely high character error rate
+        # for text that is not in the picture.
+        height, width = moved.image.shape[:2]
+        lost = clipped_edges(content_bbox, width, height)
         image_path.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(image_path), moved.image)
 
@@ -336,6 +363,7 @@ def _build_document(
         field_bboxes=boxes,
         reference_text=clean.reference_text,
         content_bbox=content_bbox,
+        content_lost_edges=lost,
     )
 
 
@@ -575,8 +603,65 @@ def balance_report(dataset: Dataset) -> str:
                 "  on what is absent rather than the whole of it.",
             ]
 
+    lines += _capture_lines(dataset)
     lines += _drift_lines(dataset)
     return "\n".join(lines)
+
+
+def _capture_lines(dataset: Dataset) -> list[str]:
+    """How the corpus is split across the capture channels, AND WITH WHAT DENOMINATOR EACH
+    CHANNEL COULD CARRY A CHARACTER ERROR RATE.
+
+    🔴 A CHANNEL THAT PRODUCED NO DOCUMENT IS REPORTED ABSENT, NEVER AS ZERO. The two are
+    different statements and only one of them can be true at a time: `0.0%` complete says a
+    measurement was taken and came out at nothing, while absence says no measurement exists.
+    Folding the first into the second is how an empty cell becomes a data point in somebody's
+    table, and nobody re-derives it afterwards.
+
+    🔴 AND THE SUBSET IS PART OF THE RESULT. `reference_text` is the reference side of a
+    character error rate, and that rate is only defined where the text it references is
+    actually in the picture. "CER on photo = X" is not a result; "CER on the N of M photos
+    whose content survived" is. So this block prints the denominator beside the share, because
+    a consumer that reads only the metric will never learn it anywhere else.
+
+    ⚠️ Complete here means THE TEXT survived — see `DocGroundTruth.content_complete`. A capture
+    that cut off a QR code while keeping every character is counted complete, and truthfully.
+    """
+    by_channel: Counter[Capture] = Counter(doc.capture for doc in dataset.documents)
+    complete: Counter[Capture] = Counter(
+        doc.capture for doc in dataset.documents if doc.content_complete
+    )
+    unmeasured: Counter[Capture] = Counter(
+        doc.capture for doc in dataset.documents if doc.content_complete is None
+    )
+    total = sum(by_channel.values())
+
+    lines = [
+        f"Capture channels — {total} document(s); `complete` is the subset on which a "
+        "character error",
+        "  rate is defined at all, and it is about TEXT: a lost QR or stamp is not counted here",
+    ]
+    for channel in Capture:
+        count = by_channel[channel]
+        if not count:
+            # ABSENT, not zero — see the docstring. There is no denominator here, so there is
+            # no share and no completeness figure to print.
+            lines.append(
+                f"  {channel.value:<12}    0         ABSENT — no document of this run took this "
+                "channel, which is"
+            )
+            lines.append(
+                "                                  not the same statement as a completeness of 0%"
+            )
+            continue
+        line = (
+            f"  {channel.value:<12} {count:>4}  {_share(count, total):>6}"
+            f"   complete {complete[channel]}/{count}"
+        )
+        if unmeasured[channel]:
+            line += f", {unmeasured[channel]} unmeasured (no content extent)"
+        lines.append(line)
+    return lines
 
 
 def _count_lines(dataset: Dataset, built: int) -> list[str]:

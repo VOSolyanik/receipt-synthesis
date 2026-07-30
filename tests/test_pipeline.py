@@ -649,11 +649,69 @@ def test_non_geometric_degradation_leaves_boxes_where_they_were():
     assert degrade(image, boxes, seed=7).field_bboxes == boxes
 
 
-def test_uncalibrated_capture_modes_are_refused():
+@pytest.mark.parametrize("capture", list(Capture))
+def test_every_capture_channel_is_deterministic_under_its_seed(capture):
+    """🔴 THE TRIPWIRE THAT CAUGHT `DirtyRollers`. Determinism under `--seed` is an invariant of
+    this generator, and an Augraphy effect is free to ignore `random_seed` — one of the three
+    that were tried does, so the first `scan` recipe produced different pixels on every call
+    while every other test stayed green. Parametrized over the whole enum so a channel added
+    later is covered before anybody remembers to think about it."""
     image, boxes = image_and_boxes()
+    first = degrade(image, boxes, seed=7, capture=capture)
+    second = degrade(image, boxes, seed=7, capture=capture)
+
+    assert np.array_equal(first.image, second.image)
+    assert first.field_bboxes == second.field_bboxes
+
+
+@pytest.mark.parametrize("capture", list(Capture))
+def test_every_capture_channel_keeps_every_box(capture):
+    """Whole pixels and no box lost, on every channel rather than on the one that applies no
+    geometry. A dropped box leaves a document whose labels name a field the annotation no
+    longer locates; a fractional one is not an index into an image."""
+    image, boxes = image_and_boxes()
+    moved = degrade(image, boxes, seed=7, capture=capture).field_bboxes
+
+    assert set(moved) == set(boxes)
+    for box in moved.values():
+        assert all(float(value).is_integer() for value in box)
+
+
+def test_the_two_paper_channels_move_the_boxes_and_the_screen_channel_does_not():
+    """The channels are not three names for one recipe. A screenshot is axis-aligned by
+    construction — there is no hand holding it and no sheet lying crooked — so its boxes must
+    come back where they were, while a photograph and a scan must move them. Asserted in both
+    directions: a recipe that lost its geometry would otherwise look like a working channel."""
+    image, boxes = image_and_boxes()
+
+    assert degrade(image, boxes, seed=7, capture=Capture.SCREENSHOT).field_bboxes == boxes
     for capture in (Capture.PHOTO, Capture.SCAN):
-        with pytest.raises(NotImplementedError):
-            degrade(image, boxes, seed=7, capture=capture)
+        moved = degrade(image, boxes, seed=7, capture=capture).field_bboxes
+        assert moved != boxes, capture
+
+
+def test_a_capture_channel_with_no_recipe_raises_rather_than_borrowing_one():
+    """A channel added to the enum without a recipe must fail by name. Falling through to another
+    channel's artefacts would put documents in the corpus labelled as one channel and degraded as
+    another, which no test of either channel could see.
+
+    🔴 EACH TABLE IS CHECKED BY ITSELF, AND THE FIRST VERSION OF THIS TEST WAS NOT. There are TWO
+    recipe tables — one for the paper effects and one for the geometry — and `degrade` calls them in
+    order. Asserting only that `degrade` raises means the SECOND table's guard is enough to keep the
+    test green while the first one is gone: a mutation that deleted the paper table's refusal
+    survived exactly that way, and it was the test that was weak rather than the mutation that was
+    mis-aimed. The denominator is two.
+    """
+    from receipt_synth.degrader import _geometry, _paper_pipeline
+
+    image, boxes = image_and_boxes()
+    with pytest.raises(NotImplementedError, match="has no recipe"):
+        degrade(image, boxes, seed=7, capture="fax")  # type: ignore[arg-type]
+
+    with pytest.raises(NotImplementedError, match="has no recipe"):
+        _paper_pipeline("fax", 7)  # type: ignore[arg-type]
+    with pytest.raises(NotImplementedError, match="has no recipe"):
+        _geometry("fax")  # type: ignore[arg-type]
 
 
 # ------------------------------------------------------------- the whole run --
@@ -1039,14 +1097,27 @@ def test_the_single_claim_default_is_still_reachable(dataset):
 
 
 def test_every_claim_of_a_persona_is_in_date_order(multi_claim_dataset):
+    """By THE PAYMENT DATE, which is what a claim takes its place in the ledger by — see
+    `ClaimInput.dated`. Read off the document whose TYPE proves payment, resolved through
+    policy.yaml's `document_evidence` exactly as `policy_engine.resolve_evidence` does.
+
+    🔴 IT USED TO TAKE THE LATEST DATE OF THE CLAIM'S DOCUMENTS, and that was wrong on a
+    mechanism this repository deliberately generates. A claim planned with the cause
+    `payment_precedes_subject` is dated BACKWARDS on purpose — its subject document is later
+    than its payment — so the latest date is the subject's, and ordering by it compares a
+    claim's subject against the next claim's payment. It passed only while no such claim
+    happened to be adjacent to a later one; the check was never testing what it said. It also
+    said "every document of this dataset is a fiscal receipt", which stopped being true when
+    the invoice archetype landed.
+    """
     result, _ = multi_claim_dataset
     for persona_record in result.personas:
-        # By the PAYMENT date, which is what a claim takes its place in the ledger by —
-        # `ClaimInput.dated`. Every document of this dataset is a fiscal receipt and so is
-        # its own proof of payment; the max is what keeps that true of a claim whose
-        # subject document is dated earlier.
         dates = [
-            max(document.date for document in documents)
+            max(
+                document.date
+                for document in documents
+                if document_evidence(document.doc_type).proves_payment
+            )
             for claim, documents in documents_of(result)
             if claim.persona_id == persona_record.persona_id
         ]
@@ -1395,6 +1466,103 @@ def test_a_verdict_the_planner_cannot_draw_is_still_given_a_row():
 
     assert verdict.value in report
     assert "realized but not realizable" in report
+
+
+def a_document_on(capture, *, doc_id, lost=()):
+    """One label record, for the capture block of the report only."""
+    from receipt_synth.schemas import DocGroundTruth, DocType
+
+    return DocGroundTruth(
+        doc_id=doc_id, source_file=f"{doc_id}.png", doc_type=DocType.FISCAL_RECEIPT,
+        language="uk", currency="UAH", amount=Decimal("10.00"), date=date(2026, 6, 15),
+        counterparty="Аптека", line_items=[], has_qr=True, qr_is_fiscal=True,
+        has_fiscal_number=True, capture=capture, content_bbox=(0.0, 0.0, 10.0, 10.0),
+        content_lost_edges=list(lost),
+    )
+
+
+def test_the_draw_can_reach_every_capture_channel():
+    """`CAPTURE_CHANNELS` is what the assembler draws from, and `Capture` is what the label may
+    carry. A channel present in the enum and missing from the tuple would be a value the contract
+    declares and no corpus can contain — unreachable rather than merely rare, and nothing about a
+    run would say so."""
+    from receipt_synth.assembler import CAPTURE_CHANNELS
+
+    assert set(CAPTURE_CHANNELS) == set(Capture)
+    assert len(CAPTURE_CHANNELS) == len(Capture), "a channel is listed twice, which weights it"
+
+
+def test_a_run_of_any_size_contains_more_than_one_capture_channel(multi_claim_dataset):
+    """🔴 THE CHANNEL IS DRAWN, NOT FIXED. Every earlier version of this generator produced a
+    corpus of screenshots only, and nothing in the labels distinguished "this channel was chosen"
+    from "this channel is the only one there is". With sixty-odd documents and an equal three-way
+    draw, all three appear with a probability that rounds to one — so anything less is the draw
+    being gone rather than the run being unlucky.
+
+    It matters beyond variety: the two paper channels are the ONLY route by which the electronic
+    side of the VAT-row rule stops being the whole corpus. See `test_vat_row_form.py`.
+    """
+    result, _ = multi_claim_dataset
+    assert len(result.documents) > 30, "too few documents for this test to mean anything"
+    assert {document.capture for document in result.documents} == set(Capture)
+
+
+def test_a_capture_channel_with_no_documents_is_reported_ABSENT_and_never_as_zero():
+    """🔴 ABSENT AND ZERO ARE DIFFERENT STATEMENTS AND ONLY ONE OF THEM CAN BE TRUE.
+
+    `0.0%` complete says a measurement was taken and came out at nothing; absence says no
+    measurement exists. Folding the first into the second is how an empty cell becomes a data point
+    in somebody's table, and nobody re-derives it afterwards.
+
+    Asserted in BOTH directions: the channel that has documents must carry a completeness fraction,
+    and the two that have none must carry the word rather than a share. A test on the word alone
+    would pass for a report that printed both.
+    """
+    from receipt_synth.assembler import Dataset
+
+    dataset = Dataset(
+        seed=1, personas=[], claims=[],
+        documents=[
+            a_document_on(Capture.PHOTO, doc_id="d1"),
+            a_document_on(Capture.PHOTO, doc_id="d2", lost=["bottom"]),
+        ],
+    )
+    report = balance_report(dataset)
+    lines = {
+        line.split()[0]: line
+        for line in report.splitlines()
+        if line.startswith("  ") and line.split() and line.split()[0] in
+        {c.value for c in Capture}
+    }
+
+    assert lines["photo"].strip().startswith("photo")
+    assert "complete 1/2" in lines["photo"]
+    for absent in ("scan", "screenshot"):
+        assert "ABSENT" in lines[absent], f"{absent} is missing but not declared absent"
+        assert "complete" not in lines[absent], (
+            f"{absent} has no documents, so a completeness figure for it is a measurement "
+            "that was never taken"
+        )
+
+
+def test_a_document_whose_content_was_not_measured_is_counted_apart():
+    """A `content_complete` of `None` is neither complete nor incomplete, and the report must not
+    silently fold it into the second. Otherwise a corpus with no extents at all would print a
+    completeness of 0 — a measurement nobody took, in the place a real one goes."""
+    from receipt_synth.assembler import Dataset
+
+    dataset = Dataset(
+        seed=1, personas=[], claims=[],
+        documents=[
+            a_document_on(Capture.SCAN, doc_id="d1"),
+            a_document_on(Capture.SCAN, doc_id="d2").model_copy(update={"content_bbox": None}),
+        ],
+    )
+    report = balance_report(dataset)
+    line = next(ln for ln in report.splitlines() if ln.strip().startswith("scan"))
+
+    assert "complete 1/2" in line
+    assert "1 unmeasured" in line, f"the unmeasured document is not declared: {line!r}"
 
 
 def test_a_dataset_without_plans_still_reports():

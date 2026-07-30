@@ -18,14 +18,14 @@ from __future__ import annotations
 
 import random
 import re
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from html import unescape
 
 import pytest
 
 from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.renderer import Renderer
-from receipt_synth.schemas import Capture
 from test_renderer import REGISTERED_SLUGS, context_for
 
 # Every field marker a template can carry that is NOT text — a QR is a picture and a stamp is drawn
@@ -219,6 +219,84 @@ def test_a_non_text_marker_really_is_outside_the_text_extent(renderer, tmp_path)
     )
 
 
+# ------------------------------------------------------ did the content survive --
+
+
+def a_document(**overrides):
+    """A minimal `DocGroundTruth`, for the completeness derivation only.
+
+    Built directly rather than through the pipeline: the property under test is arithmetic on two
+    fields of the model, and rendering a page to reach it would make the test slow AND make a
+    failure ambiguous between the model and the renderer.
+    """
+    from receipt_synth.schemas import Capture, DocGroundTruth, DocType
+
+    fields = {
+        "doc_id": "d1", "source_file": "d1.png", "doc_type": DocType.FISCAL_RECEIPT,
+        "language": "uk", "currency": "UAH", "amount": Decimal("10.00"),
+        "date": date(2026, 6, 15), "counterparty": "Аптека", "line_items": [],
+        "has_qr": True, "qr_is_fiscal": True, "has_fiscal_number": True,
+        "capture": Capture.PHOTO, "content_bbox": (0.0, 0.0, 10.0, 10.0),
+    }
+    return DocGroundTruth(**(fields | overrides))
+
+
+def test_a_document_that_lost_nothing_is_complete():
+    assert a_document(content_lost_edges=[]).content_complete is True
+
+
+def test_a_document_that_lost_an_edge_is_not_complete():
+    """The derivation, in the direction that matters. A stale `true` beside a populated edge list
+    would send a consumer to measure a character error rate against text that is not in the
+    image — which is the whole reason the boolean is computed rather than stored."""
+    assert a_document(content_lost_edges=["bottom"]).content_complete is False
+
+
+def test_a_document_with_no_content_extent_is_UNMEASURED_and_not_incomplete():
+    """🔴 `None` IS NOT `False`, and the two are different statements about the world. Without an
+    extent there is nothing to compare against a frame, so nothing is known. `False` would put a
+    fabricated measurement into a metric and `True` an unearned one."""
+    assert a_document(content_bbox=None).content_complete is None
+    assert a_document(content_bbox=None, content_lost_edges=["bottom"]).content_complete is None
+
+
+def test_the_completeness_measurement_is_taken_against_the_DEGRADED_image():
+    """🔴 A POSITIONAL QUESTION, ANSWERED WITH `ast` RATHER THAN BY RUNNING ANYTHING — the same
+    instrument, and for the same reason, as the extent's own provenance test below.
+
+    The frame the content extent is compared against must be the DEGRADED image's, because that is
+    the file a consumer receives. Two of the three channels change the image's size — `photo` and
+    `scan` both pad — so measuring against the clean render's dimensions would compare a moved box
+    with a frame it was never in. On `screenshot` the two are identical, so a version that used the
+    clean render produces the same answer for a third of the corpus and reddens nothing.
+    """
+    import ast
+    import inspect
+
+    from receipt_synth import assembler
+
+    tree = ast.parse(inspect.getsource(assembler._build_document))
+    bindings = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(t, ast.Tuple)
+            and [e.id for e in t.elts if isinstance(e, ast.Name)] == ["height", "width"]
+            for t in node.targets
+        )
+    ]
+    assert len(bindings) == 1, f"{len(bindings)} bindings of (height, width) — expected one"
+
+    source = ast.unparse(bindings[0].value)
+    assert "clean" not in source, (
+        f"the frame is taken from {source!r}, which is the CLEAN render; two of the three capture "
+        "channels change the image's size, so the comparison would use a frame the box is not in"
+    )
+    assert "moved.image" in source, (
+        f"the frame is taken from {source!r}, and not from the degraded image"
+    )
+
+
 # ---------------------------------------------------------------- determinism --
 
 
@@ -289,8 +367,13 @@ def rendered_fields(renderer: Renderer, slug: str) -> set[str]:
 
 def test_the_label_carries_both_and_they_survive_the_degrader(renderer, tmp_path):
     """End to end: what the renderer read reaches the label, and the extent comes back from the
-    degrader's geometry pipeline rather than bypassing it. `capture` is a screenshot here, which
-    applies no geometry — so the box is unchanged, and the assertion is that it went THROUGH."""
+    degrader's geometry pipeline rather than bypassing it.
+
+    The channel is now DRAWN rather than fixed, so this no longer pins one — pinning it would make
+    the test a statement about which channel a seed happens to pick. What it pins instead is that
+    the drawn one is a real channel and that the completeness measurement was taken: with three
+    channels live, two of them apply geometry, so a bypass of the transform would show up as a box
+    that failed to move rather than as nothing at all."""
     from receipt_synth import assembler
     from receipt_synth.claim_planner import ClaimPlan, DocumentPlan, evidence_of
     from receipt_synth.persona_generator import generate_persona
@@ -317,4 +400,8 @@ def test_the_label_carries_both_and_they_survive_the_degrader(renderer, tmp_path
     assert assembler._CONTENT_BBOX_KEY not in document.field_bboxes, (
         "the reserved key reached the label — it must be removed after the transform"
     )
-    assert document.capture is Capture.SCREENSHOT
+    assert document.capture in assembler.CAPTURE_CHANNELS
+    # Measured rather than defaulted: `None` here would mean no extent was compared against any
+    # frame, which is a different statement from "the content survived".
+    assert isinstance(document.content_complete, bool)
+    assert document.content_complete is (not document.content_lost_edges)
