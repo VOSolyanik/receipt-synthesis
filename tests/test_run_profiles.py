@@ -101,14 +101,47 @@ def test_the_observation_exemption_exempts_something():
 # ---------------------------------------------------------- the profiles side --
 
 
-def test_no_profile_in_this_repository_is_authoritative():
-    """🔴 THE SENTENCE THAT STOPS TWO SETS OF NUMBERS READING AS A CONTRADICTION. This repository
-    ships a generator and a seed, never a corpus, so the run a consumer holds is one this file has
-    not seen. Every profile here is an example until whoever generates the delivered dataset adds
-    its own and marks it."""
-    assert PROFILES["profiles"], "no profiles recorded"
-    assert not any(p["authoritative"] for p in PROFILES["profiles"])
-    assert "NONE OF THE PROFILES BELOW" in PROFILES["authoritative_profile"]
+def test_exactly_one_profile_is_authoritative_and_the_prose_names_it():
+    """🔴 THE SENTENCE THAT STOPS TWO SETS OF NUMBERS READING AS A CONTRADICTION.
+
+    Until the production run there was no delivered corpus, so the invariant was that NOTHING here
+    was authoritative. A dataset has now been generated and handed over, and the invariant inverts
+    rather than disappears: EXACTLY ONE profile describes it, and the prose says which. Zero would
+    leave a consumer without an answer; two would leave them with the contradiction this key exists
+    to prevent — and a flag nobody restated in prose would be a fact only a parser could find.
+    """
+    profiles = PROFILES["profiles"]
+    assert profiles, "no profiles recorded"
+
+    authoritative = [p["id"] for p in profiles if p["authoritative"]]
+    assert len(authoritative) == 1, (
+        f"{len(authoritative)} of {len(profiles)} profiles are authoritative ({authoritative}); "
+        "a consumer asking which numbers describe its corpus must get exactly one answer"
+    )
+    assert authoritative[0] in PROFILES["authoritative_profile"], (
+        f"{authoritative[0]} carries the flag and `authoritative_profile` does not name it"
+    )
+
+
+def test_the_authoritative_profile_can_be_checked_against_a_corpus():
+    """A profile that cannot say WHICH corpus it describes will one day be read as describing a
+    different one, and the delivered corpus is the case where that costs something.
+
+    The dataset is not committed — it is reproduced from the seed — so identity is the only thing
+    standing between "figures for the corpus you hold" and "figures for some run of that command".
+    Every other profile is an example and needs no such handle.
+    """
+    profile = next(p for p in PROFILES["profiles"] if p["authoritative"])
+    identity = profile["corpus_identity"]
+
+    for key in ("manifest_sha256", "images_sha256", "labels_sha256"):
+        assert re.fullmatch(r"[0-9a-f]{64}", str(identity[key])), (
+            f"{profile['id']}.corpus_identity.{key} is not a SHA-256 digest"
+        )
+    assert len(identity["how_to_recompute"]) > 200, (
+        f"{profile['id']} states digests without saying how they were computed, so nobody can "
+        "reproduce one to compare against"
+    )
 
 
 @pytest.mark.parametrize("profile", PROFILES["profiles"], ids=lambda p: p["id"])

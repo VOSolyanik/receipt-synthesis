@@ -85,6 +85,13 @@ currency, language, capture channels with their completeness subsets, and the tr
 Every figure carries its denominator, and a dimension with no data is reported as **absent** rather than as
 zero.
 
+[`docs/balance-report.md`](docs/balance-report.md) is that report for the **production corpus**, written for a
+reader rather than for a terminal: what the run produced, which per-class figures may be quoted and which may
+not, and what the corpus is not. Its machine-readable twin is profile `RP-05` under `run_profiles` in
+`config/labelling-schema.yaml` — the one profile there marked authoritative, because it is the corpus a
+consumer receives. The others are examples of how a quantity behaves, and the file says so where the numbers
+are.
+
 Generation is **deterministic under `--seed`**: the repository ships the generator, its configuration and the
 seed, not the dataset. Rerunning with the same seed reproduces the same dataset byte for byte.
 
