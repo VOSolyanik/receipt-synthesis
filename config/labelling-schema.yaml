@@ -45,6 +45,37 @@
 #
 # Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 16 by THE COMPARISON RULES BECOMING EXECUTABLE. FOUR consequences a consumer has to
+# know about, and none of them is a change to the data.
+#
+#   ONE NEW BLOCK, `conformance_vectors`, standing as section 2b directly after the `normalization`
+#   rules it pins down: 43 cases over the 13 classes there marked `status: emitted`. Each case
+#   names what an EXTRACTOR might return, what this dataset carries
+#   for the same thing, whether the class's rule declares the two equal, and WHICH CLAUSE decides
+#   it. 🔴 AN IMPLEMENTATION IS CONFORMANT WITH A CLASS WHEN IT AGREES WITH EVERY `equal` OF THAT
+#   CLASS — a testable relationship where "strip the legal form" had been a sentence two readers
+#   implement two ways. A rule agreed in prose is disagreed in code, and the disagreement arrives
+#   as a scorecard reporting a fault in a system that works.
+#
+#   ⚠️ THE CASES ARE TYPED BY CLASS AND NOT BY FIELD, so a consumer looks a field's cases up
+#   through its `normalize:` key rather than by the field's name. Attached to fields they would be
+#   repeated once per field of the same class, and the copies would drift apart.
+#
+#   🔴 NOTHING IN THIS REPOSITORY RUNS THEM, AND THE BLOCK SAYS SO WHERE IT LIVES. The generator
+#   emits one side of a comparison and never performs one, so there is no normalizer here to run
+#   them against; writing one to match would prove only that the file agrees with itself. They are
+#   for whoever writes the other side. What IS checked here is the FIXED POINT — that every value
+#   this dataset emits is already in the canonical form its class declares, so an untrimmed name or
+#   an unrounded amount fails loudly — together with the completeness of the block over every
+#   emitted class, and one property of the file's own text: that the single input written as an
+#   escape sequence is STILL an escape sequence. A vector for Unicode normalization has to carry a
+#   string that is NOT normalized, and an editor, a terminal or a well-meant reformat would
+#   normalize it silently, leaving a case that tests nothing while still looking like a test.
+#
+#   NO LABEL RECORD GAINED A KEY AND THE DRAW DID NOT MOVE. The rules themselves are unaltered —
+#   the vectors restate as cases what `normalization` already stated in prose — so a consumer
+#   holding data generated under version 15 can adopt them without regenerating anything.
+#
 # Bumped to 15 by TWO ADDITIONS THAT CHANGE NO DOCUMENT — one to the label, one to this file's own
 # shape. FOUR consequences a consumer has to know about.
 #
@@ -434,7 +465,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 15
+version: 16
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -1638,6 +1669,308 @@ normalization:
     intended_use: >
       A reference for judging EXPLANATION quality against a system's own justification —
       which is the shape the consumer's `DecisionTrace` takes.
+
+
+# =============================================================================
+# 2b. Conformance vectors — the comparison rules, as cases rather than as prose
+# =============================================================================
+#
+# 🔴 WHY THEY EXIST. Section 2 above states each comparison rule in words, and two readers
+# implement a sentence two ways: "strip the legal form" is unambiguous until a name has no legal
+# form, or two, or one that is part of the trading name. A rule stated only in prose is agreed in
+# prose and disagreed in code — and the disagreement surfaces as a scorecard reporting a fault in a
+# system that is working, which is the exact failure this whole file exists to prevent.
+#
+# ⚠️ THIS BLOCK CITED "SECTION 8" AND WAS NUMBERED 8b BEFORE IT WAS COMMITTED, and both were wrong:
+# section 8 is `artifacts`, while the rules these cases pin down are `normalization`, which is
+# section 2. The number and the citations are corrected together with the placement so that all
+# three agree — a reader comparing versions should not read the move as having changed which
+# section this extends. It always extended this one.
+#
+# HOW TO READ A VECTOR:
+#
+#   `input`  — what an EXTRACTOR might return, having read the document.
+#   `label`  — what this dataset carries for the same thing.
+#   `equal`  — whether the class's rule declares the two the same. A consumer's implementation is
+#              conformant when it agrees with every `equal` below.
+#   `why`    — which clause of the rule decides it. A vector without a reason is a fact nobody can
+#              maintain: when the rule changes, the reason is what says whether the case moved.
+#
+# ⚠️ THE VECTORS ARE TYPED BY CLASS, not by field. A field's comparison follows from its
+# `normalize:` key, so a vector attached to a field would have to be repeated for every other field
+# of the same class and would drift between them. Every class marked `status: emitted` in section 2
+# carries vectors, and a test holds that correspondence — a class added there without cases here
+# fails rather than being silently untested.
+#
+# 🔴 ONE INPUT IS WRITTEN AS AN ESCAPE SEQUENCE ON PURPOSE — see `text_name` below. A vector for
+# Unicode normalization has to carry a string that is NOT normalized, and any editor, any copy
+# through a terminal, any well-meant reformatting of this file would quietly normalize it and leave
+# a case that tests nothing while still looking like a test. Written as `\u0456\u0308` it survives
+# every one of those, and a test asserts that the value really is un-normalized rather than trusting
+# that it stayed so.
+
+conformance_vectors:
+  status: emitted
+  conformance_is: >
+    An implementation is conformant with a class when, for every vector of that class, its
+    comparison of `input` against `label` returns `equal`. Nothing here is a test of THIS
+    repository: the generator never compares two values, it only emits one side. These cases are
+    for whoever writes the other side.
+
+  vectors:
+    identity:
+      - input: "p001_c1_d1"
+        label: "p001_c1_d1"
+        equal: true
+        why: identical bytes
+      - input: "P001_C1_D1"
+        label: "p001_c1_d1"
+        equal: false
+        why: >
+          NO CASE FOLDING. These are opaque keys; a consumer that folded them could join two
+          different documents.
+      - input: " p001_c1_d1"
+        label: "p001_c1_d1"
+        equal: false
+        why: no trimming either — an opaque key is compared as bytes
+
+    closed_enum:
+      - input: "fiscal_receipt"
+        label: "fiscal_receipt"
+        equal: true
+        why: exact match against the declared vocabulary
+      - input: "Fiscal Receipt"
+        label: "fiscal_receipt"
+        equal: false
+        why: >
+          A value outside the vocabulary is an ERROR, not a near miss to be scored partially. A
+          consumer that mapped display text onto members would be scoring its own mapping.
+      - input: "invoice"
+        label: "fiscal_receipt"
+        equal: false
+        why: two members of the vocabulary are never equal
+
+    policy_vocabulary:
+      - input: "vitamin_complex"
+        label: "vitamin_complex"
+        equal: true
+        why: exact match against the vocabulary config/policy.yaml declares
+      - input: "vitamins"
+        label: "vitamin_complex"
+        equal: false
+        why: >
+          A kind not in the vocabulary is not a partial match for one that is. The join this
+          vocabulary exists for is exact.
+
+    iso_date:
+      - input: "2026-06-15"
+        label: "2026-06-15"
+        equal: true
+        why: same calendar date
+      - input: "15.06.2026"
+        label: "2026-06-15"
+        equal: true
+        why: >
+          🔴 THE RULE PARSES BOTH SIDES TO A CALENDAR DATE AND COMPARES DATES, NEVER STRINGS. The
+          document prints `DD.MM.YYYY` and the label carries ISO; a consumer comparing strings
+          scores every correct reading as wrong.
+      - input: "06/15/2026"
+        label: "2026-06-15"
+        equal: true
+        why: >
+          Also the same date. ⚠️ DD/MM versus MM/DD is the commonest way for a correct extraction to
+          score zero, which is why parsing is the rule — but a consumer must know which convention
+          it parsed with, and a Ukrainian document is `DD.MM.YYYY`.
+      - input: "2026-06-15T10:15:00"
+        label: "2026-06-15"
+        equal: true
+        why: the time is not part of the value; both sides reduce to a calendar date
+      - input: "2026-05-15"
+        label: "2026-06-15"
+        equal: false
+        why: a different date, and no tolerance — ±1 day would forgive the period rule
+
+    money:
+      - input: "1200.00"
+        label: 1200.00
+        equal: true
+        why: two decimal places, exact
+      - input: "1 200,00"
+        label: 1200.00
+        equal: true
+        why: >
+          The printed form carries a space as the thousands separator and a comma or a dot as the
+          decimal one — both occur in this corpus. A consumer parses the printed form to a number.
+      - input: "1200.004"
+        label: 1200.00
+        equal: true
+        why: half-up rounding to two places, then exact — the kopiyka is the smallest unit
+      - input: "1200.01"
+        label: 1200.00
+        equal: false
+        why: >
+          🔴 NO TOLERANCE. A kopiyka IS a difference; `0.01` would forgive a real error. This is the
+          case a consumer copying a tolerance from elsewhere gets wrong.
+      - input: "-1200.00"
+        label: 1200.00
+        equal: false
+        why: >
+          The sign is never part of an amount in this dataset — direction is its own field, exactly
+          so that this comparison stays one rule for every class.
+
+    quantity:
+      - input: "1"
+        label: 1
+        equal: true
+        why: compared numerically
+      - input: "1.0"
+        label: 1
+        equal: true
+        why: >
+          The document prints an integral quantity as `1`, not `1.0`, but a consumer that returns
+          either is right — the comparison is numeric, not textual.
+      - input: "2"
+        label: 1
+        equal: false
+        why: a different quantity
+
+    text_name:
+      - input: "Вітаміни D3 2000 МО"
+        label: "Вітаміни D3 2000 МО"
+        equal: true
+        why: identical after NFC and trimming
+      - input: "  Вітаміни D3 2000 МО  "
+        label: "Вітаміни D3 2000 МО"
+        equal: true
+        why: >
+          Leading and trailing whitespace is trimmed. OCR routinely returns it, and a rule that did
+          not trim would score every such reading as wrong.
+      - input: "Вітаміни  D3 2000 МО"
+        label: "Вітаміни D3 2000 МО"
+        equal: true
+        why: internal runs of whitespace collapse to one space
+      - input: "Вітаміни D3"
+        label: "Вітаміни D3 2000 МО"
+        equal: false
+        why: a truncated reading is not a match — there is no fuzzy matching in any class here
+      - input: "\u0456\u0308\u0436\u0430\u043a"
+        label: "їжак"
+        equal: true
+        why: >
+          🔴 THE UNICODE CASE, AND THE REASON THE INPUT IS AN ESCAPE SEQUENCE. `\u0456\u0308` is
+          `і` followed by a COMBINING DIAERESIS — the decomposed (NFD) spelling of `ї`, which the
+          label carries precomposed. The two are the same word and every rule here begins with NFC,
+          so a conformant implementation returns `true`.
+
+          WRITTEN AS AN ESCAPE BECAUSE ANY EDITOR WOULD NORMALIZE IT AWAY. A vector for
+          normalization whose input has been normalized is a case that passes without testing
+          anything, and it would still look like a test. `tests/test_conformance_vectors.py` asserts
+          that this value is genuinely NOT in NFC — the escape is checked, not trusted.
+
+    party_name:
+      - input: "ТОВ «Вітамін Плюс»"
+        label: "Вітамін Плюс"
+        equal: true
+        why: >
+          THE CENTRAL CASE OF THIS CLASS. The document prints the name with its legal form inside
+          guillemets; the label carries the bare trading name, which this file makes authoritative.
+          The rule strips the legal-form prefix and the enclosing quotation marks.
+      - input: "ФОП Ковальчук О. С."
+        label: "Ковальчук О. С."
+        equal: true
+        why: >
+          A sole trader's form is stripped too, and there are no guillemets to strip — the name is a
+          person's. A rule written to expect quotation marks fails here, which is why the two are
+          separate clauses.
+      - input: "вітамін плюс"
+        label: "Вітамін Плюс"
+        equal: true
+        why: the comparison casefolds, after stripping
+      - input: "Вітамін  Плюс"
+        label: "Вітамін Плюс"
+        equal: true
+        why: internal whitespace is collapsed
+      - input: "Вітамін"
+        label: "Вітамін Плюс"
+        equal: false
+        why: >
+          🔴 NO FUZZY MATCHING. A prefix is not a match. The threshold for this field is already
+          lowered because the field is hard; forgiving near misses as well would be counting one
+          difficulty twice, and the reasoning is in `normalization.party_name`.
+
+    vat_letter:
+      - input: "А"
+        label: "А"
+        equal: true
+        why: identical code points after NFC — both are CYRILLIC CAPITAL LETTER A
+      - input: "A"
+        label: "А"
+        equal: false
+        why: >
+          🔴 THE CASE MOST LIKELY TO BE GOT WRONG AND HARDEST TO SEE. The input is LATIN CAPITAL
+          A (U+0041); the label is CYRILLIC А (U+0410). They render identically in most fonts and
+          are different characters. The rule forbids transliteration for exactly this reason.
+      - input: "а"
+        label: "А"
+        equal: false
+        why: no case folding — the letters are a closed set of capitals
+
+    fraction:
+      - input: 1.0
+        label: 1.0
+        equal: true
+        why: within the absolute tolerance of 1e-6
+      - input: 0.6666667
+        label: 0.6666666666666666
+        equal: true
+        why: >
+          THE ONE CLASS WITH A TOLERANCE, and it is not a money tolerance in disguise: a covered
+          fraction is a ratio of two amounts and its decimal expansion does not terminate. The
+          tolerance absorbs the representation, not a difference in the underlying amounts.
+      - input: 0.75
+        label: 1.0
+        equal: false
+        why: a different fraction
+      - input: 0.0
+        label: null
+        equal: false
+        why: >
+          🔴 `null` IS NOT ZERO. It means there was no line item to compute a fraction from, which is
+          a different statement from "nothing was covered". A consumer that coerced one to the other
+          would report a covered claim as uncovered.
+
+    bbox:
+      - input: [31, 659, 1062, 26]
+        label: [31, 659, 1062, 26]
+        equal: true
+        why: identical whole pixels, `[x, y, width, height]` — the COCO convention
+      - input: [31, 659, 1093, 685]
+        label: [31, 659, 1062, 26]
+        equal: false
+        why: >
+          ⚠️ THE CONVENTION IS THE TRAP. These are the same rectangle written as `[x1, y1, x2, y2]`.
+          A consumer reading the label as corners rather than as origin-plus-size gets a box that
+          overlaps the right answer and is wrong everywhere it matters.
+
+    string_list_unordered:
+      - input: ["mixed_items", "limit_exhausted"]
+        label: ["limit_exhausted", "mixed_items"]
+        equal: true
+        why: compared as SETS — the order carries no meaning
+      - input: ["limit_exhausted"]
+        label: ["limit_exhausted", "mixed_items"]
+        equal: false
+        why: a missing member is a missing cause, not a partial match
+
+    prose_not_comparable:
+      - input: "category=sport ok"
+        label: "category=sport ok"
+        equal: null
+        why: >
+          🔴 `equal: null` MEANS NO COMPARISON IS DEFINED, and that is the whole content of this
+          class. `policy_trace` is prose written for a human reading a disagreement; scoring it
+          would measure a wording nobody promised to keep. A consumer that computed a similarity
+          over it would be reporting a number about this generator's phrasing.
 
 
 # =============================================================================
