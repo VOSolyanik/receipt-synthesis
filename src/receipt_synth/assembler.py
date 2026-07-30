@@ -72,6 +72,12 @@ _PERSONA_DRAW_LIMIT = 200
 # label that sounds accounted for is worse than a count that admits it is not.
 UNATTRIBUTED = "not attributed — planning stopped for a reason claim_planner cannot name"
 
+# The key the content extent rides under while it goes through the degrader's geometry, and which
+# is removed again before the label is written. Two leading underscores so it cannot collide with a
+# `data-field` name — those are printed-field names, and none begins that way — and the collision is
+# checked rather than assumed.
+_CONTENT_BBOX_KEY = "__content_extent__"
+
 
 @dataclass(frozen=True)
 class Dataset:
@@ -303,20 +309,33 @@ def _build_document(
         # The clean render is an intermediate, not an artifact: the dataset ships the
         # document as it would have been captured.
         clean = renderer.render(slug, document.render_context(), Path(staging) / f"{doc_id}.png")
-        degraded = degrade(
+        # 🔴 THE CONTENT EXTENT TRAVELS WITH THE FIELD BOXES, THROUGH THE SAME TRANSFORM. Geometry
+        # is Albumentations' alone (see `degrader`), and a box moved by a second route would drift
+        # from the fields the moment a real geometric step arrives — which is exactly when a
+        # measurement built on it would start being quietly wrong.
+        if _CONTENT_BBOX_KEY in clean.field_bboxes:
+            raise ValueError(
+                f"a template marks a field named {_CONTENT_BBOX_KEY!r}, which this module reserves "
+                "for the content extent; rename the `data-field`"
+            )
+        moved = degrade(
             cv2.imread(str(clean.image_path)),
-            clean.field_bboxes,
+            {**clean.field_bboxes, _CONTENT_BBOX_KEY: clean.content_bbox},
             seed=rng.getrandbits(32),
             capture=capture,
         )
+        boxes = dict(moved.field_bboxes)
+        content_bbox = boxes.pop(_CONTENT_BBOX_KEY)
         image_path.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(image_path), degraded.image)
+        cv2.imwrite(str(image_path), moved.image)
 
     return document.ground_truth(
         doc_id=doc_id,
         source_file=image_path.name,
         capture=capture,
-        field_bboxes=degraded.field_bboxes,
+        field_bboxes=boxes,
+        reference_text=clean.reference_text,
+        content_bbox=content_bbox,
     )
 
 

@@ -55,12 +55,24 @@ FONT_FILES = {
 
 @dataclass(frozen=True)
 class RenderedDocument:
-    """One rendered page: the image on disk and where every field ended up on it."""
+    """One rendered page: the image on disk, where every field ended up on it, and what it says.
+
+    `reference_text` and `field_bboxes` COVER DIFFERENT THINGS, and the difference is the whole
+    reason both exist. The boxes cover the LABELLED FIELDS; the text covers ALL PRINTED TEXT. A
+    document whose every labelled field survived a crop while the footer carrying the fiscal
+    wording was lost would look complete measured on the boxes alone.
+    """
 
     image_path: Path
     width: int
     height: int
     field_bboxes: dict[str, BBox]
+    # The page's text in reading order, taken from the layout engine BEFORE rasterization — so it
+    # is ground truth by construction rather than by annotation. See `_COLLECT_TEXT`.
+    reference_text: str
+    # Where that text is, as one box. NOT the union of the field boxes and not the page: the extent
+    # of the rendered TEXT, which is what a later measurement compares a degraded capture against.
+    content_bbox: BBox
 
 
 def _font_faces() -> list[dict[str, str]]:
@@ -81,6 +93,51 @@ def qr_svg(payload: str, *, error: str = "m") -> str:
     """
     return segno.make(payload, error=error).svg_inline(border=0, scale=3)
 
+
+# THE PAGE'S TEXT, IN READING ORDER, AND THE EXTENT OF IT.
+#
+# `innerText` rather than `textContent`, and the difference is not cosmetic: `textContent` returns
+# the source order of every node including ones CSS never paints, while `innerText` is what the
+# layout engine decided a reader sees — hidden elements excluded, line boxes reflected as newlines.
+# Since this dataset's whole premise is that the label describes the IMAGE, the text has to come
+# from the same authority that produced the image.
+#
+# THE EXTENT IS COMPUTED FROM TEXT RANGES, not from element boxes. An element's box includes its
+# padding and can be far larger than the ink inside it — a table cell, a full-width footer div —
+# and a measurement of whether the CONTENT survived a crop wants where the characters are. A
+# `Range` over a text node reports exactly the rectangles the glyphs occupy.
+#
+# ⚠️ ITS SCOPE IS TEXT AND ONLY TEXT. A QR code, a stamp and a signature are ink that this box does
+# not cover, deliberately: it is the counterpart of `reference_text`, which is also text only, and
+# a later measurement must not read it as "everything printed".
+_COLLECT_TEXT = """
+() => {
+  const root = document.querySelector('[data-document]') ?? document.documentElement;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  let node;
+  while ((node = walker.nextNode())) {
+    if (!node.textContent.trim()) continue;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    for (const rect of range.getClientRects()) {
+      if (rect.width === 0 || rect.height === 0) continue;
+      left = Math.min(left, rect.left);
+      top = Math.min(top, rect.top);
+      right = Math.max(right, rect.right);
+      bottom = Math.max(bottom, rect.bottom);
+    }
+  }
+  const empty = !Number.isFinite(left);
+  return {
+    text: root.innerText,
+    bbox: empty ? [0, 0, 0, 0] : [
+      Math.floor(left), Math.floor(top),
+      Math.ceil(right - left), Math.ceil(bottom - top),
+    ],
+  };
+}
+"""
 
 # Reading a rect straight off the layout engine. `x`/`y` are viewport coordinates, which
 # equal page coordinates because the renderer never scrolls and sizes the viewport to the
@@ -172,12 +229,21 @@ class Renderer:
                 bboxes = {
                     name: tuple(box) for name, box in page.evaluate(_COLLECT_BBOXES).items()
                 }
+                # Read BEFORE the screenshot, from the same page state. The order matters only in
+                # that nothing may change between them; there is no scrolling or animation here, so
+                # both describe one layout.
+                content = page.evaluate(_COLLECT_TEXT)
                 page.screenshot(path=output_path, full_page=True)
         finally:
             page.close()
 
         return RenderedDocument(
-            image_path=output_path, width=width, height=height, field_bboxes=bboxes
+            image_path=output_path,
+            width=width,
+            height=height,
+            field_bboxes=bboxes,
+            reference_text=content["text"],
+            content_bbox=tuple(content["bbox"]),
         )
 
 

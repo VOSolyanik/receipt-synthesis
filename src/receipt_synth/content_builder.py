@@ -625,6 +625,8 @@ class PrroReceipt:
         source_file: str,
         capture: Capture,
         field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
     ) -> DocGroundTruth:
         """The label record for this receipt.
 
@@ -648,6 +650,10 @@ class PrroReceipt:
             has_fiscal_number=True,
             capture=capture,
             field_bboxes=field_bboxes,
+            # From the RENDERER, like the boxes: neither is decided by the content class, and both
+            # describe the page that was produced from it.
+            reference_text=reference_text,
+            content_bbox=content_bbox,
             vat_row_form=self.vat_row_form,
         )
 
@@ -1737,6 +1743,8 @@ class PaymentConfirmation:
         source_file: str,
         capture: Capture,
         field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
     ) -> DocGroundTruth:
         """The label record for this confirmation.
 
@@ -1778,6 +1786,10 @@ class PaymentConfirmation:
             has_fiscal_number=False,
             capture=capture,
             field_bboxes=field_bboxes,
+            # From the RENDERER, like the boxes: neither is decided by the content class, and both
+            # describe the page that was produced from it.
+            reference_text=reference_text,
+            content_bbox=content_bbox,
         )
 
 
@@ -2292,6 +2304,8 @@ class BankStatement:
         source_file: str,
         capture: Capture,
         field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
     ) -> DocGroundTruth:
         """The label record for this statement — one transaction, not one document.
 
@@ -2339,6 +2353,10 @@ class BankStatement:
             has_fiscal_number=False,
             capture=capture,
             field_bboxes=field_bboxes,
+            # From the RENDERER, like the boxes: neither is decided by the content class, and both
+            # describe the page that was produced from it.
+            reference_text=reference_text,
+            content_bbox=content_bbox,
         )
 
 
@@ -2772,6 +2790,8 @@ class Invoice:
         source_file: str,
         capture: Capture,
         field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
     ) -> DocGroundTruth:
         """The label record for this invoice.
 
@@ -2799,6 +2819,10 @@ class Invoice:
             has_fiscal_number=False,
             capture=capture,
             field_bboxes=field_bboxes,
+            # From the RENDERER, like the boxes: neither is decided by the content class, and both
+            # describe the page that was produced from it.
+            reference_text=reference_text,
+            content_bbox=content_bbox,
         )
 
 

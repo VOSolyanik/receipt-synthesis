@@ -356,6 +356,21 @@ class DocGroundTruth(BaseModel):
 
     capture: Capture
     field_bboxes: dict[str, BBox] = Field(default_factory=dict)
+    # 🔴 EVERY PRINTED CHARACTER OF THE PAGE, IN READING ORDER, taken from the layout engine BEFORE
+    # rasterization — so it is ground truth by construction rather than by annotation, exactly as
+    # the bounding boxes are. Nothing here was read off an image.
+    #
+    # IT IS NOT THE FIELDS. `field_bboxes` covers the LABELLED fields; this covers ALL text. The
+    # difference is what a later measurement of whether a capture survived degradation rests on: a
+    # document whose every labelled field came through while the footer carrying the fiscal wording
+    # was cropped would report as complete measured on the fields alone, and would then produce a
+    # falsely low character error rate for a system that never read the footer at all.
+    reference_text: str = ""
+    # Where that text is, as one box. NOT the union of the field boxes and NOT the page: the extent
+    # of the rendered TEXT. ⚠️ Its scope is text and only text — a QR, a stamp and a signature are
+    # ink it does not cover — because it is the geometric counterpart of `reference_text`, which is
+    # also text only.
+    content_bbox: BBox | None = None
 
     # Provenance. Not decoration: this is what keeps the origin of an individual file
     # unambiguous once it leaves this repository.

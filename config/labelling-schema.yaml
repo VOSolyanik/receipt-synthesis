@@ -45,6 +45,39 @@
 #
 # Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 15 by TWO ADDITIONS THAT CHANGE NO DOCUMENT — one to the label, one to this file's own
+# shape. FOUR consequences a consumer has to know about.
+#
+#   ONE NEW LABEL FIELD, `reference_text`: EVERY PRINTED CHARACTER of the page, in reading order,
+#   read from the layout engine BEFORE rasterization. It is ground truth by construction, exactly as
+#   the bounding boxes are — nothing was transcribed from an image. 🔴 IT IS NOT THE FIELDS:
+#   `field_bboxes` covers the LABELLED fields while this covers ALL text, and the difference is what
+#   a measurement of whether a capture survived degradation rests on. A document whose every
+#   labelled field came through while a cropped footer took the fiscal wording with it would report
+#   as complete measured on the fields alone.
+#
+#   ONE NEW LABEL FIELD, `content_bbox`: where that text is, as one box. ⚠️ Text and only text — a
+#   QR, a stamp and a signature are ink it does not cover — so it and `reference_text` describe the
+#   same thing. It travels through the degrader's geometry with the field boxes, so it can never
+#   drift from them.
+#
+#   🔴 THE RUN FIGURES LEFT `known_limitations` AND NOW LIVE IN `run_profiles`. A consumer that
+#   parsed `share_in_reference_run` finds no such key: each entry carries `how_a_consumer_detects_it`
+#   and a `see_profile` reference instead. The reason is that a limitation is a property of the
+#   CORPUS and a figure is a measurement of ONE RUN — while they shared a record, every change to the
+#   draw forced rewriting a description of something that had not changed, and the entries had
+#   accumulated six "re-measured" notes saying so.
+#
+#   🔴 AND NO PROFILE IN THIS FILE IS AUTHORITATIVE. This repository ships a generator and a seed,
+#   never a corpus, so the run a consumer holds is one this file has not seen. Whoever generates the
+#   delivered dataset adds its profile and marks it. Two sets of numbers for one quantity are two
+#   runs and not a contradiction — `run_profiles.authoritative_profile` says so where the numbers
+#   are.
+#
+#   THE DRAW DID NOT MOVE. Verified byte-identically against the previous version's output for the
+#   same seed: every image identical, every shared label value identical, the only delta the two new
+#   keys.
+#
 # Bumped to 14 by A PRINTED REQUISITE GAINING A SECOND FORM, and by the label gaining the field
 # that says which. THREE consequences a consumer has to know about.
 #
@@ -401,7 +434,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 14
+version: 15
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -616,9 +649,15 @@ document_types:
         categories: all
         paper: A4 — 210 × 297 mm, unlike the till rolls the fiscal class is printed on
     narrower_than_observed: >
-      FOUR WAYS THIS CLASS IS NARROWER THAN WHAT WAS OBSERVED, recorded here rather than under
-      `known_limitations` because every entry there states a share of a reference run and no run
-      contains this class yet. They move there when one does.
+      FOUR WAYS THIS CLASS IS NARROWER THAN WHAT WAS OBSERVED.
+
+      ⚠️ WHY THEY SIT HERE RATHER THAN UNDER `known_limitations` IS AN OPEN QUESTION, RECORDED
+      RATHER THAN RESOLVED. The reason given until now was that every entry there stated a share of
+      a reference run and that no run contained this class yet, and BOTH HALVES HAVE SINCE BECOME
+      FALSE: entries there quote no run at all now — they describe a limitation qualitatively and
+      reference section 9b — and this class does reach a corpus, which the profiles in that section
+      count. So these four may belong under `known_limitations`, and nothing in this file settles
+      it. The dead justification is removed rather than replaced by one reasoned up to fit.
 
       ONE LAYOUT FOR FOUR ISSUERS. Three real banks were reviewed and their layouts differ; one
       arrangement of the fields they all carry is modelled. Field-set variation is what extraction
@@ -1243,8 +1282,15 @@ document_types:
           it is `null` BY DESIGN rather than pending.
 
     narrower_than_observed: >
-      THREE WAYS THIS CLASS IS NARROWER THAN WHAT WAS OBSERVED. Recorded here rather than under
-      `known_limitations` because every entry there states a share of a reference run.
+      THREE WAYS THIS CLASS IS NARROWER THAN WHAT WAS OBSERVED.
+
+      ⚠️ WHY THEY SIT HERE RATHER THAN UNDER `known_limitations` IS AN OPEN QUESTION, RECORDED
+      RATHER THAN RESOLVED — the same one the payment confirmation carries. The reason given until
+      now was that every entry there stated a share of a reference run, which is no longer true of
+      any of them; and this class reaches a corpus in quantity, so the fallback the confirmation
+      also used — that no run holds the class — is not available either. Whether these three belong
+      under `known_limitations` is unsettled by anything in this file, and a justification that has
+      outlived its basis is removed rather than replaced by one reasoned up to fit.
 
       THE BUYER IS A NATURAL PERSON. 👁 The observed invoice was addressed to a company and printed a
       ЄДРПОУ; this one names the claimant and prints a РНОКПП. Not a layout preference: an invoice
@@ -1473,9 +1519,9 @@ normalization:
         printed on the document:   ТОВ «Вітамін Плюс»
         counterparty in the label: Вітамін Плюс
       `_LEGAL_FORM_PREFIX` in content_builder.py SUPPORTS three Ukrainian forms — ТОВ, ФОП,
-      ПрАТ. TWO OF THE THREE ARE PRODUCED, and ФОП is the majority: in the reference run 6 of
-      the 50 counterparties are named ТОВ vendors and the other 44 are ФОП sole traders, whose
-      printed form is `ФОП Прізвище І. Б.` — no guillemets, because the name is a person's. ПрАТ
+      ПрАТ. TWO OF THE THREE ARE PRODUCED, and ФОП is the majority — most counterparties are sole
+      traders, whose printed form is `ФОП Прізвище І. Б.`, no guillemets, because the name is a
+      person's. How a particular run divides between the two is a count, not a rule here. ПрАТ
       is not produced: vendors.json carries ПрАТ entries, but none of them sells the one category
       the registered archetypes cover.
 
@@ -1976,6 +2022,52 @@ document_label:
         registered for ПДВ — such a document prints no tax block at all, so there is no row to take
         a form. `null` is therefore the same statement the empty `line_items[].vat_letter` makes.
 
+    - name: reference_text
+      type: string
+      required: true
+      normalize: prose_not_comparable
+      meaning: >
+        EVERY PRINTED CHARACTER OF THE PAGE, in reading order, taken from the layout engine before
+        rasterization. Ground truth by construction rather than by annotation: it is read from the
+        same authority that produced the image, in the same pass, and nothing in it was transcribed
+        from a picture.
+      it_is_not_the_fields: >
+        🔴 `field_bboxes` COVERS THE LABELLED FIELDS; THIS COVERS ALL TEXT. Captions, headings, the
+        fiscal wording, a footer — none of them is a labelled field and all of them are here. That
+        difference is what a per-document measurement of whether a capture survived degradation
+        rests on: a document whose every labelled field came through while a crop took the footer
+        would report as complete measured on the fields alone, and would then hand a system a
+        falsely low character error rate for text it never read.
+      how_to_compare_it: >
+        NOT AS A LABEL TO BE SCORED FIELD BY FIELD. It is the reference side of a character error
+        rate over the whole page, so `prose_not_comparable` is the normalization in the sense that
+        no equality rule applies to it: a consumer computes a distance, not a match. Whitespace is
+        as the layout engine reported it — line boxes appear as newlines and table cells as tabs —
+        so a consumer normalizing whitespace before comparing should say so.
+      null_on: nothing; every archetype produces it
+
+    - name: content_bbox
+      type: "[number, number, number, number] or null"
+      required: false
+      normalize: bbox
+      meaning: >
+        Where the text is, as ONE box — the extent of the rendered characters.
+      its_scope_is_text: >
+        ⚠️ A QR, A STAMP AND A SIGNATURE ARE INK IT DOES NOT COVER, deliberately: it is the
+        geometric counterpart of `reference_text`, which is also text only, and the two describe
+        the same thing. A consumer must not read it as "everything printed".
+      not_the_page_and_not_the_fields: >
+        Not the image: the paper's margins are outside it, which is what makes it usable for
+        detecting a crop at all — a box equal to the image would be contained in every capture. Not
+        the union of the field boxes either: it is computed from text ranges, so it covers the
+        characters rather than the padded elements around them.
+      it_travels_with_the_field_boxes: >
+        Through the SAME geometric transform, under a reserved key that is removed before the label
+        is written. A box moved by a second route would drift from the fields the moment a real
+        geometric degradation step arrives — which is exactly when a measurement built on it would
+        begin to be quietly wrong.
+      null_on: nothing today; nullable so a page with no text at all is expressible
+
     - name: relevant_transaction
       type: string or null
       required: false
@@ -2095,6 +2187,12 @@ document_label:
         the same shape holds: `seller_tax_code` 143 of 143, `seller_vat_number` 116 of 143, both
         together on those same 116. See
         `printed_fields.varies_with_vat_payer_status`.
+
+        ⚠️ THOSE TWO SETS OF FIGURES ARE A REFUTATION RECORD AND ARE NOT TO BE RE-MEASURED. They
+        describe no current corpus: they are the evidence that a claim once made here was false,
+        and each names the version it was taken on. A statement about the past cannot go stale,
+        which is why they stay outside `run_profiles` while every live count moved into it. A
+        later reader who refreshes them against a new run destroys the only thing they are for.
 
         SINCE VERSION 11 THE KEY COUNT ALSO VARIES WITH THE ROW COUNT of a bank statement. Each
         operation carries an indexed box over its whole row rect — `operation_<i>`, counted down the
@@ -3182,39 +3280,25 @@ artifacts:
 # This is the same obligation policy.yaml states for `verdict_mix`, applied to predictors
 # rather than to class shares: report what was measured, and say on what.
 #
-# REFERENCE RUN for every share below — three archetypes are registered and all three are
-# Ukrainian fiscal receipts for the one category that has any, so the whole dataset is
-# pharmacy-and-nutrition receipts:
-#   generate-dataset --seed 20260803 --personas 30 --claims-per-persona 5
-#   -> 143 documents, 143 claims, 50 distinct counterparties,
-#      31 documents carrying a visible non-covered line.
+# 🔴 NO FIGURE APPEARS IN THIS SECTION, HERE OR IN ANY ENTRY, AND THAT IS THE POINT. Each entry
+# describes its limitation QUALITATIVELY — what is understated, why, and how a consumer would
+# detect it — and carries `see_profile` pointing at section 9b. It never quotes a profile. A
+# limitation is a property of the CORPUS; a count is a measurement of ONE RUN. While the two shared
+# a record, every change to the draw forced rewriting the description of something that had not
+# changed, and this section had accumulated six "re-measured for version N" notes saying so. The
+# notes were the symptom; the record shape was the disease.
 #
-# BY ARCHETYPE, since the class is no longer one rendering: 54 `ua_prro_receipt` (80 mm software
-# register), 46 `ua_prro_receipt_58mm` (58 mm, same register), 43 `ua_rro_receipt` (80 mm hardware
-# register). The three are drawn with equal weight, so the split is a draw and not a target.
+# WHY NOT EVEN ONE NUMBER AS AN ILLUSTRATION, and this was measured rather than assumed: changing
+# only the SIZE of a drawn pool — no mechanism and no other value — consumes the generator
+# differently and shifts every later draw, and one seed was measured three times over a single
+# commit with a different corpus each time. A count is therefore worth nothing without the command
+# and seed beside it, which is what a profile is and what a sentence here cannot be.
 #
-# RE-MEASURED FOR VERSION 8, and the figures moved because the seeded stream moved: a claim's
-# receipt is now drawn from three archetypes rather than taken from one, `hygiene` entering the
-# excluded catalogue changes the basket draw, and the maker's name is a further draw per document.
-# Nothing about the mechanisms below changed — only which documents this seed produces. Version 7
-# stated 146 documents, 46 counterparties and 35 with a non-covered line; version 6 stated 147 and
-# 24. A figure quoted against a seed is only as stable as the stream, which is why each one names
-# its run.
-#
-# HOW SENSITIVE THAT IS, MEASURED RATHER THAN ASSERTED, because it bounds what any figure here is
-# worth: within this version, changing only the SIZE of the maker-name pools — nothing else, no
-# mechanism and no other value — moved the run from 51 counterparties and 36 non-covered documents
-# to 49 and 32, and a later change to the same pools — swapping invented names for public ones,
-# which changed the pool sizes again — moved it to 50 and 31. Three measurements of one seed over
-# one commit. A draw of a different arity consumes the generator differently and every later
-# draw shifts. So these counts describe one run of one tree, and a reader must re-measure rather
-# than expect them after any edit that adds or removes a draw.
-#
-# Of those 50 counterparties, 6 are named firms and 44 are sole traders whose names are
-# DRAWN rather than stored — a fresh one per claim, since a `ФОП` entry in vendors.json
-# denotes a sole trader of that trade and not one named person. So a sole trader carries
-# exactly one document, and any statistic computed per counterparty is a sample of one for
-# 44 of the 50. KL-01 below depends on that and says so.
+# A SOLE TRADER CARRIES EXACTLY ONE DOCUMENT, which several entries below depend on: a `ФОП` entry
+# in config/vendors.json denotes a sole trader of that trade rather than one named person, so the
+# name is DRAWN fresh per claim rather than stored. Any statistic computed per counterparty is a
+# sample of one for every such counterparty. That is a property of the vendor file and of the draw,
+# not of a run, which is why it is stated here and no count is. KL-01 depends on it and says so.
 
 known_limitations:
 
@@ -3227,29 +3311,16 @@ known_limitations:
       claimed category excludes. Such a vendor cannot produce a non-covered line, so every
       document it issues is fully covered by construction and its name alone settles the
       question.
-    share_in_reference_run: >
-      TWO FIGURES, AND THEY DIFFER BY A LOT. Structurally 0 of 143: the one category with a
-      registered archetype has no covered-only vendor left, because `nutrition_practice`
-      sells `medical_device` and its sole traders issue mixed receipts like any pharmacy.
-
-      Empirically 36 of 143, on 36 of the 50 counterparties — and every one of those 36 is a
-      sole trader carrying a single document. All 6 counterparties that carry more than one
-      document appear on both fully covered and partially covered ones. (Re-measured for version
-      8 on the run named above; version 7 stated 32 of 146 on 32 counterparties, version 6
-      34 of 147. The shape is identical across all three — the stream moved, not the mechanism.)
-
-      The gap is the whole point of stating both, and it widened when sole-trader names
-      became a per-claim draw: a counterparty that appears once is trivially "never seen
-      partially covered", so the cross-tabulation now produces 36 hits of which none is
-      evidence of anything.
-
-      A vendor that CANNOT sell an excluded kind is a permanent property of the data: it
-      will never appear on a partially covered document, at any size, under any seed. A
-      vendor that simply DID NOT is a sampling artifact: at n = 1 it is not even that. The
-      first is leakage; the second is noise that looks identical in a single run's
-      cross-tabulation. A consumer cannot tell them apart from the labels alone — the vendor
-      profiles in config/vendors.json are what distinguishes them, and that is why both
-      numbers are here rather than the flattering one.
+    how_a_consumer_detects_it: >
+      The shortcut is available on a MINORITY OF DOCUMENTS and every one of them is a sole trader's
+      single-document claim; a company's receipt never has this shape. Two different quantities used
+      to be reported here as though they were one — a STRUCTURAL count of vendors whose profile
+      makes the shortcut inevitable, which is zero because `nutrition_practice` sells a medical
+      device and its sole traders issue mixed receipts like any pharmacy, and an EMPIRICAL count of
+      documents on which it happened to hold. The first is a property of config/vendors.json and is
+      stated here; the second is a measurement of one run, and section 9b is where it would live —
+      NOT MEASURED YET, so no profile there carries it.
+    see_profile: run_profiles
     still_open_where: >
       `private_tutor` under language_courses and `online_learning_platform` under
       professional_development are covered-only today. Neither category has an archetype, so
@@ -3258,8 +3329,8 @@ known_limitations:
     how_to_stratify: >
       Do NOT group by the counterparty string. Most counterparties are sole traders whose
       names are drawn per claim, so grouping by the string produces buckets of one and a
-      long list of counterparties that are "never partially covered" for no reason at all —
-      36 of them in the reference run, none meaningful.
+      long list of counterparties that are "never partially covered" for no reason at all,
+      not one of them meaningful.
 
       Group by the VENDOR PROFILE instead: `config/vendors.json` maps each entry to a
       profile, and a profile that sells nothing the category excludes is the thing that
@@ -3279,31 +3350,25 @@ known_limitations:
     predictor: the line item itself
     hurts: training, evaluation
     subset: >
-      The whole dataset, without exception. Every registered archetype carries the same one
-      category, so every claim is `vitamins_nutrition`, and every non-covered line on every
-      document is a medicine, a blood-pressure monitor or glucose test strips, a face cream, or a
-      shower gel or toothpaste. Four head-noun families, and a consumer that learns those four
-      scores as well here as one that reads the article and resolves it against the policy.
-    share_in_reference_run: >
-      100% of non-covered lines. In the reference run 31 of 143 documents carried one: 58
-      non-covered LINES between them, printing 31 DISTINCT strings, drawn from the 400 those four
-      kinds can produce.
+      Documents whose non-covered lines come from `vitamins_nutrition` — the category the three
+      fiscal archetypes are registered for. Every non-covered line of such a document is a
+      medicine, a blood-pressure monitor or glucose test strips, a face cream, or a shower gel or
+      toothpaste. Four head-noun families, and a consumer that learns those four scores as well
+      here as one that reads the article and resolves it against the policy.
 
-      BY KIND, AND THE TWO COUNTS ARE STATED SEPARATELY BECAUSE THEY ANSWER DIFFERENT QUESTIONS —
-      occurrences say how often a consumer meets the kind, distinct strings say how much of the
-      kind it ever sees. An earlier draft of this entry gave one set of per-kind numbers without
-      saying which they were; they were occurrences, they summed to 58 against 31 unique, and a
-      reader could not tell.
-
-        medical_device   29 occurrences,  8 distinct strings
-        cosmetics        13 occurrences, 13 distinct strings
-        medicine          8 occurrences,  8 distinct strings
-        hygiene           8 occurrences,  2 distinct strings
-
-      RE-MEASURED FOR VERSION 8 on the run named above, and the reason it moved is BOTH of this
-      version's changes rather than the arithmetic of one: the stream shifted, and `hygiene`
-      became drawable. Version 7 stated 35 of 146 documents, 32 strings and 398 producible over
-      three kinds; version 6 stated 24 of 147 and 26 strings.
+      ⚠️ THIS ENTRY READ "the whole dataset, without exception" UNTIL NOW, on the ground that every
+      registered archetype carried one category. THAT GROUND IS GONE: the invoice carries every
+      category — KL-06 is about a second category's non-covered vocabulary and could not exist
+      otherwise. HOW WIDE THE SUBSET IS TODAY IS AN OPEN QUESTION, recorded rather than resolved,
+      because settling it means measuring which categories reach a corpus and in what proportion.
+      The mechanism this entry describes is unchanged; only the claim about its reach was false.
+    how_a_consumer_detects_it: >
+      Non-covered lines are drawn from a SMALL SET OF ITEM KINDS — the excluded buckets of the one
+      category that reaches a corpus in quantity — so a model can learn the head noun rather than
+      the coverage rule. It is a property of `excluded_items` in config/policy.yaml having few
+      members per category, not of any run's size. The per-kind counts belong in section 9b and are
+      NOT MEASURED YET.
+    see_profile: run_profiles
     what_changed_in_version_8: >
       THE FOURTH FAMILY ARRIVED, AND THIS ENTRY USED TO CARRY A `narrowed_further_by` BLOCK
       SAYING IT COULD NOT. `hygiene` reached no document because both its templates named a
@@ -3335,8 +3400,7 @@ known_limitations:
       own subset:
 
         predictor — the SPECIFIC STRING, not the head-noun family;
-        subset    — the `hygiene` lines only. 8 occurrences on 7 of the 143 documents in the
-                    reference run.
+        subset    — the `hygiene` lines only; how many there are is not measured.
 
       A brandless template has no placeholder to vary, so the kind's two templates produce exactly
       TWO strings for the whole corpus, against 8, 13 and 8 distinct strings for the other three
@@ -3344,7 +3408,7 @@ known_limitations:
       non-covered hygiene article — between them they ARE the non-covered hygiene article, and
       either string memorised gives the label with no reading of the policy at all.
 
-      WHY IT IS NOT FOLDED INTO `share_in_reference_run`. The share figure is about four families
+      WHY IT IS NOT FOLDED INTO THIS ENTRY'S OWN LIMITATION. That one is about four families
       standing in for an open world, and a consumer acts on it by stratifying on the family. This
       leak works only inside one kind and only on the exact string, so a consumer acting on the
       family would not catch it. Two mechanisms behind one visible column, as KL-01 and KL-04 are.
@@ -3405,12 +3469,13 @@ known_limitations:
       excludes. A line printing that kind then guarantees a fully covered document, and —
       unlike KL-01 — a consumer picks the shortcut up without ever looking at the
       counterparty.
-    share_in_reference_run: >
-      0 of 143. `online_course` and `certification_exam` had this shape (both selling
-      profiles were covered-only) and `instrument_rent` likewise; the affinity data was
-      changed so that a training centre also sells travel and a music school also sells
-      refreshments. Neither kind reaches a dataset yet in any case. (Re-measured for version 8;
-      version 7 stated 0 of 146. The denominator moved and the numerator is structurally zero.)
+    how_a_consumer_detects_it: >
+      STRUCTURALLY ABSENT, and that is a statement about configuration rather than about a run: the
+      vendor affinities were changed so that no covered kind is sold only by profiles stocking
+      nothing the same category excludes — a training centre also sells travel, a music school also
+      sells refreshments. Neither of the kinds that once had this shape reaches a corpus in any case.
+      Zero by configuration, so there is nothing for a profile to confirm; the reason is here.
+    see_profile: run_profiles
     still_open_where: >
       Nowhere, on this entry's own mechanism. The PL, DE and ES vendor lists do fail the
       enforced test, but for the SIBLING reason rather than this one: three covered kinds
@@ -3441,30 +3506,24 @@ known_limitations:
       tax block and a `seller_vat_number` box — and their absence is guaranteed by a name that is
       not in that file. New in version 7: before it, `vat_letter` was never null, so there was
       nothing to predict.
-    share_in_reference_run: >
-      TWO FIGURES, AS KL-01 STATES THEM, AND HERE THEY AGREE INSTEAD OF DIVERGING.
-
-      STRUCTURALLY 34 of 34: every vendor entry in the UA lists that states a `name` carries
-      `vat_payer: true`, and there is not one named non-payer. The cross-tabulation of all 44
-      entries is (TOV, payer) 28, (ПрАТ, payer) 6, (ФОП, non-payer) 9, (ФОП, payer) 1 — so
-      NAMED implies PAYER with no exceptions, at any size, under any seed. That is leakage in
-      KL-01's sense: a permanent property of the data rather than a sampling artifact.
-
-      EMPIRICALLY 99 of 143 documents carry a stored name, and 99 of those 99 have a VAT
-      block — zero exceptions on 69% of the corpus. The other 44 documents carry drawn
-      sole-trader names and are mixed: 17 payers, 27 non-payers. (Re-measured for version 8;
-      version 7 stated 106 of 146 with 40 drawn, 19 payers to 21. The structural figures above are
-      unchanged, config/vendors.json not having been touched.)
+    how_a_consumer_detects_it: >
+      The counterparty foretells whether the document carries a VAT block, because a vendor's
+      ПДВ-payer status is stored on its entry in config/vendors.json and never varies per document.
+      ONE-DIRECTIONAL: a registered seller always prints the block, so seeing the name settles it;
+      not seeing a block does not settle the name. Both halves are properties of the vendor list.
+      How many documents each side accounts for belongs in section 9b and is NOT MEASURED YET.
+    see_profile: run_profiles
     the_leak_is_one_directional: >
       Worth stating because it bounds what a consumer can do with it. A STORED name implies a VAT
-      block with certainty; a DRAWN name implies nothing, being 17 payers to 27 non-payers. So a
-      model can shortcut the positive case only — which is the larger half, and enough to inflate
-      any metric conditioned on the VAT block.
+      block with certainty; a DRAWN name implies nothing, a sole trader's registration being drawn
+      too and falling on both sides. So a model can shortcut the positive case only — which is the
+      larger half, and enough to inflate any metric conditioned on the VAT block.
     how_to_stratify: >
       Report anything that depends on `vat_letter`, on the tax block or on `seller_vat_number`
       SEPARATELY for documents with a stored counterparty and documents with a drawn one, and
-      never as a single figure over the corpus. The two subsets are 69% and 31% here and neither
-      is representative. A consumer reading only the labels cannot tell the two apart — the
+      never as a single figure over the corpus. Neither subset is representative of the other, and
+      how a run divides between them is a count that belongs beside the run that produced it — see
+      section 9b. A consumer reading only the labels cannot tell the two apart — the
       vendor file is what distinguishes them, exactly as in KL-01 — so the split has to be taken
       from config/vendors.json rather than computed from the labels.
     fixed_by: >
@@ -3487,9 +3546,13 @@ known_limitations:
       EVERY document. All of them print the «ІД» identification code (bbox key
       `seller_tax_code`), while of the real ПРРО receipts examined only 1 of 3 carries one: two
       of three print no such line at all.
-    share_in_reference_run: >
-      143 of 143 documents, against an observed real-world 1 of 3. All three archetypes print the
-      line; version 7 stated 146 of 146.
+    how_a_consumer_detects_it: >
+      EVERY document this generator produces prints the identification code, while 👁 only 1 of 3
+      real ПРРО receipts examined carries one — two of three print no such line at all. Both figures
+      survive the move because NEITHER IS A RUN MEASUREMENT: "every" is true by construction, and
+      the 1-of-3 is an observation about real documents, which is evidence rather than a count of
+      this corpus. What a profile adds is only the number of documents that "every" came to.
+    see_profile: run_profiles
     why_it_is_deliberate: >
       «ІД» is printed because it is the SUPERSET. A field that is present can be looked for and
       scored; a field the corpus never prints cannot be exercised at all, and its absence would
@@ -3531,13 +3594,12 @@ known_limitations:
       `electronics`, `food_drink`, `alcohol` — and `electronics` is declared UNPRINTABLE in
       config/generation.yaml, so no document of that category can carry it. A mixed `hobby` basket
       therefore draws its non-covered lines from two kinds where the label space declares three.
-    share_in_reference_run: >
-      MEASURED ON `--seed 42 --personas 12 --claims-per-persona 8`: 86 claims, 162 documents, of
-      which 5 claims are `hobby`. 1 of 3 of that category's excluded kinds is unreachable — 33% of
-      its non-covered vocabulary. Every other category's excluded kinds are fully reachable, which
-      is asserted by
-      `tests/test_content_builder.py::test_every_excluded_kind_of_a_generating_category_can_be_drawn`
-      over the (jurisdiction, category) pairs some subject-proving archetype carries.
+    how_a_consumer_detects_it: >
+      One of `hobby`'s three excluded item kinds is declared unprintable in config/generation.yaml,
+      so NO document of that category can carry it and its non-covered vocabulary is a third
+      narrower than the label space. A property of two configuration files agreeing, which no run
+      changes; how many `hobby` claims a given corpus held is not measured.
+    see_profile: run_profiles
     why_it_is_deliberate: >
       `electronics` is unprintable because ONE placeholder pool per kind would have to serve both
       "Планшет {brand}" and "Камера {brand}", so any mark drawn for one is printed on the other —
@@ -3575,19 +3637,15 @@ known_limitations:
       A consumer stratifying by VERDICT still cannot see this: `insufficient_evidence` is present in
       the corpus now, so its share says nothing about which of its three mechanisms produced it.
       `outside_period` is likewise absent, its verdict `rejected` having no share yet.
-    share_in_reference_run: >
-      MEASURED ON THE ×4 RUN — `--seed 42 --personas 48 --claims-per-persona 8`, 363 claims, 679
-      documents. Denominator 363 claims: `limit_exhausted` 112 (30.9%), `mixed_items` 60 (16.5%),
-      `amount_mismatch` 28 (7.7%), `payment_precedes_subject` 22 (6.1%), `subject_not_evidenced` 0,
-      `outside_period` 0. Of the 50 `insufficient_evidence` claims, 28 carry the first cause and 22
-      the second — both non-zero, which is the requirement policy.yaml states on the RESULT rather
-      than on the share.
-
-      ⚠️ WHICH RUN THIS DESCRIBES IS PART OF THE FIGURE. An earlier version of this entry was
-      measured on `--personas 12` (86 claims, 162 documents) and reported every cause of this
-      verdict as zero. A production run of a different size will produce different counts for the
-      same quantities, and a reader meeting two figures without their runs named would take the
-      dataset to contradict itself.
+    how_a_consumer_detects_it: >
+      `subject_not_evidenced` is in the `imperfection` vocabulary and can never be in the data: a
+      claim that establishes a movement of money and never what it bought needs DELIBERATELY
+      INCOMPLETE evidence, which `_select_documents` refuses and `ClaimPlan.subject_document` raises
+      on. Zero by construction rather than by outcome. A consumer stratifying by VERDICT cannot see
+      it, because `insufficient_evidence` IS present — its share says nothing about which of its
+      three mechanisms produced it. `outside_period` is likewise absent, its verdict carrying no
+      share yet. The counts per cause are in the profile.
+    see_profile: run_profiles
     when_it_appeared: >
       THE FIGURES MOVED FOR A MECHANISM, NOT FOR A SEED. On the 12-persona run all three causes of
       this verdict were zero, and the reason was that the planner could not aim at the verdict at
@@ -3620,11 +3678,14 @@ known_limitations:
       with. The planner makes this exact: `_select_documents` prefers a single document proving both
       facts wherever one is registered, and the three fiscal receipts are registered for the one
       category that has them.
-    share_in_reference_run: >
-      MEASURED ON THE ×4 RUN — `--seed 42 --personas 48 --claims-per-persona 8`, 363 claims, 679
-      documents. 316 claims carry two documents and 47 carry one. FISCAL RECEIPTS APPEARING IN A
-      MULTI-DOCUMENT CLAIM: 0 of 316. The 50 claims carrying a cross-check cause hold invoices (50),
-      payment confirmations (27) and bank statements (23) — and no receipt.
+    how_a_consumer_detects_it: >
+      EVERY `fiscal_receipt` is the whole of its claim, so neither cross-check cause can occur on
+      one: a cross-check compares a claim's subject document with its payment document, and a
+      self-sufficient document has nothing to disagree with. `_select_documents` prefers a single
+      both-proving document wherever one is registered, which makes this exact rather than likely.
+      The denominator for that class is therefore ZERO BY CONSTRUCTION, and a profile only confirms
+      the pairing counts.
+    see_profile: run_profiles
     why_it_is_deliberate: >
       It is STRUCTURAL rather than chosen, which is why it is declared instead of fixed. Pairing a
       receipt with a payment document would mean planning a claim whose evidence is described twice
@@ -3653,12 +3714,13 @@ known_limitations:
       captioned-but-empty field, and collapsing the two would make accuracy on empty fields
       unmeasurable. The invoice beside it names the claimant, so the claim's two documents carry
       two different payers and neither is wrong.
-    share_in_reference_run: >
-      FOUND BY THE CROSS-DOCUMENT SELF-CONSISTENCY CHECK on its first run, over the pipeline
-      fixture (`--seed 20260803 --personas 4 --claims-per-persona 8`): of 31 multi-document claims,
-      3 documents carried an unidentified payer. Not measured on the ×4 run, because the check that
-      finds it runs on the fixture; the rate follows `payment_confirmation.initiation_shares` in
-      config/generation.yaml, where acquiring is 👁 1 of 8.
+    how_a_consumer_detects_it: >
+      An internet-acquiring confirmation 👁 does not identify the payer and prints a HYPHEN, which
+      the label carries as the string "-". The invoice beside it names the claimant, so a claim's
+      two documents carry two different payers and NEITHER IS WRONG. The rate at which the variant
+      occurs follows `payment_confirmation.initiation_shares` in config/generation.yaml, where
+      acquiring is 👁 1 of 8; how many documents of a given corpus were affected is in the profile.
+    see_profile: run_profiles
     why_it_is_deliberate: >
       The document is right. 👁 An acquiring receipt genuinely does not name the payer, and printing
       the persona there would be inventing a requisite that variant does not carry.
@@ -3684,17 +3746,14 @@ known_limitations:
       `ПДВ А=20,00%` or as `ПДВ А 20%`, and WHAT CAUSES THE DIFFERENCE IS UNKNOWN. The generator
       reproduces the association it can support — paper takes the equals form, electronic draws
       either — without claiming that the medium is the CAUSE.
-    share_in_reference_run: >
-      MEASURED ON `--seed 42 --personas 48 --claims-per-persona 8`, 365 claims, 680 documents. Of
-      50 fiscal receipts, 47 carry a tax row: `equals` 26 (55.3% of those 47), `spaced` 21 (44.7%).
-      The other 3 are receipts of sellers not registered for ПДВ and carry no row, so
-      `vat_row_form` is `null` on them; it is `null` on all 630 non-receipt documents.
-
-      ⚠️ EVERY DOCUMENT OF THIS RUN IS A SCREENSHOT — the only calibrated capture channel — so the
-      whole corpus is on the ELECTRONIC side of the rule, where both forms are drawn. THE PAPER
-      SIDE IS UNEXERCISED BY ANY DATASET, and the near-even split above is the draw rather than any
-      observed frequency. When photo and scan capture arrive, receipts on those channels will carry
-      the equals form only, and this figure will move for that reason.
+    how_a_consumer_detects_it: >
+      Both forms occur among the receipts of any corpus, and `vat_row_form` says which each document
+      carries. ⚠️ THE SPLIT A PROFILE REPORTS IS THE DRAW AND NOT AN OBSERVED FREQUENCY: while
+      `screenshot` is the only calibrated capture channel, every document is on the ELECTRONIC side
+      of the rule, where both forms are drawn — so the paper side, which admits one form only, is
+      unexercised by any corpus. That is a property of which capture channels exist, not of a run's
+      size, and it will change when photo and scan arrive rather than when a seed does.
+    see_profile: run_profiles
     what_is_unknown: >
       🔴 THE HYPOTHESES, AND WHY THE DATA CANNOT DISCRIMINATE THEM. The obvious explanation — that
       it is each register's own configuration — is WEAKENED: two independent paper installations
@@ -3722,6 +3781,124 @@ known_limitations:
       one installation asked eight times — the mistake that produced the earlier unconditional form
       — so what would settle this is a second ELECTRONIC receipt from a different provider, or a
       paper receipt from the provider that produced the online one.
+
+
+# =============================================================================
+# 9b. Run profiles — the measurements, kept apart from the limitations
+# =============================================================================
+#
+# 🔴 WHY THIS SECTION EXISTS. A LIMITATION IS A PROPERTY OF THE CORPUS; A FIGURE IS A MEASUREMENT OF
+# ONE RUN. While the two shared a record, every change to the draw forced rewriting the description
+# of a property that had not changed — and the entries below `known_limitations` accumulated six
+# "re-measured for version N" notes, which is not a record of diligence but the tell that the
+# numbers were in the wrong place.
+#
+# So: a limitation describes itself QUALITATIVELY and REFERENCES a profile. It never quotes one. A
+# profile is self-describing — its identity, its size, its distributions — and adding one rewrites
+# nothing.
+#
+# 🔴 WHICH PROFILE IS AUTHORITATIVE FOR A CONSUMER: THE ONE THAT PRODUCED THE CORPUS THEY RECEIVED,
+# and nothing else. The others are cheaply reproducible examples, published so that a reader can see
+# how a quantity behaves at another size without regenerating anything. Two sets of numbers for the
+# same quantity are NOT a contradiction in this file — they are two runs — and this sentence is what
+# stops them reading as one.
+#
+# EVERY FIGURE CARRIES ITS DENOMINATOR, and every profile carries the identity of the run: the
+# command, the seed and the sizes. A figure that cannot say which corpus it measured is a figure
+# that will one day be read as describing a different one.
+#
+# `authoritative: false` on every profile here is a statement about THIS repository rather than
+# modesty: the generator ships configuration and a seed, not a corpus, so no run recorded here is
+# the run a consumer holds. Whoever generates the delivered corpus adds its profile and marks it.
+
+run_profiles:
+  status: emitted
+  authoritative_profile: >
+    NONE OF THE PROFILES BELOW. This repository ships the generator, its configuration and a seed —
+    never a dataset — so the corpus a consumer holds was produced by a run this file has not seen.
+    The party that generates it records its profile here and sets `authoritative: true` on that one.
+    Until then every figure below is an EXAMPLE of how a quantity behaves, and none of them
+    describes the data anybody received.
+
+  profiles:
+    - id: RP-01
+      authoritative: false
+      purpose: the smallest run that exercises every mechanism; used for most examples below
+      command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8"
+      seed: 42
+      generator_version_at_measurement: contract version 14
+      claims_ordered: 384
+      claims_built: 365
+      documents: 680
+      document_types:
+        invoice: 316
+        payment_confirmation: 164
+        bank_statement: 152
+        fiscal_receipt: 50
+        note: >
+          Denominator 680 documents. `other` is empty: no archetype of a non-target class is
+          registered. THE FOUR TARGET CLASSES ARE EACH ABOVE 30 ON THIS RUN, which is the size
+          below which a per-class figure should not be quoted — but the threshold is a property of
+          the DELIVERED corpus and has to be re-checked on its own profile, not inherited from this
+          one.
+      claim_shapes:
+        two_documents: 316
+        one_document: 47
+        note: denominator 363 claims carrying documents; `linked` is true on the 316
+      verdicts:
+        covered: 152
+        partially_covered: 161
+        insufficient_evidence: 50
+        note: >
+          Denominator 363. The three sum to the whole because `not_proof_of_payment`,
+          `partially_paid` and `rejected` are not drawn — 20% of the declared mix is absent, and the
+          shares realized here are conditional on the subset that is drawn.
+      imperfection_causes:
+        limit_exhausted: 112
+        mixed_items: 60
+        amount_mismatch: 28
+        payment_precedes_subject: 22
+        subject_not_evidenced: 0
+        outside_period: 0
+        note: >
+          Denominator 363 claims. The first two sum past their verdict's count because a claim may
+          carry both. The two cross-check causes are mutually exclusive and both non-zero, which is
+          what config/policy.yaml requires of the RESULT rather than of the share.
+      cross_check_denominators:
+        fiscal_receipts_in_a_multi_document_claim: 0
+        multi_document_claims: 316
+        note: >
+          Zero of 316 — see KL-08 for why it is zero BY CONSTRUCTION rather than by outcome.
+      vat_row_form:
+        equals: 26
+        spaced: 21
+        null_because_the_seller_is_not_registered: 3
+        note: >
+          Denominator 50 fiscal receipts, of which 47 carry a tax row. Every document of this run is
+          a `screenshot`, so the whole corpus sits on the electronic side of the rule where both
+          forms are drawn — see KL-10.
+
+    - id: RP-02
+      authoritative: false
+      purpose: >
+        The pipeline test fixture. Small, and recorded because two limitations are detected on it
+        rather than on RP-01 — the cross-document self-consistency check runs here.
+      command: "generate-dataset --seed 20260803 --personas 4 --claims-per-persona 8"
+      seed: 20260803
+      generator_version_at_measurement: contract version 14
+      claims_built: 31
+      note: >
+        ⚠️ NO PERSONA OF THIS RUN HOLDS THE ONE CATEGORY THAT HAS A FISCAL RECEIPT, so it contains
+        no document of that class at all and every claim carries two documents. That is a property
+        of four drawn personas rather than of the generator, and it is recorded because it silently
+        removed the assembler's single-document branch from every pipeline test until a surviving
+        mutation exposed it.
+      unidentified_payers:
+        documents: 3
+        multi_document_claims: 31
+        note: >
+          3 documents of 31 multi-document claims carry a payer of "-" — see KL-09. The rate follows
+          `payment_confirmation.initiation_shares`, not this run's size.
 
 
 # =============================================================================
