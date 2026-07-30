@@ -127,7 +127,15 @@ def unprintable_item_kinds() -> frozenset[str]:
 
 @cache
 def price_range(item_kind: str) -> tuple[Decimal, Decimal]:
-    """The inclusive retail price range of an item kind, in whole currency units.
+    """The retail price range of an item kind, in whole currency units, bounds included.
+
+    WHAT "INCLUDED" MEANS HERE, because one caller disagrees. `high` is inclusive as this
+    range is *stated* and for two of its three callers in `content_builder`: `_repriced`
+    clamps a price to `high`, and `_excluded_ceiling` reports it as attainable. The third,
+    `_build_line_item`, draws in ten-kopiyka steps over a half-open interval and so ends
+    one step below `high` — the word "inclusive" used to sit here unqualified and read as a
+    promise about that draw. Widening the draw to reach the endpoint would move every price
+    under every seed to buy an outcome nothing depends on, so the docstring is what moved.
 
     The same scale `annual_limit` uses in policy.yaml, because the two files are read
     together and a second scale carried only by a field name is a two-order-of-magnitude

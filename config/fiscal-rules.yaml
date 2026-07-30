@@ -59,14 +59,22 @@ jurisdictions:
       # A seller with no ПДВ registration prints no letter on the line and no tax row under
       # the totals — 👁 observed, and "Без ПДВ" appears on no open sample even though it is
       # 📄 named as permissible practice. Using `Г` for such a seller would print a
-      # "ПДВ Г 0%" row that no real receipt of that kind carries. The three sources that
+      # "ПДВ Г=0,00%" row that no real receipt of that kind carries. The three sources that
       # disagree about the non-payer's letter are recorded in config/generation.yaml.
       Г: { rate: 0.0,  name: "Без ПДВ" }
 
-    # Label of a row in the tax summary block, e.g. "ПДВ А 20%". The AMOUNT IS NOT PART OF
+    # Label of a row in the tax summary block, e.g. "ПДВ А=20,00%". The AMOUNT IS NOT PART OF
     # IT: it is printed in the same right-hand column as every other amount on the receipt,
     # and folding it into this string is what used to leave the VAT amounts out of column.
-    tax_line_label_format: "{name} {letter} {rate:g}%"
+    #
+    # THE EQUALS SIGN AND THE TWO DECIMALS ARE BOTH 👁 OBSERVED, on every open sample that
+    # carries the row: `ПДВ А=20,00%` (2/2 drawn specimens) and `ПДВ В=20,00%` (8/8 petrol
+    # receipts) — 10/10 with both. `{rate_2dp}` renders two decimals with THIS DOCUMENT's
+    # own decimal separator, drawn per document from `number_format` above, so the rate reads
+    # the same way as the amounts printed beside it; the one specimen whose line amounts are
+    # legible prints them with a comma too. `{rate:g}` is the bare number, still used by the
+    # jurisdictions where no such row has been observed.
+    tax_line_label_format: "{name} {letter}={rate_2dp}%"
     # The letter is appended to the line item itself, e.g.
     # "Regular ticket    2 500.00 А".
     line_item_letter_position: suffix
@@ -314,10 +322,16 @@ jurisdictions:
         # contradicting live data in the same file.
         - { key: acquirer,      label: "Екв." }
         - { key: terminal_id,   label: "Термінал:",      pattern: "[A-Z][0-9]{7}" }
+        # ⚠️ ONLY THE FIRST VALUE IS REACHABLE TODAY. `content_builder` takes `values[0]`,
+        # so «ПОВЕРНЕННЯ» is printed on no document — as is «ГОТІВКА» below, for the same
+        # reason. The vocabulary is declared here because it is what the form permits; the
+        # draw that would use it is unwritten work, and a cash receipt in particular is not
+        # a relabelling of this line — 👁 it carries no acquiring block at all.
         - { key: operation,     label: "",               values: ["ПРОДАЖ", "ПОВЕРНЕННЯ"] }
         - { key: card_masked,   label: "ЕПЗ",            pattern: "[0-9]{4}X{8}[0-9]{4}" }
         - { key: auth_code,     label: "Код авт.:",      pattern: "[0-9]{6}" }
         - { key: rrn,           label: "RRN:",           pattern: "[0-9]{12}" }
+      # ⚠️ Second value unreachable — see the note on `operation` above.
       payment_method_labels: ["БЕЗГОТІВКОВА", "ГОТІВКА"]
 
     # Fiscal QR: the public receipt-verification URL of the tax authority.

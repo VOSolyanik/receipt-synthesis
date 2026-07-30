@@ -92,16 +92,37 @@ def _is_digits(value: str, length: int) -> bool:
     return len(value) == length and value.isascii() and value.isdigit()
 
 
+def _rnokpp_length() -> int:
+    """How many digits a РНОКПП has, from config rather than from a literal.
+
+    The ПН path already reads its length out of config/fiscal-rules.yaml, and a literal
+    here would have left the same fact stated twice in two different ways. It IS stated
+    twice all the same — the weight table pins the body length too — so the two are
+    cross-checked instead of one of them being trusted silently.
+    """
+    length = jurisdiction("UA")["identifiers"]["rnokpp"]["length"]
+    body_length = len(_RNOKPP_WEIGHTS)
+    if length != body_length + 1:
+        raise ValueError(
+            f"`identifiers.rnokpp.length` is {length}, but the published check-digit "
+            f"algorithm weights {body_length} body digits — check config/fiscal-rules.yaml"
+        )
+    return length
+
+
 def rnokpp_check_digit(body: str) -> int:
     """The tenth digit of a РНОКПП, given its first nine."""
-    if not _is_digits(body, 9):
+    if not _is_digits(body, len(_RNOKPP_WEIGHTS)):
         raise ValueError(f"a РНОКПП body is nine digits, got {body!r}")
     return sum(w * int(d) for w, d in zip(_RNOKPP_WEIGHTS, body, strict=True)) % 11 % 10
 
 
 def is_valid_rnokpp(value: str) -> bool:
     """Whether a string is a well-formed, checksum-correct РНОКПП."""
-    return _is_digits(value, 10) and rnokpp_check_digit(value[:9]) == int(value[9])
+    length = _rnokpp_length()
+    return _is_digits(value, length) and rnokpp_check_digit(value[: length - 1]) == int(
+        value[length - 1]
+    )
 
 
 def generate_rnokpp(
@@ -540,10 +561,14 @@ class PrroReceipt:
             # flush right.
             "tax_lines": [
                 {
+                    # Two placeholders for the rate, and a jurisdiction picks one:
+                    # `rate` is the bare number, `rate_2dp` two decimals written with this
+                    # document's own separator — the form observed on Ukrainian receipts.
                     "label": rules["tax_line_label_format"].format(
                         name=rules["vat_letters"][line.letter]["name"],
                         letter=line.letter,
                         rate=line.rate,
+                        rate_2dp=f"{line.rate:.2f}".replace(".", self.decimal_separator),
                     ),
                     "amount": self._amount(line.vat),
                 }
@@ -864,7 +889,9 @@ def _build_line_item(
         item_kind=item_kind,
         qty=Decimal(rng.choice(quantity_choices())),
         # Drawn in whole ten-kopiyka steps: retail prices do not end in arbitrary
-        # kopiykas, and an exact integer keeps the sum exact.
+        # kopiykas, and an exact integer keeps the sum exact. `randrange` is half-open, so
+        # the configured `high` is the one price this draw cannot produce — see
+        # `config.price_range`, which says where the bound IS inclusive.
         price=Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100,
         covered=covered,
         # A seller with no ПДВ registration has assigned no rate group to anything, so the
@@ -1257,6 +1284,8 @@ def build_prro_receipt(
         # a printed field with one value teaches a consumer the value, not the field.
         acquirer=rng.choice(acquirers("UA")),
         terminal_id=f"{rng.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{rng.randint(0, 10**7 - 1):07d}",
+        # `[0]` and not a draw: every receipt in the corpus is a sale, so «ПОВЕРНЕННЯ» is
+        # declared in config and printed on nothing. Stated at the config site too.
         operation=acquiring_examples["operation"]["values"][0],
         card_masked=f"{rng.randint(0, 9999):04d}XXXXXXXX{rng.randint(0, 9999):04d}",
         auth_code=f"{rng.randint(0, 999_999):06d}",
@@ -1321,6 +1350,10 @@ def build_prro_receipt(
         rounding=Decimal(0),
         amount_in_words=amount_in_words_uk(total),
         tax_lines=_build_tax_lines(items, vat_payer=vat_payer),
+        # `[0]` for the same reason as `operation` above: every receipt is card-paid, so
+        # «ГОТІВКА» is unreachable. A cash receipt is not this label with the acquiring block
+        # left in place — 👁 there is no acquiring block on one — so it is a template, not a
+        # draw here.
         payment_method=acquiring_rules["payment_method_labels"][0],
         acquiring=acquiring,
         decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),

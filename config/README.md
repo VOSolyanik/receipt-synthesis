@@ -300,9 +300,9 @@ addition*, its VAT-payer number under `ПН`: 12 digits for a company, and for a
 its `ІД` line carries. A seller that is not registered prints no `ПН`, no per-line VAT letter and no tax
 summary. **The two identifier lines are not alternatives** — a payer carries one line more, not a different
 one. `vat_payer` is a separate field from `legal_form` because the two do not coincide: a ФОП on the general
-system is registered, a small company on the simplified system is not. The assigned values are the author's assumption rather than a
-statistic, stated as such in `$note_vat_payer`, and an entry that omits the field is refused rather than
-defaulted.
+system is registered, a small company on the simplified system is not. The assigned values are the author's
+assumption rather than a statistic, stated as such in `$note_vat_payer`, and an entry that omits the field is
+refused rather than defaulted.
 
 ---
 

@@ -98,12 +98,15 @@ def build(seed: int, vendor: dict, **kwargs):
 # ------------------------------------------------------ the identifier lines --
 
 
+@pytest.mark.parametrize("seed", range(5))
 @pytest.mark.parametrize(
     ("vendor", "id_register", "pn_length"),
     [(PAYER, "edrpou", 12), (PAYER_SOLE_TRADER, "rnokpp", 10)],
     ids=["company", "sole_trader"],
 )
-def test_a_registered_seller_prints_pn_IN_ADDITION_to_its_id_code(vendor, id_register, pn_length):
+def test_a_registered_seller_prints_pn_IN_ADDITION_to_its_id_code(
+    vendor, id_register, pn_length, seed
+):
     """REWRITTEN. The old assertion — a payer prints «ПН» of twelve digits and nothing else —
     was false twice over: it dropped the ІД line that a real registered company prints beside
     it, and it gave a sole trader's ПН twelve digits when 👁 it is the ten-digit РНОКПП.
@@ -111,7 +114,7 @@ def test_a_registered_seller_prints_pn_IN_ADDITION_to_its_id_code(vendor, id_reg
     What is pinned now: both lines present, each carrying the length its OWN register defines,
     with the prefixes read from the configuration rather than restated here.
     """
-    seller = build(3, vendor).seller
+    seller = build(seed, vendor).seller
 
     assert seller.tax_code_label == IDENTIFIERS[id_register]["label"] == "ІД"
     assert len(seller.tax_code) == IDENTIFIERS[id_register]["length"]
@@ -122,7 +125,8 @@ def test_a_registered_seller_prints_pn_IN_ADDITION_to_its_id_code(vendor, id_reg
     assert seller.vat_number.isascii() and seller.vat_number.isdigit()
 
 
-def test_a_companys_pn_begins_with_its_id_code():
+@pytest.mark.parametrize("seed", range(5))
+def test_a_companys_pn_begins_with_its_id_code(seed):
     """👁 ONE OBSERVATION, encoded as a construction. On the company receipt seen, the ІД value
     is the first eight digits of the twelve-digit ПН, so the builder appends to the ЄДРПОУ
     instead of drawing an unrelated number — the two printed lines then agree by construction
@@ -131,7 +135,7 @@ def test_a_companys_pn_begins_with_its_id_code():
     Only the LENGTH is certain; the prefix relation rests on a single document and no source
     states it as a requirement.
     """
-    seller = build(3, PAYER).seller
+    seller = build(seed, PAYER).seller
 
     assert is_valid_edrpou(seller.tax_code)
     assert seller.vat_number.startswith(seller.tax_code)
@@ -224,7 +228,19 @@ def test_every_ukrainian_vendor_entry_declares_its_status():
     categories = load_vendors()["vendors"]["UA"]
     entries = [(name, entry) for name, block in categories.items() for entry in block]
     assert len(categories) == 7
-    assert len(entries) == 44
+
+    # A FLOOR, NOT A COUNT. This used to be `len(entries) == 44`, which reddened on every
+    # legitimate vendor addition — including a correctly flagged one — and a test that fails
+    # on correct work teaches its reader to edit the number rather than to look.
+    #
+    # WHAT THE COUNT CAUGHT, AND IT IS EXACTLY ONE THING: the `missing` check below is empty
+    # both when every entry declares the flag AND when the comprehension found no entries at
+    # all, so it passes VACUOUSLY if the vendor file is ever restructured beneath it. A count
+    # noticed that; nothing else here did. Requiring every category to contribute keeps that
+    # guard and drops the brittleness — the emptiness is what mattered, never the 44.
+    empty = [name for name, block in categories.items() if not block]
+    assert not empty, f"these categories yielded no vendor entries: {empty}"
+    assert len(entries) >= len(categories)
 
     missing = [name for name, entry in entries if "vat_payer" not in entry]
     assert not missing, f"{len(missing)} of {len(entries)} entries state no vat_payer: {missing}"
@@ -288,9 +304,31 @@ def test_a_letter_on_a_non_payers_receipt_is_a_builder_bug_too():
 
 def test_the_zero_rate_letter_exists_but_is_not_the_non_payers_answer():
     """«Г» is the zero-rate group of a seller that IS registered. Using it for a non-payer
-    would print a "ПДВ Г 0%" row that no observed receipt carries."""
+    would print a "ПДВ Г=0,00%" row that no observed receipt carries.
+
+    SECOND ASSERTION REPLACED, THE OLD ONE WAS NEAR-VACUOUS. It read
+    `"Г" not in {item.vat_letter for item in build(4, NON_PAYER).line_items}` — but for a
+    non-payer EVERY letter is already None, asserted more strongly one test above, so that
+    check would have passed just as well had the builder emitted an arbitrary wrong letter.
+    It could only ever fail on the single value it named.
+
+    The mechanism by which «Г» could actually reach a line is `item_vat_letter`: the builder
+    draws each line's letter from that mapping, so a kind pointed at «Г» is the whole of the
+    failure mode. Asserting on the mapping reddens for any kind, which is what the name of
+    this test claims to cover.
+    """
     assert UA["vat_letters"]["Г"]["rate"] == 0.0
-    assert "Г" not in {item.vat_letter for item in build(4, NON_PAYER).line_items}
+
+    letters_per_kind = UA["item_vat_letter"].values()
+    reachable = {
+        letter
+        for value in letters_per_kind
+        for letter in ([value] if isinstance(value, str) else value)
+    }
+    assert reachable, "no kind maps to any letter — the mapping was read at the wrong level"
+    assert "Г" not in reachable, (
+        f"a zero-rate letter is drawable by a line item: {sorted(reachable)}"
+    )
 
 
 # ---------------------------------------------------------- the total block --

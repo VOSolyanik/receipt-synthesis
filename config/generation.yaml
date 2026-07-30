@@ -376,14 +376,11 @@ line_item_placeholders:
 # that works fails just as loudly as a missing one.
 #
 # THE CAUSE IS THE KEYING, NOT THE MARKET. A vocabulary is keyed by item kind and then by
-# placeholder name, so a draw cannot see which of the kind's templates it is filling. When
-# one kind carries templates for different articles — `Планшет {brand}` and `Камера {brand}`
-# in the same kind — a mark drawn for one is printed on the other, whoever makes what.
-#
-# Note what this reasoning deliberately does NOT rest on. "No public house makes both" would
-# be an appeal to the market, and it would be false — houses selling a tablet and a camera do
-# exist. The objection stands without it: this file cannot express which article a mark was
-# chosen for.
+# placeholder name, so a draw cannot see which of the kind's templates it is filling: when one
+# kind carries templates for different articles — `Планшет {brand}` and `Камера {brand}` in
+# the same kind — a mark drawn for one is printed on the other. Not because no public house
+# makes both, which would be an appeal to the market and is in any case false, but because
+# this file cannot express which article a mark was chosen for.
 #
 # THE FIX IS A BRANDLESS TEMPLATE FORM, and `hygiene` HAS NOW HAD IT. Its two templates read
 # `Гель для душу 250 мл` and `Зубна паста 75 мл` instead of naming a house, which removes the
@@ -410,12 +407,17 @@ unprintable_item_kinds:
 # Retail prices
 # =============================================================================
 #
-# Inclusive range per item kind, in whole currency units — hryvnias, the same scale
+# Range per item kind, bounds included, in whole currency units — hryvnias, the same scale
 # `annual_limit` uses in policy.yaml. One scale across both files on purpose: the two are
 # read and edited by the same person in the same sitting, and a second scale distinguished
 # only by a field name is a two-order-of-magnitude error that breaks nothing. It prints an
 # implausible receipt and waits. The storage unit is the code's business — `content_builder`
 # converts to whole kopiykas for the draw — and it must not leak into the file a human edits.
+#
+# "BOUNDS INCLUDED" IS ABOUT THE RANGE, NOT ABOUT EVERY DRAW OVER IT. The upper bound is a
+# price a line may be clamped to; the line-item draw steps in ten kopiykas over a half-open
+# interval and so stops one step below it. Nothing depends on the endpoint. See
+# `config.price_range`, which says the same thing where the callers are visible.
 #
 # Written as strings so the values reach `Decimal` as decimal text. A `Decimal` built from
 # "2000.00" is exactly as precise as a count of minor units, which is the whole of what the
