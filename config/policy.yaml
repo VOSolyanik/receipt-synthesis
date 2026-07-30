@@ -43,6 +43,32 @@ version: 1
 period:
   start: "2026-01-01"
   end: "2026-12-31"
+  # WHICH DATE THE WINDOW IS CHECKED AGAINST. A real bank payment confirmation does not print
+  # one date: several are printed at once, under captions that the law defining the document
+  # does not define. So "the payment date" is a CHOICE, and it has to be written down
+  # somewhere; the alternative is not neutrality, it is every reader choosing.
+  #
+  # THIS FILE NAMES THE CONCEPT AND NAMES NO CAPTION. The concept belongs here because the
+  # period rule above is this file's rule: whoever loads this file to reproduce the labels has
+  # to compare the window against the same thing the labels were built from. A caption is a
+  # property of one bank's layout — it changes when a bank renames a row, and a benefit plan
+  # is not edited for that. The mapping of printed captions onto the concept therefore lives
+  # in the labelling contract: config/labelling-schema.yaml,
+  # `document_types.payment_confirmation.payment_date`.
+  #
+  # THE SPLIT IS NOT STYLISTIC. A downstream consumer builds its own verdict engine against
+  # this file, independently. Were the concept left unnamed here, two independent and equally
+  # correct engines would pick different printed dates LEGITIMATELY — and because the period
+  # is checked on this value, they would disagree not about a date but about the VERDICT. One
+  # side would appear to be measuring the other wrongly while both were right, which is the
+  # most expensive class of defect this repository has.
+  payment_date: >
+    The date on which the funds LEFT THE PAYER'S ACCOUNT. That is the whole of the concept,
+    and it is stated positively on purpose: a printed date that answers some other question —
+    when the instruction was drawn up, when the recipient acquires the funds, when the bank
+    processed its own record — fails this definition by its own content, and needs no list to
+    exclude it. Which printed caption carries it is not a policy question; see
+    config/labelling-schema.yaml, `document_types.payment_confirmation.payment_date`.
 
 # Currency the limits are expressed in. Foreign-currency documents are converted
 # with config/fx-rates.yaml before limit checks.

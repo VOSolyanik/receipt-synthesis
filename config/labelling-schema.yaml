@@ -27,10 +27,46 @@
 # consumer's requirements stay in the consumer's own repository. All are referenced by
 # name. Two copies of a rule become two rules the first time one is edited.
 #
-# NOTHING IN THIS REPOSITORY READS THIS FILE. There is no loader for it in `src/`, and
-# adding one would be inventing a caller. It is consumed by downstream tooling; its
-# accuracy is maintained by being re-checked against a freshly generated label file.
+# NO CODE IN `src/` READS THIS FILE. There is no loader for it there, and adding one would be
+# inventing a caller. It is consumed by downstream tooling; its accuracy is maintained by being
+# re-checked against a freshly generated label file.
+#
+# ONE TEST READS IT, and the sentence above used to say "nothing in this repository", which that
+# test made false. `tests/test_payment_date_split.py` loads this file and config/policy.yaml
+# together to check the ONE property neither file can hold alone: that the concept of the payment
+# date is named in the policy and the printed captions only here, with no caption on the policy
+# side. It reads two files precisely because the property is the boundary between them; it is not
+# a loader, nothing in the pipeline calls it, and no other test loads this file.
 
+# Bumped to 9 by THE PAYMENT DATE ACQUIRING A DEFINITION, which is a change of MEANING with no
+# change of shape: no key of any label record is added, removed or retyped, so a consumer diffing
+# the label structure sees nothing. FOUR consequences a consumer has to know about.
+#
+# Derived the same way as the two lists below — a key-set diff of this file against the previous
+# version, plus the `known_limitations` section, which this version does not touch.
+#
+#   `date` ON A PAYMENT CONFIRMATION NOW HAS ONE ANSWER, WHERE IT PREVIOUSLY HAD SIX. A real bank
+#   confirmation prints several dates under captions the law does not define; until now this file
+#   said only "the calendar date of the transaction", which every one of them satisfies. The
+#   caption preference order and the three refused captions are
+#   `document_types.payment_confirmation.payment_date`. A consumer whose extraction takes the
+#   first date on the page, or the one with a time beside it, is not extracting this field.
+#
+#   AND IT IS THE VERDICT THAT MOVES, NOT ONLY THE FIELD. The benefit period is checked on this
+#   value and on no other (`claim_evidence.period_and_date`), so a consumer reading a different
+#   printed date reaches a different verdict on any claim paid near a period boundary — while
+#   every field it extracted looks correct. That is why the number moves for a change that adds
+#   no key.
+#
+#   THE DEFINITION IS SPLIT ACROSS TWO FILES ON PURPOSE, AND A CONSUMER NEEDS BOTH. The CONCEPT —
+#   the date the funds left the payer's account — is `period.payment_date` in config/policy.yaml,
+#   which is the file a consumer vendors to reproduce the labels. The MAPPING of printed captions
+#   onto it is here. Neither file names both, and neither is sufficient alone.
+#
+#   ONE PROSE CORRECTION AT THE HEAD OF THIS FILE, recorded rather than made quietly because it
+#   was a claim about the repository: "nothing in this repository reads this file" is now "no code
+#   in `src/` reads this file", one test having been added that loads it.
+#
 # Bumped to 8 by the `fiscal_receipt` CLASS GAINING TWO MORE ARCHETYPES, which changes what a
 # document of that class may contain and what a fixed key set for it is worth. SIX consequences
 # a consumer has to know about.
@@ -179,7 +215,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 8
+version: 9
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -373,6 +409,100 @@ document_types:
       EMPTY BY DESIGN. The requirements document states plainly that this type has no line
       items — it is proof of one transaction. Settled by the requirement, not an open
       question.
+
+    # WHICH OF THE PRINTED DATES IS THIS DOCUMENT'S `date`, AND WHY THE ANSWER IS SPLIT ACROSS
+    # TWO FILES.
+    #
+    # A real Ukrainian bank payment confirmation does not print one date. 👁 Of eight reviewed,
+    # five carry two or more; ten different captions across the eight reduce to six distinct
+    # concepts. 📄 HALF OF THOSE SIX ARE NOT DEFINED TERMS AT ALL: the National Bank's
+    # instruction on non-cash settlements (Resolution 163 of 29.07.2022, as amended) defines
+    # composition, execution and valuation, and does not define carrying-out, processing or
+    # "the operation". 📄 And of the two temporal requisites that instruction makes mandatory,
+    # one — the date the payment was accepted for execution — is 👁 printed on 0 of 8 under any
+    # caption. The documents do not carry what the law prescribes, so no caption can simply be
+    # trusted to mean it.
+    #
+    #   config/policy.yaml, `period.payment_date`, names THE CONCEPT — the date the funds left
+    #   the payer's account — and names no caption.
+    #   This block gives THE MAPPING of printed captions onto that concept, and defines no
+    #   concept of its own.
+    #
+    # Neither half works alone, and the split is why this file exists. A consumer builds its
+    # own engine against policy.yaml; had that file named only "the payment date", two
+    # independent and equally correct implementations would pick DIFFERENT captions
+    # legitimately. The period is checked on this value, so they would disagree about the
+    # VERDICT, and the disagreement would arrive as a scorecard reporting a date error against
+    # a system that read the document correctly.
+    payment_date:
+      status: forward_contract
+      concept: >
+        config/policy.yaml, `period.payment_date`. Not restated here — a second statement of a
+        definition becomes a second definition the first time one of them is edited.
+      derived_from: >
+        THE MEANING OF THE TERMS, NOT A COUNT. The frequencies below are recorded because they
+        say what an extractor will meet, but they decided nothing: the most common caption of
+        the six is one this block accepts only as a third choice, and one of the refused
+        captions is as frequent as two of the accepted ones. Written as an ordered list plus a
+        refusal list so that a disagreement has a line to argue with rather than the decision
+        as a whole.
+      accept_in_order:
+        - caption: "Дата виконання"
+          also_printed_as: []
+          why: >
+            The literal counterpart of the concept: the payment instruction has been EXECUTED,
+            so the funds have gone. 📄 A defined term of the instruction, entered by the payer's
+            payment service provider. 👁 2/8.
+        - caption: "Дата проведення"
+          also_printed_as: []
+          why: >
+            A common synonym of execution in bank usage. ⛔ Not a defined term of the
+            instruction. 👁 2/8.
+        - caption: "Дата операції"
+          also_printed_as: ["Дата і час операції", "Дата та час операції"]
+          why: >
+            Taken as the same thing WHEN NEITHER OF THE TWO ABOVE IS PRINTED, and third for
+            that reason alone: it names the operation without saying which end of it. ⛔ Not a
+            defined term, and 👁 the most frequent of the six — 4/8.
+      never:
+        - caption: "Дата валютування"
+          also_printed_as: []
+          why: >
+            AN ACCOUNTING CONVENTION, NOT THE MOMENT OF DEBIT. 📄 The Ukrainian law on payment
+            services (Law 1591-IX), article 1, defines it as the date from which the funds pass
+            into the RECIPIENT's ownership — the far end of the transfer — and the banks' own
+            published explanations of it describe exactly the gap: debited from the payer on one
+            date, credited to the recipient on another. So it MAY DIFFER BY A DAY, and across a
+            month boundary that is a different benefit period. 👁 2/8.
+        - caption: "Дата складання"
+          also_printed_as: ["Дата і час складання"]
+          why: >
+            THE DATE OF THE OBLIGATION, NOT OF THE EXPENSE — when the payment instruction was
+            drawn up. Accepting it would be the same error as dating a claim by its invoice,
+            which `claim_evidence.period_and_date` refuses in the same words. 📄 A defined term,
+            which is what makes it tempting: being defined is not being the right definition.
+            👁 2/8.
+        - caption: "Дата обробки"
+          also_printed_as: ["Дата оброблення", "Дата обробки операції"]
+          why: >
+            AN INTERNAL BANK EVENT. ⛔ Not a defined term, and no source relates it to the debit
+            at all, so a value under it cannot be known to satisfy the concept even when it
+            happens to. 👁 2/8.
+      observed_divergence: >
+        NORMATIVE, NOT MEASURED, and stated that way round on purpose. 👁 Of the five documents
+        carrying two or more dates, 0 show two dates falling on different days — the only
+        difference observed is that one caption prints a time to the second and another does
+        not. 📄 The gap is nonetheless provided for by statute, through valuation. So the
+        preference order above is a guard against a divergence the norm permits and the sample
+        of eight does not exhibit; a consumer must not read the counts as evidence that the
+        choice does not matter.
+      if_no_accepted_caption_is_printed: >
+        A REQUIREMENT ON THE TEMPLATE, NOT A FALLBACK. No archetype prints a payment
+        confirmation yet; whichever one does must print at least one caption from
+        `accept_in_order`, so the dataset never contains a document whose payment date is
+        unstated. That leaves the case undefined for a real document that prints none of the
+        three, and this file does not invent a rule for it: the dataset carries no example, so
+        any rule stated here would be untested by construction.
     prd_required_fields:
       - prd: amount
         generator: amount
@@ -380,6 +510,7 @@ document_types:
       - prd: date
         generator: date
         status: forward_contract
+        see: document_types.payment_confirmation.payment_date
       - prd: payer / payee
         generator: none — `counterparty` is a single party and cannot carry two
         status: forward_contract
