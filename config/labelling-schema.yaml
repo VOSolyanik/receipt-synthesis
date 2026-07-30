@@ -31,12 +31,30 @@
 # adding one would be inventing a caller. It is consumed by downstream tooling; its
 # accuracy is maintained by being re-checked against a freshly generated label file.
 
-# Bumped to 5 by a CLAIM-LEVEL SHAPE CHANGE: a claim's evidence is now resolved into
-# transactions before any verdict is derived, `imperfection` carries four new causes, and
-# `covered_fraction` has become genuinely nullable. See `claim_evidence` below. A consumer
-# that vendors this file compares versions before diffing it, so a change of this size
-# under an unchanged number would be a change nobody looked for.
-version: 5
+# Bumped to 6 by TWO CHANGES that arrived together, stated separately because they are
+# separate and a consumer that regresses needs to know which one to look at.
+#
+#   A CHANGE OF LABEL, not of shape: a claim whose payment falls outside the benefit period is
+#   now `rejected` rather than `insufficient_evidence`. No field was added or removed and the
+#   `outside_period` cause is unchanged, so a consumer diffing structure alone would see
+#   nothing — which is exactly why the number has to move. A scorecard pinned to the old
+#   verdict scores every such claim as a miss. See `verdicts.rejected.by_when_it_was_paid` for
+#   the reasoning and for the alternative that was rejected.
+#
+#   A RESTRUCTURE OF THE DEFINITIONS, changing no label at all: every evidence verdict is now
+#   defined by its own slot of `document_evidence` instead of as the case that is not its
+#   neighbour. Nothing a consumer scores changes, but TWO KEYS DEPARTED — one renamed, one
+#   removed, both declared under
+#   `verdicts.not_proof_of_payment.why_this_was_once_unreachable`, which a consumer diffing key
+#   sets should read first. The rule itself is
+#   `verdict_notes.definitions_name_their_own_slot`.
+#
+# Version 5 was a CLAIM-LEVEL SHAPE CHANGE: a claim's evidence is resolved into transactions
+# before any verdict is derived, `imperfection` gained four causes, and `covered_fraction`
+# became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
+# compares versions before diffing it, so a change of either size under an unchanged number
+# would be a change nobody looked for.
+version: 6
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -952,30 +970,50 @@ verdicts:
   not_proof_of_payment:
     status: forward_contract
     means: >
-      The evidence does not establish that money changed hands. Both sides agree on this
-      reading: policy.yaml's `document_evidence`, the verdict table in
-      docs/architecture.md, and the consumer's own definition, whose canonical example is an
-      invoice reading "Zapłacono: 0,00".
+      THE SLOT: that MONEY MOVED. This verdict is what the claim gets when that one fact of
+      `document_evidence` is not established, and it is decided from the DOCUMENT TYPE — every
+      document the claim carries is of a type whose entry in policy.yaml says
+      `proves_payment: false`. An invoice, an act, an order screenshot, a non-fiscal receipt,
+      alone or in any combination. Amounts, baskets and dates are not consulted.
+
+      NO CAUSE in `imperfection`: the verdict says the whole of it. There is one slot and one
+      way to fail it, so there is nothing left for a cause to distinguish.
     consumer_counterpart: not_proof_of_payment
-    built_only_through_the_document_type: >
-      The one mechanism, and it is now the only one: a document type whose
-      `document_evidence` entry in policy.yaml says `proves_payment: false`. The route
-      through item coverage is closed — that case is `rejected`, a separate member — so
-      nothing competes for this name any more.
+    agreement_across_the_sources: >
+      All three sources read it this way: policy.yaml's `document_evidence`, the verdict table
+      in docs/architecture.md, and the consumer's own definition, whose canonical example is an
+      invoice reading "Zapłacono: 0,00".
     derived_but_not_built: >
-      `policy_engine.evaluate_claim` NOW LABELS THIS CASE: a claim NONE of whose documents
-      proves payment — an invoice, an act, an order screenshot or a non-fiscal receipt,
-      alone or together — comes back `not_proof_of_payment` with an empty `imperfection`.
-      No archetype produces such a document, so the verdict still reaches no dataset and
-      the status above stays `forward_contract`.
-    not_the_same_as_a_missing_subject: >
-      A claim whose payment IS proven and whose subject is not — a bare transfer — is
-      `insufficient_evidence` with cause `subject_not_evidenced`, not this verdict. The two
-      are the two halves of `document_evidence` and each has its own name.
-      docs/architecture.md's imperfection catalogue used to fold "no proof of payment" into
-      the `insufficient_evidence` row as well as into this one; that row now names only the
-      missing-subject half, because leaving both there made this verdict unreachable by any
-      mechanism either source describes.
+      `policy_engine.evaluate_claim` NOW LABELS THIS CASE: a claim none of whose documents is a
+      payment-proving type comes back `not_proof_of_payment` with an empty `imperfection`. No
+      archetype produces such a document, so the verdict still reaches no dataset and the
+      status above stays `forward_contract`.
+    why_this_was_once_unreachable: >
+      HISTORY, kept because it has gone wrong twice. This verdict used to be written as what it
+      was NOT, and under that construction it lost its own territory: policy.yaml's `coverage`
+      block wrote a zero covered amount as `not_proof_of_payment / rejected`, and
+      docs/architecture.md's imperfection catalogue listed "no proof of payment" under a second
+      verdict as well as under this one — between them, nothing was left that reached this name.
+      Both are fixed by every verdict naming its own slot of `document_evidence`; see
+      `verdict_notes.definitions_name_their_own_slot`, which is the rule, and
+      `verdict_notes.why_this_boundary_slips` for why this particular pair invites the error.
+
+      TWO KEYS DEPARTED FROM THIS VERDICT IN THIS REVISION, declared together because a consumer
+      diffing key sets sees two absences and this file should not leave it guessing which is
+      which. No content was lost; each sentence's new home is named.
+
+        `not_the_same_as_a_missing_subject` was RENAMED to this key. A key whose NAME is a
+        complement keeps the construction alive in the one place a reader converting the prose
+        would not look. Its content is the paragraph above, less the sentence that defined this
+        verdict by contrast with its neighbour, which the slot form makes unnecessary.
+
+        `built_only_through_the_document_type` was REMOVED, not renamed. Its substance — that the
+        document type is the one mechanism — is now the FIRST thing `means` says ("decided from
+        the DOCUMENT TYPE — every document … says `proves_payment: false`"), so the key had become
+        a second copy of the definition, and two copies of a rule become two rules the first time
+        one is edited. Its other sentence, that the item-coverage route to this name is closed
+        because that case is `rejected`, is in the `decided` block below, which this revision
+        leaves unchanged and which is where that decision belongs.
     # -----------------------------------------------------------------------
     # WAS UNDECIDED. NOW DECIDED — recorded here so the reasoning survives the decision.
     # -----------------------------------------------------------------------
@@ -999,6 +1037,13 @@ verdicts:
       for two outcomes: the generator was missing one of them, and the slash in policy.yaml
       was the symptom.
 
+      READ WITH `verdicts.rejected.by_when_it_was_paid`, which moved the out-of-period case
+      INTO `rejected` and is not the defect this paragraph forbids. Collapsing would be
+      letting `rejected` absorb a verdict whose own definition fitted a case; this moved a
+      case out of a verdict whose definition did not fit it, and left that verdict with every
+      mechanism it does fit. The test is the same one applied here — does the verdict's
+      one-line definition cover the case — and it is what both changes were decided by.
+
       WHAT DID NOT CHANGE: `_reimbursable` still raises for a claim wholly beyond an
       exhausted annual limit (`policy_engine._reimbursable`). `rejected` does not close that
       gap — there the policy DOES cover the purchase, in part or in full, and the persona has
@@ -1009,12 +1054,29 @@ verdicts:
   insufficient_evidence:
     status: forward_contract
     means: >
-      The claim does not establish what a reimbursement rests on. FOUR CAUSES, each named
-      in `imperfection`: no statement of what was bought (`subject_not_evidenced`), a
-      payment outside the benefit period (`outside_period`), and two ways for a subject
-      document and its payment to fail to describe one transaction (`amount_mismatch`,
-      `payment_precedes_subject`).
+      THE SLOTS: that a PURCHASE WAS MADE, and that the payment and the purchase are ONE
+      TRANSACTION. This verdict is what the claim gets when either of those two facts of
+      `document_evidence` is not established, and `imperfection` says which — THREE CAUSES over
+      two slots:
+
+        WHAT WAS BOUGHT is not established — no document of the claim is of a type that states
+        it, so that slot has no document at all. Cause `subject_not_evidenced`. A bare transfer.
+
+        ONE TRANSACTION is not established — a subject document and its payment both exist and
+        fail a cross-check: the amounts differ (`amount_mismatch`), or the payment is dated
+        before the document it settles (`payment_precedes_subject`).
+
+      Those two slots are the whole of this verdict. Which slot is unestablished is read off the
+      claim's own documents; no comparison with any other verdict is involved in reaching it.
     consumer_counterpart: insufficient_evidence
+    what_moved_out: >
+      A payment dated outside the benefit period WAS a fourth cause of this verdict and is
+      now a cause of `rejected`. The name did not fit: for an out-of-window expense every
+      fact is established — the purchase happened, the proof is flawless, only the date does
+      not match — so "a required fact was not established" was false of it. See
+      `verdicts.rejected.by_when_it_was_paid`. A consumer that keyed on
+      `insufficient_evidence` to mean "go and ask for another document" was being sent after
+      a document that does not exist.
     why_a_disagreement_is_this_verdict_and_not_a_new_one: >
       Both facts are present separately, and the claim still does not establish that THIS
       payment paid for THIS subject — which is a linkage a claim has to prove, so the
@@ -1029,7 +1091,7 @@ verdicts:
       every number derived from the verdict would be computed off evidence that does not
       hold together.
     note: >
-      The policy engine labels all four causes correctly; what is missing is a planner path
+      The policy engine labels all three causes correctly; what is missing is a planner path
       that produces a claim carrying only half its evidence, which needs archetypes that do
       not exist. No dataset contains this verdict.
 
@@ -1044,11 +1106,52 @@ verdicts:
   rejected:
     status: forward_contract
     means: >
+      The documents establish everything they need to, and the policy plainly does not cover
+      the claim. TWO MECHANISMS, answering the same question on different axes — by WHAT was
+      bought and by WHEN it was paid. `verdict_basis` is `["documents"]` for both: each is
+      entirely visible in the image.
+    consumer_counterpart: rejected
+    by_what_was_bought: >
       The documents prove payment perfectly well, and NOTHING on them is covered by the
       claimed category — the covered amount is zero. A property of the LINE ITEMS, resolved
-      against the category's `covered_items` and `excluded_items` in policy.yaml, which is
-      why `verdict_basis` is `["documents"]`: it is entirely visible in the image.
-    consumer_counterpart: rejected
+      against the category's `covered_items` and `excluded_items` in policy.yaml. Carries NO
+      cause in `imperfection`: the verdict says the whole of it.
+    by_when_it_was_paid: >
+      The claim's PAYMENT falls outside `period` in policy.yaml. Carries the cause
+      `outside_period`, which is what tells the two mechanisms apart without parsing
+      `policy_trace`.
+
+      HISTORY, NOT PART OF THE DEFINITION ABOVE. The paragraph above decides this route on its
+      own; everything from here down is for a reader who has already classified and is checking
+      themselves, and that is the only reason it may name another verdict at all. Two other
+      artifacts fence this same history the same way: `policy_engine`'s module docstring does it
+      at rule 4, and the `Verdict` class docstring in `schemas.py` does it in the paragraph that
+      follows this verdict's two axis bullets.
+
+      WAS `insufficient_evidence` UNTIL THIS REVISION, AND THE CHANGE IS A CONTRACT CHANGE —
+      a consumer that pinned the old verdict for this case scores it as a miss until it
+      re-vendors. The old label was wrong by the other verdict's own name: that verdict says
+      a required fact was not established, and for an out-of-window expense ALL of them are —
+      the purchase happened, the proof is flawless, only the date does not match. Meanwhile
+      `rejected` means the policy plainly does not cover it, and an out-of-window
+      expense is plainly not covered, by *when* rather than by *what*, symmetrically to the
+      wrong-subject case above. Nothing was collapsed into `rejected`: a CASE moved from a
+      badly fitted verdict to a well fitted one, and every mechanism that did fit
+      `insufficient_evidence` stayed there (see `verdicts.insufficient_evidence`).
+
+      REJECTED ALTERNATIVE: a seventh member of the enum meaning "outside period". It would
+      pull a share into `verdict_mix` and cost the downstream contract another revision, and
+      it buys no precision a named cause on a fitting verdict does not already give.
+    # THIS BLOCK IS ALLOWED TO CONTRAST, and the reason is not that it comes after the
+    # definition — position licenses nothing. It is that the block is NOT LOAD-BEARING: `means`
+    # and the two axis keys above decide the verdict on their own, so a reader classifying a
+    # claim never has to come here, and one who skips the block entirely still gets the right
+    # answer. It warns a reader who has already classified and is checking themselves. The rule
+    # in `verdict_notes.definitions_name_their_own_slot` governs the text a reader MUST consult;
+    # everything in it must be positive. Optional neighbours may contrast, and a key name that
+    # announces itself as disambiguation is where they belong. If any entry below ever becomes
+    # something a reader needs in order to classify, it stops qualifying and has to be rewritten
+    # positively or folded into an axis key.
     not_to_be_confused_with:
       not_proof_of_payment: >
         A property of the DOCUMENT TYPE (`proves_payment: false`), not of item coverage. The
@@ -1063,16 +1166,23 @@ verdicts:
         The consumer's catch-all for a guard firing. A runtime outcome, not a label; see
         `verdict_decision_mapping`.
     emitted: >
-      NOT YET. `policy_engine.verdict_for` labels such a claim today, and nothing builds one:
-      `content_builder` always draws at least one covered line, so no dataset produced so far
-      contains this verdict. `claim_planner._UNREALIZABLE_REASONS` records what it waits for.
+      NOT YET, BY EITHER MECHANISM. `policy_engine` labels both today and no dataset produced
+      so far contains this verdict: `content_builder` always draws at least one covered line,
+      and `claim_planner._draw_date_in_period` draws every date inside the window.
+
+      The scope of that is the DRAWN path, not every path. `plan_claim`'s `issued_at` is a
+      public parameter with no guard on the period, so a caller naming an out-of-window date
+      gets a plan the engine labels `rejected` — which is why the claim above is about what
+      the generator draws rather than about what it can be made to produce.
+      `claim_planner._UNREALIZABLE_REASONS` records what each mechanism waits for.
     share: >
       `verdict_mix` in policy.yaml declares this member with NO SHARE — `null`, which the
-      loader returns as `None` and never as 0. The share is decided together with the
-      mechanism that builds a wholly non-covered basket; a number set before then would size
-      a bucket nothing can fill. A consumer reading `verdict_mix` as weights must treat an
-      undeclared share as absent rather than as zero, and the assembler's balance report
-      therefore reports the absent fraction of the mix as a LOWER BOUND.
+      loader returns as `None` and never as 0. Acquiring a second mechanism did not change
+      that: the share is decided together with whichever mechanism first builds such a claim,
+      and a number set before then would size a bucket nothing can fill. A consumer reading
+      `verdict_mix` as weights must treat an undeclared share as absent rather than as zero,
+      and the assembler's balance report therefore reports the absent fraction of the mix as
+      a LOWER BOUND.
 
 # The two enums, side by side. Stated as a table because the alternative is a consumer
 # comparing verdict strings and scoring every correct decision as wrong — the exact failure
@@ -1111,6 +1221,92 @@ verdict_decision_mapping:
   see: verdicts, for what each generator-side member means
 
 verdict_notes:
+
+  definitions_name_their_own_slot:
+    # NO `status`, deliberately. Every value in `status_vocabulary` says something about whether
+    # a LABEL exists or is disputed, and this key is a construction rule for this file's own
+    # prose — nothing in a dataset corresponds to it. `emitted` in particular would tell a
+    # consumer filtering on it that a style rule was observed in a run and may be relied upon.
+    # The file's convention is that a `status` belongs to a section describing a label; this
+    # section does not.
+    note: >
+      HOW THE EVIDENCE VERDICTS IN `verdicts` ABOVE ARE CONSTRUCTED, and the rule for amending
+      them. `document_evidence` carries TWO facts plus the LINKAGE between them — three slots.
+      Each slot has a name, and each definition states ITS OWN SLOT and nothing else.
+    slots: |
+      fact not established            verdict                 cause in `imperfection`
+      ------------------------------  ----------------------  ---------------------------
+      that MONEY MOVED                not_proof_of_payment    none - the verdict says it all
+      that a PURCHASE was made        insufficient_evidence   subject_not_evidenced
+      that the two are ONE            insufficient_evidence   amount_mismatch,
+      TRANSACTION                                             payment_precedes_subject
+    the_test_an_edit_must_pass: >
+      A BARE INVOICE MUST BE CLASSIFIABLE FROM `verdicts.not_proof_of_payment.means` ALONE, with
+      no mention of any other verdict in it. An invoice is a `proves_payment: false` type, the
+      money-moved slot is therefore unestablished, and that is the answer — reached without
+      consulting a second definition. Apply the mirror test to each of the others. If definition
+      A has to mention B to work, it is still relational, and the next edit to B moves A.
+    no_exception_clauses: >
+      A definition must carry no clause of the form "and case X is NOT this verdict". Under the
+      three-slot form such a clause excludes nothing that was ever included — a bare invoice
+      fails the money-moved slot and no other, so it never fell under `insufficient_evidence` to
+      be excluded from it. Such a clause is not a harmless safety rail: it re-introduces exactly
+      the cross-reference the structural form exists to remove, while looking like care. One was
+      added to three artifacts during this very repair and then deleted for that reason.
+    what_the_rule_governs_and_what_it_does_not: >
+      THE CRITERION IS WHETHER THE TEXT IS LOAD-BEARING FOR CLASSIFICATION, and it is the only
+      criterion. The rule governs text a reader must consult to decide what a claim is called —
+      `means`, and anything a definition folds into itself. Such text must be positive: it must
+      name its own slot and reach the answer without reading another verdict's entry.
+
+      Text that is NOT load-bearing may contrast freely. The example in this file is the
+      `not_to_be_confused_with` block on `verdicts.rejected`: that verdict's `means` together with
+      its two axis keys is self-sufficient, so classification never enters the block, and a reader
+      who skips it
+      entirely still arrives at the right verdict. It exists to warn a reader who has already
+      classified correctly and is checking themselves. Being optional is what makes the contrast
+      safe, and a key whose NAME announces it as disambiguation is where such text belongs.
+
+      NOT A CRITERION: where the text SITS. "It comes after a positive definition" licenses
+      nothing — `not_the_same_as_a_missing_subject` also sat after a positive definition and was
+      renamed, because it was reached while classifying and its name presented a complement as
+      the thing to know. Position is not a property; reachability is. Ask what a reader must read
+      to answer the question, and require every sentence in that set to be positive.
+    why_it_is_not_style: >
+      Both evidence verdicts were once written as "the one that is not the other". Under that
+      construction, editing the boundary of either SILENTLY MOVES the boundary of the other, and
+      nothing local to the edit reveals it. It has gone wrong twice: once when
+      docs/architecture.md's imperfection catalogue listed "no proof of payment" under a second
+      verdict as well, leaving `not_proof_of_payment` unreachable by any mechanism either source
+      described; and again when a later repair narrowed `insufficient_evidence` to "a document is
+      missing" and thereby reclaimed the bare-invoice case — written, at the time, while actively
+      guarding against the first. A sharper boundary buys time. A slot buys the property.
+
+      THE GENERAL FORM, which is not specific to verdicts: whenever several names partition a
+      space, define each by its own position in the structure being partitioned. **A definition
+      of the form "X is the case that is not Y" is a defect even when it is, at that moment,
+      accurate** — its accuracy depends on a sentence elsewhere that nothing links it to.
+
+  why_this_boundary_slips:
+    status: divergent
+    note: >
+      WHY THIS PARTICULAR PAIR INVITES THE ERROR, recorded so the next recurrence is expected
+      rather than surprising. The split is ASYMMETRIC. The payment slot has a verdict of its own,
+      `not_proof_of_payment`; the purchase slot has no verdict of its own and lives as a CAUSE,
+      `subject_not_evidenced`, under `insufficient_evidence`. Two facts of equal standing in
+      `document_evidence`, at two different levels of the label.
+
+      THE ASYMMETRY IS NOT THIS GENERATOR'S CHOICE. It comes from the CONSUMER'S vocabulary,
+      which carries `not_proof_of_payment` and carries no counterpart for the subject half — so
+      the generator cannot make the partition symmetric without inventing a verdict the consumer
+      cannot receive. Marked `divergent` for that reason: it is a property of the two sides, not
+      a defect in either.
+
+      THE CONSEQUENCE FOR EDITORS: an asymmetric partition is harder to state than a symmetric
+      one, so every prose edit TENDS TO LEVEL IT — "a document is missing" is the symmetric
+      sentence, and it is wrong precisely because it covers both halves. Both recurrences took
+      that shape. This deserves a check of its own on any edit to either definition, not a
+      general resolve to be careful.
 
   missing_from_the_generator:
     status: divergent
@@ -1228,7 +1424,10 @@ claim_evidence:
     period: >
       Checked on the PAYMENT DATE ONLY. A December invoice paid in January is an ordinary
       January expense, not a period failure — the subject document's date is checked for
-      order instead (see `cross_checks.order`). Cause `outside_period`.
+      order instead (see `cross_checks.order`). A payment that does fall outside the window
+      makes the claim `rejected` with the cause `outside_period`, and NOT
+      `insufficient_evidence`, which it was labelled until this revision: see
+      `verdicts.rejected.by_when_it_was_paid`.
 
   what_is_not_recorded:
     status: divergent
@@ -1380,36 +1579,57 @@ claim_label:
         # the dataset.
         mixed_items: a non-covered line is on the document — VISIBLE IN THE IMAGE
         limit_exhausted: the annual balance ran out — NOT VISIBLE IN THE IMAGE
-        # Causes of `insufficient_evidence`. POLICY.YAML NAMES NONE OF THESE: it declares a
-        # cause vocabulary only where shares are being declared, and no share of a dataset
-        # is sized by them. The names are `policy_engine`'s, exported as module constants,
-        # and this file is where they are contracted.
+        # Causes of `insufficient_evidence`, one per slot it owns: the WHAT-WAS-BOUGHT slot and
+        # the ONE-TRANSACTION slot (see `verdict_notes.definitions_name_their_own_slot`).
+        # POLICY.YAML NAMES NONE OF THESE: it declares a cause vocabulary only where shares are
+        # being declared, and no share of a dataset is sized by them. The names are
+        # `policy_engine`'s, exported as module constants, and this file is where they are
+        # contracted.
         subject_not_evidenced: >
-          Payment is proven and no document states what was bought — a bare transfer. The
-          claim has one document too few.
+          The WHAT-WAS-BOUGHT slot: no document of the claim is of a type that states it — a
+          bare transfer. That slot has no document at all.
         amount_mismatch: >
-          A subject document and the payment that settles it state different amounts, so
-          the claim does not establish that THIS payment paid for THIS subject.
+          The ONE-TRANSACTION slot: a subject document and the payment that settles it state
+          different amounts, so the claim does not establish that THIS payment paid for THIS
+          subject.
         payment_precedes_subject: >
-          The payment is dated before the document it settles. An impossible order, and a
-          different defect from a date outside the benefit period.
+          The ONE-TRANSACTION slot again: the payment is dated before the document it settles,
+          an impossible order. Checked between the two documents of a pair, not against the
+          benefit period, which is a different rule with a different verdict.
+        # The one cause of `rejected`, and the only one that verdict needs: its other
+        # mechanism, a basket the category covers none of, is the whole of what the verdict
+        # already says.
         outside_period: >
-          The PAYMENT falls outside `period` in policy.yaml. The subject document's date is
-          not checked against the period at all — see `claim_evidence.period_and_date`.
+          The PAYMENT falls outside `period` in policy.yaml, so the claim is `rejected` — the
+          policy plainly does not cover it, by WHEN rather than by WHAT. Under
+          `insufficient_evidence` until this revision; see
+          `verdicts.rejected.by_when_it_was_paid`. The subject document's date is not checked
+          against the period at all — see `claim_evidence.period_and_date`.
       cardinality: >
-        Empty on a `covered` claim, and empty on `not_proof_of_payment`, where the verdict
-        says the whole of it. Several causes may appear on one claim: both
-        `partially_covered` causes, for which policy.yaml declares no share, and both
-        cross-check causes, where one pair of documents disagrees twice over.
+        Empty on a `covered` claim, empty on `not_proof_of_payment`, and empty on a `rejected`
+        claim whose basket is what the policy does not cover — in each case the verdict says
+        the whole of it. Several causes may appear on one claim: both `partially_covered`
+        causes, for which policy.yaml declares no share, and both cross-check causes, where
+        one pair of documents disagrees twice over.
       verdict_scope: >
-        A cause never appears under a verdict it does not belong to. The two
-        `partially_covered` causes and the four `insufficient_evidence` causes are disjoint
-        sets, so a consumer may key on either the verdict or the cause and get the same
-        partition.
+        A cause never appears under a verdict it does not belong to. Three disjoint sets —
+        two `partially_covered` causes, three `insufficient_evidence` causes, one `rejected`
+        cause — so a cause always determines its verdict, and a consumer may key on the cause
+        to recover the verdict.
+
+        THE CONVERSE NO LONGER HOLDS EVERYWHERE, and this is the one asymmetry to read
+        carefully. `partially_covered` and `insufficient_evidence` always carry a cause, so
+        for those two the verdict and the cause induce the same partition. `rejected` does
+        not: it arrives either through the period, carrying `outside_period`, or through zero
+        coverage, carrying nothing. So a consumer keying on the cause must treat "no cause"
+        as a value rather than as missing data, and must not assume every `rejected` claim
+        names one.
       narrower_than_the_catalogue: >
         docs/architecture.md#imperfection-catalogue names fifteen mechanisms; only these six
-        reach a label, because only these six are causes of a verdict that names no cause of
-        its own. Where the others will be recorded is not decided. The consumer's counterpart is
+        reach a label, because only these six are mechanisms whose verdict does not say by
+        itself which of them applied — read PER ROUTE rather than per verdict, since
+        `rejected` names a cause on its period route and none on its coverage route. Where the
+        others will be recorded is not decided. The consumer's counterpart is
         `ValidationFlag` plus the guard reasons (`line_items_unreliable`,
         `arithmetic_inconsistent`, `segmentation_uncertain`), which are runtime outcomes
         rather than labels.

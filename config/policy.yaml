@@ -34,9 +34,12 @@
 
 version: 1
 
-# Active benefit period. Documents dated outside it drive the
-# `insufficient_evidence` / reject branch of the planner
-# (docs/architecture.md#imperfection-catalogue).
+# Active benefit period. A claim whose PAYMENT falls outside it is `rejected`, with
+# the cause `outside_period` — one verdict and not a choice between two. Nothing about
+# such a claim is unestablished, so it is not `insufficient_evidence`: the policy
+# plainly does not cover it, by *when* rather than by *what*. Only the payment date is
+# checked; a December invoice paid in January is an ordinary January expense
+# (docs/architecture.md#the-period-is-checked-on-the-payment).
 period:
   start: "2026-01-01"
   end: "2026-12-31"
@@ -311,10 +314,22 @@ coverage:
   # not the same outcome: they answer different questions, and a claim earns one
   # of them for reasons the other knows nothing about.
   #
-  # `rejected` answers WHAT WAS BOUGHT: the policy plainly does not cover it. A
-  # basket drawn wholly from the `excluded_items` of the claimed category is
-  # exactly that case, and it is decided from the line items, so it is visible on
-  # the document.
+  # `rejected` answers WHETHER THE POLICY COVERS THE CLAIM AT ALL, and it has two
+  # ways of answering no.
+  #
+  #   By WHAT WAS BOUGHT — a covered fraction of zero, decided from the line items
+  #   against the category's `covered_items` / `excluded_items`. A basket drawn
+  #   wholly from `excluded_items` is exactly that case. Carries NO cause in
+  #   `imperfection`: the verdict says the whole of it.
+  #
+  #   By WHEN IT WAS PAID — the claim's payment falls outside `period` above.
+  #   Carries the cause `outside_period`, which is what tells the two routes apart.
+  #
+  # Both are visible on the document, so `verdict_basis` is ["documents"] either
+  # way. And neither is `insufficient_evidence`: that verdict says a required fact
+  # was not established, and an out-of-window expense establishes every one of
+  # them — the purchase happened, the proof is flawless, only the date does not
+  # match. Not covered by *when* rather than by *what* is still not covered.
   #
   # `not_proof_of_payment` answers WHETHER MONEY MOVED, and that is a property of
   # the DOCUMENT TYPE — `proves_payment` in the `document_evidence` block below —
@@ -370,12 +385,13 @@ verdict_mix:
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
   partially_paid: 0.10
-  # NO SHARE YET, AND DELIBERATELY SO. `rejected` — the policy plainly does not cover what
-  # was bought — belongs to the vocabulary because the `coverage` block above needs a name
-  # for a covered fraction of zero. What share of the dataset should carry it is a separate
-  # decision, taken together with the mechanism that builds a wholly non-covered basket. No
-  # such mechanism exists yet, so any number here would be a balance decision nobody has
-  # made.
+  # NO SHARE YET, AND DELIBERATELY SO. `rejected` — the policy plainly does not cover the
+  # claim, by what was bought or by when it was paid — belongs to the vocabulary because two
+  # rules above need a name for it: the `coverage` block, for a covered fraction of zero, and
+  # `period`, for a payment outside the window. What share of the dataset should carry it is a
+  # separate decision, taken together with whichever mechanism first builds such a claim —
+  # a wholly non-covered basket, or a payment dated outside the period. The generator DRAWS
+  # neither yet, so any number here would be a balance decision nobody has made.
   #
   # `null`, not 0. A 0 share is itself a decision — "never draw this" — and it behaves like
   # any other weight: it sums, it renormalizes, and nothing downstream could tell it from a

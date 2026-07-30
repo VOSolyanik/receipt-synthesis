@@ -102,33 +102,38 @@ REALIZABLE_VERDICTS: tuple[Verdict, ...] = (Verdict.COVERED, Verdict.PARTIALLY_C
 
 _UNREALIZABLE_REASONS: dict[Verdict, str] = {
     Verdict.NOT_PROOF_OF_PAYMENT: (
-        "needs a document type that establishes no payment — an invoice, an act, a sales "
-        "slip — via the `proves_payment: false` entries of `document_evidence` in "
-        "policy.yaml. `policy_engine.resolve_evidence` labels such a claim today; no "
-        "template in ARCHETYPES carries one, so nothing can build it. This verdict is "
-        "reached ONLY that way: a basket bought in the wrong category is `rejected`, "
-        "which is a separate member of the enum, so the two mechanisms no longer compete "
-        "for one name"
+        "is the MONEY-MOVED slot of `document_evidence` left unestablished, and needs a claim "
+        "every document of which is a `proves_payment: false` type in policy.yaml — an "
+        "invoice, an act, a sales slip. `policy_engine.resolve_evidence` labels such a claim "
+        "today; no template in ARCHETYPES carries one of those types, so nothing can build it. "
+        "The document type is the whole mechanism: amounts, baskets and dates are not consulted"
     ),
     Verdict.INSUFFICIENT_EVIDENCE: (
-        "needs a payment dated outside the active period of policy.yaml, a claim whose "
-        "documents leave one of the two facts unestablished, or two documents that "
-        "disagree about the transaction they describe. Content, not coverage arithmetic — "
-        "`policy_engine` labels all three correctly today, and each carries its own cause "
-        "in `imperfection`; what is missing is the archetypes that would let a claim be "
-        "built with only half its evidence"
+        "is the other two slots of `document_evidence`. WHAT WAS BOUGHT, left unestablished by "
+        "a claim carrying no type that states it; or ONE TRANSACTION, left unestablished by a "
+        "subject document and its payment that both exist and fail a cross-check. Content, not "
+        "coverage arithmetic — `policy_engine` labels all three causes correctly today, each "
+        "with its own name in `imperfection`; what is missing is the archetypes that would let "
+        "a claim be built carrying only part of its evidence"
     ),
     Verdict.PARTIALLY_PAID: (
         "needs document types that do not exist yet: an invoice or a statement that "
         "shows part of the amount settled. No template in ARCHETYPES can carry it"
     ),
     Verdict.REJECTED: (
-        "needs a basket drawn wholly from the `excluded_items` of the claimed category, so "
-        "that the covered amount comes to zero. `policy_engine.verdict_for` already labels "
-        "such a claim, but nothing builds one: `content_builder` always draws at least one "
-        "covered line, and `verdict_mix` in policy.yaml sets no share for this verdict yet. "
-        "Both arrive together — a share invented before the mechanism would size a bucket "
-        "nothing can fill"
+        "is the policy not covering a claim whose evidence is complete, on either of two axes, "
+        "and the two are unreachable for DIFFERENT reasons — stated separately because one of "
+        "them is weaker than it looks. By WHAT was bought: a basket drawn wholly from the "
+        "`excluded_items` of the claimed category, so that the covered amount comes to zero. "
+        "`policy_engine.verdict_for` already labels such a claim and NOTHING CAN BUILD ONE — "
+        "`content_builder` always draws at least one covered line. By WHEN it was paid: a "
+        "payment dated outside the active period of policy.yaml, which `evaluate_claim` labels "
+        "with the cause `outside_period`. That one is merely NOT DRAWN, which is a weaker claim "
+        "than not buildable: `_draw_date_in_period` draws inside the window, but `issued_at` is "
+        "a public parameter with no guard on the period, so a caller naming an out-of-window "
+        "date gets a plan the engine duly labels `rejected`. Either way `verdict_mix` in "
+        "policy.yaml sets no share for this verdict yet, and a share invented before a "
+        "mechanism exists would size a bucket nothing can fill"
     ),
 }
 
@@ -352,9 +357,9 @@ def plannable_categories(persona: Persona, ledger: Ledger) -> list[str]:
 def _draw_date_in_period(rng: random.Random) -> datetime:
     """A timestamp inside the active benefit period.
 
-    Inside, because the planner realizes `covered` and `partially_covered`. A date outside
-    the window is what drives the `insufficient_evidence` branch, and choosing it is a
-    decision of the planner rather than an accident of the calendar — which is why the
+    Inside, because the planner realizes `covered` and `partially_covered`. A payment dated
+    outside the window is what drives the `rejected` branch on the period, and choosing it is
+    a decision of the planner rather than an accident of the calendar — which is why the
     period is read from policy.yaml and never from today's date.
     """
     period = load_policy()["period"]

@@ -397,7 +397,7 @@ def test_the_ledger_order_follows_the_payment_and_not_the_invoice():
 def test_a_december_invoice_paid_in_january_is_an_ordinary_claim():
     """D, and the case it dissolves. The period is 2026-01-01..2026-12-31 and the invoice
     is dated 2025-12-20 — outside it. The expense is January's, the claim is ordinary, and
-    `insufficient_evidence` would be wrong.
+    refusing it for its date would be wrong.
 
         invoice  2025-12-20, 1 x 600.00 covered
         payment  2026-01-15, 600.00
@@ -414,23 +414,41 @@ def test_a_december_invoice_paid_in_january_is_an_ordinary_claim():
     assert result.imperfection == ()
 
 
-def test_a_payment_outside_the_period_is_insufficient_evidence():
-    """The half of D that survives: the period is checked, on the payment date."""
+def test_a_payment_outside_the_period_is_rejected():
+    """The half of D that survives: the period is checked, on the payment date.
+
+        invoice 2026-12-20 (inside), payment 2027-01-05 (outside) — the payment decides
+
+    `rejected`, and emphatically NOT `insufficient_evidence`. Every fact this claim rests
+    on is established: the purchase is stated, the payment is proven, the two agree, and
+    the invoice's own date is inside the window. Nothing is missing, so a verdict whose name
+    means "a required fact was not established" does not describe it. The policy plainly
+    does not cover this claim — by WHEN rather than by WHAT, which is the wrong-subject case
+    turned ninety degrees — and `rejected` is the verdict for plainly not covered.
+
+    `covered_fraction` is still 1.0: every line of the invoice belongs to the category, and
+    that is a fact about the lines whatever the date says.
+    """
     invoice = doc("c1_d1", DocType.INVOICE, amount="600.00", when=date(2026, 12, 20),
                   items=[item("600.00")])
     payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="600.00", when=date(2027, 1, 5))
 
     result = evaluate([invoice, payment])
 
-    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.verdict is Verdict.REJECTED
     assert result.imperfection == (OUTSIDE_PERIOD,)
     assert result.covered_fraction == Decimal(1)
+    assert result.reimbursable == Decimal("0.00")
+    assert result.verdict_basis == (VerdictBasis.DOCUMENTS,)
     assert any("2027-01-05" in line for line in result.policy_trace)
 
 
 def test_a_payment_may_not_precede_the_document_it_settles():
     """D's second half, and it is a DIFFERENT defect from the period one — folding the two
-    together is what made the December invoice look like a period failure.
+    together is what made the December invoice look like a period failure. They now differ
+    in the verdict as well as in the cause: an impossible order leaves the linkage
+    unestablished (`insufficient_evidence`), while an out-of-window payment establishes
+    everything and is simply not covered (`rejected`).
 
         invoice 2026-06-10, payment 2026-06-01
         both dates are inside the period, and the order is still impossible

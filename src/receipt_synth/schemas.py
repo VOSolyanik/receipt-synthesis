@@ -64,16 +64,38 @@ class Capture(StrEnum):
 class Verdict(StrEnum):
     """The answer a claim gets. Values match the keys of ``verdict_mix`` in policy.yaml.
 
-    ``REJECTED`` and ``NOT_PROOF_OF_PAYMENT`` are the pair that is easiest to collapse into
-    one, and they are not the same outcome:
+    Each member below states WHAT IT ITSELF IS ABOUT, and never by contrast with another
+    verdict. Three of them are easy to collapse into one another, and the construction is what
+    keeps them apart: while
+    one is written as "the case that is not the other", editing either silently moves the other.
+    See ``verdict_notes.definitions_name_their_own_slot`` in config/labelling-schema.yaml.
 
-    * ``REJECTED`` — the documents prove payment perfectly well, and nothing on them is
-      covered by the claimed category. It is a property of the LINE ITEMS, resolved against
-      ``covered_items`` / ``excluded_items``; policy.yaml's ``coverage`` block sends a
-      covered fraction of zero here.
-    * ``NOT_PROOF_OF_PAYMENT`` — the evidence does not establish that money changed hands.
-      It is a property of the DOCUMENT TYPE, declared by ``proves_payment: false`` in
-      policy.yaml's ``document_evidence``, and it says nothing about what was bought.
+    ``document_evidence`` carries two facts plus the linkage between them — three slots — and
+    the two evidence verdicts divide them:
+
+    * ``NOT_PROOF_OF_PAYMENT`` — the MONEY-MOVED slot is unestablished: every document of the
+      claim is of a type whose ``proves_payment`` is ``false`` in policy.yaml's
+      ``document_evidence``. A bare invoice, an act, an order screenshot. Decided from the
+      type; amounts, baskets and dates are not consulted. Carries no cause — one slot, one way
+      to fail it.
+    * ``INSUFFICIENT_EVIDENCE`` — the other two slots. WHAT WAS BOUGHT is unestablished when no
+      document of the claim is of a type that states it (cause ``subject_not_evidenced``); ONE
+      TRANSACTION is unestablished when a subject document and its payment both exist and fail
+      a cross-check (``amount_mismatch``, ``payment_precedes_subject``).
+
+    ``REJECTED`` is not about the evidence at all — the documents establish every slot, and the
+    policy still does not cover the claim, on either of two axes:
+
+    * by WHAT was bought — nothing on the documents is covered by the claimed category, a
+      property of the LINE ITEMS resolved against ``covered_items`` / ``excluded_items``, which
+      is where policy.yaml's ``coverage`` block sends a covered fraction of zero. No cause.
+    * by WHEN it was paid — the payment falls outside the active ``period``. Cause
+      ``outside_period``, which is what tells the two axes apart.
+
+    HISTORY, not part of the definition above: the out-of-window case was labelled
+    ``INSUFFICIENT_EVIDENCE`` until the revision that added ``outside_period`` here. It moved
+    because that verdict's slots are all established for such a claim. See
+    ``verdicts.rejected.by_when_it_was_paid`` in config/labelling-schema.yaml.
 
     Appended to rather than reordered: the member order is the row order of the assembler's
     balance report, so reordering would change output that a seed is supposed to determine.
@@ -207,10 +229,12 @@ class ClaimGroundTruth(BaseModel):
     item to compute it from, which is a different statement from ``0.0``.
 
     ``imperfection`` names why the verdict is what it is where the verdict alone does not
-    say. Two causes for ``partially_covered``, declared in policy.yaml; four for
-    ``insufficient_evidence``, named in `policy_engine` because policy.yaml declares a
-    cause vocabulary only where it is declaring shares. The two sets are disjoint. The
-    whole vocabulary is contracted in config/labelling-schema.yaml.
+    say. Two causes for ``partially_covered``, declared in policy.yaml; three for
+    ``insufficient_evidence`` and one for ``rejected``, named in `policy_engine` because
+    policy.yaml declares a cause vocabulary only where it is declaring shares. The three
+    sets are disjoint, so a cause determines its verdict; the converse does not hold for
+    ``rejected``, whose zero-coverage mechanism carries no cause at all. The whole vocabulary
+    is contracted in config/labelling-schema.yaml.
 
     The two money-ish fields answer different questions and neither substitutes for the
     other: ``covered_fraction`` is *how much of this document belongs to the category*,

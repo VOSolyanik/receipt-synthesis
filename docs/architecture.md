@@ -265,9 +265,11 @@ distinguishes a limit-bound claim numerically, and it is what makes the pairing 
 **`imperfection`** names why the verdict is what it is, where the verdict alone does not say. For
 `partially_covered` the causes are declared in `policy.yaml`: `mixed_items` (a non-covered line is on the
 document) and `limit_exhausted` (the annual balance ran out). For `insufficient_evidence` they are
-`subject_not_evidenced`, `outside_period`, `amount_mismatch` and `payment_precedes_subject` — see
-[Evidence](#evidence). A claim can carry more than one. The two sets are disjoint, so a consumer may key on
-either the verdict or the cause and get the same partition.
+`subject_not_evidenced`, `amount_mismatch` and `payment_precedes_subject`, and for `rejected` there is one,
+`outside_period` — see [Evidence](#evidence). A claim can carry more than one. The three sets are disjoint, so
+a cause always determines its verdict. The converse holds for the first two verdicts only: `rejected` also
+arrives through zero coverage, and a claim rejected that way carries no cause, because the verdict already
+says the whole of it.
 
 **`verdict_basis`** records what the verdict actually depends on:
 
@@ -290,22 +292,52 @@ not bind is not mentioned, and a claim rejected for its date says so without arg
 |---|---|
 | `covered` | Fully reimbursable |
 | `partially_covered` | Some of the amount qualifies — mixed items, or an exhausted limit |
-| `rejected` | Nothing bought is covered by the category |
-| `not_proof_of_payment` | The evidence does not establish that money changed hands |
-| `insufficient_evidence` | A required fact is missing entirely |
+| `rejected` | The policy plainly does not cover the claim — nothing bought is covered by the category, or the payment falls outside the active period |
+| `not_proof_of_payment` | It is not established that **money moved**: every document is of a *type* whose `proves_payment` is `false` |
+| `insufficient_evidence` | It is not established **what was bought** (no document states it), or not established that the payment and the purchase are **one transaction** |
 | `partially_paid` | Payment was made in installments; only part has been paid |
+
+The evidence a claim rests on has three slots — that money moved, that a purchase was made, and that the two
+are one transaction — and each row above names **its own slot**. No row is written as "the case that is not one
+of the others", and no row carries an exception excluding a case another row covers. That is a rule rather
+than a style: while two verdicts are defined through each other, editing the boundary of one silently moves
+the boundary of the other, and nothing at the edit reveals it. It has gone wrong twice in this repository.
+`verdict_notes.definitions_name_their_own_slot` in `config/labelling-schema.yaml` carries the full statement,
+the test an edit has to pass, and — under `why_this_boundary_slips` — why this particular pair invites it.
+
+The table above is sufficient on its own: everything needed to classify a claim is in it. The rest of this
+section contrasts verdicts that are easy to confuse, and it is **optional reading** — that is precisely what
+allows it to contrast at all. The rule governs the text you must consult to reach an answer, not the text that
+checks an answer you already have.
 
 `rejected` and `not_proof_of_payment` are easy to merge and must not be, in either direction. They answer
 different questions, and each reads a different part of the labelling policy to answer it.
 
-**`rejected` answers what was bought.** The category covers none of it. That is decided from the line
-items, by resolving each item kind against the category's covered and excluded vocabularies, so the answer
-is visible on the document itself.
+**`rejected` answers whether the policy covers the claim at all**, and it has two ways of answering no. By
+*what* was bought: the category covers none of it, decided from the line items by resolving each item kind
+against the category's covered and excluded vocabularies. By *when* it was paid: the payment falls outside the
+active period. Both answers are visible on the document itself, and the second carries the cause
+`outside_period` while the first carries none.
 
-**`not_proof_of_payment` answers whether money moved.** That is a property of the document *type*, read
-from `proves_payment` in the `document_evidence` block, and it has nothing to do with what was bought. A
-fiscal receipt proves its payment whatever its basket was — so a pharmacy receipt listing nothing but
-medicines is `rejected`, and is not, on any reading, a failure of proof of payment.
+Neither is `insufficient_evidence`, and the out-of-period case is the one worth stating, because it used to be
+labelled that way. `insufficient_evidence` means, by its own name, that a required fact was not established;
+an out-of-period claim establishes every fact there is — the purchase happened, the proof is flawless, only
+the date does not match the window. It is a case of the policy plainly not covering an expense, which is what
+`rejected` is for. There is no seventh verdict for it: a named cause on a verdict whose definition already
+fits says the same thing without splitting the enum.
+
+**`not_proof_of_payment` owns the money-moved slot.** Every document of the claim is of a type whose
+`proves_payment` entry in the `document_evidence` block is `false` — an invoice, an act, an order screenshot, a
+non-fiscal receipt, alone or in any combination — so nothing the claim carries attests a movement of money. The
+type decides it; amounts, baskets and dates are not consulted, and the verdict carries no cause because there
+is one slot and one way to fail it. A fiscal receipt proves its payment whatever its basket was, so a pharmacy
+receipt listing nothing but medicines is `rejected`, and is not, on any reading, a failure of proof of payment.
+
+**`insufficient_evidence` owns the other two slots.** *What was bought* is unestablished when no document of
+the claim is of a type that states it — a bare transfer, cause `subject_not_evidenced`. *One transaction* is
+unestablished when a subject document and its payment both exist and fail a cross-check, causes
+`amount_mismatch` and `payment_precedes_subject` (see [Evidence](#evidence)). Those two slots are the whole of
+the verdict, and which one failed is read off the claim's own documents.
 
 ---
 
@@ -346,9 +378,13 @@ so nothing identifies the row a given claim is about.
 A claim is reimbursable only when its documents establish *both* what was bought and that it was paid for.
 Neither is optional and neither implies the other:
 
-- nothing proving payment — an invoice on its own — is `not_proof_of_payment`;
-- payment proven with nothing saying what it bought — a bare transfer — is `insufficient_evidence`, cause
-  `subject_not_evidenced`.
+- the money-moved slot fails when every document is of a type that proves no payment — an invoice on its own —
+  which is `not_proof_of_payment`;
+- the what-was-bought slot fails when no document is of a type that states it — a bare transfer — which is
+  `insufficient_evidence`, cause `subject_not_evidenced`.
+
+Each is read from the types the claim carries, independently of the other, so neither answer depends on how the
+other is worded.
 
 With a fiscal receipt this is vacuously satisfied, which is exactly why it has to be checked rather than
 assumed: the moment a claim can be an invoice on its own, a verdict derived from coverage alone would label
@@ -363,17 +399,25 @@ and each is its own defect with its own name:
 - **`payment_precedes_subject`** — the payment is dated before the document it settles. Strictly before:
   paying an invoice on the day it is issued is ordinary.
 
-Either makes the claim `insufficient_evidence`. By the verdict's own name: both facts are present separately,
-and the claim still does not establish that *this* payment paid for *this* subject — a linkage a claim has to
-prove. It is a verdict and not a flag beside a coverage verdict, because a flag would let a claim whose
-documents contradict each other come out `covered`.
+Either makes the claim `insufficient_evidence`. This is the third slot: both other facts are established
+separately, and the claim still does not establish that *this* payment paid for *this* subject — a linkage a
+claim has to prove. It is a verdict and not a flag beside a coverage verdict, because a flag would let a claim
+whose documents contradict each other come out `covered`.
+
+These two causes are the linkage slot; the missing **subject** document is the other slot `insufficient_evidence`
+owns. Together they are why the verdict still exists after the period case moved to `rejected`: in all three
+something genuinely *is* unestablished.
 
 ### The period is checked on the payment
 
 A limit is consumed when money moves, so a claim is dated by its **proof of payment** and the active period
 is checked against that date alone. A December invoice paid in January is an ordinary January expense, and
-labelling it `insufficient_evidence` would be wrong. The subject document's date is checked for *order*
-instead, which is the `payment_precedes_subject` defect above — a different question with a different repair.
+refusing it for its date would be wrong. The subject document's date is checked for *order* instead, which is
+the `payment_precedes_subject` defect above — a different question with a different repair.
+
+A payment that does fall outside the window makes the claim `rejected`, cause `outside_period` — the policy
+does not cover an expense paid outside its own period, which is a coverage answer and not an evidence one. See
+[Verdicts](#verdicts).
 
 ---
 
@@ -428,7 +472,7 @@ short. Each mechanism is a parameter of `claim_planner`, combined with a target 
 | Non-covered addition to an order | A non-qualifying item inside a qualifying order | `partially_covered` |
 | Annual limit exhausted | Fourth claim exceeds what remains | `partially_covered` |
 | Category does not match the policy | A purchase outside the claimed category | `rejected` |
-| Payment outside the active period | Money moved before or after the window | `insufficient_evidence` |
+| Payment outside the active period | Money moved before or after the window | `rejected` |
 | Document does not prove payment | Invoice marked "paid: 0"; sales slip; booking confirmation | `not_proof_of_payment` |
 | Paid in installments | Part of the amount settled | `partially_paid` |
 | Evidence incomplete | No statement of what was bought — a bare transfer | `insufficient_evidence` |

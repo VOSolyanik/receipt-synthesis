@@ -23,27 +23,53 @@ Six rules, in the order they are applied:
    at any rate, from any source — a converted amount would land in the ground truth as a
    number nothing in the dataset can prove.
 2. **Evidence.** A claim's documents are resolved into transactions against
-   `document_evidence` in policy.yaml — see `resolve_evidence`. A claim reimburses
-   nothing unless its documents establish BOTH facts a reimbursement rests on: what was
-   bought, and that it was paid for. Nothing proving payment is `not_proof_of_payment`;
-   payment proven with nothing saying what it bought is `insufficient_evidence`.
-3. **Agreement between the documents of one transaction.** A subject document and the
-   payment that settles it have to describe the same purchase: the same amount, and the
-   payment not before the subject. Failing either is `insufficient_evidence`, with the
-   cause named in `imperfection` — the claim does not establish that *this* payment paid
-   for *this* subject, which is a linkage a claim has to prove.
-4. **Period**, checked on the PAYMENT date and on no other. A limit is consumed when
-   money moves, so a December invoice paid in January is an ordinary January expense and
-   not a period failure. The subject document's date is checked for order instead (rule
-   3), which is a different defect with a different name.
+   `document_evidence` in policy.yaml — see `resolve_evidence`. That table carries TWO
+   facts a reimbursement rests on, plus the LINKAGE between them: three slots, and each
+   slot has its own name. Rules 2 and 3 answer them in order.
+
+   The **money-moved** slot: every document is of a type whose `proves_payment` is false,
+   so nothing the claim carries attests a movement of money → `not_proof_of_payment`, with
+   no cause, because there is one slot and one way to fail it.
+
+   The **what-was-bought** slot: no document is of a type that states it →
+   `insufficient_evidence`, cause `subject_not_evidenced`.
+3. **The linkage slot**: a subject document and the payment that settles it both exist and
+   have to describe the same purchase — the same amount, and the payment not before the
+   subject. Failing either → `insufficient_evidence`, with the cause named in
+   `imperfection`; the claim does not establish that *this* payment paid for *this*
+   subject.
+
+   Each slot is decided from the claim's own documents and never by comparison with
+   another verdict. That construction is deliberate: while two of these were written as
+   "the one that is not the other", editing either silently moved the other, and it went
+   wrong twice. The rule and its history live in
+   `config/labelling-schema.yaml`, `verdict_notes.definitions_name_their_own_slot`.
+4. **Period**, checked on the PAYMENT date and on no other, and failing it is `rejected`
+   with the cause `outside_period`. A limit is consumed when money moves, so a December
+   invoice paid in January is an ordinary January expense and not a period failure. The
+   subject document's date is checked for order instead (rule 3), which is a different
+   defect with a different name — and now a different verdict.
+
+   HISTORY of this branch, not part of the rule above. It answered
+   `insufficient_evidence` until the revision that moved it here. It moved because an
+   out-of-window claim leaves every slot of rule 2 and rule 3 ESTABLISHED — the purchase
+   happened, the proof is flawless, the documents agree — while the policy still does not
+   cover it, by *when* rather than by *what*, symmetrically to the wrong-subject case of
+   rule 5. Nothing was collapsed: a CASE moved to the verdict whose own subject matter
+   covers it, and both verdicts kept every mechanism that is theirs. The alternative — a
+   seventh enum member meaning "outside period" — was rejected because it would pull a
+   share into `verdict_mix` and cost the downstream contract another revision, for no gain
+   in precision over a named cause on a verdict that already fits.
 5. **The verdict.** STRICT, as the prose of the `coverage` block states it: *any*
    non-covered line makes the claim `partially_covered`, however small — the fraction is
    reported, never used as a tolerance. Everything covered is `covered`, and
    `full_threshold` is kept alive as a **self-check** on that case (see `verdict_for`),
    which is the role its own comment gives it. A claim whose covered amount is 0 is
-   `rejected`, which is the third branch that block declares and is about coverage alone —
-   not `not_proof_of_payment`, which is a property of the document type and lives in
-   `document_evidence`.
+   `rejected` — the third branch that block declares, decided from the line items and from
+   nothing else. This is the SECOND route to `rejected`, rule 4 being the first; they are
+   told apart by `imperfection`, which the coverage route leaves empty. Note that this rule
+   reads amounts, and rule 2 reads document types: neither can answer the other's question,
+   which is why they are separate rules rather than one with a branch.
 6. **The cumulative annual limit.** Claims are processed per persona per category in date
    order, carrying the balance. When what remains is less than what the document covers,
    the claim is `partially_covered`, and the verdict then also depends on the persona's
@@ -84,22 +110,37 @@ from receipt_synth.schemas import DocGroundTruth, DocType, LineItem, Verdict, Ve
 MIXED_ITEMS = "mixed_items"
 LIMIT_EXHAUSTED = "limit_exhausted"
 
-# Causes of an `insufficient_evidence` verdict, recorded in `imperfection` beside the two
-# above. One verdict, several named causes — the shape `partially_covered` already has,
-# and for the same reason: a consumer can know different things about each. A document
-# that is simply absent and two documents that contradict each other are not the same
-# problem, and neither is a claim whose payment fell outside the benefit period.
+# The four causes below are recorded in `imperfection` beside the two above, under the
+# verdicts that are NOT decided by coverage arithmetic — three under `insufficient_evidence`
+# and one under `rejected`. One verdict, several named causes — the shape
+# `partially_covered` already has, and for the same reason: a consumer can know different
+# things about each. A document that is simply absent and two documents that contradict
+# each other are not the same problem.
 #
-# POLICY.YAML NAMES NONE OF THESE. Its only cause vocabulary is
+# POLICY.YAML NAMES NONE OF THE FOUR. Its only cause vocabulary is
 # `partially_covered_causes`, which exists to declare SHARES of the partially_covered
-# bucket; these four have no share, because no share of a dataset is being sized by them.
-# So the names are this module's, they are exported for anyone comparing labels against a
-# vocabulary, and they are recorded in config/labelling-schema.yaml, which is the contract
+# bucket; none of these four has a share, because no share of a dataset is being sized by
+# them. So the names are this module's, they are exported for anyone comparing labels against
+# a vocabulary, and they are recorded in config/labelling-schema.yaml, which is the contract
 # a consumer reads. If policy.yaml ever grows a cause vocabulary of its own, these move
 # there and the constants read it — the same way MIXED_ITEMS reads its own key today.
+
+# Causes of `insufficient_evidence`, which owns two of the three slots of `document_evidence`
+# (see the module docstring, rules 2 and 3): the WHAT-WAS-BOUGHT slot, unestablished when no
+# document is of a type that states it, and the LINKAGE slot, unestablished when a subject
+# document and its payment both exist and fail a cross-check. Each is read off the claim's own
+# documents.
 SUBJECT_NOT_EVIDENCED = "subject_not_evidenced"
 AMOUNT_MISMATCH = "amount_mismatch"
 PAYMENT_PRECEDES_SUBJECT = "payment_precedes_subject"
+
+# The one cause of `rejected`, and the only one it needs. `rejected` has two mechanisms —
+# a basket the category covers none of, and a payment outside the benefit period — and only
+# the second is worth naming: the first is the whole of what the verdict already says,
+# while the second says the claim is uncovered by WHEN rather than by WHAT. So a `rejected`
+# claim carries either this cause or none, which is how the two mechanisms are told apart
+# without parsing `policy_trace`. See the module docstring, rules 4 and 5, for why this case
+# is not `insufficient_evidence`.
 OUTSIDE_PERIOD = "outside_period"
 
 
@@ -444,12 +485,26 @@ def verdict_for(covered: Decimal, total: Decimal, *, every_line_covered: bool) -
     every line of such a claim is non-covered, so `partially_covered` would be true of the
     lines and false about the claim, which qualifies for nothing.
 
-    `rejected` is emphatically NOT `not_proof_of_payment`, and the two are easy to merge by
-    accident. This branch sees amounts and nothing else, and amounts cannot say whether the
-    evidence proves a payment: that is a property of the document type, declared by
-    `proves_payment: false` in `document_evidence`, and it is decided nowhere near here. A
-    pharmacy receipt listing nothing but medicines proves its payment perfectly well and is
-    still about the wrong subject.
+    This is one of the TWO routes to `rejected`, and the only one this function can see. The
+    other is a payment outside the benefit period, decided in `evaluate_claim` from dates
+    and never from amounts; it carries the cause `outside_period` in `imperfection`, while
+    the zero-coverage route here carries none.
+
+    A WARNING FOLLOWS, and it is not part of the rule above. Everything this function needs to
+    decide a verdict is stated already: amounts in, `rejected` / `partially_covered` / `covered`
+    out. So the paragraph below is optional — a caller that skips it still gets the right answer
+    from this docstring — which is the one condition under which a contrast with another verdict
+    is allowed at all. See `verdict_notes.definitions_name_their_own_slot` in
+    config/labelling-schema.yaml: text a reader must consult in order to classify has to be
+    positive; text nobody has to consult may contrast. Being optional is the licence, not being
+    positioned last.
+
+    `rejected` is easy to merge with `not_proof_of_payment` by accident, and the two are
+    decided from different inputs entirely. This branch sees amounts and nothing else, and
+    amounts cannot say whether the evidence proves a payment: that is a property of the document
+    type, declared by `proves_payment: false` in `document_evidence`, and it is decided nowhere
+    near here. A pharmacy receipt listing nothing but medicines proves its payment perfectly
+    well and is still about the wrong subject.
     """
     if total <= 0:
         raise ValueError(f"a claim with a total of {total} has no verdict")
@@ -698,11 +753,12 @@ def _reimbursable(
             f"persona {persona_id} has no {category_id} balance left "
             f"(limit {annual_limit(category_id)} {reporting_currency()} fully reimbursed), "
             "and policy.yaml assigns no verdict to a claim that covers something and is "
-            "still paid nothing. None of the candidates fits: `rejected` is the policy not "
-            "covering the purchase, and here it covers part or all of it; "
-            "`not_proof_of_payment` says the evidence does not establish that money "
-            "changed hands, which a receipt does; and `partially_covered` says some of the "
-            "amount is payable, which none of it is. Deciding this means changing the "
+            "still paid nothing. None of the candidates fits: `rejected` is the policy "
+            "plainly not covering the claim — by what was bought or by when it was paid — "
+            "and here it covers part or all of it, inside the period; "
+            "`not_proof_of_payment` is for a claim whose document types all declare "
+            "`proves_payment: false`, and a receipt's does not; and `partially_covered` says "
+            "some of the amount is payable, which none of it is. Deciding this means changing the "
             "policy, so the planner does not plan such a claim and the engine will not "
             "invent a label for one."
         )
@@ -753,10 +809,15 @@ def evaluate_claim(
     def refused(verdict: Verdict, causes: tuple[str, ...]) -> ClaimEvaluation:
         """A claim that reimburses nothing, with the cause named rather than described.
 
-        Every branch that reaches this has established the verdict from evidence rather
-        than from coverage, so the trace carries no coverage line: it states what
-        justified the verdict, and coverage did not. The fraction is still reported where
-        there were lines to compute one from, as a fact about those lines.
+        Every branch that reaches this has established the verdict from the CONTENT of the
+        documents — which types they are, whether they agree, when the payment happened —
+        rather than from coverage arithmetic, so the trace carries no coverage line: it
+        states what justified the verdict, and coverage did not. The fraction is still
+        reported where there were lines to compute one from, as a fact about those lines.
+
+        Three verdicts reach it, not two: `not_proof_of_payment`, `insufficient_evidence`
+        and — for a payment outside the benefit period — `rejected`. `verdict_basis` is
+        `DOCUMENTS` for all three, because each of the facts above is printed on the image.
         """
         return ClaimEvaluation(
             verdict=verdict,
@@ -784,7 +845,9 @@ def evaluate_claim(
             Verdict.INSUFFICIENT_EVIDENCE, tuple(cause for cause, _ in disagreements)
         )
 
-    # -- the period, on the payment date and on no other
+    # -- the period, on the payment date and on no other. `rejected`, not
+    # `insufficient_evidence`: nothing here is unestablished, the policy simply does not
+    # cover a payment made outside its window. See the module docstring, rule 4.
     start, end = active_period()
     late = [t.payment for t in shape.transactions if not start <= t.payment.date <= end]
     if late:
@@ -793,7 +856,7 @@ def evaluate_claim(
             f"period: payment {first.doc_id} dated {first.date} falls outside "
             f"{start}..{end}"
         )
-        return refused(Verdict.INSUFFICIENT_EVIDENCE, (OUTSIDE_PERIOD,))
+        return refused(Verdict.REJECTED, (OUTSIDE_PERIOD,))
     trace.append("period ok")
 
     if total <= 0:

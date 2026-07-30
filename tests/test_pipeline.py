@@ -128,8 +128,8 @@ def test_plan_is_deterministic_under_seed():
 
 
 def test_plan_dates_fall_inside_the_active_period():
-    """A date outside the window drives `insufficient_evidence`. Landing outside it by
-    accident would attach that document to a `covered` label."""
+    """A payment date outside the window drives `rejected`. Landing outside it by accident
+    would attach that document to a `covered` label."""
     period = load_policy()["period"]
     start = date.fromisoformat(str(period["start"]))
     end = date.fromisoformat(str(period["end"]))
@@ -197,10 +197,16 @@ def test_a_category_the_persona_does_not_hold_is_refused():
 def test_verdicts_no_archetype_can_carry_are_refused_not_faked(verdict):
     """Explicit over silent. A planner that accepted one of these and produced an ordinary
     basket would write a wrong label rather than fail. The message has to say what each
-    actually needs, because the reason differs: two are content mechanisms, one needs
-    document types that do not exist, and `rejected` needs a basket builder that draws no
-    covered line at all — which `policy_engine` can already label and nothing can yet
-    build."""
+    actually needs, because the reason differs: `not_proof_of_payment` needs a document type
+    that establishes no payment, `insufficient_evidence` needs a claim carrying only half its
+    evidence, `rejected` needs either a basket builder that draws no covered line or a payment
+    dated outside the active period, and `partially_paid` needs document types that do not
+    exist at all.
+
+    `policy_engine` can already label THREE of the four — the ones above except
+    `partially_paid`, which the engine never returns: it is an enum member and an
+    `_UNREALIZABLE_REASONS` key and nothing else, because the field an invoice would have to
+    carry to be partly settled does not exist. So for that one, neither side is built."""
     with pytest.raises(NotImplementedError) as raised:
         plan_claim(
             random.Random(1), persona=persona(), claim_id="c1",

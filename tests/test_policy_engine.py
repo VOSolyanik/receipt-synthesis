@@ -37,6 +37,7 @@ import pytest
 
 from receipt_synth.config import category, load_policy
 from receipt_synth.policy_engine import (
+    OUTSIDE_PERIOD,
     ClaimInput,
     Ledger,
     PolicyGapError,
@@ -371,8 +372,10 @@ def test_a_wholly_non_covered_basket_is_rejected():
         verdict_basis       ["documents"] — coverage is resolved from the line items alone,
                             which policy.yaml's `limits` block defines as the documents-only
                             basis; no ledger was consulted
-        imperfection        () — `imperfection` says why a partially_covered claim is
-                            partial, and this claim is not partially anything
+        imperfection        () — the coverage route to `rejected` names no cause, because
+                            the verdict says the whole of it. The other route to the same
+                            verdict, a payment outside the period, does carry one; see
+                            `test_the_two_routes_to_rejected_are_told_apart_by_their_cause`
     """
     result = evaluate([item("100.00", False), item("400.00", False)])
     assert result.verdict is Verdict.REJECTED
@@ -547,15 +550,15 @@ def test_a_claim_beyond_a_fully_exhausted_limit_has_no_verdict_in_the_policy():
     """The gap this engine refuses to paper over.
 
     With 12000 of 12000 already reimbursed, a further claim reimburses nothing.
-    policy.yaml assigns no verdict to that state, and `rejected` does not close it:
-    `rejected` is the policy plainly not covering the purchase, and here it covers it
-    completely — every line qualifies, and the only reason nothing is paid out is that the
-    persona has already drawn the annual maximum. `not_proof_of_payment` is a statement
-    about the evidence ("the evidence does not establish that money changed hands") and a
-    receipt does establish it, while `partially_covered` would say some of the amount
-    qualifies when none of it is payable. Inventing any of the three would put a label in
-    the dataset that nothing specified, so the engine raises and `claim_planner` never
-    plans one.
+    policy.yaml assigns no verdict to that state, and none of the three candidates closes it.
+    `rejected` is the policy not covering the claim on either of its two axes, and here both
+    say it is covered — every line qualifies and the payment is inside the period; the only
+    reason nothing is paid out is that the persona has already drawn the annual maximum.
+    `not_proof_of_payment` is for a claim whose document types all carry
+    `proves_payment: false`, and a fiscal receipt's does not. `partially_covered` would say
+    some of the amount qualifies when none of it is payable. Inventing any of the three would
+    put a label in the dataset that nothing specified, so the engine raises and `claim_planner`
+    never plans one.
     """
     ledger = Ledger()
     ledger.record("p001", "vitamins_nutrition", Decimal("12000.00"))
@@ -721,15 +724,38 @@ def test_a_claim_of_several_receipts_is_dated_by_the_earliest_of_them():
 # ------------------------------------------------------ cannot yet realize   --
 
 
-def test_a_document_outside_the_active_period_is_insufficient_evidence():
-    """The period is 2026-01-01..2026-12-31. `claim_planner` cannot yet plan this — it is
-    a content mechanism, not coverage arithmetic — but the engine must classify it if it
-    is handed one, and it must not consume the balance for a claim it rejects."""
+def test_a_payment_outside_the_active_period_is_rejected():
+    """The period is 2026-01-01..2026-12-31, so 2025-12-31 misses it by a day.
+
+    `rejected` and not `insufficient_evidence`: nothing about this claim is unestablished —
+    a fiscal receipt states what was bought and proves it was paid for — and the policy
+    plainly does not cover a payment made outside its own window. `claim_planner` cannot yet
+    plan this (it is a content mechanism, not coverage arithmetic), but the engine must
+    classify it if it is handed one, and it must not consume the balance for a claim it pays
+    nothing on.
+    """
     result = evaluate([item("500.00", True)], when=date(2025, 12, 31))
-    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == (OUTSIDE_PERIOD,)
     assert result.reimbursable == Decimal(0)
     assert result.verdict_basis == (VerdictBasis.DOCUMENTS,)
     assert any("period" in line for line in result.policy_trace)
+
+
+def test_the_two_routes_to_rejected_are_told_apart_by_their_cause():
+    """`rejected` has two mechanisms and one name, so the verdict alone cannot separate
+    them and `imperfection` has to.
+
+    A basket the category covers none of carries NO cause — the verdict says the whole of
+    it. A payment outside the window carries `outside_period`, because "not covered" is
+    true of both and only the cause says which sense of it applies.
+    """
+    by_basket = evaluate([item("500.00", False)], when=IN_PERIOD)
+    by_date = evaluate([item("500.00", True)], when=date(2027, 1, 1))
+
+    assert by_basket.verdict is by_date.verdict is Verdict.REJECTED
+    assert by_basket.imperfection == ()
+    assert by_date.imperfection == (OUTSIDE_PERIOD,)
 
 
 def test_an_out_of_period_claim_still_reports_what_its_lines_cover():
@@ -738,17 +764,20 @@ def test_an_out_of_period_claim_still_reports_what_its_lines_cover():
     from one where nothing was covered at all — two different facts under one number.
 
         covered   997.00 of 1000.00 -> 0.997, regardless of the date
+
+    All three come out `rejected`, and the third for two independent reasons at once; the
+    point of the test is the fraction, which differs across all three.
     """
     mixed = evaluate([item("997.00", True), item("3.00", False)], when=date(2025, 12, 31))
-    assert mixed.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert mixed.verdict is Verdict.REJECTED
     assert mixed.covered_fraction == Decimal("0.997")
 
     full = evaluate([item("1000.00", True)], when=date(2027, 1, 1))
-    assert full.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert full.verdict is Verdict.REJECTED
     assert full.covered_fraction == Decimal(1)
 
     none = evaluate([item("1000.00", False)], when=date(2027, 1, 1))
-    assert none.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert none.verdict is Verdict.REJECTED
     assert none.covered_fraction == Decimal(0)
 
 
@@ -758,11 +787,19 @@ def test_the_day_the_period_opens_and_the_day_it_closes_are_inside_it():
 
 
 def test_a_period_failure_is_decided_before_coverage_is():
-    """policy.yaml does not say which of the two wins when both apply. The engine checks
-    the period first: a document from outside the window is not evidence of anything in
-    the period, so there is nothing for a coverage verdict to be about."""
+    """policy.yaml does not say which of the two wins when both apply, and the engine checks
+    the period first: a document from outside the window is not evidence of anything in the
+    period, so there is nothing for a coverage verdict to be about.
+
+    Since both branches now answer `rejected`, the order is no longer visible in the
+    verdict — it is visible in `imperfection` and in the trace. The period branch names its
+    cause and argues no coverage at all; the coverage branch names no cause and states the
+    fraction. Asserting the verdict alone here would have been vacuous.
+    """
     result = evaluate([item("500.00", False)], when=date(2027, 1, 1))
-    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == (OUTSIDE_PERIOD,)
+    assert not any("coverage" in line for line in result.policy_trace)
 
 
 # -------------------------------------------------------------- policy_trace --
