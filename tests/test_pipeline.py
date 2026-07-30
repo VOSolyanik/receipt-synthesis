@@ -20,6 +20,7 @@ from receipt_synth.claim_planner import (
     ARCHETYPES,
     REALIZABLE_VERDICTS,
     archetypes_for,
+    can_assemble_evidence,
     documentable_categories,
     draw_partially_covered_cause,
     draw_verdict,
@@ -157,18 +158,54 @@ def test_plan_picks_archetypes_that_can_carry_the_category():
         assert document.archetype.country is subject.location.country
 
 
-def test_a_category_no_archetype_covers_is_refused():
+def test_a_category_whose_archetypes_cannot_prove_both_facts_is_refused():
+    """A claim needs both facts — what was bought and that it was paid for — so a category whose
+    only registered archetype supplies ONE of them is refused rather than half-built.
+
+    REWRITTEN WITH THE SECOND DOCUMENT CLASS, and the old form no longer described anything. It
+    looked for a category NO archetype covers, which was every category but one while the registry
+    held fiscal receipts alone. A bank payment confirmation carries every category — 👁 it lists no
+    items, so nothing on it can contradict one — and the refusal now comes from the evidence being
+    incomplete rather than from the category having no template at all. Same guard, reached through
+    the branch that is actually live: `_select_documents` refuses, because `document_evidence` says
+    what each type proves and nothing says which purchase an unpaired payment settled.
+    """
     subject = persona()
     unsupported = next(
         category
         for category in subject.benefit_categories
-        if not archetypes_for(Country.UA, category)
+        if not can_assemble_evidence(archetypes_for(Country.UA, category))
     )
+    assert archetypes_for(Country.UA, unsupported), (
+        "this category has no archetype at all, so the refusal below would come from the "
+        "empty-registry branch and this test would not exercise the evidence rule"
+    )
+
     with pytest.raises(ValueError):
         plan_claim(
             random.Random(1), persona=subject, claim_id="c1",
             category=unsupported, ledger=Ledger(),
         )
+
+
+def test_a_payment_only_category_is_not_reported_as_documentable():
+    """The other half, one stage earlier — and it is what keeps the refusal above off the drawn
+    path. `documentable_categories` answers the question the assembler asks before any claim
+    exists, so a category it reports would be drawn and then refused, and the run would die
+    mid-dataset on a machine nobody is watching.
+    """
+    subject = persona()
+    payment_only = [
+        category
+        for category in subject.benefit_categories
+        if archetypes_for(Country.UA, category)
+        and not can_assemble_evidence(archetypes_for(Country.UA, category))
+    ]
+    assert payment_only, (
+        "no category is covered by payment-proving archetypes alone, so this test asserts "
+        "nothing — check the registry"
+    )
+    assert not set(payment_only) & set(documentable_categories(subject))
 
 
 def test_a_category_the_persona_does_not_hold_is_refused():

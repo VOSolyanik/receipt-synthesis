@@ -25,8 +25,13 @@ from PIL import Image
 from receipt_synth.assembler import _BUILDERS
 from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.config import jurisdiction
-from receipt_synth.content_builder import build_prro_receipt, resolve_vendor
+from receipt_synth.content_builder import (
+    build_payment_confirmation,
+    build_prro_receipt,
+    resolve_vendor,
+)
 from receipt_synth.renderer import FONT_FILES, FONTS_DIR, TEMPLATES_DIR, Renderer, qr_svg
+from receipt_synth.schemas import DocType
 
 TEMPLATE = "ua_prro_receipt"
 # Millimetres of paper per rendered pixel is fixed across the UA fiscal receipts: 640 px is
@@ -39,6 +44,19 @@ PIXELS_PER_MM = 8
 # Read from the registry rather than listed, so a template registered without being rendered
 # here is impossible.
 REGISTERED_SLUGS = sorted(ARCHETYPES)
+
+# AND THE SAME SET SPLIT BY DOCUMENT CLASS, because the registry no longer holds one class. A
+# receipt is printed on a till roll whose width is one the jurisdiction's suppliers sell and
+# carries a fiscal foot; a bank payment confirmation is an A4 page with neither. Every test below
+# that asserts a receipt fact reads THIS list, so registering a third class cannot make a
+# receipt-shaped assertion quietly apply to it — and the two lists are checked against the
+# registry, so a class nobody assigned cannot slip through either.
+FISCAL_SLUGS = sorted(
+    slug for slug, a in ARCHETYPES.items() if a.doc_type is DocType.FISCAL_RECEIPT
+)
+CONFIRMATION_SLUGS = sorted(
+    slug for slug, a in ARCHETYPES.items() if a.doc_type is DocType.PAYMENT_CONFIRMATION
+)
 
 
 def template_source(template_name: str) -> str:
@@ -107,6 +125,43 @@ def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "p
     )
 
 
+def make_confirmation(seed: int = 20260417, vendor: dict = PAYER, initiation: str | None = None):
+    """One bank payment confirmation.
+
+    The payer's name and tax number are stated here rather than drawn from a persona: this test
+    module renders documents, and pulling in `persona_generator` would make every rendering test
+    depend on the draw order of a stage that has nothing to do with the page.
+    """
+    return build_payment_confirmation(
+        random.Random(seed),
+        issued_at=datetime(2026, 4, 17, 11, 3, 9),
+        vendor=vendor,
+        payer_name="Ковальчук Олена Петрівна",
+        payer_tax_id="2345678901",
+        initiation=initiation,
+    )
+
+
+def context_for(slug: str) -> dict:
+    """A render context for any registered archetype, built by its document class.
+
+    THE ONE PLACE THAT KNOWS WHICH BUILDER FEEDS WHICH TEMPLATE, so the whole-registry tests
+    below stay whole-registry as classes are added. Before the second class landed they all built
+    a fiscal receipt, which was correct only because every archetype was one — and a payment
+    confirmation rendered from a receipt's context would raise on the first missing key rather
+    than assert anything about the page.
+    """
+    doc_type = ARCHETYPES[slug].doc_type
+    if doc_type is DocType.FISCAL_RECEIPT:
+        return make_receipt(registrar=registrar_of(slug)).render_context()
+    if doc_type is DocType.PAYMENT_CONFIRMATION:
+        return make_confirmation().render_context()
+    raise AssertionError(
+        f"{slug} is a {doc_type.value}, and this module has no context for that class — a "
+        "registered archetype nothing here can render is one no test below covers"
+    )
+
+
 # Which kind of register each archetype's documents come from — the pairing the assembler
 # makes. Taken from `assembler._BUILDERS` rather than restated, because a slug rendered here
 # under the wrong registrar would produce a page no run can produce.
@@ -154,17 +209,35 @@ def test_every_template_declares_exactly_one_document_root(template_path):
     )
 
 
+# The class each document class names its page root. `.receipt` for a till roll and `.page` for
+# an A4 sheet — a distinction worth keeping in the markup, since the two are not the same object
+# and a rule written for one must not reach the other through a shared name.
+_ROOT_SELECTORS = ("receipt", "page")
+
+
 def declared_width_px(slug: str) -> int:
     """The width `<slug>.css` gives the document root.
 
     Read out of the archetype's OWN stylesheet, which is where the paper width lives: the
-    shared stylesheet the three archetypes layer it over sets no width at all, so a width that
-    migrated there would leave one archetype silently taking another's paper.
+    shared stylesheet the three fiscal archetypes layer it over sets no width at all, so a width
+    that migrated there would leave one archetype silently taking another's paper.
+
+    EXACTLY ONE root rule may declare a width, over both spellings. A file declaring neither
+    would leave the paper to the browser; one declaring both would make this function report
+    whichever came first, and the test built on it would pass while measuring the wrong rule.
     """
     stylesheet = (TEMPLATES_DIR / f"{slug}.css").read_text(encoding="utf-8")
-    declared = re.search(r"\.receipt\s*\{[^}]*?\bwidth:\s*(\d+)px", stylesheet, re.DOTALL)
-    assert declared, f"{slug}.css should give the document root an explicit width"
-    return int(declared.group(1))
+    declared = [
+        int(match.group(1))
+        for selector in _ROOT_SELECTORS
+        for match in re.finditer(
+            rf"\.{selector}\s*\{{[^}}]*?\bwidth:\s*(\d+)px", stylesheet, re.DOTALL
+        )
+    ]
+    assert len(declared) == 1, (
+        f"{slug}.css should give its document root exactly one explicit width; found {declared}"
+    )
+    return declared[0]
 
 
 def test_the_image_width_is_the_declared_document_width(rendered):
@@ -177,8 +250,8 @@ def test_the_image_width_is_the_declared_document_width(rendered):
     assert rendered.width == declared_width_px(TEMPLATE)
 
 
-@pytest.mark.parametrize("slug", REGISTERED_SLUGS)
-def test_every_archetype_is_rendered_on_a_paper_width_the_jurisdiction_sells(slug):
+@pytest.mark.parametrize("slug", FISCAL_SLUGS)
+def test_every_fiscal_archetype_is_rendered_on_a_paper_width_the_jurisdiction_sells(slug):
     """A receipt is printed on a roll, and rolls come in fixed widths — `receipt.widths_mm` in
     config/fiscal-rules.yaml, 58 mm and 80 mm for Ukraine. Until this test the list was read by
     nothing, so a stylesheet at 700 px would have rendered a paper width no supplier stocks and
@@ -187,6 +260,11 @@ def test_every_archetype_is_rendered_on_a_paper_width_the_jurisdiction_sells(slu
     The scale is the one 640 px = 80 mm fixes, and it is asserted for the whole set rather than
     per template: if the two widths mapped through different scales the ratio between the images
     would mean nothing.
+
+    SCOPED TO THE FISCAL CLASS, and the scope is the point rather than a caveat. `widths_mm` is
+    the widths a thermal ROLL is sold in; a bank payment confirmation is an A4 page, and holding
+    it to this list would fail on a document that is correct — or, worse, pass if somebody
+    "fixed" it by adding 210 mm to a list of till-roll widths.
     """
     widths_mm = jurisdiction("UA")["receipt"]["widths_mm"]
     width_px = declared_width_px(slug)
@@ -202,7 +280,7 @@ def test_both_configured_paper_widths_are_actually_rendered():
     while the narrow roll reached no image at all — and the whole reason the 58 mm variant is
     its own archetype is that a corpus rendered only on the wide roll teaches a consumer where
     the amount column sits."""
-    rendered_mm = {declared_width_px(slug) // PIXELS_PER_MM for slug in REGISTERED_SLUGS}
+    rendered_mm = {declared_width_px(slug) // PIXELS_PER_MM for slug in FISCAL_SLUGS}
     assert set(jurisdiction("UA")["receipt"]["widths_mm"]) == rendered_mm
 
 
@@ -232,9 +310,9 @@ def test_every_registered_archetype_renders_with_every_box_on_the_paper(renderer
     a box inside the paper, so this catches the collapse and the overrun and cannot catch
     ugliness. The renders were also inspected by eye when this archetype landed.
     """
-    receipt = make_receipt(registrar=registrar_of(slug))
-    result = renderer.render(slug, receipt.render_context(), tmp_path / f"{slug}.png")
-    marked = marked_fields(renderer.build_html(slug, receipt.render_context()))
+    context = context_for(slug)
+    result = renderer.render(slug, context, tmp_path / f"{slug}.png")
+    marked = marked_fields(renderer.build_html(slug, context))
 
     assert set(result.field_bboxes) == marked, "a marked field lost its box, or gained one"
     for name, (x, y, width, height) in result.field_bboxes.items():
@@ -556,7 +634,7 @@ def test_a_non_payers_boxes_lack_exactly_what_is_not_on_the_document(
 # ------------------------------------------- the fiscal foot of the receipt --
 
 
-@pytest.mark.parametrize("slug", REGISTERED_SLUGS)
+@pytest.mark.parametrize("slug", FISCAL_SLUGS)
 def test_the_maker_name_is_printed_immediately_after_the_fiscal_title(renderer, tmp_path, slug):
     """📄 Line 35 of the published form is ONE requisite — the wording «ФІСКАЛЬНИЙ ЧЕК»
     together with the name or logo of the maker — and 👁 11 of 11 open receipts print such a
@@ -657,9 +735,7 @@ def test_the_stylesheet_falls_back_to_noto(renderer, slug):
     the per-archetype parametrization is here for, since the override wins the cascade. Any stack
     a document renders through has to be able to substitute ₴.
     """
-    html = renderer.build_html(
-        slug, make_receipt(registrar=registrar_of(slug)).render_context()
-    )
+    html = renderer.build_html(slug, context_for(slug))
     body = re.sub(r"/\*.*?\*/", "", html, flags=re.DOTALL)
     body = re.sub(r"@font-face\s*\{[^}]*\}", "", body, flags=re.DOTALL)
     stacks = [

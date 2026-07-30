@@ -179,6 +179,14 @@ class LineItem(BaseModel):
 class DocGroundTruth(BaseModel):
     """The label record of a single rendered document.
 
+    ONE MODEL FOR EVERY DOCUMENT CLASS, so a field a class does not print is ``None`` on its
+    records rather than absent. ``amount`` is the exception that is never optional, and its
+    meaning is the same question on every class — *the amount this document is about* — answered
+    by that class's own requisite: the basket total on a fiscal receipt, and on a payment
+    confirmation the TRANSFER amount, which is 📄 what the National Bank's instruction calls the
+    amount of the operation and is NOT the largest number printed on the page. See
+    ``content_builder.PaymentConfirmation``.
+
     ``amount_due`` is ``None`` for a document type that prints no such line, and is EQUAL TO
     ``amount`` wherever it is populated today, because the discount and the rounding that make
     the two differ are zero in this version. A consumer must therefore not report accuracy on
@@ -187,6 +195,14 @@ class DocGroundTruth(BaseModel):
     basket-level discount over per-line coverage, not the difficulty of printing it — see
     ``content_builder.PrroReceipt.amount_due`` and the field's entry in
     config/labelling-schema.yaml.
+
+    ``fee`` and ``total_charged`` ARE NOT THAT SAME DEFERRAL WEARING A SECOND NAME, and the
+    contrast is worth having in one place. A discount is a property of a basket, so making it
+    non-zero needs a rule for splitting it across covered and non-covered lines that policy.yaml
+    does not have. A bank's fee is charged on the payment, never enters a basket, and is not
+    reimbursable, so nothing about it is undecided: it is 👁 non-zero on about a third of real
+    confirmations and is generated that way, and ``total_charged`` genuinely differs from
+    ``amount`` whenever it is.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -199,8 +215,37 @@ class DocGroundTruth(BaseModel):
     amount: Money
     # ДО СПЛАТИ on a Ukrainian receipt: the total less any discount, plus cash rounding.
     amount_due: Money | None = None
+    # The bank's own charge for executing the payment — комісія. `None` on a class that has no
+    # such requisite, and NEVER reimbursable: it pays for a banking service rather than for
+    # anything a benefit category covers, so no policy limit applies to it.
+    fee: Money | None = None
+    # `amount` + `fee`: everything that left the payer's account. Where a confirmation prints it
+    # («Загальна сума») it is the largest number on the page, which is exactly why it is labelled
+    # apart from `amount` — an extractor that reaches for the most salient figure is measurably
+    # wrong rather than invisibly wrong.
+    total_charged: Money | None = None
     date: date
     counterparty: str
+    # The party the document names OPPOSITE `counterparty`. `counterparty` is the other side of
+    # the transaction from the claimant — the seller on a receipt, the payee on a confirmation —
+    # and `payer` is the claimant's own side, which only a document naming both parties carries.
+    # `None` where the class names one party; the empty string is NOT that case, and the
+    # difference is deliberate: 👁 a confirmation may print a payer field whose value is a
+    # hyphen, and a real extractor reads that hyphen as a value.
+    payer: str | None = None
+    # Призначення платежу — free text written by the payer. 🔴 It never names what was bought
+    # (👁 0 of 7 observed), which is the observation behind `proves_subject: false` for the
+    # payment-confirmation type in policy.yaml.
+    payment_purpose: str | None = None
+    # The bank's own number for the document, 👁 present on 8 of 8 and 📄 mandatory. It is the
+    # deduplication key of this class — the authorization code is not, being six digits and
+    # unique only within an issuer and a window.
+    document_code: str | None = None
+    # Код авторизації — six digits, and only where a card operation was authorized (👁 4 of 8).
+    auth_code: str | None = None
+    # EMPTY on a class that lists nothing — a payment confirmation proves one movement of money
+    # and 👁 8 of 8 carry no table of items at all. An empty list is the statement "this document
+    # lists nothing", which is why the field stays required rather than becoming nullable.
     line_items: list[LineItem]
 
     has_qr: bool

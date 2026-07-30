@@ -25,12 +25,14 @@ from receipt_synth.claim_planner import (
     ClaimPlan,
     DocumentPlan,
     documentable_categories,
+    evidence_of,
     plan_claims,
     unrealizable_verdicts,
     why_no_claim,
 )
 from receipt_synth.config import load_vendors
 from receipt_synth.content_builder import (
+    build_payment_confirmation,
     build_prro_receipt,
     resolve_vendor,
     vendor_can_carry,
@@ -159,10 +161,15 @@ def _pick_vendor(
 # `Archetype` — the planner decides labels, and which prefix a fiscal number takes is not one.
 # The paper width is bound nowhere in Python at all: it lives in `<slug>.css`, which the
 # renderer picks up from the slug.
+#
+# TWO DOCUMENT CLASSES NOW, WITH DIFFERENT PARAMETERS, which is why `_build_document` dispatches
+# on what the document has to state instead of calling every entry the same way. A receipt takes a
+# basket; a payment confirmation takes the payer and an amount and states no basket at all.
 _BUILDERS = {
     "ua_prro_receipt": build_prro_receipt,
     "ua_prro_receipt_58mm": build_prro_receipt,
     "ua_rro_receipt": partial(build_prro_receipt, registrar="rro"),
+    "ua_bank_payment_confirmation": build_payment_confirmation,
 }
 
 
@@ -187,41 +194,61 @@ def _build_document(
     The basket goes to the claim's SUBJECT document and to no other. Sizing is a claim-level
     decision (`ClaimPlan.coverage_target`, `item_count`), and giving the same basket to a
     second document would double the money a claim aimed at a limit was sized to spend.
+
+    DISPATCHED ON WHAT THE DOCUMENT HAS TO STATE, read from `document_evidence` in policy.yaml
+    rather than from a table of slugs. The two classes take different parameters because they
+    state different things: a receipt needs a category to draw a basket from, and a payment
+    confirmation needs the two parties and takes no basket at all. Keying on the evidence means a
+    further archetype of either class arrives without this branch being touched.
     """
-    slug = document_plan.archetype.slug
+    archetype = document_plan.archetype
+    slug = archetype.slug
     if slug not in _BUILDERS:
         raise NotImplementedError(
             f"archetype {slug!r} is registered in claim_planner.ARCHETYPES but no builder "
             f"produces it; assembler._BUILDERS knows {sorted(_BUILDERS)}"
         )
-    if document_plan is not plan.subject_document:
-        # Every builder registered above produces a document that states what was bought,
-        # and takes a basket to state it with. A document that states no subject — a
-        # payment confirmation, a statement — needs a builder of its own, and none exists.
-        # Said here rather than assumed: the claim loop no longer takes a claim to have one
-        # document, and this is the place that still cannot honour it.
-        raise NotImplementedError(
-            f"{slug!r} is planned as a document that does not state what was bought, and "
-            "no builder produces one yet"
+
+    if evidence_of(archetype).proves_subject:
+        if document_plan is not plan.subject_document:
+            # `ClaimPlan.subject_document` establishes that the claim has exactly ONE document
+            # stating what was bought; this says that the one being built is that document. The
+            # basket is sized once per claim, so a second carrier would spend the claim's money
+            # twice.
+            raise ValueError(
+                f"{slug!r} states what was bought but is not this claim's subject document, "
+                "and a basket is sized once per claim — see `ClaimPlan.coverage_target`"
+            )
+        document = _BUILDERS[slug](
+            rng,
+            category_id=plan.category,
+            issued_at=document_plan.issued_at,
+            vendor=vendor,
+            # No "м." prefix: Faker's uk_UA city names already carry their settlement type
+            # ("хутір Великі Мости"), and prefixing produced "м. хутір Великі Мости".
+            address=persona.location.city,
+            covered_only=plan.coverage_target is None,
+            coverage_target=plan.coverage_target,
+            item_count=plan.item_count,
         )
-    receipt = _BUILDERS[slug](
-        rng,
-        category_id=plan.category,
-        issued_at=document_plan.issued_at,
-        vendor=vendor,
-        # No "м." prefix: Faker's uk_UA city names already carry their settlement type
-        # ("хутір Великі Мости"), and prefixing produced "м. хутір Великі Мости".
-        address=persona.location.city,
-        covered_only=plan.coverage_target is None,
-        coverage_target=plan.coverage_target,
-        item_count=plan.item_count,
-    )
+    else:
+        # A document that proves the payment and states no subject. It takes NO basket and no
+        # coverage target — there is nothing on it for a coverage rule to read, which is exactly
+        # why its type proves no subject — and it takes the persona, because this is the first
+        # archetype that prints a persona's own name, as the payer.
+        document = _BUILDERS[slug](
+            rng,
+            issued_at=document_plan.issued_at,
+            vendor=vendor,
+            payer_name=persona.full_name,
+            payer_tax_id=persona.tax_id,
+        )
 
     image_path = out_dir / "images" / f"{doc_id}.png"
     with tempfile.TemporaryDirectory() as staging:
         # The clean render is an intermediate, not an artifact: the dataset ships the
         # document as it would have been captured.
-        clean = renderer.render(slug, receipt.render_context(), Path(staging) / f"{doc_id}.png")
+        clean = renderer.render(slug, document.render_context(), Path(staging) / f"{doc_id}.png")
         degraded = degrade(
             cv2.imread(str(clean.image_path)),
             clean.field_bboxes,
@@ -231,7 +258,7 @@ def _build_document(
         image_path.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(image_path), degraded.image)
 
-    return receipt.ground_truth(
+    return document.ground_truth(
         doc_id=doc_id,
         source_file=image_path.name,
         capture=Capture.SCREENSHOT,

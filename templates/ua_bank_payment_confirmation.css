@@ -1,0 +1,317 @@
+/*
+ * Ukrainian bank payment confirmation — A4.
+ *
+ * SELF-CONTAINED, unlike the fiscal receipts, which layer three archetypes over one shared
+ * stylesheet. There is one archetype of this class, and nothing to share a rule with: a bank
+ * document and a till roll have no layout in common beyond a white background.
+ *
+ * THE PAPER. 📄 A4 is 210 × 297 mm (ISO 216), stated in `payment_confirmation.page` in
+ * config/fiscal-rules.yaml, and rendered here at 96 dpi — the resolution a PDF page is shown
+ * at on screen, which is how such a document reaches a claimant: 210 mm × 96 / 25.4 = 794 px,
+ * 297 mm the same way = 1123 px. That is a DIFFERENT scale from the receipts' 8 px/mm, and
+ * deliberately so: a thermal receipt is a printed strip photographed or scanned at print
+ * resolution, while this is a screen rendering of a page. Both facts are declared where the
+ * paper is, so neither is a number a reader has to trust.
+ *
+ * `min-height` rather than `height`, so a long payment purpose lengthens the sheet instead of
+ * being clipped: a bounding box that runs past the bottom of the image is the one failure a
+ * fixed height would guarantee, and the renderer measures the document element.
+ *
+ * Font stacks: "Noto Sans" leads the prose and "Noto Sans Mono" the amount column, and BOTH
+ * carry "Noto Sans" as a member — the house rule from fonts/README.md, since Roboto has no ₴
+ * glyph and Chromium must always have a Noto face to substitute from. The generic family last
+ * is a backstop that should never be reached: the vendored fonts are what make one seed produce
+ * one set of pixels on any machine.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
+
+.page {
+  box-sizing: border-box;
+  width: 794px;
+  min-height: 1123px;
+  padding: 54px 62px 48px;
+  background: #ffffff;
+  color: #14171c;
+  font-family: "Noto Sans", "Roboto", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* -- header ---------------------------------------------------------------- */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 2px solid #1b3a6b;
+  padding-bottom: 10px;
+}
+
+.bank-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1b3a6b;
+  letter-spacing: 0.2px;
+}
+
+/* Reserves the top-right corner the way a printed form does, so the header does not read as
+   left-aligned only. Empty on purpose: the stamp itself sits by the signature at the foot,
+   which is 👁 where it was observed. */
+.stamp-slot {
+  width: 96px;
+  height: 1px;
+}
+
+.title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 26px 0 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.doc-code {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 12px;
+}
+
+.muted {
+  color: #4a5260;
+}
+
+.caption {
+  color: #4a5260;
+}
+
+/* A caption on the left, its value hard against the right edge — the column a reader's eye
+   follows down a form. The same rule the receipt uses, for the same reason. */
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.meta {
+  margin-top: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #d5dae2;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+}
+
+/* -- the two parties ------------------------------------------------------- */
+
+/* 👁 6 of 8 documents make this the largest block of the page, in two columns. */
+.parties {
+  display: flex;
+  gap: 34px;
+  margin: 18px 0 4px;
+}
+
+.party {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 14px;
+  background: #f5f7fa;
+  border: 1px solid #dfe4ec;
+  border-radius: 3px;
+  /* An IBAN is 29 characters and a long legal name is longer than a column: both wrap rather
+     than run past the edge of the paper. */
+  overflow-wrap: anywhere;
+}
+
+.party-name {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.party .muted {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 12px;
+}
+
+/* -- the money ------------------------------------------------------------- */
+
+.money {
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border: 1px solid #dfe4ec;
+  border-radius: 3px;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+}
+
+.money .row + .row {
+  margin-top: 6px;
+}
+
+.amount {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* 🔴 THE SALIENCE TRAP, RENDERED. Where the total is printed it is the largest number on the
+   page — and it is NOT the amount of the operation, which 📄 the norm says is the transfer. The
+   type size is the observed fact and the divergence it creates is the point: an extractor that
+   takes the most prominent figure is wrong by exactly the fee. */
+.grand {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #d5dae2;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.words {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #d5dae2;
+  font-family: "Noto Sans", "Roboto", sans-serif;
+  font-size: 12px;
+}
+
+.words .caption::after {
+  content: ": ";
+}
+
+/* -- purpose and the conditional operation block --------------------------- */
+
+.purpose {
+  margin-top: 18px;
+  overflow-wrap: anywhere;
+}
+
+.operation {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #d5dae2;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 12px;
+}
+
+.operation .row + .row {
+  margin-top: 5px;
+}
+
+/* -- stamp and signature --------------------------------------------------- */
+
+.attestation {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 30px;
+  margin-top: 46px;
+}
+
+.sign {
+  flex: 1 1 auto;
+  max-width: 320px;
+  font-size: 12px;
+}
+
+/* The rule a signature sits on. It stays when the ink does not: 👁 the one document without a
+   signature printed an empty line under the caption. */
+.sign-line {
+  height: 36px;
+  border-bottom: 1px solid #6c7480;
+}
+
+.ink {
+  display: block;
+  width: 132px;
+  height: 40px;
+  margin-left: 12px;
+  /* Slanted, the way a hand signs across a rule. */
+  transform: rotate(-4deg) skewX(-8deg);
+}
+
+/* 👁 The round blue stamp is the ONE constant of this class — 8 of 8 — and usually the bottom
+   right. Rotated a little, as a hand-applied stamp is; the rotation is small and the element
+   well inside the page, so its bounding box stays on the paper. */
+.stamp {
+  flex: 0 0 auto;
+  width: 132px;
+  height: 132px;
+  border: 3px solid #1b3a6b;
+  border-radius: 50%;
+  color: #1b3a6b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-7deg);
+  opacity: 0.82;
+}
+
+.stamp-inner {
+  width: 108px;
+  height: 108px;
+  border: 1px solid #1b3a6b;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.stamp-text {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.stamp-code {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 11px;
+}
+
+/* -- foot ------------------------------------------------------------------ */
+
+.foot {
+  margin-top: 40px;
+  padding-top: 12px;
+  border-top: 1px solid #d5dae2;
+  font-size: 11px;
+  color: #4a5260;
+}
+
+.note {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.note .caption::after {
+  content: ": ";
+}
+
+.promo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.promo-text {
+  max-width: 210px;
+}
+
+.qr {
+  width: 78px;
+  height: 78px;
+}
+
+.qr svg {
+  display: block;
+  width: 78px;
+  height: 78px;
+}

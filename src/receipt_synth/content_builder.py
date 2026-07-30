@@ -36,11 +36,17 @@ from faker import Faker
 
 from receipt_synth.config import (
     acquirers,
+    banks,
     category,
     excluded_line_counts,
     fiscal_makers,
     high_frequency_surnames,
+    initiating_systems,
+    initiation_shares,
     jurisdiction,
+    payment_confirmation_money_range,
+    payment_confirmation_share,
+    payment_purposes,
     placeholder_values,
     price_range,
     quantity_choices,
@@ -1370,6 +1376,572 @@ def build_prro_receipt(
 
 
 # =============================================================================
+# Bank payment confirmation
+# =============================================================================
+#
+# A DIFFERENT DOCUMENT CLASS AND NOT A VARIANT OF THE RECEIPT ABOVE: a bank issues it, it
+# carries no fiscal identity, and 👁 8 of 8 observed confirmations list NO ITEMS at all. What it
+# proves is therefore only that money moved — policy.yaml's `document_evidence` gives the type
+# `proves_subject: false`, and 👁 0 of 7 payment purposes name what was bought, which is the
+# strongest confirmation of that entry in this repository.
+#
+# ONE ARCHETYPE WITH A CONDITIONAL BLOCK, NOT TWO. An earlier reading split the class in two — a
+# quittance carrying a purpose against a card slip carrying an authorization code — and 👁 3 of 8
+# documents carry a masked card AND an authorization code AND a purpose at once, which refutes
+# it. What varies is HOW THE PAYMENT WAS INITIATED; see `initiation` in
+# config/fiscal-rules.yaml.
+
+
+def iban_check_digits(country: str, bban: str) -> str:
+    """The two check digits of an IBAN, per 📄 ISO 13616 / ISO 7064 mod 97-10.
+
+    The published algorithm: move the country code and the two check positions to the end,
+    replace each letter by its position in the alphabet plus 9 (A = 10 … Z = 35), read the result
+    as one integer and take it mod 97; the check digits are 98 minus that.
+
+    Computed rather than drawn, for the reason every identifier in this module is: an account
+    number that fails its own published checksum is a broken invariant, and a broken invariant in
+    this repository has to be a labelled choice of a fraud archetype rather than a side effect of
+    a generator that did not bother.
+    """
+    rearranged = f"{bban}{country}00"
+    digits = "".join(
+        str(int(char, 36)) if char.isalpha() else char for char in rearranged.upper()
+    )
+    if not digits.isdigit():
+        raise ValueError(f"an IBAN body is alphanumeric, got {bban!r}")
+    return f"{98 - int(digits) % 97:02d}"
+
+
+def is_valid_iban(value: str) -> bool:
+    """Whether a string is an IBAN whose check digits agree with its body."""
+    if len(value) < 5 or not value[:2].isalpha() or not value[2:4].isdigit():
+        return False
+    return iban_check_digits(value[:2], value[4:]) == value[2:4]
+
+
+def generate_iban(rng: random.Random, bank_code: str, country: str = "UA") -> str:
+    """A checksum-correct IBAN of this jurisdiction, on this bank's code.
+
+    The length and the bank-code length come from `payment_confirmation.iban` in
+    config/fiscal-rules.yaml rather than from literals here: an IBAN's length is fixed per
+    country by the published registry, and that is a fact about the jurisdiction.
+    """
+    rules = jurisdiction(country)["payment_confirmation"]["iban"]
+    if len(bank_code) != rules["bank_code_length"]:
+        raise ValueError(
+            f"a {country} IBAN carries a {rules['bank_code_length']}-digit bank code, got "
+            f"{bank_code!r}"
+        )
+    account_length = rules["length"] - 4 - len(bank_code)
+    account = "".join(rng.choice(_DIGITS) for _ in range(account_length))
+    bban = bank_code + account
+    return f"{rules['country']}{iban_check_digits(rules['country'], bban)}{bban}"
+
+
+def luhn_check_digit(body: str) -> int:
+    """The final digit a card number would need for its 📄 published Luhn checksum to pass.
+
+    Here to be AVOIDED rather than satisfied — see `unissuable_card_number`.
+    """
+    if not body.isdigit():
+        raise ValueError(f"a card number body is digits, got {body!r}")
+    total = 0
+    for index, char in enumerate(reversed(body)):
+        digit = int(char)
+        if index % 2 == 0:  # the position the check digit will make even from the right
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return (10 - total % 10) % 10
+
+
+def passes_luhn(number: str) -> bool:
+    """Whether a number satisfies the Luhn checksum every payment card satisfies."""
+    return number.isdigit() and luhn_check_digit(number[:-1]) == int(number[-1])
+
+
+def unissuable_card_number(rng: random.Random, length: int = 16) -> str:
+    """Digits that LOOK like a card number and cannot be one, by construction.
+
+    🔴 The reason is publication, not realism. 👁 One observed confirmation prints a recipient's
+    card with no masking at all, so this generator must be able to print sixteen visible digits —
+    and sixteen digits drawn freely would satisfy the Luhn checksum one time in ten, at which
+    point a published image would carry a string that could be somebody's actual card.
+    Deliberately failing a published checksum makes "this is not a card number" a verifiable
+    property of every such image rather than an assurance in a README.
+
+    The masked schemes use it too: what stays visible is drawn from the same digits, so the head
+    and tail of a masked number belong to a number that could not exist either.
+    """
+    body = "".join(rng.choice(_DIGITS) for _ in range(length - 1))
+    correct = luhn_check_digit(body)
+    return body + str((correct + rng.randint(1, 9)) % 10)
+
+
+@dataclass(frozen=True)
+class Party:
+    """One side of a payment, as a bank confirmation prints it.
+
+    Every field is nullable because 👁 real confirmations leave them out in TWO mechanically
+    different ways, and the difference matters to whoever scores an extraction: a HYPHEN printed
+    as the value (`name="-"`) is a value an extractor returns as the string "-", while a caption
+    with nothing under it returns nothing at all. Collapsing both into "field absent" would make
+    accuracy on empty fields unmeasurable.
+
+    `code` is a РНОКПП (10 digits) or a ЄДРПОУ (8), and ⚠️ the length distinguishes the KIND OF
+    CODE rather than the kind of party: a sole trader is a business with a ten-digit code, so
+    "ten digits means a private individual" is false.
+    """
+
+    name: str
+    code: str | None
+    account: str | None
+    bank: str | None
+
+
+@dataclass(frozen=True)
+class PaymentConfirmation:
+    """One Ukrainian bank payment confirmation, complete but not yet rendered.
+
+    THE THREE AMOUNTS ARE THE HEART OF THIS CLASS, and 👁 0 of 8 observed documents carry only
+    one:
+
+    * ``transfer`` — 📄 the amount of the payment OPERATION, which the National Bank's instruction
+      on non-cash settlements makes a mandatory requisite. **This is the claim's amount.**
+    * ``fee`` — the bank's charge. 📄 Absent from the requisite list entirely, and it pays for a
+      banking service rather than for anything a benefit category covers, so it is never
+      reimbursable. 👁 Non-zero on 3 of 8, and generated at about that rate: keeping it at zero
+      would make the field discriminate nothing.
+    * ``total_charged`` — their sum, DERIVED rather than stored so the three cannot drift.
+      👁 Printed on 1 of 8, and where it is printed it is the LARGEST NUMBER ON THE PAGE.
+
+    🔴 That last point is the divergence this archetype exists to make measurable. An extractor
+    that takes the most salient figure returns ``total_charged`` while the oracle, following the
+    norm, expects ``transfer`` — and the gap between them is exactly the fee. It is now visible
+    whether a system resists the salient number instead of being invisible.
+
+    ``initiation`` names a key of ``payment_confirmation.initiation`` in
+    config/fiscal-rules.yaml and decides the CONDITIONAL BLOCK: whether a card and an
+    authorization code are printed, whether there is a payment purpose at all, and whether the
+    payer is identified. It is the axis of variation because 👁 the documents vary along it — not
+    by family of document, which was the reading the observation refuted.
+    """
+
+    bank_name: str
+    bank_code: str
+    title: str
+    document_code: str
+    issued_at: datetime
+    # The caption printed beside the date. 👁 Ten captions over six concepts appear on real
+    # confirmations; only the three the labelling contract accepts as the payment date are ever
+    # printed here — see `payment_date` in config/labelling-schema.yaml and `period.payment_date`
+    # in config/policy.yaml for the concept itself.
+    date_caption: str
+    payer: Party
+    payee: Party
+    initiation: str
+    transfer: Decimal
+    fee: Decimal
+    # 👁 Four captions for the amount and three for the fee. Carried per document because a
+    # consumer keying on one string reads a minority of real documents.
+    amount_caption: str
+    fee_caption: str
+    prints_total: bool
+    amount_in_words: str | None
+    amount_in_words_caption: str
+    purpose: str | None
+    auth_code: str | None
+    card_masked: str | None
+    terminal_label: str | None
+    terminal_value: str | None
+    signature_path: str | None
+    signatory_post: str | None
+    electronic_note: str | None
+    verification_footer: str | None
+    qr_payload: str | None
+    decimal_separator: str
+
+    @property
+    def total_charged(self) -> Decimal:
+        """Everything that left the payer's account: the transfer plus the bank's fee.
+
+        Derived for the reason `PrroReceipt.amount_due` is derived and `_vat_number` is derived:
+        two numbers that must agree should not be two numbers. Unlike ``amount_due`` this one
+        genuinely DIFFERS from the amount it is derived from — 👁 on about a third of documents —
+        so it discriminates, and a consumer may score it.
+        """
+        return (self.transfer + self.fee).quantize(KOPIYKA)
+
+    # -- rendering ------------------------------------------------------------
+
+    def _amount(self, value: Decimal) -> str:
+        rules = jurisdiction("UA")["number_format"]
+        whole, _, fraction = f"{value:.2f}".partition(".")
+        grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
+        return f"{grouped}{self.decimal_separator}{fraction}"
+
+    def render_context(self) -> dict:
+        """Everything the template prints, already formatted.
+
+        Formatting lives here for the same reason it does on the receipt: a jurisdiction's number
+        format is decided once rather than in every template that shows an amount.
+        """
+        rules = jurisdiction("UA")
+        block = rules["payment_confirmation"]
+        return {
+            "bank_name": self.bank_name,
+            "bank_code": self.bank_code,
+            "bank_code_label": block["parties"]["bank_code_label"],
+            "title": self.title,
+            "document_code": self.document_code,
+            "document_code_label": block["document_code"]["label"],
+            "date_caption": self.date_caption,
+            "date": self.issued_at.strftime(rules["date_format"]),
+            # This class's own `time_format`, not the jurisdiction's: the shared one separates
+            # with dashes, which is 👁 a till-printer quirk observed on receipts.
+            "time": self.issued_at.strftime(block["time_format"]),
+            "party_labels": block["parties"],
+            "payer": self.payer,
+            "payee": self.payee,
+            "amount_caption": self.amount_caption,
+            "amount": self._amount(self.transfer),
+            "fee_caption": self.fee_caption,
+            "fee": self._amount(self.fee),
+            "total_caption": block["total_caption"],
+            "total_charged": self._amount(self.total_charged) if self.prints_total else None,
+            "amount_in_words": self.amount_in_words,
+            "amount_in_words_caption": self.amount_in_words_caption,
+            "purpose_label": block["purpose_label"],
+            "purpose": self.purpose,
+            "auth_code": self.auth_code,
+            "auth_code_label": block["auth_code"]["label"],
+            "card_masked": self.card_masked,
+            "card_label": block["card"]["label"],
+            "terminal_label": self.terminal_label,
+            "terminal_value": self.terminal_value,
+            "stamp_caption": block["signature"]["stamp_caption"],
+            "signature_label": block["signature"]["signature_label"],
+            "signature_path": self.signature_path,
+            "signatory_post": self.signatory_post,
+            "electronic_note": self.electronic_note,
+            "verification_caption": block["verification_footer"]["present_caption"],
+            "verification_footer": self.verification_footer,
+            "qr_caption": block["qr"]["marketing_caption"],
+            "qr_payload": self.qr_payload,
+        }
+
+    # -- labels ---------------------------------------------------------------
+
+    def ground_truth(
+        self,
+        *,
+        doc_id: str,
+        source_file: str,
+        capture: Capture,
+        field_bboxes: dict[str, tuple[float, float, float, float]],
+    ) -> DocGroundTruth:
+        """The label record for this confirmation.
+
+        ``amount`` IS THE TRANSFER AND NOT THE TOTAL. Two supports, and they agree: 📄 the
+        instruction on non-cash settlements calls the amount of the operation the requisite, and a
+        fee buys a banking service rather than anything a benefit category covers, so the policy
+        does not reach it. ``total_charged`` and ``fee`` are labelled beside it, which is what
+        makes the disagreement with a salience-following extractor measurable.
+
+        ``amount_due`` stays ``None``: it is a receipt requisite (ДО СПЛАТИ) and this document has
+        no such line. Reusing it for «Загальна сума» would give one key two meanings, which is the
+        failure config/labelling-schema.yaml exists to prevent.
+
+        ``line_items`` is EMPTY rather than omitted — the document lists nothing, and that empty
+        list is the statement.
+        """
+        return DocGroundTruth(
+            doc_id=doc_id,
+            source_file=source_file,
+            doc_type=DocType.PAYMENT_CONFIRMATION,
+            language="uk",
+            currency="UAH",
+            amount=self.transfer,
+            fee=self.fee,
+            total_charged=self.total_charged,
+            date=self.issued_at.date(),
+            counterparty=self.payee.name,
+            payer=self.payer.name,
+            payment_purpose=self.purpose,
+            document_code=self.document_code,
+            auth_code=self.auth_code,
+            line_items=[],
+            # 👁 2 of 8 carry a QR and BOTH are marketing — an application download. So a QR on
+            # this class is positive evidence that a QR says nothing about fiscality, and
+            # `qr_is_fiscal` is False whether or not one is printed.
+            has_qr=self.qr_payload is not None,
+            qr_is_fiscal=False,
+            has_fiscal_number=False,
+            capture=capture,
+            field_bboxes=field_bboxes,
+        )
+
+
+def _grouped(value: str, size: int, separator: str) -> str:
+    """A digit run broken into groups, as a document prints it."""
+    if size <= 1 or not separator:
+        return value
+    return separator.join(value[i : i + size] for i in range(0, len(value), size))
+
+
+def _draw_document_code(rng: random.Random, block: dict) -> str:
+    """The bank's own number for the document — 👁 8/8, 📄 mandatory, and the deduplication key.
+
+    Three formats are observed and all three are drawn from: a consumer validating the field by
+    shape needs every one of them, and a corpus printing a single shape would teach the shape.
+    """
+    spec = rng.choice(block["document_code"]["formats"])
+    groups = [_draw_from_pattern(rng, spec["pattern"]) for _ in range(spec["groups"])]
+    return spec["separator"].join(groups)
+
+
+def _draw_card(rng: random.Random, block: dict) -> str:
+    """A card number under one of the 👁 six observed masking schemes.
+
+    ⛔ NO NORM WAS FOUND for masking, in either the instruction on non-cash settlements or the
+    regulation on payment instruments, and 🔴 the spread confirms the absence from the opposite
+    direction: one observed document prints a recipient's card unmasked. So the scheme is drawn,
+    the unmasked one included, and a consumer whose pattern is "six digits, asterisks, four" is
+    matching a minority of the field.
+    """
+    card = block["card"]
+    scheme = rng.choice(card["masking_schemes"])
+    digits = unissuable_card_number(rng)
+
+    head, tail = scheme["head"], scheme["tail"]
+    hidden = len(digits) - head - tail
+    if hidden < 0:
+        raise ValueError(
+            f"masking scheme {scheme!r} in config/fiscal-rules.yaml reveals more digits than a "
+            f"card number has ({len(digits)})"
+        )
+    shown = digits[:head] + scheme["mask"] * hidden + (digits[-tail:] if tail else "")
+    if scheme.get("grouped"):
+        shown = _grouped(shown, 4, " ")
+    if scheme.get("name_scheme"):
+        shown = f"{shown} ({rng.choice(card['schemes'])})"
+    return shown
+
+
+def _draw_signature_path(rng: random.Random) -> str:
+    """An SVG path for a handwritten signature — 👁 present beside the stamp on 7 of 8.
+
+    Drawn per document rather than fixed, because a single path would be a constant on every
+    image of the class and a constant is something a model learns instead of learning the field.
+    Deterministic under the seed like everything else here: the control points come from the
+    caller's generator.
+
+    Geometry only. It spells no name and is not meant to: what the layout carries is that a
+    signature is there, and a legible name in script would be a personal name printed on a
+    published image for no gain.
+    """
+    points = [(0, 22)]
+    x = 0
+    for _ in range(4):
+        x += rng.randint(16, 26)
+        points.append((x, rng.randint(2, 30)))
+    curves = " ".join(
+        f"Q {px - 8} {rng.randint(0, 32)} {px} {py}" for px, py in points[1:]
+    )
+    return f"M 0 22 {curves}"
+
+
+def build_payment_confirmation(
+    rng: random.Random,
+    *,
+    issued_at: datetime,
+    vendor: dict,
+    payer_name: str,
+    payer_tax_id: str,
+    transfer: Decimal | None = None,
+    initiation: str | None = None,
+    country: str = "UA",
+) -> PaymentConfirmation:
+    """Build one Ukrainian bank payment confirmation.
+
+    ``vendor`` is an entry of config/vendors.json, resolved — it is the PAYEE, and the same
+    instance is passed to every document of a claim so two documents cannot name two firms. Its
+    ``profile`` is not consulted: this document lists nothing, so what the payee sells cannot be
+    read off it, which is the whole reason the type proves no subject.
+
+    ``payer_name`` and ``payer_tax_id`` come from the persona. This is the first archetype that
+    prints a persona's own name, which is why the surname pool was narrowed to a published
+    high-frequency set before it was ever printed — see `personal_names` in
+    config/generation.yaml.
+
+    ``transfer`` and ``initiation`` are drawn when not given. They are parameters so a test can
+    pin the conditional block instead of hunting for a seed that produces it, and so that the
+    three initiation modes can each be rendered and looked at.
+    """
+    rules = jurisdiction(country)
+    block = rules["payment_confirmation"]
+
+    try:
+        mode = block["initiation"][initiation] if initiation else None
+    except KeyError:
+        raise ValueError(
+            f"config/fiscal-rules.yaml declares no initiation mode {initiation!r} for "
+            f"{country}; it knows {sorted(block['initiation'])}"
+        ) from None
+    if mode is None:
+        shares = initiation_shares()
+        initiation = rng.choices(list(shares), weights=list(shares.values()), k=1)[0]
+        mode = block["initiation"][initiation]
+
+    # -- the money. Drawn in ten-kopiyka steps, as prices are: neither a transfer nor a fee is
+    # quoted to an arbitrary kopiyka, and whole steps keep the sum exact.
+    if transfer is None:
+        low, high = payment_confirmation_money_range("transfer_amount")
+        transfer = Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100
+    if transfer <= 0:
+        raise ValueError(f"a payment confirmation states a positive amount, got {transfer}")
+
+    fee = Decimal(0)
+    if rng.random() < payment_confirmation_share("nonzero_fee"):
+        fee_low, fee_high = payment_confirmation_money_range("fee")
+        fee = Decimal(rng.randrange(_minor(fee_low), _minor(fee_high), 10)) / 100
+
+    # -- the two parties
+    bank_name = rng.choice(banks(country))
+    bank_code = _draw_from_pattern(rng, block["parties"]["bank_code"]["pattern"])
+    payee_bank_code = _draw_from_pattern(rng, block["parties"]["bank_code"]["pattern"])
+
+    is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
+    payee_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
+    # 👁 The SECOND form of emptiness — a caption with nothing under it — observed on the
+    # recipient's bank among three such fields on one document. ⛔ The same form was observed on
+    # the recipient's NAME too and is deliberately not produced there: `counterparty` is a
+    # required label field, and emitting an empty one would assert that the document names no
+    # counterparty, a case whose comparison rule the labelling contract has not settled. Declared
+    # as a narrowing in config/labelling-schema.yaml rather than left for a reader to notice.
+    payee_bank_label = block["parties"]["bank_code_label"]
+    payee_bank = (
+        None
+        if rng.random() < payment_confirmation_share("empty_captioned_field")
+        else f"{rng.choice(banks(country))}, {payee_bank_label} {payee_bank_code}"
+    )
+    payee = Party(
+        name=printed_legal_name(vendor["name"], vendor["legal_form"]),
+        code=payee_code,
+        account=generate_iban(rng, payee_bank_code, country),
+        bank=payee_bank,
+    )
+
+    # 👁 The FIRST form of emptiness, and the mode it belongs to: on the internet-acquiring
+    # document the payer is not identified at all and a HYPHEN is printed as the value. An
+    # extractor reads that hyphen as a string, which is why it is a value here and not a `None`.
+    if mode["identifies_payer"]:
+        payer = Party(
+            name=payer_name,
+            code=payer_tax_id,
+            account=generate_iban(rng, bank_code, country),
+            bank=None,
+        )
+    else:
+        payer = Party(name=block["parties"]["empty_value"], code=None, account=None, bank=None)
+
+    # -- the conditional block: what a card operation adds
+    auth_code = (
+        _draw_from_pattern(rng, block["auth_code"]["pattern"])
+        if mode["prints_auth_code"]
+        else None
+    )
+    card_masked = _draw_card(rng, block) if mode["prints_card"] else None
+
+    purpose = None
+    if mode["prints_purpose"]:
+        template = rng.choice(payment_purposes(rules["language"]))
+        # An invoice number and its date, filled here rather than from the placeholder
+        # vocabulary: this is a reference to another document, not merchandise. 🔴 It is also the
+        # whole reason the purpose proves nothing about the subject — it names a document, and
+        # that document is not in the claim.
+        purpose = template.format(
+            invoice_no=f"{rng.randint(1, 9999)}",
+            invoice_date=(issued_at - timedelta(days=rng.randint(0, 20))).strftime(
+                rules["date_format"]
+            ),
+        )
+
+    terminal_label = terminal_value = None
+    if rng.random() < payment_confirmation_share("terminal"):
+        caption = rng.choice(block["terminal"]["captions"])
+        terminal_label = caption["label"]
+        terminal_value = (
+            rng.choice(initiating_systems(rules["language"]))
+            if caption["value_kind"] == "system_name"
+            else _draw_from_pattern(rng, block["terminal"]["mnemonic"]["pattern"])
+        )
+
+    signature = block["signature"]
+    return PaymentConfirmation(
+        bank_name=bank_name,
+        bank_code=bank_code,
+        title=rng.choice(block["titles"]),
+        document_code=_draw_document_code(rng, block),
+        issued_at=issued_at,
+        date_caption=rng.choice(block["date_captions"]),
+        payer=payer,
+        payee=payee,
+        initiation=initiation,
+        transfer=transfer,
+        fee=fee,
+        amount_caption=rng.choice(block["amount_captions"]),
+        fee_caption=rng.choice(block["fee_captions"]),
+        prints_total=rng.random() < payment_confirmation_share("prints_total"),
+        # 👁 The words spell the TRANSFER and not the total: 📄 the amount of the operation is the
+        # requisite, and the words are the same requisite written twice.
+        amount_in_words=(
+            amount_in_words_uk(transfer)
+            if rng.random() < payment_confirmation_share("amount_in_words")
+            else None
+        ),
+        amount_in_words_caption=rng.choice(block["amount_in_words_captions"]),
+        purpose=purpose,
+        auth_code=auth_code,
+        card_masked=card_masked,
+        terminal_label=terminal_label,
+        terminal_value=terminal_value,
+        # 👁 The stamp is 8/8 and is therefore not a draw; the signature beside it is 7/8, and the
+        # document without one printed an EMPTY SIGNATURE LINE, so the caption stays either way.
+        signature_path=(
+            _draw_signature_path(rng)
+            if rng.random() < payment_confirmation_share("signature")
+            else None
+        ),
+        signatory_post=(
+            rng.choice(signature["post_labels"])
+            if rng.random() < payment_confirmation_share("signatory_post")
+            else None
+        ),
+        electronic_note=(
+            rng.choice(signature["electronic_notes"])
+            if rng.random() < payment_confirmation_share("electronic_note")
+            else None
+        ),
+        # 👁 3/8, which refutes "every confirmation carries a verification footer".
+        verification_footer=(
+            block["verification_footer"]["steps"]
+            if rng.random() < payment_confirmation_share("verification_footer")
+            else None
+        ),
+        # 👁 2/8, both marketing. `None` means no QR block on the page at all.
+        qr_payload=(
+            rng.choice(block["qr"]["marketing_payloads"])
+            if rng.random() < payment_confirmation_share("qr")
+            else None
+        ),
+        decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
+    )
+
+
+# =============================================================================
 # Invariant validators
 # =============================================================================
 
@@ -1410,13 +1982,22 @@ def validate_vat_letter(item_kind: str, letter: str | None, country: str) -> boo
     return letter in allowed_vat_letters(item_kind, country)
 
 
-def legal_name(seller: Seller) -> str:
-    """The seller's name as printed, with its legal form.
+def printed_legal_name(name: str, legal_form: str) -> str:
+    """A party's name as printed, with its legal form.
 
     A sole trader is printed without quotes — ``ФОП Ковальчук О. С.`` — because the name is
     a person's, not a firm's. Every other form takes the Ukrainian quotation marks.
+
+    Takes the two strings rather than a ``Seller`` because the same rule prints the RECIPIENT of
+    a bank payment confirmation, which is the same firm named on a different document class and
+    is not a seller of anything on that page.
     """
-    prefix = _LEGAL_FORM_PREFIX.get(seller.legal_form, seller.legal_form)
-    if seller.legal_form == _SOLE_TRADER:
-        return f"{prefix} {seller.name}"
-    return f"{prefix} «{seller.name}»"
+    prefix = _LEGAL_FORM_PREFIX.get(legal_form, legal_form)
+    if legal_form == _SOLE_TRADER:
+        return f"{prefix} {name}"
+    return f"{prefix} «{name}»"
+
+
+def legal_name(seller: Seller) -> str:
+    """The seller's name as printed on a receipt. See `printed_legal_name` for the rule."""
+    return printed_legal_name(seller.name, seller.legal_form)

@@ -253,3 +253,107 @@ def acquirers(country: str) -> tuple[str, ...]:
     if not names:
         raise KeyError(f"config/vendors.json lists no acquirer for {country!r}")
     return tuple(names)
+
+
+@cache
+def banks(country: str) -> tuple[str, ...]:
+    """The issuers of a payment confirmation, as printed in its header.
+
+    The `printed_name` of each entry and nothing else: `display_name` names the mark in Latin
+    for a reader of config/vendors.json, and `slug` is a key. A bank is drawn per document, so a
+    single name would teach a consumer the name instead of the field — the same reason the
+    acquirer above stopped being one fixed string.
+
+    Entries keyed by `$` are notes rather than data, and the block is a list here, so nothing
+    needs skipping; the guard is that a country with no list raises instead of yielding an empty
+    header.
+    """
+    entries = load_vendors()["banks"].get(country)
+    if not entries:
+        raise KeyError(f"config/vendors.json lists no bank for {country!r}")
+    return tuple(entry["printed_name"] for entry in entries)
+
+
+# --- generation.yaml: the payment-confirmation draw inputs ---------------------
+#
+# Its own group rather than more entries above, because every one of them reads the same block
+# and the block is a document class. `payment_confirmation` in config/generation.yaml states
+# what each share was observed to be.
+
+
+def _payment_confirmation_generation() -> dict[str, Any]:
+    return load_generation()["payment_confirmation"]
+
+
+@cache
+def payment_confirmation_share(name: str) -> float:
+    """One of the observed frequencies a payment-confirmation variant is drawn at.
+
+    A single accessor over a family of keys rather than one function per key: they are all the
+    same kind of value, they are all read once, and a dozen near-identical loaders would be a
+    dozen places to keep in step. The name is checked against the file so a typo fails here,
+    naming the key, instead of defaulting to some rate nobody chose.
+    """
+    block = _payment_confirmation_generation()
+    key = f"{name}_share"
+    if key not in block:
+        raise KeyError(
+            f"config/generation.yaml declares no `payment_confirmation.{key}`; it has "
+            f"{sorted(k for k in block if k.endswith('_share'))}"
+        )
+    return float(block[key])
+
+
+@cache
+def payment_confirmation_money_range(name: str) -> tuple[Decimal, Decimal]:
+    """A money range of the payment-confirmation block, exact to the kopiyka.
+
+    Parsed from decimal text for the reason `price_range` states: a YAML float is a binary
+    double, and these bounds feed money arithmetic that is otherwise exact.
+    """
+    block = _payment_confirmation_generation()
+    key = f"{name}_range"
+    if key not in block:
+        raise KeyError(f"config/generation.yaml declares no `payment_confirmation.{key}`")
+    low, high = (Decimal(str(value)) for value in block[key])
+    return low, high
+
+
+@cache
+def initiation_shares() -> dict[str, float]:
+    """How a payment was initiated, as weights in the order the file declares them.
+
+    A dict rather than a tuple of pairs because the caller draws by name and the name selects a
+    field set out of `payment_confirmation.initiation` in config/fiscal-rules.yaml. Declaration
+    order is preserved, which is what keeps a seeded draw reproducible.
+    """
+    return {
+        str(name): float(share)
+        for name, share in _payment_confirmation_generation()["initiation_shares"].items()
+    }
+
+
+@cache
+def payment_purposes(language: str) -> tuple[str, ...]:
+    """The payment-purpose templates of a language.
+
+    🔴 None of them names what was bought — that is the observation `proves_subject: false`
+    rests on, and it is stated where the templates are.
+    """
+    purposes = _payment_confirmation_generation()["purposes"].get(language)
+    if not purposes:
+        raise KeyError(
+            f"config/generation.yaml lists no payment purpose for language {language!r}"
+        )
+    return tuple(purposes)
+
+
+@cache
+def initiating_systems(language: str) -> tuple[str, ...]:
+    """The values a "name of the initiating system" caption may carry."""
+    systems = _payment_confirmation_generation()["initiating_systems"].get(language)
+    if not systems:
+        raise KeyError(
+            f"config/generation.yaml lists no initiating system for language {language!r}"
+        )
+    return tuple(systems)

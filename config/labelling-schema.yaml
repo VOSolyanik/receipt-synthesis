@@ -31,13 +31,69 @@
 # inventing a caller. It is consumed by downstream tooling; its accuracy is maintained by being
 # re-checked against a freshly generated label file.
 #
-# ONE TEST READS IT, and the sentence above used to say "nothing in this repository", which that
-# test made false. `tests/test_payment_date_split.py` loads this file and config/policy.yaml
-# together to check the ONE property neither file can hold alone: that the concept of the payment
-# date is named in the policy and the printed captions only here, with no caption on the policy
-# side. It reads two files precisely because the property is the boundary between them; it is not
-# a loader, nothing in the pipeline calls it, and no other test loads this file.
+# TWO TESTS READ IT, and the sentence above used to say "nothing in this repository", which the
+# first of them made false. Both read the SAME block — the payment-date mapping — because it is the
+# one place where this file states something the generator has to obey rather than something it
+# merely records:
+#
+#   `tests/test_payment_date_split.py` loads this file and config/policy.yaml together, to check
+#   the property neither file can hold alone: the CONCEPT is named in the policy and the printed
+#   captions only here, with no caption on the policy side.
+#   `tests/test_payment_confirmation.py` checks that every date caption the generator PRINTS is one
+#   this file accepts, and that none is one it refuses. Without it the mapping could be correct and
+#   the documents could still carry a caption the contract says is not the payment date.
+#
+# Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 10 by THE SECOND DOCUMENT CLASS ARRIVING: a bank payment confirmation has a template, a
+# builder and label fields. SEVEN consequences a consumer has to know about, and the first is the
+# one that changes what a label record looks like.
+#
+# Derived the same way as the lists below — a key-set diff of this file against the previous
+# version, the printed-field inventory, and the `known_limitations` section.
+#
+#   SIX NEW KEYS ON EVERY LABEL RECORD, because there is one label model for every document class:
+#   `fee`, `total_charged`, `payer`, `payment_purpose`, `document_code`, `auth_code`. They are
+#   `null` on a fiscal receipt, which prints none of them. A consumer that pinned the key set of a
+#   document label breaks on them — the same lesson as version 8's two new bbox keys, one level up.
+#
+#   🔴 `amount` ON A CONFIRMATION IS THE TRANSFER AND NOT THE LARGEST NUMBER ON THE PAGE. 👁 0 of 8
+#   real confirmations carry a single amount: each prints the operation amount and the fee, and 1
+#   of 8 also prints their sum, in the biggest type on the sheet. 📄 The National Bank's
+#   instruction on non-cash settlements names the amount of the OPERATION as the requisite and does
+#   not name the fee at all, and a fee buys a banking service that no benefit category covers. So
+#   the salient number is the wrong one, deliberately, and `total_charged` is labelled beside
+#   `amount` to make the disagreement measurable rather than invisible.
+#
+#   TWO FIELDS THIS TYPE NEVER HAD ARE GONE FROM ITS REQUIRED LIST: an RRN and a payment form.
+#   👁 0 of 8. An RRN is a requisite of the CARD OPERATION printed inside a fiscal receipt — where
+#   this generator does print it, so the earlier 0-of-8 finding was a misplacement rather than a
+#   defect — and a payment form is a receipt requisite too. Deduplication for this class rests on
+#   the bank's own document number, 👁 8 of 8 and 📄 mandatory; the authorization code cannot carry
+#   it at six digits. See RC-06, amended.
+#
+#   THE FIELD SET VARIES WITHIN THE CLASS, BY HOW THE PAYMENT WAS INITIATED. A card operation
+#   carries an authorization code and a card number; a transfer by account details carries neither.
+#   👁 3 of 8 documents carry a card AND an authorization code AND a payment purpose at once, which
+#   refuted an earlier plan to split the class into two archetypes. A consumer must not treat a
+#   missing authorization code as an extraction failure.
+#
+#   `forward_contract` NOW MEANS "NOT IN THE DATASET" rather than "no template produces it". The
+#   word is unchanged everywhere it is used and the promise a consumer relies on is unchanged; what
+#   changed is that a class can now have a template and still not be in any run. See
+#   `status_vocabulary`.
+#
+#   `normalization.identifier` NO LONGER SAYS THAT NOTHING CARRIES AN IDENTIFIER VALUE. Two do —
+#   `document_code` and `auth_code` — so the rule it states has something to normalize for the
+#   first time.
+#
+#   NO NEW `known_limitations` ENTRY, AND THE ABSENCE IS DELIBERATE. This class is narrower than
+#   the observation in four named ways — one layout for four issuers among them — but every entry
+#   in that section states a SHARE OF A REFERENCE RUN, and no run contains a document of this class
+#   at all. A limitation of a dataset that does not yet hold the class would be a share of nothing.
+#   The four narrowings are recorded on the type instead, under `narrower_than_observed`, and they
+#   become `known_limitations` entries when a run first contains one.
+#
 # Bumped to 9 by THE PAYMENT DATE ACQUIRING A DEFINITION, which is a change of MEANING with no
 # change of shape: no key of any label record is added, removed or retyped, so a consumer diffing
 # the label structure sees nothing. FOUR consequences a consumer has to know about.
@@ -215,7 +271,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 9
+version: 10
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -228,9 +284,17 @@ status_vocabulary:
     Observed in the output of a real run, checked field by field. A consumer may rely on
     it being in the dataset today.
   forward_contract: >
-    Required by the consumer side, or called for by the design, and NOT produced by any
-    template yet. A consumer may build against it; a consumer may not conclude that the
-    current dataset contains it.
+    Required by the consumer side, or called for by the design, and NOT PRESENT IN THE DATASET. A
+    consumer may build against it; a consumer may not conclude that the current dataset contains
+    it.
+
+    AMENDED IN VERSION 10, and the amendment is the difference between a promise about code and a
+    promise about data. This word used to say "not produced by any template yet", which stopped
+    being true of `payment_confirmation`: a template, a builder and the label fields all exist,
+    while no run contains such a document, because a claim needs both facts and this class proves
+    one. The operative half was always the second sentence, so the definition now turns on the
+    DATASET. A consumer reads this word as "do not expect to find it in the labels", and that
+    reading is unchanged.
   divergent: >
     Both sides exist and disagree — on a name, a type, or a definition. Neither is chosen
     here. See `required_changes`.
@@ -405,6 +469,46 @@ document_types:
   payment_confirmation:
     classifier_role: target_class
     status: forward_contract
+    archetypes:
+      # ONE ARCHETYPE, AND IT IS IN NO RUN YET. `ua_bank_payment_confirmation` is registered in
+      # `ARCHETYPES` in claim_planner.py, has a template and a stylesheet, and produces every label
+      # field listed below. No dataset contains one, and the reason is structural rather than an
+      # oversight: a claim needs BOTH facts — what was bought and that it was paid for — this class
+      # proves one, and the class that proves the other (an invoice) is not written. So
+      # `documentable_categories` reports no category as documentable through it, and the type's
+      # `status` stays `forward_contract` in the amended sense of that word.
+      - slug: ua_bank_payment_confirmation
+        jurisdiction: UA
+        language: uk
+        # EVERY category of policy.yaml, which is a consequence of the class rather than a generous
+        # guess: the document lists no items, so nothing on it can contradict a category. A test
+        # checks the tuple against policy.yaml so a category added there cannot drop out.
+        categories: all
+        paper: A4 — 210 × 297 mm, unlike the till rolls the fiscal class is printed on
+    narrower_than_observed: >
+      FOUR WAYS THIS CLASS IS NARROWER THAN WHAT WAS OBSERVED, recorded here rather than under
+      `known_limitations` because every entry there states a share of a reference run and no run
+      contains this class yet. They move there when one does.
+
+      ONE LAYOUT FOR FOUR ISSUERS. Three real banks were reviewed and their layouts differ; one
+      arrangement of the fields they all carry is modelled. Field-set variation is what extraction
+      has to cope with and it IS modelled; visual diversity between issuers is not, so a consumer
+      must not read robustness to bank layouts off a score on this corpus.
+
+      THE MERCHANT-DOMAIN VALUE OF THE TERMINAL FIELD IS NOT PRODUCED. 👁 That field carries three
+      incompatible kinds of value — a system named in words, an uppercase mnemonic, and a
+      merchant's internet domain. The domain is left out because printing one beside a named payee
+      asserts that the payee owns it, which is a claim about a real firm.
+
+      AN EMPTY RECIPIENT NAME IS NOT PRODUCED. 👁 Observed once, and it is the field a cross-check
+      between a seller and a payee would rest on. `counterparty` is a required label field, so
+      emitting an empty one would assert that the document names no counterparty — a case whose
+      comparison rule this file has not settled. The other captioned-but-empty field observed on
+      that same document, the recipient's bank, IS produced.
+
+      A THIRD PERSON'S NAME IN THE PAYMENT PURPOSE IS NOT PRODUCED. 👁 1 of 7 purposes contained
+      one, written by the payer. Left out: it would put a personal name in free text on a published
+      image for no gain this step needs.
     line_items: >
       EMPTY BY DESIGN. The requirements document states plainly that this type has no line
       items — it is proof of one transaction. Settled by the requirement, not an open
@@ -435,6 +539,9 @@ document_types:
     # VERDICT, and the disagreement would arrive as a scorecard reporting a date error against
     # a system that read the document correctly.
     payment_date:
+      # `forward_contract` in the amended sense: the mapping is what the archetype PRINTS — every
+      # caption it prints is one of the three accepted, checked by a test — while no run contains
+      # such a document, so a consumer may not look for one in the labels yet.
       status: forward_contract
       concept: >
         config/policy.yaml, `period.payment_date`. Not restated here — a second statement of a
@@ -497,47 +604,94 @@ document_types:
         of eight does not exhibit; a consumer must not read the counts as evidence that the
         choice does not matter.
       if_no_accepted_caption_is_printed: >
-        A REQUIREMENT ON THE TEMPLATE, NOT A FALLBACK. No archetype prints a payment
-        confirmation yet; whichever one does must print at least one caption from
-        `accept_in_order`, so the dataset never contains a document whose payment date is
-        unstated. That leaves the case undefined for a real document that prints none of the
-        three, and this file does not invent a rule for it: the dataset carries no example, so
-        any rule stated here would be untested by construction.
+        A REQUIREMENT ON THE TEMPLATE, NOT A FALLBACK — AND IT IS NOW MET. The archetype
+        `ua_bank_payment_confirmation` draws its caption from `accept_in_order` and from nothing
+        else, so no document it produces can carry a date this file refuses to read;
+        `tests/test_payment_confirmation.py` holds it to that in both directions, sweeping the
+        printed captions against the accepted list and against the refused one.
+
+        The case remains undefined for a REAL document that prints none of the three, and this file
+        still does not invent a rule for it: nothing generated exhibits it, so any rule stated here
+        would be untested by construction.
     prd_required_fields:
       - prd: amount
-        generator: amount
+        generator: amount — THE TRANSFER, and not the largest number printed
         status: forward_contract
+        note: >
+          🔴 THE ONE FIELD OF THIS CLASS A CORRECT-LOOKING SYSTEM GETS WRONG. 👁 0 of 8 real
+          confirmations print a single amount: each prints the operation amount and the fee
+          separately, and 1 of 8 also prints their sum in the largest type on the page. 📄 The
+          National Bank's instruction on non-cash settlements names the amount of the OPERATION as
+          the requisite and does not name a fee anywhere, and a fee is a charge for a banking
+          service rather than for anything a benefit category covers. So `amount` is the transfer,
+          `fee` and `total_charged` are labelled beside it, and an extractor that takes the most
+          prominent figure is wrong by exactly the fee — measurably, which is the point.
       - prd: date
         generator: date
         status: forward_contract
         see: document_types.payment_confirmation.payment_date
       - prd: payer / payee
-        generator: none — `counterparty` is a single party and cannot carry two
+        generator: payer, counterparty
         status: forward_contract
+        note: >
+          THE DIVERGENCE IS RESOLVED, and this entry used to record it: `counterparty` is one
+          party and could not carry two. `payer` now carries the other. `counterparty` keeps its
+          meaning — the party opposite the claimant — which on this class is the PAYEE, exactly as
+          on a bank statement.
+
+          ⚠️ Two forms of emptiness, and they are not one case. 👁 A payer field may print a HYPHEN
+          as its value, which OCR returns as the string "-"; a captioned field may be printed with
+          nothing under it, which returns nothing. `payer` is `null` only where the class names one
+          party — never for an unidentified payer, whose label carries the hyphen.
       - prd: payment purpose
-        generator: none
+        generator: payment_purpose
         status: forward_contract
         note: >
-          Load-bearing rather than incidental: policy.yaml's `document_evidence` gives this
-          type `proves_subject: false`, and the one documented override is a confirmation
-          whose payment purpose spells out what was bought. Without the field that override
-          cannot be labelled.
-      - prd: RRN / authorization code
-        generator: none — `rrn` and `auth_code` are bbox keys with no labelled value
+          🔴 IT NEVER NAMES WHAT WAS BOUGHT — 👁 0 of 7 documents that carry the field. It names
+          another DOCUMENT (an invoice by number, a delivery note), or a generic category, or
+          nothing but the movement of money. That is the strongest confirmation available of
+          `proves_subject: false` for this type in policy.yaml.
+
+          AN EARLIER VERSION OF THIS ENTRY SAID THE OPPOSITE OF WHAT IT NOW SAYS, and the
+          correction is recorded rather than made quietly. It called the field load-bearing because
+          "the one documented override is a confirmation whose payment purpose spells out what was
+          bought" — an archetype-level evidence override. That override does not exist, cannot be
+          labelled (see `claim_evidence.what_is_not_recorded`), and the observation refutes the
+          premise it rested on. The field is load-bearing for a different reason: it is what a
+          consumer must NOT read a subject out of.
+      - prd: authorization code
+        generator: auth_code
         status: forward_contract
         note: >
-          `content_builder.Acquiring` already holds both and `ground_truth()` discards them.
-          The consumer's duplicate detection treats RRN and authorization code as DECISIVE
-          keys — two documents carrying the same one are the same transaction, whatever
-          else differs — so until they carry values the dataset can exercise deduplication
-          but cannot score it. See RC-06.
-      - prd: payment form (cash / card)
-        generator: none — `payment_method` is a bbox key with no labelled value
+          👁 4 of 8 — the card operations, six digits in 4 of 4 of them. OPTIONAL BY NATURE: a
+          transfer by account details has no card operation to authorize, so its absence is
+          information and not an extraction failure.
+
+          ⚠️ NOT A DEDUPLICATION KEY. Six digits is a space of a million and the code is unique
+          only within an issuer and a time window; 👁 it is also absent from half the documents, and
+          a key missing from half the cases is not a key. See `document_code`.
+      - prd: bank document code
+        generator: document_code
         status: forward_contract
         note: >
-          The consumer cross-checks payment form between linked documents — a confirmation
-          of a card payment against an invoice that says it was settled in cash is a
-          mismatch worth flagging — so the field is scored, not merely extracted.
+          👁 8 of 8, 📄 mandatory as "the number of the payment instruction", and 📄 the key the
+          official check services take. THIS is the deduplication key of the class. Three formats
+          are 👁 observed and all three are produced, so a consumer validating the field by shape
+          needs every one of them: four groups of four, a letter prefix followed by digits, and a
+          bare run of eight to ten digits.
+      - prd: >
+          NOT ON THIS CLASS — an RRN and a payment form. Both were in an earlier field list for this
+          type and 👁 neither appears on any of the eight documents reviewed.
+        generator: none, and none is wanted
+        status: forward_contract
+        note: >
+          RECONCILED RATHER THAN SIMPLY DROPPED, because the earlier 0-of-8 finding read as a defect
+          in this generator and is not one. An RRN IS a requisite of a card operation — as printed
+          inside a FISCAL RECEIPT, where this repository does print it, and 👁 where a real sole
+          trader's receipt carries one. It is not a requisite of a bank confirmation. A payment form
+          (cash / card) is a receipt requisite too, carried over by the same mistake. A consumer
+          cross-checking a payment form between linked documents has nothing on this class to read
+          it from.
 
   bank_statement:
     classifier_role: target_class
@@ -852,10 +1006,13 @@ normalization:
     status: forward_contract
     applies_to: >
       The registration and transaction identifiers a document prints — tax code, VAT number,
-      receipt number, RRN, authorization code, terminal id. NONE HAS A LABELLED VALUE TODAY:
-      they appear in `field_bboxes` as geometry only, so this rule has nothing to normalize
-      yet. The requirements document makes several of them fields a consuming system must
-      extract; see `required_changes`.
+      receipt number, RRN, authorization code, terminal id, and the bank's own document code.
+
+      TWO OF THEM NOW CARRY A LABELLED VALUE, so this rule has something to normalize for the first
+      time: `document_code` and `auth_code` on a payment confirmation. The receipt's identifiers
+      still appear in `field_bboxes` as geometry only. The rule below was written before anything
+      carried a value and is unchanged by their arrival — which is the useful part, since a
+      comparison rule agreed in advance is one nobody had to fit to a field.
     rule: >
       Strip everything outside [0-9A-Za-z], then compare case-insensitively. Separators, spacing
       and the prefix printed beside an identifier (ІД and ПН on a Ukrainian receipt, which may
@@ -866,7 +1023,9 @@ normalization:
       and «ПН 1234567890» on one sole trader's receipt are the same digits under two requisites,
       so normalizing them into one string and comparing would make two distinct fields
       indistinguishable.
-    decided_here: all of it. Nothing emits an identifier value yet.
+    decided_here: >
+      All of it. Two identifiers are emitted as values now (see `applies_to`); the rule predates
+      them and was not adjusted for them.
 
   fraction:
     status: emitted
@@ -1049,7 +1208,10 @@ document_label:
       type: string
       required: true
       normalize: party_name
-      meaning: the other party to the transaction — the seller on a receipt
+      meaning: >
+        The other party to the transaction — the seller on a receipt, and THE PAYEE on a payment
+        confirmation or a bank statement. The claimant's own side, where a document names it, is
+        `payer` below.
       divergence:
         name: divergence_counterparty_name
         status: resolved
@@ -1074,6 +1236,93 @@ document_label:
           The `seller_name` bbox key stays as it is. Printed keys are a separate vocabulary
           from label field names — that is stated once, for every field, and this is an
           instance of it rather than an exception to it.
+
+    # ------------------------------------------------------------------------
+    # SIX FIELDS THAT ARE `null` ON A FISCAL RECEIPT, added in version 10 with the second document
+    # class. One label model serves every class, so a field a class does not print is null on its
+    # records rather than absent — `required: false` here means the VALUE may be null, never that
+    # the key is missing.
+    # ------------------------------------------------------------------------
+
+    - name: fee
+      type: number or null
+      required: false
+      normalize: money
+      meaning: >
+        The bank's charge for executing the payment — комісія. NEVER REIMBURSABLE: it pays for a
+        banking service rather than for anything a benefit category covers, so no annual limit
+        reaches it and it is not part of a claim's amount.
+      cardinality:
+        forward_contract: >
+          👁 Non-zero on 3 of 8 real confirmations — about 37% — and generated at that rate. A field
+          that were always zero would discriminate nothing, which is the state `amount_due` is in
+          and says so; this one is not in that state.
+      null_on: every class but `payment_confirmation`
+
+    - name: total_charged
+      type: number or null
+      required: false
+      normalize: money
+      meaning: >
+        `amount` + `fee`: everything that left the payer's account. 👁 Printed on 1 of 8, where it
+        is the LARGEST NUMBER ON THE PAGE — and 📄 it is not the amount of the operation.
+      why_it_is_labelled_apart: >
+        SO THAT THE DIVERGENCE IS MEASURABLE. An extractor trained to reach for the most salient
+        figure returns this and not `amount`, and the difference is exactly the fee. Folding the two
+        would hide, in a single number, whether a system resists salience. Derived rather than
+        stored inside the generator — see `content_builder.PaymentConfirmation.total_charged` — so
+        the three amounts cannot drift apart.
+      null_on: every class but `payment_confirmation`
+
+    - name: payer
+      type: string or null
+      required: false
+      normalize: party_name
+      meaning: >
+        The claimant's own side of the payment, where the class names both parties.
+      two_forms_of_emptiness: >
+        ⚠️ `null` MEANS THE CLASS NAMES ONE PARTY, and it is not the same as an unidentified payer.
+        👁 One observed confirmation prints a HYPHEN as the payer's value, and OCR returns the string
+        "-" for it, so the label carries that string. A label that merged the two would make
+        accuracy on empty fields unmeasurable, which is the whole reason both forms are produced.
+      null_on: every class but `payment_confirmation`
+
+    - name: payment_purpose
+      type: string or null
+      required: false
+      normalize: text_name
+      meaning: >
+        Призначення платежу — free text written by the payer. 🔴 It NEVER names what was bought:
+        👁 0 of 7 observed purposes do, naming an invoice, a delivery note, a generic category, or
+        the movement of money itself. A consumer must not read a subject out of it; that is what
+        `proves_subject: false` for this type means in practice.
+      null_on: >
+        every class but `payment_confirmation` — and 👁 1 of 8 confirmations has no such field at
+        all, an internet-acquiring document, so null occurs within the class too
+
+    - name: document_code
+      type: string or null
+      required: false
+      normalize: identifier
+      meaning: >
+        The bank's own number for the document. 👁 8 of 8 and 📄 mandatory as "the number of the
+        payment instruction", and 📄 the key the official check services take.
+      deduplication: >
+        THIS is the decisive key for this class. Not the authorization code, which is six digits,
+        unique only within an issuer and a window, and 👁 absent from half the documents; and not an
+        RRN, which 👁 is not on this class at all. See RC-06.
+      null_on: every class but `payment_confirmation`
+
+    - name: auth_code
+      type: string or null
+      required: false
+      normalize: identifier
+      meaning: >
+        Код авторизації — 👁 six digits on 4 of 4 card operations, and 👁 absent from 4 of 8
+        documents, because a transfer by account details has no card operation to authorize.
+      null_on: >
+        every class but `payment_confirmation`, and within the class wherever the payment was not a
+        card operation. Its absence is information, not an extraction failure.
 
     - name: line_items
       type: array of line_item
@@ -2655,14 +2904,22 @@ required_changes:
 
   - id: RC-06
     file: src/receipt_synth/schemas.py, content_builder.py
+    status: done in version 10, and NARROWER than it was asked for
     change: >
-      Carry the payment-confirmation fields as values: RRN, authorization code, payer, payee,
-      payment purpose, payment form. `Acquiring` already holds rrn, auth_code, terminal_id,
-      card_masked and operation and drops them. Until RRN carries a value the dataset can
-      exercise deduplication but cannot score it.
+      DONE, in a form the original entry got partly wrong. The payment-confirmation fields are
+      carried as values — `payer`, `counterparty` (the payee), `payment_purpose`, `document_code`,
+      `auth_code`, `fee`, `total_charged` — by `content_builder.PaymentConfirmation`.
+
+      TWO OF THE ORIGINAL ASKS ARE WITHDRAWN RATHER THAN COMPLETED: an RRN and a payment form.
+      👁 Neither appears on any of the eight documents reviewed. This entry asked for them because
+      the field list it was written from carried them over from a FISCAL RECEIPT, where an RRN is a
+      genuine requisite of the card operation and is printed. Deduplication for this class rests on
+      `document_code` — 👁 8 of 8, 📄 mandatory, and the key of the official check services — and NOT
+      on the authorization code, which cannot be one at six digits.
     blocked_on: >
-      none for the acquiring fields; decision for payer / payee / purpose, which need a
-      payment archetype first
+      nothing. What remains is not a change to `src/` but a class of claim: no dataset contains such
+      a document, because a claim needs both facts and this class proves one. It arrives with an
+      invoice archetype.
 
   - id: RC-07
     file: src/receipt_synth/schemas.py

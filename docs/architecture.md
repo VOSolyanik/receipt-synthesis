@@ -82,9 +82,17 @@ claim are not simultaneous: an invoice is issued and then settled. The planner k
 both facts a reimbursement rests on are established — what was bought, and that it was paid for — reading
 what each type proves from `document_evidence` in `config/policy.yaml`. Where a single archetype proves both,
 as a fiscal receipt does, the claim has one document; where none does, it takes a subject document and a
-payment document. The registry currently holds three archetypes, all of them Ukrainian fiscal receipts, and
-each proves both — so every claim built today has exactly one document, drawn from the three. That is a
-property of the registry and not of a claim, and nothing downstream may depend on it.
+payment document. The registry currently holds four archetypes of two classes: three Ukrainian fiscal receipts, each of which
+proves both facts, and one Ukrainian bank payment confirmation, which proves only that money moved. So every
+claim built today still has exactly one document, drawn from the three receipts — a property of the registry
+and not of a claim, and nothing downstream may depend on it.
+
+**The fourth archetype is registered and no claim uses it, which is a structural fact rather than an
+oversight.** A claim needs both facts; a payment confirmation supplies one; the class that supplies the other
+on its own — an invoice — is not written. `documentable_categories` therefore reports no category as
+documentable through it, so the planner never draws it and no run contains one. It is registered because the
+template, the builder and the label fields are what pairs with an invoice when that archetype lands, and
+because an unregistered archetype is one nothing renders and no test reaches.
 
 It processes a persona's claims in date order and carries the remaining category balance, so that a claim can
 also become partially covered by exhausting an annual limit rather than by containing a non-covered item.
@@ -434,6 +442,12 @@ is checked against that date alone. A December invoice paid in January is an ord
 refusing it for its date would be wrong. The subject document's date is checked for *order* instead, which is
 the `payment_precedes_subject` defect above — a different question with a different repair.
 
+*Which* of a document's printed dates counts as the payment is not left to the reader either, and on a real
+bank confirmation it is a real question: several dates are printed, under captions the law defining the
+document does not define. `config/policy.yaml` names the **concept** — the date the funds left the payer's
+account — under `period.payment_date`, and `config/labelling-schema.yaml` maps the printed captions onto it,
+in order of preference and with the captions that must never be read as it. Neither file names both halves.
+
 A payment that does fall outside the window makes the claim `rejected`, cause `outside_period` — the policy
 does not cover an expense paid outside its own period, which is a coverage answer and not an evidence one. See
 [Verdicts](#verdicts).
@@ -458,7 +472,7 @@ them would be a guess on every image. What varies is what is evidenced.
 
 | # | Template | Class | Role |
 |---|---|---|---|
-| 1–4 | Bank in-app payment confirmations (four issuers) | `payment_confirmation` | Mainstream bank layouts |
+| 1 | Bank payment confirmation, A4 — **one template with a conditional block**, four issuers | `payment_confirmation` | The payment class |
 | 5–7 | Payment-service receipts (three providers) | `payment_confirmation` | Payment-gateway layouts |
 | 8 | Software cash register receipt (ПРРО) — QR, `ФН ПРРО`, VAT letters; **two templates, 80 mm and 58 mm** | `fiscal_receipt` | Modern fiscal document |
 | 9 | Classic hardware cash register receipt (РРО), 80 mm — `ЗН` beside `ФН`, sequential number | `fiscal_receipt` | Register diversity |
@@ -467,8 +481,22 @@ them would be a guess on every image. What varies is what is evidenced.
 | 12 | Sales slip marked "not a fiscal receipt" | trap | Fiscality trap |
 | 13 | Non-fiscal POS slip — RRN and auth code, no fiscal number | trap | Fiscality trap |
 | 14 | Online marketplace order screenshot | linked | Proves the subject, not the payment |
-| 15 | Bank receipt for an insurance premium, detailed payment purpose | `payment_confirmation` | Insurance proven by payment, not by policy |
+| 15 | *withdrawn* — a bank receipt whose payment purpose proves the subject | — | See the note under this table |
 | 16 | Act of services rendered | reference | Service-type reference |
+
+**Two rows of this table were withdrawn by the anatomy of real documents, and both are recorded rather than
+deleted.** Rows 1–4 planned one template per issuer, on the reading that the class splits by document family —
+a bank quittance carrying a payment purpose against a card slip carrying an authorization code. Of eight real
+confirmations, three carry a masked card *and* an authorization code *and* a payment purpose at once, so the
+split does not exist: what varies is **how the payment was initiated**, which one template covers with a
+conditional block. Three issuers were observed and their layouts do differ; that diversity is a named gap, not
+four templates guessed from two documents each.
+
+Row 15 planned a confirmation whose detailed payment purpose proves the subject. Of seven real purposes that
+carry the field, none names what was bought — they name an invoice, a delivery note, a generic category, or the
+movement of money itself. Such a document would also need an archetype whose evidence differs from its type's
+default, which cannot be labelled: the engine sees a document's *type*, not the archetype that produced it. So
+the subject is proven by the invoice of the dominant pair, and never by the payment.
 
 ### Europe
 

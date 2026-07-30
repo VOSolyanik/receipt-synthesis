@@ -551,6 +551,103 @@ mixed_basket:
 
 
 # =============================================================================
+# Bank payment confirmation — the draw inputs
+# =============================================================================
+#
+# What the document PRINTS is law and layout, and lives under `payment_confirmation` in
+# config/fiscal-rules.yaml. What is here is the same three questions this file answers for a
+# receipt: which words fill a free-text field, what an amount plausibly is, and how often each
+# variant is drawn.
+#
+# ⚠️ THE SHARES BELOW ARE OBSERVED FREQUENCIES USED AS DRAW WEIGHTS, over a sample of eight
+# documents. That is a small sample and it is the whole of the evidence: a share written here is
+# what makes a variant appear in the corpus at roughly the rate it was seen, not a measurement
+# anybody should quote. The one that matters is the fee, because assuming it away is what a
+# reader does by default.
+payment_confirmation:
+  # 👁 3 of 8 documents carry a NON-ZERO fee — about 37%, which is not an edge case. Generating
+  # it at zero would put a field on every image that discriminates nothing, and would hide the
+  # one divergence this class is built to expose: the largest number on the page is the total,
+  # and the amount of the operation is the smaller transfer.
+  #
+  # NOTE THE CONTRAST WITH THE RECEIPT'S DISCOUNT, which stays zero. A discount applies to a
+  # basket, so a non-zero one would need a rule for splitting it across covered and non-covered
+  # lines and policy.yaml has none. A fee is charged on the payment, is never part of the
+  # basket, and is not reimbursable — so it raises no question the policy is silent about.
+  nonzero_fee_share: 0.37
+  # Strings, converted to `Decimal` — 0.37 above is a weight and stays a float, while anything
+  # that becomes money is parsed from text so it is exact.
+  fee_range: ["5.00", "60.00"]
+
+  # What a transfer a person makes toward a benefit is worth. An assumption in the same sense
+  # as `price_ranges` above, chosen to sit inside the annual limits of policy.yaml so the
+  # documents look like the claims they belong to. Nothing derives a label from the range
+  # itself.
+  transfer_amount_range: ["400.00", "9000.00"]
+
+  # 👁 1/8 print the sum of the transfer and the fee, in the largest type on the page. The
+  # other 7 print the two amounts side by side and NO total, so ⛔ whether the printed amount
+  # includes the fee cannot be established from those documents at all.
+  prints_total_share: 0.125
+  # 👁 5/8 spell an amount out in words under a caption.
+  amount_in_words_share: 0.625
+  # 👁 2/8 carry a QR, both of them marketing.
+  qr_share: 0.25
+  # 👁 3/8 carry a verification footer, which refutes "every such document has one".
+  verification_footer_share: 0.375
+  # 👁 5/8 carry a device or initiating-system field.
+  terminal_share: 0.625
+  # 👁 7/8 carry a handwritten signature beside the stamp; the stamp itself is 8/8 and is not a
+  # draw. The exception observed was an empty signature line, so the absent case still prints
+  # its caption.
+  signature_share: 0.875
+  # 👁 5/8 name the signatory's post in words.
+  signatory_post_share: 0.625
+  # 👁 3/8 carry a note about the electronic signature or about the operation being automatic.
+  electronic_note_share: 0.375
+  # 👁 2/8 print a caption with nothing under it — the second, mechanically different form of
+  # emptiness. Applied to the recipient's name, which 👁 was observed empty once and is the
+  # field a cross-check between seller and payee would rest on.
+  empty_captioned_field_share: 0.25
+
+  # How the payment was initiated, which is what decides the field set — see `initiation` in
+  # config/fiscal-rules.yaml. 👁 card 4/8 · transfer 3/8 · acquiring 1/8.
+  initiation_shares:
+    card: 0.5
+    transfer: 0.375
+    acquiring: 0.125
+
+  # 🔴 THE PAYMENT PURPOSE NEVER NAMES WHAT WAS BOUGHT — 👁 0 of 7 documents that carry the
+  # field. It names ANOTHER DOCUMENT (an invoice, a delivery note), or a generic category, or
+  # nothing but the movement of money. That is the observation behind `proves_subject: false`
+  # for this type in config/policy.yaml, and it is a stronger result than the same finding on a
+  # bank statement, where at least a generic category of goods was seen.
+  #
+  # `{invoice_no}` and `{invoice_date}` are filled by `content_builder`, not from the
+  # placeholder vocabulary above: they are a document reference rather than merchandise.
+  #
+  # ⛔ ONE OBSERVED FORM IS NOT REPRODUCED: 👁 1/7 purposes contained the full name of a THIRD
+  # PERSON, written by the payer. It is left out rather than modelled — it would put a personal
+  # name into a free-text field on a published image for no gain this step needs — and it is
+  # named here so the corpus is known to be narrower than the observation.
+  purposes:
+    uk:
+      - "Оплата згідно рахунку № {invoice_no} від {invoice_date}"
+      - "Оплата за послуги згідно рахунку № {invoice_no}"
+      - "Поповнення балансу (гарантійний внесок) згідно рахунку № {invoice_no}"
+      - "Оплата за товар"
+      - "Переказ власних коштів"
+
+  # The value under a "name of the initiating system" caption: 👁 a system named in ordinary
+  # words. Generic descriptions of a channel rather than marks, so nothing here names a firm.
+  initiating_systems:
+    uk:
+      - "Інтернет-банкінг"
+      - "Мобільний застосунок"
+      - "Термінал самообслуговування"
+
+
+# =============================================================================
 # Personal names
 # =============================================================================
 #

@@ -47,7 +47,12 @@ from receipt_synth.content_builder import (
     validate_vat_letter,
     vendor_can_carry,
 )
-from receipt_synth.policy_engine import covered_total, resolved_coverage, verdict_for
+from receipt_synth.policy_engine import (
+    covered_total,
+    document_evidence,
+    resolved_coverage,
+    verdict_for,
+)
 from receipt_synth.schemas import Capture, DocType, Verdict
 
 ISSUED_AT = datetime(2026, 8, 3, 14, 22, 51)
@@ -500,10 +505,19 @@ def test_every_excluded_kind_of_a_generating_category_can_be_drawn():
     on the PL / DE / ES lists, which are seeded rather than filled. The union is taken over the
     vendors of THAT jurisdiction only — pooling every country's vendors would let a Polish entry
     cover a kind no Ukrainian receipt can print.
+
+    AND SCOPED TO ARCHETYPES THAT STATE WHAT WAS BOUGHT, which is narrower than "registered" now
+    that the registry holds a second class. A line item reaches a document only through a document
+    that lists items: a bank payment confirmation carries every benefit category — nothing on it
+    can contradict one, since 👁 it lists nothing at all — so scoping by registration alone would
+    ask which vendors can print the excluded kinds of SEVEN categories onto a document that
+    prints no kinds whatever. The property is about baskets, so the scope is documents with
+    baskets.
     """
     documented = {
         (archetype.country.value, category_id)
         for archetype in ARCHETYPES.values()
+        if document_evidence(archetype.doc_type).proves_subject
         for category_id in archetype.categories
     }
     assert documented, "no archetype registered — this test would assert nothing"

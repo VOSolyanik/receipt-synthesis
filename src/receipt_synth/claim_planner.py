@@ -115,6 +115,40 @@ ARCHETYPES: dict[str, Archetype] = {
         language="uk",
         categories=("vitamins_nutrition",),
     ),
+    # THE SECOND DOCUMENT CLASS, and the first that establishes only one of the two facts a
+    # reimbursement needs. A bank payment confirmation proves that money moved and says nothing
+    # about what was bought — policy.yaml's `document_evidence`, confirmed by 👁 0 of 7 observed
+    # payment purposes naming the subject of the expense.
+    #
+    # IT CARRIES EVERY CATEGORY, and that is a consequence of the class rather than a generous
+    # guess. The other archetypes are limited by what a shop can sell — a pharmacy receipt cannot
+    # print a gym membership — and this document PRINTS NO ITEMS AT ALL, so there is nothing on it
+    # that any category could contradict. Every id below is a category of config/policy.yaml and
+    # the two lists are checked against each other by a test, so a category added there cannot
+    # silently drop out of this tuple.
+    #
+    # ⚠️ NO CLAIM CAN BE ASSEMBLED FROM IT YET, and the reason is structural rather than a
+    # shortcoming of this entry: a claim needs both facts, this archetype supplies one, and the
+    # archetype that supplies the other — an invoice — is not written. `documentable_categories`
+    # therefore reports none of these categories as documentable, which is why registering it
+    # changes no dataset. It is registered all the same: the template, the builder and the label
+    # fields are what a later step pairs with an invoice, and an unregistered archetype is one
+    # nothing renders and no test can reach.
+    "ua_bank_payment_confirmation": Archetype(
+        slug="ua_bank_payment_confirmation",
+        doc_type=DocType.PAYMENT_CONFIRMATION,
+        country=Country.UA,
+        language="uk",
+        categories=(
+            "medical_insurance",
+            "language_courses",
+            "professional_development",
+            "sport",
+            "mental_health",
+            "vitamins_nutrition",
+            "hobby",
+        ),
+    ),
 }
 
 
@@ -138,8 +172,15 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
         "a claim carrying no type that states it; or ONE TRANSACTION, left unestablished by a "
         "subject document and its payment that both exist and fail a cross-check. Content, not "
         "coverage arithmetic — `policy_engine` labels all three causes correctly today, each "
-        "with its own name in `imperfection`; what is missing is the archetypes that would let "
-        "a claim be built carrying only part of its evidence"
+        "with its own name in `imperfection`. WHAT IS MISSING IS NO LONGER THE SAME THING FOR "
+        "ALL THREE, and the difference matters to whoever closes this. For "
+        "`subject_not_evidenced` the archetype now EXISTS — a bank payment confirmation states "
+        "no subject — and what is missing is a planner that deliberately plans an INCOMPLETE "
+        "claim: `_select_documents` assembles both facts or refuses, because the two verdicts "
+        "this planner draws both need complete evidence, and `documentable_categories` reports "
+        "a payment-only category as not documentable rather than letting such a plan be made. "
+        "The other two causes still need an archetype that does not exist, since a cross-check "
+        "needs a SUBJECT document to disagree with its payment"
     ),
     Verdict.PARTIALLY_PAID: (
         "needs document types that do not exist yet: an invoice or a statement that "
@@ -348,18 +389,43 @@ def archetypes_for(
     ]
 
 
+def can_assemble_evidence(candidates: list[Archetype]) -> bool:
+    """Whether these archetypes can establish BOTH facts a reimbursement rests on.
+
+    The precondition of `_select_documents`, asked separately so that a caller can find out
+    before planning instead of by catching the refusal. The two shapes are the two that function
+    builds: one archetype proving both facts, or a subject archetype together with a payment one.
+
+    ONE ARCHETYPE THAT PROVES ONE FACT IS NOT ENOUGH, and until the payment-confirmation
+    archetype was registered nothing in the registry could make that distinction visible: every
+    entry proved both facts, so "some archetype exists" and "a claim can be built" were the same
+    question. They are now different questions, and answering the first while meaning the second
+    would plan a claim `_select_documents` then refuses — a failure landing a stage away from its
+    cause.
+    """
+    both = [a for a in candidates if all(evidence_of(a))]
+    subjects = [a for a in candidates if evidence_of(a) == Evidence(True, False)]
+    payments = [a for a in candidates if evidence_of(a) == Evidence(False, True)]
+    return bool(both) or bool(subjects and payments)
+
+
 def documentable_categories(persona: Persona) -> list[str]:
-    """The persona's benefit categories some registered archetype can carry.
+    """The persona's benefit categories a COMPLETE claim can be documented in.
 
     Ignores the ledger entirely — this is a question about templates, and it is the one
     `assembler._draw_documentable_persona` asks before any claim exists. Empty is a normal
-    answer while the template set is incomplete, not an error: the registered archetypes cover
-    one category between them, so most personas hold nothing any of them can carry.
+    answer while the template set is incomplete, not an error: the registered archetypes carry one
+    category between them as a complete claim, so most personas hold nothing that can be built.
+
+    COMPLETE, not merely covered by some archetype. A category whose only registered archetype is
+    a payment confirmation has a document and no claim: the payment is proven and what was bought
+    is not, and the planner draws neither of the verdicts that describes. Reporting such a category
+    as documentable would hand `_select_documents` a plan it has to refuse.
     """
     return [
         category
         for category in persona.benefit_categories
-        if archetypes_for(persona.location.country, category)
+        if can_assemble_evidence(archetypes_for(persona.location.country, category))
     ]
 
 

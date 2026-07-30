@@ -134,14 +134,22 @@ class Renderer:
         self._playwright = None
 
     def build_html(self, template_name: str, context: dict) -> str:
-        """The full HTML page for a document, stylesheet and fonts inlined."""
+        """The full HTML page for a document, stylesheet and fonts inlined.
+
+        `qr_svg` IS `None` WHERE THE DOCUMENT CARRIES NO QR, and that case is real rather than
+        defensive: 👁 only 2 of 8 bank payment confirmations print one. `context["qr_payload"]` is
+        still required — a template that shows a QR has to say what is in it, and a missing key
+        here would be a document silently losing a requisite — but a payload of `None` means the
+        page has no QR block, and the template decides that with its own conditional.
+        """
         stylesheet = (self._templates_dir / f"{template_name}.css").read_text(encoding="utf-8")
         template = self._env.get_template(f"{template_name}.html")
+        payload = context["qr_payload"]
         return template.render(
             **context,
             stylesheet=stylesheet,
             font_faces=_font_faces(),
-            qr_svg=qr_svg(context["qr_payload"]),
+            qr_svg=qr_svg(payload) if payload else None,
         )
 
     def render(self, template_name: str, context: dict, output_path: Path) -> RenderedDocument:

@@ -334,6 +334,255 @@ jurisdictions:
       # ⚠️ Second value unreachable — see the note on `operation` above.
       payment_method_labels: ["БЕЗГОТІВКОВА", "ГОТІВКА"]
 
+    # =========================================================================
+    # Bank payment confirmation — квитанція про оплату
+    # =========================================================================
+    #
+    # A DIFFERENT DOCUMENT CLASS, NOT A VARIANT OF THE RECEIPT ABOVE. It is issued by a bank
+    # rather than by a cash register, it carries no fiscal identity of any kind, and 👁 it
+    # carries NO LIST OF ITEMS: what was bought is not on it.
+    #
+    # 📄 THE REQUISITES ARE LAW, which is why they are in this file. The National Bank's
+    # instruction on non-cash settlements (Resolution 163 of 29.07.2022, as amended), clause
+    # 37-3, lists what information about the acceptance of a payment instruction must be given:
+    # the date and number of the instruction · the payer's unique identifier or name, code and
+    # account number · the name of the payer's payment service provider · the amount of the
+    # payment operation · the payment purpose · the same three for the recipient · the date of
+    # acceptance for execution. 📄 A list of goods is not among them, and neither is a payment
+    # form or an RRN.
+    #
+    # 👁 THE OBSERVED SET IS WIDER THAN THE LAW'S AND ALSO NARROWER, and every count below comes
+    # from eight A4 confirmations of three banks. Wider: a stamp, a signature, a masked card, an
+    # authorization code, a terminal identifier, an amount in words, a verification footer. And
+    # narrower: 👁 0/8 print the one requisite the law names by wording — the date of acceptance
+    # for execution.
+    #
+    # 🔴 ONE LAYOUT, AND THE LIMIT IS NAMED RATHER THAN HIDDEN. Three banks were observed and
+    # they have three different layouts. This block describes ONE, and what varies inside it is
+    # the SET OF FIELDS — which follows how the payment was initiated, and is what an extraction
+    # step has to cope with. Visual layout diversity between issuers is a declared gap, not a
+    # thing this block models; see `known_limitations` in config/labelling-schema.yaml.
+    payment_confirmation:
+      # 👁 THE TITLE IS NOT A TYPE MARKER, and this is the strongest form of that finding: two
+      # documents of ONE bank name their own type differently, and on one image the app's screen
+      # heading and the document heading inside it disagree while carrying the same number. A
+      # classifier keying on either string is keying on a coin toss.
+      titles: ["Квитанція", "Платіжна інструкція"]
+
+      # 📄 THE PAPER IS A4 — ISO 216, 210 × 297 mm — and not a till roll. 👁 8/8 of the observed
+      # confirmations are A4 documents, which is why this class needs its own paper fact rather
+      # than an entry in `receipt.widths_mm`: those are the widths a thermal roll is SOLD in, and
+      # a bank prints on a page. The rendered pixel width follows from this size and is in the
+      # archetype's stylesheet, which is where every paper width in this repository lives.
+      page: { width_mm: 210, height_mm: 297 }
+
+      # 👁 8/8 carry the bank's own document number, 📄 and clause 37-3 makes the number of the
+      # payment instruction mandatory. It is ALSO the key of the official check services, which
+      # is what makes it the deduplication key of this class rather than the authorization code.
+      # Three formats were observed; all three are drawn from, because a consumer validating the
+      # field by shape needs all of them.
+      document_code:
+        label: "Номер документа"
+        formats:
+          # 👁 four groups of four.
+          - { pattern: "[0-9]{4}", groups: 4, separator: "-" }
+          # 👁 a letter prefix followed by an unbroken run of digits.
+          - { pattern: "[A-Z]{2}[0-9]{10}", groups: 1, separator: "" }
+          # 👁 eight to ten bare digits.
+          - { pattern: "[0-9]{8,10}", groups: 1, separator: "" }
+
+      # WHICH DATE CAPTION IS PRINTED. The label side of the concept named in
+      # config/policy.yaml, `period.payment_date`; the mapping of captions onto that concept —
+      # including the three captions that must NEVER be read as it — is
+      # `document_types.payment_confirmation.payment_date` in config/labelling-schema.yaml.
+      # Only accepted captions appear here, because a generator that printed a refused one
+      # would be printing a document whose payment date the contract says cannot be read.
+      date_captions: ["Дата виконання", "Дата проведення", "Дата операції"]
+      # ⚠️ A TIME FORMAT OF ITS OWN, AND NOT THE JURISDICTION'S. `date_format` above is shared —
+      # a date is written the same way on every Ukrainian document — but the jurisdiction's
+      # `time_format` separates with DASHES, and that entry is 👁 an observation about ПРРО
+      # RECEIPTS ("time separated by dashes, not colons" in `verified_against_own_receipts`). It
+      # is a quirk of till printers. A bank writes a time with colons, so this class states its
+      # own format rather than inheriting a fact established about another class of document.
+      time_format: "%H:%M:%S"
+
+      # 👁 THE MONEY SPLITS, ON EVERY DOCUMENT: 0/8 print a single amount. 8/8 print the
+      # operation amount and the fee as separate fields, and 1/8 also prints their sum in the
+      # largest type on the page.
+      #
+      # 📄 THE AMOUNT OF THE OPERATION IS THE TRANSFER AMOUNT — clause 37-3 names it and does
+      # not name the fee at all. 🔴 So the most salient number on the page is NOT the amount of
+      # the operation, and an extractor trained to take the largest number takes the wrong one.
+      # That divergence is deliberate and measurable; see the label entries in
+      # config/labelling-schema.yaml.
+      amount_captions: ["Сума", "Сума операції", "Сума (грн)", "Сума переказу"]
+      fee_captions: ["Комісія", "Комісія (грн)", "Сума комісії"]
+      total_caption: "Загальна сума"
+      # 👁 5/8, under three different captions — and one of those is no caption at all, the
+      # words following the digits in brackets. Only the captioned forms are printed here.
+      amount_in_words_captions: ["Сума словами", "Сума літерами"]
+
+      purpose_label: "Призначення платежу"
+
+      # The two parties. 👁 6/8 lay them out as the largest block of the document, in two
+      # columns. ⚠️ The code length distinguishes the KIND OF CODE and not the kind of party:
+      # 10 digits is a РНОКПП, which a natural person AND a sole trader both have, so "ten
+      # digits means not a business" is false — 👁 a sole trader payee with a ten-digit code was
+      # observed. 8 digits is a ЄДРПОУ. Both are already in `identifiers` above and are not
+      # restated here.
+      parties:
+        payer_label: "Платник"
+        payee_label: "Отримувач"
+        account_label: "IBAN"
+        code_label: "Код"
+        bank_label: "Банк отримувача"
+        # 👁 A third numeric code appears on the same document under its own caption — the МФО,
+        # six digits — so one confirmation may print three unlabelled-by-type numbers of three
+        # lengths (10, 8, 6) and an extractor has to tell them apart by caption AND length.
+        bank_code_label: "Код банку"
+        bank_code: { pattern: "[0-9]{6}" }
+        # 👁 2/8 have at least one empty field, in TWO mechanically different forms: a hyphen
+        # printed AS the value, and a caption with nothing under it. They are not one situation
+        # — OCR returns the string "-" for the first and nothing for the second — so both are
+        # produced. This is the hyphen form.
+        empty_value: "-"
+
+      # The Ukrainian IBAN, 📄 ISO 13616 with a country length of 29: "UA", two check digits
+      # computed mod 97-10, the six-digit МФО of the bank, then a nineteen-character account.
+      iban: { country: "UA", length: 29, bank_code_length: 6 }
+
+      # 🔴 HOW THE PAYMENT WAS INITIATED IS WHAT DECIDES THE FIELD SET — not the family of the
+      # document, which is the conclusion this block was rewritten on. 👁 3/8 confirmations
+      # carry a masked card AND an authorization code AND a payment purpose at once, so
+      # "quittance with a purpose" against "card slip with an authorization code" is not a real
+      # division. What actually varies:
+      #
+      #   card       👁 4/8 — a card operation: an authorization code and a card number are
+      #                     printed, and so is the purpose.
+      #   transfer   👁 3/8 — a transfer by account details: NO authorization code and no card
+      #                     number, because there was no card operation to authorize.
+      #   acquiring  👁 1/8 — internet acquiring: a card and an authorization code, but NO
+      #                     payment purpose field at all, and the payer is not identified.
+      #
+      # The shares are draw inputs and live in config/generation.yaml; what each mode PRINTS is
+      # a layout fact and lives here.
+      initiation:
+        card:
+          prints_auth_code: true
+          prints_card: true
+          prints_purpose: true
+          identifies_payer: true
+        transfer:
+          prints_auth_code: false
+          prints_card: false
+          prints_purpose: true
+          identifies_payer: true
+        acquiring:
+          prints_auth_code: true
+          prints_card: true
+          prints_purpose: false
+          identifies_payer: false
+
+      # 👁 4/4 of the card operations print six digits. 📄 The term is defined by the National
+      # Bank's regulation on the issue and acquiring of payment instruments (Resolution 164 of
+      # 29.07.2022, as amended), which does NOT list the requisites of such a document.
+      #
+      # ⚠️ IT IS NOT A DEDUPLICATION KEY, and the temptation to use it as one is why the reason
+      # is written down: six digits is a space of a million, and the code is unique only within
+      # an issuer and a time window. The document number above is the key that is 👁 8/8 present
+      # and 📄 mandatory.
+      auth_code: { label: "Код авторизації", pattern: "[0-9]{6}" }
+
+      # 👁 RRN IS NOT ON THIS DOCUMENT — 0/8 — and it is not an omission of this block. It is a
+      # requisite of the CARD OPERATION as printed inside a fiscal receipt, where this
+      # repository does print it (`acquiring_block` above, 👁 1/1 of the observed sole trader's
+      # receipts). ⛔ The same holds for a payment form (cash / card): 0/8, and it is a receipt
+      # requisite carried over by mistake.
+
+      # 👁 CARD MASKING IS NOT UNIFORM AND THERE IS NO NORM FOR IT. 6/8 print a card number,
+      # under SIX different schemes — nearly as many as there are documents — and ⛔ neither the
+      # instruction on non-cash settlements nor the regulation on payment instruments states
+      # any requirement about it. 🔴 One observed document prints a recipient's card with NO
+      # masking at all, which confirms the absence of a norm from the opposite direction.
+      #
+      # Every scheme is drawn from, INCLUDING the unmasked one: a consumer whose regular
+      # expression is "six digits, asterisks, four digits" covers a minority of the field.
+      card:
+        label: "Картка"
+        # `head` and `tail` are how many digits stay visible; `mask` is the character used for
+        # the rest, and `grouped` prints the number in four groups of four.
+        masking_schemes:
+          - { head: 6, tail: 2, mask: "*", grouped: false }
+          - { head: 4, tail: 4, mask: "*", grouped: false }
+          - { head: 6, tail: 4, mask: "*", grouped: false }
+          - { head: 4, tail: 4, mask: "*", grouped: true, name_scheme: true }
+          - { head: 4, tail: 4, mask: "·", grouped: true, name_scheme: true }
+          # 🔴 The unmasked form, observed on a RECIPIENT's card.
+          - { head: 16, tail: 0, mask: "*", grouped: true }
+        # Printed in brackets after the number by the two grouped schemes. Public marks of the
+        # card schemes, as any Ukrainian card carries one of them.
+        schemes: ["Visa", "Mastercard"]
+
+      # 👁 5/8 carry a device or initiating-system field, under FIVE different captions, and
+      # 🔴 the values under them are of three incompatible kinds — a system named in words, a
+      # merchant's internet domain, and an uppercase mnemonic code. One contract field
+      # therefore covers three different things.
+      #
+      # ⛔ THE DOMAIN KIND IS NOT REPRODUCED, and the reason is provenance rather than
+      # difficulty: a domain printed beside a named payee asserts that the payee owns it, and
+      # this repository does not print unverifiable claims about real firms. The two remaining
+      # kinds carry no such claim. Declared here so the corpus is known to be narrower than the
+      # observation on this field.
+      terminal:
+        captions:
+          - { label: "Термінал", value_kind: mnemonic }
+          - { label: "Ідентифікатор платіжного пристрою", value_kind: mnemonic }
+          - { label: "Ідентифікатор системи/пристрою", value_kind: mnemonic }
+          - { label: "Назва системи-ініціатора", value_kind: system_name }
+        mnemonic: { pattern: "[A-Z]{4}[0-9]{4}" }
+
+      # 👁 The stamp is the ONE constant of this class — 8/8, usually bottom right. The
+      # signature beside it is 7/8, the exception being a document with an empty signature line.
+      # 👁 5/8 also print the signatory's post in words.
+      signature:
+        stamp_caption: "БАНК"
+        signature_label: "Підпис"
+        post_labels: ["Операційний директор", "Директор департаменту операційного сервісу"]
+        # 👁 3/8 carry a note about the qualified electronic signature; 👁 2/8 of one bank print
+        # a note saying the operation was performed automatically INSTEAD. Two mechanisms, and
+        # they must not be confused with the verification footer below: this one answers "is the
+        # signature under the file intact", that one answers "did this payment happen".
+        electronic_notes:
+          - "Документ підписано кваліфікованим електронним підписом представника банку. Перевірка підпису: ca.diia.gov.ua/verify"
+          - "Операцію виконано автоматично, підпис не вимагається"
+
+      # 👁 THE VERIFICATION FOOTER IS NOT A CONSTANT — 3/8. That directly refutes the assumption
+      # that every such document carries one.
+      #
+      # ⚠️ The host is the STATE cross-bank check service rather than any bank's own page, and
+      # that is a narrowing: 👁 the observed footers name each bank's own address, and pairing a
+      # bank with a URL would be this file asserting that pairing. 📄 The state service is the
+      # one that checks a document by its code across the banks connected to it.
+      verification_footer:
+        present_caption: "Перевірка документа"
+        steps: "Відкрийте check.gov.ua, виберіть тип документа та введіть його номер"
+
+      # 👁 2/8 carry a QR and BOTH of them are marketing — an invitation to install the bank's
+      # application. 👁 0/8 carry a verification QR: checking a document is done by its code as
+      # text, never by the QR.
+      #
+      # ✅ This is a stronger refutation of "a QR means the document is fiscal" than the fiscal
+      # case is. On a receipt the QR at least encodes a request to the tax service; here it has
+      # nothing to do with the operation at all.
+      qr:
+        # 👁 The QR came with supporting text on both documents that had one — an invitation to
+        # install the bank's application. A bare QR with nothing beside it is not what was seen,
+        # and the text is what makes its purpose legible to a reader of the image.
+        marketing_caption: "Завантажте застосунок банку за QR-кодом"
+        marketing_payloads:
+          - "https://example.com/app"
+          - "https://example.com/mobile"
+
     # Fiscal QR: the public receipt-verification URL of the tax authority.
     qr:
       fiscal_payload: "https://cabinet.tax.gov.ua/cashregs/check?id={receipt_number}&date={date:%Y%m%d}&time={time:%H%M%S}&fn={fiscal_device_number}&sm={total:.2f}"
