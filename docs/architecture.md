@@ -157,8 +157,33 @@ ground truth of every image while being invisible in every metric.
 
 ### 6. `assembler`
 
-Writes the dataset, splits it into train and validation, and emits a balance report over document classes,
-verdicts, currencies and languages so that skew is visible rather than discovered later.
+Writes the dataset, splits it into train and validation, and emits a balance report so that skew is visible
+rather than discovered later. **Without the report a fan-out can quietly produce a lopsided corpus and
+nothing would say so**, which is what the whole stage is for.
+
+**The partition is by persona, and the reason is a label dependency rather than a feature leak.** Annual
+limits are cumulative per persona, so a claim labelled `partially_covered` with the cause `limit_exhausted`
+carries that label *because of that persona's earlier claims*. Split by claim and a validation label becomes
+a function of training data — an objection no amount of shuffling addresses. Keeping personas whole also
+keeps a claim's documents together (an invoice and the payment that settles it are one transaction) and keeps
+a persona's printed name and tax id off both sides at once.
+
+It is **not stratified**, deliberately. Stratifying would tune the corpus, and this generator's rule is that
+the report makes a shortfall visible rather than repairing it — so instead the report *names* any verdict or
+document class the corpus contains and a side does not.
+
+The report covers verdicts against `verdict_mix`, imperfection causes, document classes, currency, language,
+capture channels with their completeness subsets, and the partition. Two rules hold throughout: **every
+figure carries its denominator**, and **anything with no data is reported as absent rather than as zero** —
+a class no archetype can build, a channel no document took, a side too small to exist. A report that reads as
+passing when a dimension has no data is a report nobody reads.
+
+Document classes are measured against a **minimum of 30 per buildable class** — below which a per-class
+figure should not be quoted, since at *p* ≈ 0.9 and *n* = 30 the 95% Wilson interval is about ±0.10 and
+"0.91" and "0.85" are the same reading. **The minimum is reported and never tuned to.** There is no target
+*share* per class: `config/policy.yaml` declares `verdict_mix` and explicitly refuses a `document_mix`,
+because a share of receipts against invoices would read as an observation about what claimants submit, which
+nothing here has measured.
 
 ---
 
@@ -239,6 +264,7 @@ These are the most valuable examples in the dataset.
   "reference_text": "…every printed character of the page, in reading order…",
   "content_bbox": [0, 0, 0, 0],
   "content_lost_edges": [],
+  "split": "train",
   "synthetic": true,
   "generator_version": "0.1.0",
   "content_complete": true

@@ -132,6 +132,37 @@ _CAPTURE_MEDIA: dict[Capture, Medium] = {
 }
 
 
+class Split(StrEnum):
+    """Which side of the train / validation partition a record belongs to.
+
+    🔴 THE PARTITION IS BY PERSONA, AND THE REASON IS A LABEL DEPENDENCY RATHER THAN A FEATURE
+    LEAK. A persona's annual limits are cumulative: `policy_engine.Ledger` accumulates per
+    persona per category, so a claim labelled `partially_covered` with the cause
+    `limit_exhausted` IS THAT LABEL BECAUSE OF THAT PERSONA'S EARLIER CLAIMS. Split by claim
+    and a validation claim's own verdict is a function of training claims — the label is not
+    independent across the boundary, which is a stronger objection than any of the ordinary
+    leakage arguments and is not fixed by shuffling harder.
+
+    Three more consequences follow from the same unit, and each would be a defect on its own:
+
+    * a claim's documents stay together. An invoice in train and the payment that settles it in
+      validation is the same transaction on both sides;
+    * a persona's NAME, tax id and city are printed on their documents, so a per-claim split
+      would put the same identifier on both sides and let a model memorize it;
+    * a claim's vendor instance is drawn once per claim, and personas share vendor pools — the
+      weakest of the three, and it comes along anyway.
+
+    ⚠️ THE PARTITION IS NOT STRATIFIED. Personas are assigned at random, so a small run can put
+    a whole verdict on one side. That is deliberate: stratifying would TUNE the corpus, and this
+    generator's rule is that the balance report makes a shortfall VISIBLE rather than repairing
+    it. `assembler.balance_report` names any verdict or document class the corpus contains and a
+    side does not.
+    """
+
+    TRAIN = "train"
+    VALIDATION = "validation"
+
+
 class Verdict(StrEnum):
     """The answer a claim gets. Values match the keys of ``verdict_mix`` in policy.yaml.
 
@@ -386,6 +417,15 @@ class DocGroundTruth(BaseModel):
     # it is built on.
     content_lost_edges: list[str] = Field(default_factory=list)
 
+    # WHICH SIDE OF THE TRAIN / VALIDATION PARTITION THIS DOCUMENT IS ON — see `Split` for why the
+    # partition is by persona. Carried on the record rather than left to be joined from the
+    # manifest because A DOCUMENT LABEL HAS NO `persona_id`: a consumer holding one label file
+    # cannot derive its side at all, and would have to load the whole corpus to place one document.
+    #
+    # `None` means NO PARTITION WAS COMPUTED, which is a different statement from either side. It
+    # is what a document assembled outside a run looks like.
+    split: Split | None = None
+
     # Provenance. Not decoration: this is what keeps the origin of an individual file
     # unambiguous once it leaves this repository.
     synthetic: bool = True
@@ -469,3 +509,7 @@ class ClaimGroundTruth(BaseModel):
     imperfection: list[str] = Field(default_factory=list)
     verdict_basis: list[VerdictBasis] = Field(default_factory=list)
     policy_trace: list[str] = Field(default_factory=list)
+    # The side of the partition this claim and ALL OF ITS DOCUMENTS are on — see `Split`. A claim
+    # and its documents can never disagree, because the unit of the partition is the persona, which
+    # is one level above both. `None` means no partition was computed.
+    split: Split | None = None

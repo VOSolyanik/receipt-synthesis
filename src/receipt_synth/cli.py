@@ -13,7 +13,11 @@ import argparse
 from pathlib import Path
 
 from receipt_synth import __version__
-from receipt_synth.assembler import balance_report, generate_dataset
+from receipt_synth.assembler import (
+    DEFAULT_TRAIN_FRACTION,
+    balance_report,
+    generate_dataset,
+)
 from receipt_synth.schemas import Country
 
 
@@ -38,6 +42,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--split",
+        type=float,
+        default=DEFAULT_TRAIN_FRACTION,
+        metavar="TRAIN_FRACTION",
+        help=(
+            "fraction of PERSONAS assigned to train, the rest to validation "
+            f"(default {DEFAULT_TRAIN_FRACTION}); the partition is by persona because annual "
+            "limits are cumulative per persona, and it is not stratified"
+        ),
+    )
+    parser.add_argument(
         "--country",
         type=Country,
         choices=list(Country),
@@ -57,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         personas=args.personas,
         claims_per_persona=args.claims_per_persona,
         country=args.country,
+        train_fraction=args.split,
     )
 
     print(

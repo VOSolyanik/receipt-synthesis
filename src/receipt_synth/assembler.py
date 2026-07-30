@@ -13,6 +13,7 @@ import json
 import random
 import tempfile
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from functools import partial
@@ -22,6 +23,7 @@ import cv2
 
 from receipt_synth import __version__
 from receipt_synth.claim_planner import (
+    ARCHETYPES,
     REALIZABLE_VERDICTS,
     ClaimPlan,
     DocumentPlan,
@@ -57,7 +59,9 @@ from receipt_synth.schemas import (
     ClaimGroundTruth,
     Country,
     DocGroundTruth,
+    DocType,
     Persona,
+    Split,
     Verdict,
 )
 
@@ -99,6 +103,59 @@ _CONTENT_BBOX_KEY = "__content_extent__"
 # channel for a given seed, exactly as reordering any drawn-from list in this repository does.
 CAPTURE_CHANNELS = (Capture.SCREENSHOT, Capture.PHOTO, Capture.SCAN)
 
+# What fraction of the PERSONAS go to training. A CONVENTION, declared as one: nothing measured it
+# and nothing in this repository depends on the number. It is a default so that an ordinary
+# invocation produces a partitioned dataset rather than an unpartitioned one that somebody later
+# partitions by hand — which is the only way the two halves come to be split differently twice.
+DEFAULT_TRAIN_FRACTION = 0.85
+
+# 🔴 THE MINIMUM NUMBER OF DOCUMENTS A PER-CLASS FIGURE MAY BE QUOTED ON. Below it a per-class
+# accuracy is not a measurement: at p ≈ 0.9 and n = 30 the 95% Wilson interval is about ±0.10, so
+# "0.91" and "0.85" are the same reading. THE THRESHOLD IS REPORTED AND NEVER ENFORCED — nothing
+# here resizes a run or reweights a draw to reach it, because a corpus tuned until its report looks
+# healthy is a corpus whose report says nothing. The shortfall is made visible and left.
+MIN_DOCUMENTS_PER_TARGET_CLASS = 30
+
+
+def assign_splits(
+    persona_ids: Sequence[str], *, seed: int, train_fraction: float
+) -> dict[str, Split]:
+    """Which side of the partition each persona is on. See `schemas.Split` for the unit.
+
+    🔴 SEEDED INDEPENDENTLY OF THE GENERATOR'S OWN DRAW, from `f"split:{seed}"` rather than from
+    the root generator. That is what makes the partition a LABELLING OF AN EXISTING CORPUS instead
+    of a change to it: the documents a seed produces are byte-identical with and without this
+    step, so a corpus generated before the partition existed can be partitioned without being
+    regenerated. Drawing from `root` would have shifted every document downstream of the first
+    call — the ordinary cost of touching a seeded stream, paid here for nothing.
+
+    `random.Random` seeds from a string through SHA-512 of its bytes, so the assignment does not
+    depend on `PYTHONHASHSEED` and is reproducible across machines and interpreter runs.
+
+    ⚠️ ADDING A PERSONA RESHUFFLES THE WHOLE PARTITION, and that is inherent rather than a defect
+    of this implementation: a partition is a property of the SET, and any rule that kept earlier
+    personas in place would have to place later ones by a fixed criterion, which stops honouring
+    the requested fraction. What the generator does promise is reproducibility for a given seed and
+    size, and that holds exactly.
+
+    NO SIDE IS TOPPED UP TO BE NON-EMPTY. A run of one persona has an empty validation side, and
+    the report says so — see `_split_lines`. Forcing a document into an empty side would satisfy
+    the shape of a split while producing a validation set of one persona, which is worse than
+    nothing precisely because it looks like something.
+    """
+    if not 0.0 < train_fraction < 1.0:
+        raise ValueError(
+            f"train_fraction is a proportion strictly between 0 and 1, not {train_fraction!r}; "
+            "a run with everything on one side is not a partition"
+        )
+    shuffled = list(persona_ids)
+    random.Random(f"split:{seed}").shuffle(shuffled)
+    train_size = round(len(shuffled) * train_fraction)
+    return {
+        persona_id: Split.TRAIN if index < train_size else Split.VALIDATION
+        for index, persona_id in enumerate(shuffled)
+    }
+
 
 @dataclass(frozen=True)
 class Dataset:
@@ -127,15 +184,61 @@ class Dataset:
     # reasons; anything it cannot attribute is counted under `UNATTRIBUTED` rather than
     # being folded into a bucket that sounds accounted for.
     claims_skipped: dict[str, int] = field(default_factory=dict)
+    # Persona id -> which side of the train / validation partition. Empty for a dataset assembled
+    # without a partition, which is a different state from a partition that put everything on one
+    # side. See `assign_splits`.
+    split: dict[str, Split] = field(default_factory=dict)
+    # What was ASKED FOR, kept beside what was realized. The two differ by rounding on any run
+    # whose persona count does not divide evenly, and a report that printed only the realized share
+    # would leave a reader unable to tell a rounding from a mistake.
+    train_fraction: float | None = None
 
     def as_manifest(self) -> dict:
-        return {
+        """The full index: every persona, claim and document, plus the partition.
+
+        THE PARTITION IS DESCRIBED HERE AND APPLIED ON THE RECORDS. This block carries the
+        DECISION — the unit, the fraction asked for, the realized counts — and each claim and
+        document carries its own `split`. It deliberately does NOT repeat the ids: a list here
+        beside a field there would be two statements of one fact, and the first edit to either
+        makes them disagree with nothing to notice it.
+        """
+        manifest = {
             "generator_version": __version__,
             "seed": self.seed,
             "synthetic": True,
+            "split": self._split_manifest(),
             "personas": [persona.model_dump(mode="json") for persona in self.personas],
             "claims": [claim.model_dump(mode="json") for claim in self.claims],
             "documents": [document.model_dump(mode="json") for document in self.documents],
+        }
+        return manifest
+
+    def _split_manifest(self) -> dict | None:
+        """The partition as a decision plus its realized sizes, or `None` if none was computed.
+
+        `None` rather than an empty structure: no partition and a partition with an empty side are
+        different states, and a consumer must be able to tell them apart without counting.
+        """
+        if not self.split:
+            return None
+        counts = {
+            side.value: {
+                "personas": sum(1 for value in self.split.values() if value is side),
+                "claims": sum(1 for claim in self.claims if claim.split is side),
+                "documents": sum(1 for document in self.documents if document.split is side),
+            }
+            for side in Split
+        }
+        return {
+            "unit": "persona",
+            "why_this_unit": (
+                "annual limits are cumulative per persona, so a claim's verdict can depend on "
+                "that persona's earlier claims; a per-claim partition would make a validation "
+                "label a function of training data. See schemas.Split."
+            ),
+            "stratified": False,
+            "train_fraction_requested": self.train_fraction,
+            "realized": counts,
         }
 
 
@@ -406,6 +509,7 @@ def generate_dataset(
     personas: int = 1,
     claims_per_persona: int = 1,
     country: Country = Country.UA,
+    train_fraction: float = DEFAULT_TRAIN_FRACTION,
 ) -> Dataset:
     """Generate the dataset for a seed, writing images and labels under `out_dir`.
 
@@ -419,6 +523,10 @@ def generate_dataset(
     """
     if claims_per_persona < 1:
         raise ValueError(f"a persona files at least one claim, not {claims_per_persona}")
+    # Validated BEFORE the run rather than at the partition step at the end. A bad fraction would
+    # otherwise be reported after every image had been rendered, which on a production run is an
+    # hour and a half spent to learn that an argument was mistyped.
+    assign_splits([], seed=seed, train_fraction=train_fraction)
 
     root = random.Random(seed)
     all_personas: list[Persona] = []
@@ -504,6 +612,29 @@ def generate_dataset(
                 reason = why_no_claim(persona, ledger) or UNATTRIBUTED
                 skipped[reason] += claims_per_persona - built
 
+    # THE PARTITION IS APPLIED LAST, ON A FINISHED CORPUS, because its unit is the persona and no
+    # persona is complete until its own planning has stopped. It changes no pixel and no drawn
+    # value — see `assign_splits` on why it has its own generator — so this is a labelling pass over
+    # records that already exist.
+    splits = assign_splits(
+        [persona.persona_id for persona in all_personas],
+        seed=seed,
+        train_fraction=train_fraction,
+    )
+    # A document record carries no `persona_id`, so its side is joined through the claim that owns
+    # it — the same join a consumer makes, and the only one available. Built once rather than
+    # searched per document.
+    owner = {
+        doc_id: claim.persona_id for claim in all_claims for doc_id in claim.documents
+    }
+    all_claims = [
+        claim.model_copy(update={"split": splits[claim.persona_id]}) for claim in all_claims
+    ]
+    all_documents = [
+        document.model_copy(update={"split": splits[owner[document.doc_id]]})
+        for document in all_documents
+    ]
+
     dataset = Dataset(
         seed=seed,
         personas=all_personas,
@@ -512,6 +643,8 @@ def generate_dataset(
         claims_ordered=personas * claims_per_persona,
         claims_skipped=dict(skipped),
         plans=all_plans,
+        split=splits,
+        train_fraction=train_fraction,
     )
     _write_labels(dataset, out_dir)
     return dataset
@@ -531,9 +664,25 @@ def balance_report(dataset: Dataset) -> str:
     from every sum, and the absent fraction is then reported as a lower bound: it is what
     the share-carrying verdicts account for, not the whole of what is missing.
 
-    The full report — document classes, currencies, languages, the train/validation split
-    — is a later step. This is the verdict axis, the claim count and the exclusion note,
-    nothing else.
+    🔴 TWO MARKER VOCABULARIES, AND THEY MUST NOT MERGE. The report says two different kinds of
+    thing and a reader has to be able to tell them apart at a glance:
+
+      `!!`   THE REPORT CONTRADICTS ITSELF, or the run reached a state nothing should produce —
+             rows that do not sum to their own header, a verdict realized that the planner cannot
+             draw, claims missing that nothing accounts for. It should never fire, and if it does
+             the TABLE is wrong rather than the dataset.
+      words  A FINDING ABOUT THE CORPUS, in capitals and in plain English: ABSENT, EMPTY,
+             BELOW <n>, ONE VALUE ACROSS THE WHOLE CORPUS, THIS SIDE CONTAINS NO <x>. These are
+             expected to fire — a corpus that never trips one is a corpus nobody stressed — and
+             they are not defects in the report.
+
+    The distinction is load-bearing rather than cosmetic: a test asserts that `!!` is ABSENT from a
+    healthy run's report, which is only meaningful while `!!` means the first thing. Marking a
+    below-threshold class with `!!` broke that test the moment the class block landed, and the
+    lesson is that the sigil is a reserved word, not emphasis.
+
+    The report covers the verdict axis, the claim count, the exclusion note, imperfection causes,
+    document classes, currency, language, capture channels and the train / validation partition.
     """
     mix = verdict_mix()
     missing = unrealizable_verdicts()
@@ -603,9 +752,154 @@ def balance_report(dataset: Dataset) -> str:
                 "  on what is absent rather than the whole of it.",
             ]
 
+    lines += _document_class_lines(dataset)
+    lines += _value_dimension_lines(dataset, "Currency", lambda d: d.currency)
+    lines += _value_dimension_lines(dataset, "Language", lambda d: d.language)
     lines += _capture_lines(dataset)
+    lines += _split_lines(dataset)
     lines += _drift_lines(dataset)
     return "\n".join(lines)
+
+
+def _document_class_lines(dataset: Dataset) -> list[str]:
+    """The distribution over document classes, against the per-class minimum — REPORTED, NOT MET.
+
+    🔴 THERE IS NO TARGET SHARE TO COMPARE AGAINST, AND THE ABSENCE IS DELIBERATE.
+    config/policy.yaml declares `verdict_mix` and explicitly REFUSES a `document_mix`, on the
+    ground that a share of receipts against invoices would read as an observation about which
+    documents claimants actually submit — which nothing here has measured. So this block reports
+    what a run produced and measures it against one thing only: a MINIMUM below which a per-class
+    figure should not be quoted at all.
+
+    🔴 AND NOTHING TUNES ANYTHING TO REACH IT. The threshold applies to the delivered corpus and is
+    checked after it is generated; this block makes a shortfall visible and leaves it. A generator
+    that resized a run until its own report looked healthy would produce a report that could not
+    fail, which is a report nobody reads.
+
+    A CLASS WITH NO REGISTERED ARCHETYPE IS ABSENT, NOT ZERO. `DocType` names seven classes and the
+    registry can build four; the other three cannot appear in any run at any size, so a count of 0
+    beside a threshold would invite somebody to fix a shortfall that no run can close. The minimum
+    is stated only for the classes it can be asked of.
+    """
+    buildable = {archetype.doc_type for archetype in ARCHETYPES.values()}
+    counts: Counter[DocType] = Counter(document.doc_type for document in dataset.documents)
+    total = sum(counts.values())
+
+    lines = [
+        f"Document classes — {total} document(s); target ≥ {MIN_DOCUMENTS_PER_TARGET_CLASS} "
+        "per buildable class,",
+        "  REPORTED AND NEVER TUNED TO — policy.yaml declares no document mix, on purpose",
+    ]
+    for doc_type in DocType:
+        count = counts[doc_type]
+        if doc_type not in buildable:
+            lines.append(
+                f"  {doc_type.value:<22}    0         ABSENT — no archetype builds this class, so"
+                " no run of any size"
+            )
+            lines.append(
+                "                                  contains one; the minimum does not apply to it"
+            )
+            continue
+        mark = (
+            "ok" if count >= MIN_DOCUMENTS_PER_TARGET_CLASS
+            else f"BELOW {MIN_DOCUMENTS_PER_TARGET_CLASS} — do not quote a per-class figure here"
+        )
+        lines.append(
+            f"  {doc_type.value:<22} {count:>4}  {_share(count, total):>6}   {mark}"
+        )
+    return lines
+
+
+def _value_dimension_lines(dataset: Dataset, title: str, of) -> list[str]:
+    """One flat dimension of the corpus — currency, language — with its denominator.
+
+    🔴 A DIMENSION WITH ONE VALUE IS SAID TO HAVE ONE VALUE. Printing `UAH 100.0%` and stopping
+    reads as a balanced distribution that happens to have one member, which is exactly the
+    reassuring shape this report is not allowed to take: a corpus of a single currency does not
+    EXERCISE the currency dimension at all, and a consumer reporting per-currency accuracy on it
+    would be reporting the corpus average under another name.
+
+    An empty corpus is reported as having no documents rather than as a distribution over nothing.
+    """
+    counts: Counter[str] = Counter(of(document) for document in dataset.documents)
+    total = sum(counts.values())
+
+    lines = [f"{title} — {total} document(s)"]
+    if not total:
+        lines.append(f"  ABSENT — this run produced no documents, so there is no {title.lower()}")
+        return lines
+    for value, count in sorted(counts.items()):
+        lines.append(f"  {value:<22} {count:>4}  {_share(count, total):>6}")
+    if len(counts) == 1:
+        lines.append(
+            f"  ONE VALUE ACROSS THE WHOLE CORPUS: this run does not exercise the "
+            f"{title.lower()} dimension."
+        )
+        lines.append(
+            "     A per-value figure computed on it is the corpus average under another name."
+        )
+    return lines
+
+
+def _split_lines(dataset: Dataset) -> list[str]:
+    """The train / validation partition, and WHAT EACH SIDE IS MISSING.
+
+    The sizes alone would be the reassuring half. The half that matters is the last one: any
+    verdict or document class the corpus contains and a side does not. The partition is by persona
+    and is NOT stratified — see `schemas.Split` — so on a small run a whole verdict can land on one
+    side, and nothing else in this report would say so.
+
+    ⚠️ AN EMPTY SIDE IS DECLARED AS EMPTY, not printed as 0.0%. A run of one persona has no
+    validation set at all; that is a property of the run's size, and a percentage would present it
+    as a partition that happens to be lopsided.
+    """
+    if not dataset.split:
+        return [
+            "Train / validation split — NOT COMPUTED for this dataset, which is not the same as "
+            "an empty split"
+        ]
+
+    requested = dataset.train_fraction
+    lines = [
+        f"Train / validation split — by PERSONA, {requested:.0%} of personas requested for train;"
+        " not stratified",
+    ]
+    corpus_verdicts = {claim.verdict for claim in dataset.claims}
+    corpus_classes = {document.doc_type for document in dataset.documents}
+
+    for side in Split:
+        claims = [claim for claim in dataset.claims if claim.split is side]
+        documents = [d for d in dataset.documents if d.split is side]
+        personas = sum(1 for value in dataset.split.values() if value is side)
+        if not personas:
+            lines.append(
+                f"  {side.value:<12}    0 persona(s)   EMPTY — the run is too small to partition at"
+                f" {requested:.0%}."
+            )
+            lines.append(
+                "                                 Not a share of zero: there is no such side here."
+            )
+            continue
+        lines.append(
+            f"  {side.value:<12} {personas:>4} persona(s) {len(claims):>5} claim(s) "
+            f"{len(documents):>5} document(s)   "
+            f"{_share(len(claims), len(dataset.claims))} of claims"
+        )
+        missing_verdicts = corpus_verdicts - {claim.verdict for claim in claims}
+        missing_classes = corpus_classes - {document.doc_type for document in documents}
+        for label, missing in (("verdict", missing_verdicts), ("document class", missing_classes)):
+            if missing:
+                named = ", ".join(sorted(item.value for item in missing))
+                lines.append(
+                    f"    THIS SIDE CONTAINS NO {named} — a {label} the corpus has and this "
+                    "side does not."
+                )
+                lines.append(
+                    "       Nothing measured on it can report that "
+                    f"{label}; the partition is not stratified."
+                )
+    return lines
 
 
 def _capture_lines(dataset: Dataset) -> list[str]:

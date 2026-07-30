@@ -45,6 +45,35 @@
 #
 # Neither is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 18 by THE TRAIN / VALIDATION PARTITION. FOUR consequences a consumer has to know about,
+# and the draw did not move for any of them.
+#
+#   ONE NEW LABEL FIELD, `split`, on BOTH the document record and the claim record: `train`,
+#   `validation`, or `null` where no partition was computed. A claim and its documents can never
+#   disagree, because the unit of the partition sits above both.
+#
+#   🔴 THE UNIT IS THE PERSONA, AND THE REASON IS A LABEL DEPENDENCY RATHER THAN A FEATURE LEAK.
+#   Annual limits are cumulative per persona, so a claim labelled `partially_covered` with the cause
+#   `limit_exhausted` CARRIES THAT LABEL BECAUSE OF THAT PERSONA'S EARLIER CLAIMS. Partition by
+#   claim and a validation label becomes a function of training data — an objection no amount of
+#   shuffling addresses. Keeping personas whole also keeps a claim's documents together and keeps a
+#   persona's printed name and tax id off both sides at once.
+#
+#   ⚠️ IT IS NOT STRATIFIED, AND A SIDE MAY BE MISSING A WHOLE VERDICT OR CLASS. Deliberate:
+#   stratifying would tune the corpus, and this generator's rule is that the balance report makes a
+#   shortfall visible rather than repairing it. A consumer must check what its validation side
+#   actually contains before reporting anything per class — the report names the gaps, and
+#   `run_profiles` records them for the runs it describes. See `known_limitations` KL-13.
+#
+#   THE MANIFEST GAINED A `split` BLOCK carrying the DECISION — unit, requested fraction, realized
+#   counts — and deliberately NOT the id lists: the ids are on the records, and a list beside a
+#   field would be two statements of one fact.
+#
+#   THE DRAW DID NOT MOVE. Verified byte-identically against version 17's output for the same seed:
+#   86 of 86 images identical, and every label file identical once `split` is removed. The partition
+#   is seeded independently of the generator's own stream precisely so that it labels an existing
+#   corpus instead of changing it.
+#
 # Bumped to 17 by THE OTHER TWO CAPTURE CHANNELS ARRIVING. FIVE consequences a consumer has to know
 # about, and the first of them changes every image in the corpus.
 #
@@ -508,7 +537,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 17
+version: 18
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these four
@@ -1483,7 +1512,7 @@ normalization:
     status: emitted
     applies_to: >
       doc_type, capture, verdict, verdict_basis members, imperfection members,
-      content_lost_edges members, content_complete
+      content_lost_edges members, content_complete, split
     form: lower_snake_case ASCII
     rule: exact match against the closed vocabulary declared in this file
     why: a value outside the vocabulary is an error, not a near miss to be scored partially
@@ -2497,6 +2526,40 @@ document_label:
         SUBSET PER CHANNEL IS PART OF THE RESULT. See `known_limitations` KL-12; the counts are in
         `run_profiles`.
       null_on: nothing today; every archetype produces a content extent
+
+    - name: split
+      type: enum or null
+      required: true
+      normalize: closed_enum
+      vocabulary: [train, validation]
+      status: emitted
+      meaning: >
+        Which side of the train / validation partition this document is on. NOT AN EXTRACTION
+        TARGET and never scored — nothing about it is printed on the page. It is dataset structure
+        carried on the record.
+      why_it_is_on_the_record_and_not_only_in_the_manifest: >
+        A DOCUMENT LABEL HAS NO `persona_id`. The partition's unit is the persona, so a consumer
+        holding one document label could not place it on either side without loading the whole
+        corpus and joining through the claim. The manifest carries the DECISION — unit, requested
+        fraction, realized counts — and never the id lists, so there is exactly one statement of
+        where any given document went.
+      the_unit_is_the_persona: >
+        🔴 A LABEL DEPENDENCY, NOT A FEATURE LEAK, AND THAT IS WHY THE UNIT IS NOT THE CLAIM. Annual
+        limits are cumulative per persona, so a claim labelled `partially_covered` with the cause
+        `limit_exhausted` carries that label BECAUSE OF THAT PERSONA'S EARLIER CLAIMS. Partition by
+        claim and a validation claim's own verdict is a function of training claims. Keeping
+        personas whole also keeps a claim's documents together — an invoice in one side and the
+        payment that settles it in the other is one transaction split across the boundary — and
+        keeps a persona's printed name and tax id from appearing on both sides.
+      it_is_not_stratified: >
+        ⚠️ PERSONAS ARE ASSIGNED AT RANDOM, so a side may contain NO documents of a class the corpus
+        has, and no claims of a verdict the corpus has. Deliberate: stratifying would tune the
+        corpus, and this generator's rule is that the balance report makes a shortfall visible
+        rather than repairing it. A consumer must check what its validation side contains before
+        reporting anything per class. See `known_limitations` KL-13.
+      null_on: >
+        a record produced outside a run. `null` means NO PARTITION WAS COMPUTED, which is a
+        different statement from either side and from an empty side.
 
     - name: relevant_transaction
       type: string or null
@@ -3632,6 +3695,18 @@ claim_label:
           - "annual limit <category id> 9000.00 UAH: 8100.00 already reimbursed, 900.00 remaining"
           - "reimbursable 900.00 UAH of 2400.00 covered — annual limit exhausted"
 
+    - name: split
+      type: enum or null
+      required: true
+      normalize: closed_enum
+      vocabulary: [train, validation]
+      status: emitted
+      answers: which side of the train / validation partition this claim and all its documents are on
+      see: >
+        `document_label.fields.split`, which carries the whole reasoning. A CLAIM AND ITS DOCUMENTS
+        CANNOT DISAGREE: the unit of the partition is the persona, which sits above both, so the
+        value here always equals the value on every document this claim names.
+
 
 # =============================================================================
 # 7. The persona record
@@ -3691,9 +3766,31 @@ artifacts:
     "labels/<doc_id>.json": one `document_label` record
     "labels/<claim_id>.claim.json": one `claim_label` record
     "ground_truth.json": >
-      The manifest for a run: `generator_version`, `seed`, `synthetic: true`, and the arrays
-      `personas`, `claims`, `documents`. The claim and document arrays hold exactly the same
-      records as the per-file labels — a second view, not a different set.
+      The manifest for a run: `generator_version`, `seed`, `synthetic: true`, a `split` block, and
+      the arrays `personas`, `claims`, `documents`. The claim and document arrays hold exactly the
+      same records as the per-file labels — a second view, not a different set.
+  there_is_no_separate_manifest_file: >
+    `ground_truth.json` IS the manifest and the index; nothing writes a `manifest.json`. A second
+    file holding a subset of this one would be a second statement of the same thing, and the first
+    edit to either would make them disagree with nothing to notice it. An earlier README named a
+    `manifest.json` and a `balance-report.md`; neither ever existed, and the README now describes
+    what the generator writes.
+  balance_report: >
+    PRINTED TO STDOUT, not written to a file — redirect it to keep it. It covers verdicts against
+    `verdict_mix`, imperfection causes, document classes against a per-class minimum, currency,
+    language, capture channels with their completeness subsets, and the partition. Two rules hold
+    throughout, and they are the reason it is worth reading: EVERY FIGURE CARRIES ITS DENOMINATOR,
+    and ANYTHING WITH NO DATA IS REPORTED AS ABSENT RATHER THAN AS ZERO — a class no archetype can
+    build, a channel no document took, a partition side too small to exist. It is not a pass/fail
+    gate and does not tune anything; it makes a shortfall visible and leaves it.
+  split:
+    unit: persona
+    stratified: false
+    manifest_block: >
+      `split` in `ground_truth.json` carries the DECISION — `unit`, `train_fraction_requested`,
+      `stratified`, and the realized persona / claim / document counts per side — and NOT the id
+      lists. Each claim and document carries its own `split`, which is the single statement of where
+      that record went. `null` where no partition was computed.
   encoding: UTF-8 JSON, two-space indent, non-ASCII written literally rather than escaped
   determinism: >
     Every run is fully determined by `--seed`, so a scorecard may rely on the same seed
@@ -4305,6 +4402,42 @@ known_limitations:
       is the reporting, which is what this entry is for.
 
 
+  - id: KL-13
+    name: the train / validation partition is not stratified, so a side may be missing a whole class
+    predictor: none — an incomplete evaluation set, not a leak
+    hurts: reporting
+    subset: >
+      🔴 WHATEVER THE VALIDATION SIDE HAPPENS NOT TO CONTAIN. Personas are assigned to the two sides
+      at random and nothing balances the result, so a side can hold no claims of a verdict the
+      corpus has and no documents of a class the corpus has. It is most acute on a small run, where
+      one persona is a large fraction of a side, and it does not disappear at any size — it only
+      becomes less likely.
+    how_a_consumer_detects_it: >
+      By grouping its own validation records by `verdict` and by `doc_type` BEFORE reporting
+      anything per class, and comparing that against the corpus. The generator's balance report
+      already names every verdict and class the corpus contains and a side does not, so the gap is
+      stated rather than left to be discovered — but a consumer that re-partitions the data, or that
+      receives only one side, has to re-derive it. The failure mode without that check is a
+      per-class figure quietly computed on zero examples, or on far fewer than the corpus suggests.
+    see_profile: run_profiles
+    consequence: >
+      A PER-CLASS METRIC ON THE VALIDATION SIDE HAS ITS OWN DENOMINATOR, WHICH IS NOT THE CORPUS'S.
+      The per-class minimum applies to whatever is actually being measured: a class with 40
+      documents in the corpus and 3 on the validation side supports no validation figure at all.
+      Macro-averaging is where this does damage, because it weights every class equally regardless
+      of how many examples the side holds — a class with three documents moves a macro average as
+      much as one with three hundred.
+    how_to_stratify: >
+      By `split` together with `doc_type` and `verdict`. The generator deliberately does not do this
+      for the consumer: stratifying the partition would TUNE the corpus, and the rule throughout
+      this repository is that a shortfall is made visible rather than repaired.
+    fixed_by: >
+      A LARGER RUN, or a consumer's own stratified re-partition of the delivered corpus — which it
+      can perform, because every record carries its `persona_id` join and its `split`. What must NOT
+      fix it is the generator quietly balancing the sides: a report that cannot show an unbalanced
+      partition is a report that says nothing about balance.
+
+
 # =============================================================================
 # 9b. Run profiles — the measurements, kept apart from the limitations
 # =============================================================================
@@ -4355,6 +4488,69 @@ run_profiles:
     the only thing it is evidence of. A new version adds a profile.
 
   profiles:
+    - id: RP-04
+      authoritative: false
+      purpose: >
+        THE PARTITION, MEASURED ON RP-03'S OWN CORPUS. It records only what version 18 added; every
+        other figure is RP-03's and is not repeated here, because the two runs produced the SAME
+        DOCUMENTS — see `documents_identical_to`.
+      command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8"
+      seed: 42
+      generator_version_at_measurement: contract version 18
+      documents_identical_to: >
+        RP-03, byte for byte. The partition is seeded independently of the generator's own stream,
+        so re-running RP-03's command under version 18 reproduced its documents exactly and added a
+        `split` to each record. Verified on a smaller pair before this run — 86 of 86 images
+        identical, and every label file identical once `split` was removed — and confirmed here by
+        the document counts matching RP-03's class for class: 666 total, 307 / 154 / 153 / 52.
+        SO THE TWO PROFILES DESCRIBE ONE CORPUS and neither supersedes the other.
+      split:
+        unit: persona
+        stratified: false
+        train_fraction_requested: 0.85
+        train: {personas: 41, claims: 304, documents: 566}
+        validation: {personas: 7, claims: 55, documents: 100}
+        note: >
+          Denominator: 48 personas, 359 claims and 666 documents. The realized claim share is 84.7% /
+          15.3% against a requested 85% of PERSONAS — the two differ because personas do not carry
+          equal numbers of claims, and the requested fraction is over personas.
+      split_by_verdict:
+        train: {covered: 140, partially_covered: 130, insufficient_evidence: 34}
+        validation: {covered: 25, partially_covered: 25, insufficient_evidence: 5}
+        note: >
+          Denominator: 304 train claims and 55 validation claims. Every verdict the corpus contains
+          occurs on both sides on
+          THIS run, which is an outcome and not a guarantee — the partition is not stratified. See
+          KL-13.
+      split_by_document_class:
+        train: {invoice: 262, bank_statement: 133, payment_confirmation: 129, fiscal_receipt: 42}
+        validation: {invoice: 45, payment_confirmation: 24, bank_statement: 21, fiscal_receipt: 10}
+        note: >
+          🔴 DENOMINATOR: 566 TRAIN DOCUMENTS AND 100 VALIDATION DOCUMENTS. THE VALIDATION ROW IS
+          THE POINT OF THIS ENTRY.
+          The corpus clears the per-class minimum of 30 on all four classes, and the VALIDATION SIDE
+          DOES NOT: `fiscal_receipt` has 10 and `bank_statement` 21. A per-class figure computed on
+          the validation side of this run may not be quoted for either, however healthy the corpus
+          figure looks. This is KL-13 as a measurement rather than as a warning.
+      split_by_capture:
+        train: {screenshot: 198, scan: 193, photo: 175}
+        validation: {scan: 37, screenshot: 33, photo: 30}
+        note: 'Denominator: 566 train documents and 100 validation documents.'
+      content_complete_by_side:
+        train: {screenshot: 198 of 198, scan: 193 of 193, photo: 160 of 175}
+        validation: {screenshot: 33 of 33, scan: 37 of 37, photo: 27 of 30}
+        note: >
+          The character-error-rate denominator per channel PER SIDE — see KL-12. On the validation
+          side that is 27 photographs of 30, which is already below the per-class minimum before
+          any class is considered. Denominator: 566 train and 100 validation documents.
+      unassigned:
+        claims: 0
+        documents: 0
+        note: >
+          Denominator: all 359 claims and all 666 documents of this run. Every record carries a
+          side; a record with `split: null` after a run would mean the partition failed to reach it,
+          which is why the count is stated rather than assumed.
+
     - id: RP-03
       authoritative: false
       purpose: >

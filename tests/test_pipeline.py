@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import random
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -17,7 +17,11 @@ import numpy as np
 import pytest
 
 from receipt_synth import claim_planner
-from receipt_synth.assembler import balance_report, generate_dataset
+from receipt_synth.assembler import (
+    DEFAULT_TRAIN_FRACTION,
+    balance_report,
+    generate_dataset,
+)
 from receipt_synth.claim_planner import (
     ARCHETYPES,
     REALIZABLE_VERDICTS,
@@ -1601,6 +1605,68 @@ def test_manifest_is_valid_json_and_declares_its_provenance(dataset):
     # Against the run, not against `1`: a claim may hold two documents since the invoice landed.
     assert len(manifest["documents"]) == len(result.documents)
     assert len(manifest["claims"]) == len(result.claims)
+
+
+def test_every_document_of_a_claim_is_on_the_claim_s_side_of_the_partition(multi_claim_dataset):
+    """🔴 THE INTEGRITY THE PARTITION EXISTS TO KEEP. An invoice in train and the payment that
+    settles it in validation is ONE TRANSACTION split across the boundary — the model would see the
+    amount, the date and the counterparty of a validation document while training. It holds because
+    the unit is the persona, which sits above both; this is the assertion that says it holds in the
+    data rather than in the reasoning."""
+    result, _ = multi_claim_dataset
+    by_id = {document.doc_id: document for document in result.documents}
+
+    for claim in result.claims:
+        assert claim.split is not None, claim.claim_id
+        for doc_id in claim.documents:
+            assert by_id[doc_id].split is claim.split, (claim.claim_id, doc_id)
+
+
+def test_every_claim_of_a_persona_is_on_one_side(multi_claim_dataset):
+    """The unit, asserted as a property of the output. A persona whose claims straddled the
+    boundary would break the reason the unit is the persona at all: annual limits are cumulative,
+    so a validation claim's own verdict would be a function of a training claim."""
+    result, _ = multi_claim_dataset
+    sides = defaultdict(set)
+    for claim in result.claims:
+        sides[claim.persona_id].add(claim.split)
+
+    assert sides, "no claims, so this test asserts nothing"
+    for persona_id, seen in sides.items():
+        assert len(seen) == 1, f"{persona_id} has claims on both sides: {seen}"
+
+
+def test_the_partition_reaches_the_written_labels_and_the_manifest(multi_claim_dataset):
+    """On disk, not only in memory — a consumer reads the files. BOTH record kinds, because they are
+    populated by two separate statements and only one of them was checked at first.
+
+    🔴 THE TOTALS ARE COMPARED AGAINST THE CORPUS SIZE, NOT AGAINST THE RECORDS. Comparing the
+    manifest's realized counts with `sum(1 for c in claims if c.split is side)` looks stricter and
+    is not: both sides of that comparison read the same field, so a defect that stopped populating
+    it moves both to zero and the assertion still holds. A mutation that dropped the claims' split
+    entirely survived exactly that way. The absolute totals cannot be satisfied by a record that
+    carries no side at all.
+    """
+    result, out = multi_claim_dataset
+    document = result.documents[0]
+    claim = result.claims[0]
+    written = json.loads((out / "labels" / f"{document.doc_id}.json").read_text(encoding="utf-8"))
+    written_claim = json.loads(
+        (out / "labels" / f"{claim.claim_id}.claim.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads((out / "ground_truth.json").read_text(encoding="utf-8"))
+
+    assert written["split"] == document.split.value
+    assert written_claim["split"] == claim.split.value
+    assert manifest["split"]["unit"] == "persona"
+    assert manifest["split"]["train_fraction_requested"] == DEFAULT_TRAIN_FRACTION
+
+    realized = manifest["split"]["realized"]
+    assert sum(side["claims"] for side in realized.values()) == len(result.claims), (
+        "the sides do not account for every claim — one is on neither side, or on both"
+    )
+    assert sum(side["documents"] for side in realized.values()) == len(result.documents)
+    assert sum(side["personas"] for side in realized.values()) == len(result.personas)
 
 
 def test_bboxes_in_the_written_labels_index_the_written_image(dataset):

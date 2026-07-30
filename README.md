@@ -51,24 +51,39 @@ make check
 ## Usage
 
 ```bash
-uv run generate-dataset \
-  --config config/policy.yaml \
-  --personas 30 --seed 42 \
-  --categories-per-persona 3 --max-docs-per-category 5 \
-  --out out/ --split 0.85
+uv run generate-dataset --seed 42 --personas 30 --claims-per-persona 5 --out out/
 ```
 
-`--config` points at the labelling policy; the fiscal rules, exchange rates and vendor catalogue are read
-from the same directory unless overridden.
+Every flag:
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--seed` | *required* | Determines the whole run. Required rather than defaulted: a dataset is reproducible only if the number that produced it is one the caller wrote down. |
+| `--out` | `out` | Output directory. |
+| `--personas` | `1` | How many synthetic people to generate. |
+| `--claims-per-persona` | `1` | An **upper bound**. Planning stops early once a persona has no category with an annual balance left, which is also the only way the cumulative-limit mechanism is exercised. |
+| `--split` | `0.85` | Fraction of **personas** assigned to train. The partition is by persona because annual limits are cumulative per persona; it is **not** stratified. |
+| `--country` | `UA` | Jurisdiction whose fiscal rules apply. |
+| `--version` | — | Print the version and exit. |
+
+The configuration is read from `config/` in the repository — there is **no `--config` flag**, and none is
+planned: the generator and its policy are versioned together, and pointing the two at different revisions is
+the failure the labelling contract exists to prevent.
 
 Output:
 
 ```text
-out/images/<claim>.png        rendered documents (+ degraded variants)
-out/labels/<claim>.json       claim-level and document-level ground truth
-out/manifest.json             full index + train/val split
-out/balance-report.md         distribution over classes, verdicts, currencies, languages
+out/images/<doc_id>.png       rendered documents, degraded as they would have been captured
+out/labels/<doc_id>.json      document-level ground truth
+out/labels/<claim_id>.claim.json   claim-level ground truth
+out/ground_truth.json         the full index: every persona, claim and document, plus the partition
 ```
+
+The **balance report is printed to stdout**, not written to a file — redirect it if you want to keep it. It
+covers verdicts against `verdict_mix`, imperfection causes, document classes against the per-class minimum,
+currency, language, capture channels with their completeness subsets, and the train/validation partition.
+Every figure carries its denominator, and a dimension with no data is reported as **absent** rather than as
+zero.
 
 Generation is **deterministic under `--seed`**: the repository ships the generator, its configuration and the
 seed, not the dataset. Rerunning with the same seed reproduces the same dataset byte for byte.
