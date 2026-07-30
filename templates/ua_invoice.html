@@ -1,0 +1,194 @@
+{#
+  Ukrainian invoice — рахунок на оплату.
+
+  🔴 AN OFFER TO PAY, AND THAT IS WHAT THE PAGE SAYS. 📄 This document is not a primary accounting
+  document: the seller proposes that the buyer pay, and the fact of payment is established by a
+  payment document. So there is NO PAYMENT STATUS anywhere below — 👁 0 of 2 open invoices carry
+  one, structurally rather than by sampling — and no «ДО СПЛАТИ», which is 📄 a line of the FISCAL
+  RECEIPT form. The consumer's requirement asks this type for a payment status; that requirement is
+  recorded as a divergence in config/labelling-schema.yaml and is deliberately not satisfied.
+
+  🔴 THE SUBJECT DOCUMENT OF THE DOMINANT PAIR. This states what was bought and proves no payment;
+  a bank confirmation or a statement proves the payment and states no subject. The two together are
+  the first claim in this repository whose evidence is split across two documents.
+
+  ⚠️ THE PAYMENT-ORDER SPECIMEN AT THE TOP IS NOT DECORATION. 👁 1/1 — the classic 1С/BAS invoice
+  prints a filled-in sample payment order above the title, and it carries the recipient's name, code,
+  bank and account. Those four values are therefore PRINTED TWICE on one sheet, once here and once in
+  the supplier block, and an extractor has to decide which of two identical strings to return. It is
+  reproduced because a real invoice does it; the label carries the seller once.
+
+  ⛔ NO PER-LINE VAT LETTER COLUMN. 👁 The observed table prices VAT-inclusive and states the tax once
+  at the foot, so a line item of this class carries no `vat_letter` in its label either — a letter
+  labelled and not printed would be a ground-truth value unreadable from the image.
+
+  Every element a consumer would extract carries data-field="<name>". Indices are zero-based and
+  dense, as on the receipt, so box i pairs with line item i without matching text.
+#}
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# data-document marks the page root: the renderer sizes the viewport to this element, so the
+   image is the document and not the browser window around it. Exactly one per template. #}
+<div class="page" data-document="invoice">
+
+  {# 👁 The topmost line of the observed invoice, above everything including the title — and note
+     what it says. It is the nearest thing this document has to a statement about payment, and it
+     says that PAYING means agreeing to the terms. It is a condition, not a record. #}
+  <div class="attention">{{ attention_line }}</div>
+
+  {# ⚠️ THE SPECIMEN PAYMENT ORDER — see the head of this file. Framed as a form, because that is
+     what it is: an example of the payment order the buyer is to fill in. #}
+  <section class="payment-order">
+    <div class="po-caption">{{ payment_order.caption }}</div>
+    <table class="po-grid">
+      <tr>
+        <td class="po-label">{{ payment_order.recipient_label }}</td>
+        <td class="po-value">{{ supplier_display }}</td>
+        <td class="po-label">{{ payment_order.code_label }}</td>
+        <td class="po-value">{{ supplier.code }}</td>
+      </tr>
+      <tr>
+        <td class="po-label">{{ payment_order.bank_label }}</td>
+        <td class="po-value">{{ supplier.bank }}</td>
+        <td class="po-label">{{ payment_order.bank_code_label }}</td>
+        <td class="po-value">{{ bank_code }}</td>
+      </tr>
+      <tr>
+        <td class="po-label">{{ payment_order.account_label }}</td>
+        <td class="po-value" colspan="3">{{ supplier.account }}</td>
+      </tr>
+    </table>
+  </section>
+
+  {# 👁 The title carries the number and a date IN WORDS, while the rest of the page writes dates in
+     digits — so both forms appear on one document. The label's `date` is this date; the two
+     spellings of it are a parsing case a corpus of receipts alone never presents. #}
+  <h1 class="title" data-field="title">{{ title }}</h1>
+
+  <section class="parties">
+    <div class="party">
+      <span class="caption">{{ party_labels.supplier_label }}</span>
+      <span class="party-body">
+        <span class="party-name" data-field="seller_name">{{ supplier_display }}</span>,
+        {{ supplier.code_label }} <span data-field="seller_tax_code">{{ supplier.code }}</span>{#
+        #}{% if supplier.address %}, {{ party_labels.address_label }} {{ supplier.address }}{% endif %}{#
+        #}{% if supplier.phone %}, {{ party_labels.phone_label }} <span data-field="seller_phone">{{ supplier.phone }}</span>{% endif %}
+        <br>
+        {{ party_labels.account_label }} <span data-field="seller_account">{{ supplier.account }}</span>,
+        {{ party_labels.bank_label }} {{ supplier.bank }}
+      </span>
+    </div>
+    {# ⚠️ THE BUYER IS THE CLAIMANT, a natural person with a РНОКПП. 👁 The observed invoice was
+       addressed to a company. An invoice addressed to anybody else would evidence nothing about the
+       persona filing the claim, which is the same reasoning that puts the persona's name on a bank
+       statement's account. #}
+    <div class="party">
+      <span class="caption">{{ party_labels.buyer_label }}</span>
+      <span class="party-body">
+        <span class="party-name" data-field="buyer_name">{{ buyer_display }}</span>,
+        {{ buyer.code_label }} <span data-field="buyer_code">{{ buyer.code }}</span>
+      </span>
+    </div>
+    {% if agreement %}
+    <div class="party">
+      <span class="caption">{{ party_labels.agreement_label }}</span>
+      <span class="party-body" data-field="agreement">{{ agreement }}</span>
+    </div>
+    {% endif %}
+  </section>
+
+  {# 👁 The table, in the observed column order. The two money columns lose their «з ПДВ» suffix for
+     a seller that is not registered — the same vendor property that decides whether a receipt has a
+     VAT block, resolved once in the builder rather than twice in two templates. #}
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="c-idx">{{ columns.index }}</th>
+        <th class="c-name">{{ columns.name }}</th>
+        <th class="c-qty">{{ columns.qty }}</th>
+        <th class="c-unit">{{ columns.unit }}</th>
+        <th class="c-money">{{ columns.price }}</th>
+        <th class="c-money">{{ columns.sum }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="c-idx">{{ loop.index }}</td>
+        <td class="c-name" data-field="item_{{ loop.index0 }}_name">{{ item.name }}</td>
+        <td class="c-qty" data-field="item_{{ loop.index0 }}_qty">{{ item.qty }}</td>
+        <td class="c-unit">{{ item.unit }}</td>
+        <td class="c-money" data-field="item_{{ loop.index0 }}_price">{{ item.price }}</td>
+        <td class="c-money" data-field="item_{{ loop.index0 }}_sum">{{ item.sum }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# 👁 ONE TOTAL BLOCK. A registered payer prints the total and the tax contained within it; a
+     non-payer prints a single «Разом до сплати» line and no tax line at all. There is no second
+     amount anywhere on this document — see the head of this file for why «ДО СПЛАТИ» is not one. #}
+  <section class="totals">
+    {% if vat_total %}
+    <div class="total-row">
+      <span class="caption">{{ totals_labels.total_label }}</span>
+      <span class="money" data-field="total">{{ total }}</span>
+    </div>
+    <div class="total-row">
+      <span class="caption">{{ totals_labels.vat_label }}</span>
+      <span class="money" data-field="vat_total">{{ vat_total }}</span>
+    </div>
+    {% else %}
+    <div class="total-row">
+      <span class="caption">{{ totals_labels.single_label }}</span>
+      <span class="money" data-field="total">{{ total }}</span>
+    </div>
+    {% endif %}
+  </section>
+
+  {# 👁 The count line and the amount in words, both on 1/1. 📄 The words are obligatory in practice
+     and are the same requisite written twice, which is what makes them a cross-check a consumer can
+     run against the figure. #}
+  <div class="summary" data-field="count_line">{{ count_line }}</div>
+  <div class="summary words" data-field="amount_in_words">{{ amount_in_words }}</div>
+  {% if vat_in_words %}
+  <div class="summary words">{{ totals_labels.vat_in_words_label }}
+    <span data-field="vat_in_words">{{ vat_in_words }}</span>
+  </div>
+  {% endif %}
+
+  {# 📄 The validity line: how long the offer stands. It occupies the place a «Оплачено» would
+     occupy on a Polish faktura, and printing it is this document's positive statement that it is an
+     OFFER rather than a record. #}
+  {% if validity %}
+  <div class="validity" data-field="validity">{{ validity }}</div>
+  {% endif %}
+
+  {# 👁 «Виписав(ла):» with a name and, for a company, a post. 📄 A sole trader signs in their own
+     name and states no post. 📄 A stamp is NOT mandatory on this document and none is drawn. #}
+  <section class="signature">
+    <span class="caption">{{ signature_labels.label }}</span>
+    <span class="sign-line">
+      <span data-field="signatory_name">{{ signatory_name }}</span>
+      {% if signatory_post %}<span class="muted" data-field="signatory_post">{{ signatory_post }}</span>{% endif %}
+    </span>
+  </section>
+
+</div>
+</body>
+</html>

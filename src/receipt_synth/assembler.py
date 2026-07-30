@@ -14,6 +14,7 @@ import random
 import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
+from decimal import Decimal
 from functools import partial
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from receipt_synth.claim_planner import (
 from receipt_synth.config import load_vendors
 from receipt_synth.content_builder import (
     build_bank_statement,
+    build_invoice,
     build_payment_confirmation,
     build_prro_receipt,
     resolve_vendor,
@@ -163,18 +165,26 @@ def _pick_vendor(
 # The paper width is bound nowhere in Python at all: it lives in `<slug>.css`, which the
 # renderer picks up from the slug.
 #
-# THREE DOCUMENT CLASSES NOW, WITH DIFFERENT PARAMETERS, which is why `_build_document` dispatches
-# on what the document has to state instead of calling every entry the same way. A receipt takes a
-# basket; a payment confirmation and a statement take the payer and state no basket at all — and
-# the two of them take the SAME parameters, which is what the dispatch keys on: it asks what the
-# document must establish, not which class it is, so a third payment-proving archetype needed no
-# new branch.
+# FOUR DOCUMENT CLASSES NOW, AND THE DISPATCH IS THREE-WAY — keyed on `document_evidence` and not
+# on the class, so what a document must be told follows from what it proves:
+#
+#   proves both      a fiscal receipt. Takes a basket. Names NO buyer: the payer is standing at the
+#                    till, so a receipt has no buyer field at all.
+#   subject only     an invoice. Takes a basket AND the claimant, because an OFFER TO PAY has to say
+#                    to whom it is made.
+#   payment only     a confirmation or a statement. Takes the claimant as the payer, no basket, and
+#                    THE CLAIM'S AMOUNT — see `_build_document`.
+#
+# The middle case is what the invoice added. It is a real relation rather than a convenient one: a
+# document that proves the payment IS the payment, so its payer is present by construction; a
+# document that does not prove payment is addressed to somebody and must name them.
 _BUILDERS = {
     "ua_prro_receipt": build_prro_receipt,
     "ua_prro_receipt_58mm": build_prro_receipt,
     "ua_rro_receipt": partial(build_prro_receipt, registrar="rro"),
     "ua_bank_payment_confirmation": build_payment_confirmation,
     "ua_bank_statement": build_bank_statement,
+    "ua_invoice": build_invoice,
 }
 
 
@@ -188,8 +198,15 @@ def _build_document(
     doc_id: str,
     renderer: Renderer,
     out_dir: Path,
+    settles: Decimal | None = None,
 ) -> DocGroundTruth:
     """One document of a claim.
+
+    `settles` is THE AMOUNT THIS DOCUMENT'S CLAIM IS ABOUT, and it is required for a document that
+    proves the payment and ignored by one that states the subject. The subject document decides the
+    amount — its basket is drawn first and summed — and the payment document is then told what it
+    settles. The order is not an accident of the loop: a claim's money is a property of what was
+    bought, so the document that lists the purchase is the one that fixes it.
 
     `vendor` is passed in rather than chosen here. It is the claim's vendor instance, and
     every document of the claim has to name the same seller — while a sole trader's name
@@ -214,7 +231,8 @@ def _build_document(
             f"produces it; assembler._BUILDERS knows {sorted(_BUILDERS)}"
         )
 
-    if evidence_of(archetype).proves_subject:
+    evidence = evidence_of(archetype)
+    if evidence.proves_subject:
         if document_plan is not plan.subject_document:
             # `ClaimPlan.subject_document` establishes that the claim has exactly ONE document
             # stating what was bought; this says that the one being built is that document. The
@@ -224,29 +242,43 @@ def _build_document(
                 f"{slug!r} states what was bought but is not this claim's subject document, "
                 "and a basket is sized once per claim — see `ClaimPlan.coverage_target`"
             )
-        document = _BUILDERS[slug](
-            rng,
-            category_id=plan.category,
-            issued_at=document_plan.issued_at,
-            vendor=vendor,
+        basket = {
+            "category_id": plan.category,
+            "issued_at": document_plan.issued_at,
+            "vendor": vendor,
             # No "м." prefix: Faker's uk_UA city names already carry their settlement type
             # ("хутір Великі Мости"), and prefixing produced "м. хутір Великі Мости".
-            address=persona.location.city,
-            covered_only=plan.coverage_target is None,
-            coverage_target=plan.coverage_target,
-            item_count=plan.item_count,
-        )
+            "address": persona.location.city,
+            "covered_only": plan.coverage_target is None,
+            "coverage_target": plan.coverage_target,
+            "item_count": plan.item_count,
+        }
+        # A SUBJECT DOCUMENT THAT DOES NOT PROVE PAYMENT IS ADDRESSED TO SOMEBODY, and has to name
+        # them: an invoice is an offer to pay. A receipt proves its own payment, so the payer is
+        # present at the till and no buyer is named — 👁 a fiscal receipt has no buyer field.
+        if not evidence.proves_payment:
+            basket |= {"buyer_name": persona.full_name, "buyer_tax_id": persona.tax_id}
+        document = _BUILDERS[slug](rng, **basket)
     else:
         # A document that proves the payment and states no subject. It takes NO basket and no
         # coverage target — there is nothing on it for a coverage rule to read, which is exactly
-        # why its type proves no subject — and it takes the persona, because this is the first
-        # archetype that prints a persona's own name, as the payer.
+        # why its type proves no subject — and it takes the persona, because this class prints a
+        # persona's own name, as the payer.
+        #
+        # 🔴 AND IT TAKES THE CLAIM'S AMOUNT, which is the whole of what makes a split pair
+        # coherent. `policy_engine._cross_checks` compares a transaction's subject and payment
+        # amounts EXACTLY — there is no tolerance anywhere in this repository — so a payment that
+        # drew its own amount would disagree with the invoice beside it on every claim, and every
+        # such claim would be labelled `insufficient_evidence` with the cause `amount_mismatch`.
+        # Measured before this was written: an invoice of 1200.00 beside an independently drawn
+        # payment came out exactly that, while the same pair agreeing came out `covered`.
         document = _BUILDERS[slug](
             rng,
             issued_at=document_plan.issued_at,
             vendor=vendor,
             payer_name=persona.full_name,
             payer_tax_id=persona.tax_id,
+            amount=settles,
         )
 
     image_path = out_dir / "images" / f"{doc_id}.png"
@@ -325,10 +357,20 @@ def generate_dataset(
                     plan.category,
                     mixed=plan.coverage_target is not None,
                 )
-                # A claim is a list of documents. One entry while every registered archetype
-                # proves both facts — and the number is read off the plan, never assumed.
-                documents = [
-                    _build_document(
+                # A claim is a list of documents, and since the invoice archetype landed it may
+                # genuinely hold two. A LOOP RATHER THAN A COMPREHENSION, because the documents are
+                # no longer independent: the subject document fixes the claim's amount and the
+                # payment document has to be told it, or the two disagree and the engine labels
+                # every such claim `insufficient_evidence`.
+                #
+                # `plan.documents` is ordered subject-first — `_select_documents` builds it that
+                # way — but nothing here relies on the order: `settles` is read off whichever
+                # document proved the subject, and stays `None` for a self-contained claim, whose
+                # single document is its own subject and its own payment.
+                documents: list[DocGroundTruth] = []
+                settles: Decimal | None = None
+                for index, document_plan in enumerate(plan.documents, start=1):
+                    document = _build_document(
                         rng,
                         persona=persona,
                         plan=plan,
@@ -337,9 +379,11 @@ def generate_dataset(
                         doc_id=f"{plan.claim_id}_d{index}",
                         renderer=renderer,
                         out_dir=out_dir,
+                        settles=settles,
                     )
-                    for index, document_plan in enumerate(plan.documents, start=1)
-                ]
+                    if evidence_of(document_plan.archetype).proves_subject:
+                        settles = document.amount
+                    documents.append(document)
                 # The oracle, not the plan, decides the label. The plan's verdict was the
                 # target; where the two differ the balance report says so.
                 evaluation = evaluate_claim(

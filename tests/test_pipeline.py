@@ -9,21 +9,24 @@ from __future__ import annotations
 
 import json
 import random
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import numpy as np
 import pytest
 
+from receipt_synth import claim_planner
 from receipt_synth.assembler import balance_report, generate_dataset
 from receipt_synth.claim_planner import (
     ARCHETYPES,
     REALIZABLE_VERDICTS,
+    _select_documents,
     archetypes_for,
     can_assemble_evidence,
     documentable_categories,
     draw_partially_covered_cause,
     draw_verdict,
+    evidence_of,
     plan_claim,
     plan_claims,
     plannable_categories,
@@ -35,12 +38,11 @@ from receipt_synth.config import high_frequency_surnames, load_policy
 from receipt_synth.content_builder import MAX_LINE_ITEMS, is_valid_rnokpp
 from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
-from receipt_synth.policy_engine import Ledger
+from receipt_synth.policy_engine import Evidence, Ledger, document_evidence
 from receipt_synth.schemas import (
     Capture,
     ClaimGroundTruth,
     Country,
-    DocType,
     Verdict,
     VerdictBasis,
 )
@@ -170,22 +172,19 @@ def test_a_category_whose_archetypes_cannot_prove_both_facts_is_refused():
     the branch that is actually live: `_select_documents` refuses, because `document_evidence` says
     what each type proves and nothing says which purchase an unpaired payment settled.
     """
-    subject = persona()
-    unsupported = next(
-        category
-        for category in subject.benefit_categories
-        if not can_assemble_evidence(archetypes_for(Country.UA, category))
-    )
-    assert archetypes_for(Country.UA, unsupported), (
-        "this category has no archetype at all, so the refusal below would come from the "
-        "empty-registry branch and this test would not exercise the evidence rule"
-    )
+    payment_only = [
+        archetype
+        for archetype in ARCHETYPES.values()
+        if evidence_of(archetype) == Evidence(False, True)
+    ]
+    assert payment_only, "no payment-proving archetype is registered at all"
 
-    with pytest.raises(ValueError):
-        plan_claim(
-            random.Random(1), persona=subject, claim_id="c1",
-            category=unsupported, ledger=Ledger(),
-        )
+    assert not can_assemble_evidence(payment_only), (
+        "a set of archetypes that all prove the payment and none the subject must not be "
+        "assemblable — it is the case this whole rule exists for"
+    )
+    with pytest.raises(ValueError, match="establishes both"):
+        _select_documents(random.Random(1), payment_only, datetime(2026, 6, 15, 12, 0))
 
 
 def test_a_payment_only_category_is_not_reported_as_documentable():
@@ -195,17 +194,26 @@ def test_a_payment_only_category_is_not_reported_as_documentable():
     mid-dataset on a machine nobody is watching.
     """
     subject = persona()
-    payment_only = [
-        category
-        for category in subject.benefit_categories
-        if archetypes_for(Country.UA, category)
-        and not can_assemble_evidence(archetypes_for(Country.UA, category))
+    payment_archetypes = [
+        archetype
+        for archetype in ARCHETYPES.values()
+        if evidence_of(archetype) == Evidence(False, True)
     ]
-    assert payment_only, (
-        "no category is covered by payment-proving archetypes alone, so this test asserts "
-        "nothing — check the registry"
-    )
-    assert not set(payment_only) & set(documentable_categories(subject))
+    assert payment_archetypes, "no payment-proving archetype is registered at all"
+
+    # A registry holding ONLY payment-proving archetypes. Every category is then covered by
+    # archetypes and none is completable, which is exactly the state the rule is about.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            claim_planner,
+            "ARCHETYPES",
+            {archetype.slug: archetype for archetype in payment_archetypes},
+        )
+        assert archetypes_for(Country.UA, subject.benefit_categories[0]), (
+            "the narrowed registry covers none of this persona's categories, so the assertion "
+            "below would hold for the wrong reason"
+        )
+        assert documentable_categories(subject) == []
 
 
 def test_a_category_the_persona_does_not_hold_is_refused():
@@ -564,11 +572,47 @@ def test_images_and_labels_are_written(dataset):
     assert (out / "ground_truth.json").is_file()
 
 
-def test_the_claim_points_at_the_document_that_was_written(dataset):
+def test_the_claim_points_at_the_documents_that_were_written(dataset):
+    """The join from a claim to its evidence, ASSERTED AGAINST THE RUN rather than against the
+    number one. It used to read `== [result.documents[0].doc_id]` and to pin the type as a fiscal
+    receipt — true while every registered archetype proved both facts, and false the moment the
+    invoice made a split pair buildable. A constant that was a property of the registry is exactly
+    what the test above it warns about."""
     result, _ = dataset
-    assert result.claims[0].documents == [result.documents[0].doc_id]
-    assert result.claims[0].verdict is Verdict.COVERED
-    assert result.documents[0].doc_type is DocType.FISCAL_RECEIPT
+    claim = result.claims[0]
+
+    assert claim.documents == [document.doc_id for document in result.documents]
+    assert claim.verdict is Verdict.COVERED
+    assert claim.linked is (len(claim.documents) > 1)
+
+
+def test_every_document_of_a_claim_names_the_same_persona_and_the_same_vendor(dataset):
+    """THE WIRING BETWEEN THE PERSONA AND THE DOCUMENTS, which nothing asserted until a mutation
+    survived and said so.
+
+    A claim's documents must agree about WHO. The invoice is addressed to the claimant and the
+    payment document is drawn on the claimant's account, so `payer` is the persona's name on every
+    document that names one; and the seller must be the SAME vendor instance on both, which used to
+    hold because a claim had one document and is now a constraint somebody has to keep — a sole
+    trader's name is drawn rather than stored, so two calls would print two sellers.
+
+    Found by `assembler._build_document` being mutated to pass a literal buyer name: every test in
+    the suite stayed green. The mutation was aimed at the wrong test, and re-aiming it had nowhere
+    to land, which is the useful kind of survivor.
+    """
+    result, _ = dataset
+    persona = result.personas[0]
+
+    named = [d for d in result.documents if d.payer is not None]
+    assert named, "no document of this run names a payer — the assertion below is vacuous"
+    for document in named:
+        assert document.payer == persona.full_name, document.doc_id
+
+    for claim in result.claims:
+        sellers = {result.documents[
+            [d.doc_id for d in result.documents].index(doc_id)
+        ].counterparty for doc_id in claim.documents}
+        assert len(sellers) == 1, f"{claim.claim_id} names {sellers} across its documents"
 
 
 def test_labels_state_the_invariants_that_were_built(dataset):
@@ -588,18 +632,32 @@ def test_a_covered_claim_carries_the_policy_engines_answer(dataset):
     depends on the documents alone, and says why in words."""
     result, _ = dataset
     claim = result.claims[0]
+    subject = next(
+        document
+        for document in result.documents
+        if document_evidence(document.doc_type).proves_subject
+    )
 
     assert claim.covered_fraction == 1.0
-    assert claim.reimbursable_amount == result.documents[0].amount
+    # 🔴 THE CLAIM'S AMOUNT IS ONE DOCUMENT'S, NOT THE SUM. On a split pair the invoice and the
+    # payment describe ONE movement of money, and adding them would count it twice — which is what
+    # `resolve_evidence` exists to prevent and what this line now measures rather than assumes.
+    assert claim.reimbursable_amount == subject.amount
+    if len(result.documents) > 1:
+        # THE ARITHMETIC THAT WOULD HAVE GONE UNNOTICED. Both documents of a pair state the same
+        # amount — the payment settles the invoice — so a claim that summed its documents would
+        # report exactly twice the money and would still come out `covered`. The reimbursable
+        # amount is what gives it away, which is the same shape as
+        # `test_claim_evidence.py::test_a_split_pair_is_one_transaction_and_not_two`.
+        naive_sum = sum(document.amount for document in result.documents)
+        assert naive_sum == subject.amount * len(result.documents), "the pair should agree"
+        assert claim.reimbursable_amount == subject.amount
+        assert claim.reimbursable_amount != naive_sum
     assert claim.verdict_basis == [VerdictBasis.DOCUMENTS]
     assert claim.imperfection == []
-    assert claim.policy_trace == [
-        f"category={claim.category} ok",
-        f"evidence: 1 transaction — {result.documents[0].doc_id} (fiscal_receipt) "
-        "proves both",
-        "period ok",
-        "coverage 100% (all line items covered)",
-    ]
+    assert claim.policy_trace[0] == f"category={claim.category} ok"
+    assert claim.policy_trace[-2:] == ["period ok", "coverage 100% (all line items covered)"]
+    assert "1 transaction" in claim.policy_trace[1], claim.policy_trace
 
 
 # ---------------------------------------------------- many claims, one run --
@@ -880,7 +938,14 @@ def test_the_report_states_how_many_claims_were_ordered_and_how_many_were_built(
     skipped = sum(result.claims_skipped.values())
 
     assert ordered == 4 * 8
-    assert built < ordered, "this run did not exercise the early stop"
+    # ⚠️ THE EARLY STOP IS NO LONGER EXERCISED BY THIS RUN, and that is a measurement rather than a
+    # regression: until the invoice landed a persona had ONE documentable category, so eight claims
+    # against one annual limit exhausted it. Every category is completable now, so a persona has
+    # several balances to spend and thirty-two claims fit. The assertion moved from
+    # "built < ordered" — a property of a one-template registry — to the accounting identity, which
+    # is what
+    # the report is actually for. The early stop keeps its own test below, on a persona narrowed to
+    # one category.
     assert skipped == ordered - built, "the missing claims are not all accounted for"
     assert f"Claims — {ordered} ordered, {built} built, {skipped} not built" in report
     for reason in result.claims_skipped:
@@ -1004,10 +1069,13 @@ def test_manifest_is_valid_json_and_declares_its_provenance(dataset):
     _, out = dataset
     manifest = json.loads((out / "ground_truth.json").read_text(encoding="utf-8"))
 
+    result, _ = dataset
     assert manifest["synthetic"] is True
     assert manifest["seed"] == SEED
     assert manifest["generator_version"]
-    assert len(manifest["documents"]) == 1
+    # Against the run, not against `1`: a claim may hold two documents since the invoice landed.
+    assert len(manifest["documents"]) == len(result.documents)
+    assert len(manifest["claims"]) == len(result.claims)
 
 
 def test_bboxes_in_the_written_labels_index_the_written_image(dataset):

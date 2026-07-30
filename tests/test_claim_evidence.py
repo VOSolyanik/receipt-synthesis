@@ -37,10 +37,11 @@ from pathlib import Path
 import pytest
 
 from receipt_synth.claim_planner import (
-    ARCHETYPES,
     Archetype,
     ClaimPlan,
     DocumentPlan,
+    archetypes_for,
+    can_assemble_evidence,
     evidence_of,
     plan_claim,
 )
@@ -728,10 +729,12 @@ PAIR_REGISTRY = {
 }
 """A registry with NO archetype that proves both facts.
 
-The only way to reach the split-evidence path today: `templates/` holds one archetype and
-it is a fiscal receipt, which proves both. Patched in rather than added to `ARCHETYPES`,
-because registering an archetype no template and no builder can produce would break every
-run rather than one test.
+⚠️ IT IS NO LONGER THE ONLY WAY TO REACH THE SPLIT-EVIDENCE PATH. It was, while `templates/` held
+fiscal receipts alone; the real `ua_invoice` archetype now reaches it in six categories of every
+run. The fixture stays because it pins the SHAPE independently of the registry — the mechanism must
+hold for any pair of archetypes, not only for the pair that happens to be registered — and because
+it is the only way to exercise the path for `vitamins_nutrition`, where the real planner prefers
+the receipt.
 """
 
 
@@ -739,21 +742,56 @@ def _persona():
     return generate_persona(random.Random(20260803), persona_id="p001", country=Country.UA)
 
 
-def test_the_registered_archetype_yields_a_claim_of_exactly_one_document():
-    """What the dataset contains today, asserted rather than assumed. Every registered
-    archetype is a fiscal receipt and proves both facts, so a claim needs one document — and
-    the planner prefers that shape wherever it exists.
+def test_a_claims_shape_follows_the_evidence_its_category_can_assemble():
+    """What a claim's document list is, ASSERTED AGAINST THE REGISTRY rather than against a number.
 
-    The chosen slug is checked against the registry rather than named: three fiscal receipts
-    are registered, the planner draws among them, and pinning one of the three here would
-    assert the outcome of a draw instead of the property this test is about. Which archetypes
-    exist is asserted in `test_every_registered_archetype_is_a_fiscal_receipt_that_builds`.
+    It read `len(plan.documents) == 1` while every registered archetype proved both facts, and the
+    invoice made that false in six categories of seven. The property was never "one document" — it
+    is that the planner prefers a single document proving both facts wherever one is registered, and
+    assembles a pair where none is. Both branches are checked here, with the category named, so
+    neither can disappear unnoticed.
     """
-    plan = plan_claim(random.Random(3), persona=_persona(), claim_id="c1", ledger=Ledger())
+    subject = _persona()
+    both_categories = [
+        category_id
+        for category_id in subject.benefit_categories
+        if any(
+            evidence_of(archetype) == (True, True)
+            for archetype in archetypes_for(Country.UA, category_id)
+        )
+    ]
+    assert both_categories, "no category has an archetype proving both facts"
 
-    assert len(plan.documents) == 1
-    assert plan.documents[0].archetype.slug in ARCHETYPES
-    assert evidence_of(plan.documents[0].archetype) == (True, True)
+    for category_id in both_categories:
+        plan = plan_claim(
+            random.Random(3), persona=subject, claim_id="c1",
+            category=category_id, ledger=Ledger(),
+        )
+        assert len(plan.documents) == 1, category_id
+        assert evidence_of(plan.documents[0].archetype) == (True, True)
+
+    split = [
+        category_id
+        for category_id in subject.benefit_categories
+        if category_id not in both_categories
+        and can_assemble_evidence(archetypes_for(Country.UA, category_id))
+    ]
+    assert split, (
+        "no category is documented by a pair, so the invoice archetype activated nothing — "
+        "this test would assert only the branch that always held"
+    )
+    for category_id in split:
+        plan = plan_claim(
+            random.Random(3), persona=subject, claim_id="c1",
+            category=category_id, ledger=Ledger(),
+        )
+        assert len(plan.documents) == 2, category_id
+        assert {evidence_of(d.archetype) for d in plan.documents} == {(True, False), (False, True)}
+        # The subject is dated on or before the payment: an invoice is issued and then settled.
+        assert plan.subject_document.issued_at <= plan.documents[-1].issued_at
+
+
+    assert both_categories or split, "the persona holds no documentable category at all"
 
 
 def test_a_registry_without_a_both_proving_archetype_plans_two_documents():
@@ -940,20 +978,32 @@ def test_document_ids_are_numbered_from_the_plan_and_not_fixed_at_one(tmp_path):
 
 def test_a_planned_archetype_with_no_builder_fails_by_name():
     """The other assumption the loop used to carry: every document was built by
-    `build_prro_receipt`, whatever the plan said. An archetype nothing can produce has to
-    say so rather than be handed to the one builder that exists."""
+    `build_prro_receipt`, whatever the plan said. An archetype nothing can produce has to say so
+    rather than be handed to the one builder that exists.
+
+    ⚠️ THE SUBJECT OF THIS TEST HAD TO MOVE. It planned a `ua_invoice`, which had no builder; it has
+    one now, so the archetype stopped being unproducible and the test began asserting that a real
+    builder raises on an empty vendor — a different thing entirely, and one nothing needed. An `act`
+    takes its place: 📄 a type policy.yaml gives evidence for and no template produces. The
+    assertion below checks that it genuinely has no builder, so the day one lands this test says so
+    instead of passing while measuring nothing.
+    """
     from receipt_synth import assembler
 
+    unbuilt = Archetype(
+        slug="ua_act", doc_type=DocType.ACT, country=Country.UA,
+        language="uk", categories=("vitamins_nutrition",),
+    )
+    assert unbuilt.slug not in assembler._BUILDERS, (
+        "this archetype has a builder now, so the refusal below cannot be reached — pick a slug "
+        "that genuinely has none"
+    )
     plan = ClaimPlan(
         claim_id="c1", persona_id="p001", category="vitamins_nutrition",
         verdict=Verdict.COVERED, issued_at=datetime(2026, 6, 15, 12, 0),
-        documents=(
-            DocumentPlan(
-                archetype=PAIR_REGISTRY["ua_invoice"], issued_at=datetime(2026, 6, 15, 12, 0)
-            ),
-        ),
+        documents=(DocumentPlan(archetype=unbuilt, issued_at=datetime(2026, 6, 15, 12, 0)),),
     )
-    with pytest.raises(NotImplementedError, match="ua_invoice"):
+    with pytest.raises(NotImplementedError, match="ua_act"):
         assembler._build_document(
             random.Random(1), persona=_persona(), plan=plan,
             document_plan=plan.documents[0], vendor={}, doc_id="c1_d1",

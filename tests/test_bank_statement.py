@@ -102,6 +102,7 @@ def _common(rows: tuple[StatementRow, ...]) -> dict:
         "issued_at": datetime(2026, 5, 20, 9, 0),
         "opening_balance": Decimal("500.00"),
         "rows": rows,
+        "payee_trade_name": "Т",
         "decimal_separator": ",",
     }
 
@@ -151,7 +152,8 @@ def test_the_label_carries_the_relevant_row_and_not_the_document():
     assert record.doc_type is DocType.BANK_STATEMENT
     assert record.amount == row.amount
     assert record.date == row.at.date()
-    assert record.counterparty == row.counterparty_name
+    # The bare trade name; the row prints the name with its legal form. See the test below.
+    assert record.counterparty == statement.payee_trade_name
     assert record.payment_purpose == row.purpose
     assert record.direction is row.direction
     assert record.relevant_transaction == row.number
@@ -201,7 +203,14 @@ def test_the_holder_is_the_claimant_and_the_counterparty_is_the_payee():
 
     assert record.payer == HOLDER_NAME
     assert statement.holder_code == HOLDER_CODE
-    assert record.counterparty == printed_legal_name(PAYER["name"], PAYER["legal_form"])
+    # 🔴 THE BARE TRADE NAME, NOT THE PRINTED ONE. config/labelling-schema.yaml makes the bare name
+    # authoritative; the ROW prints «ТОВ «Аптека АНЦ»» and the LABEL carries «Аптека АНЦ». This test
+    # asserted the printed form until commit B, when a cross-document check found the confirmation
+    # and the statement labelling one thing and a receipt of the same seller another.
+    assert record.counterparty == PAYER["name"]
+    assert statement.relevant.counterparty_name == printed_legal_name(
+        PAYER["name"], PAYER["legal_form"]
+    )
 
 
 # --------------------------------------- which printed date the label's `date` is --
@@ -627,7 +636,7 @@ def test_moving_the_label_to_another_row_changes_not_one_pixel(renderer, tmp_pat
             for field in (
                 "bank_name", "bank_code", "holder_name", "holder_code", "account",
                 "period_start", "period_end", "issued_at", "opening_balance", "rows",
-                "decimal_separator",
+                "payee_trade_name", "decimal_separator",
             )
         },
         relevant_index=elsewhere,

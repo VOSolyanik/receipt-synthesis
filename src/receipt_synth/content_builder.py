@@ -47,10 +47,13 @@ from receipt_synth.config import (
     high_frequency_surnames,
     initiating_systems,
     initiation_shares,
+    invoice_count_range,
+    invoice_share,
     jurisdiction,
     payment_confirmation_money_range,
     payment_confirmation_share,
     payment_purposes,
+    phone_prefixes,
     placeholder_values,
     price_range,
     quantity_choices,
@@ -1501,6 +1504,18 @@ class Party:
     """
 
     name: str
+    # THE BARE TRADING NAME, which is what the LABEL carries — `name` above is what the document
+    # PRINTS. config/labelling-schema.yaml makes the bare name authoritative under
+    # `normalization.party_name` ("this file makes the bare name authoritative"), because a legal
+    # form is a property of the seller's registration rather than of the merchant identity a claim
+    # is about. For a natural person the two coincide: there is no legal form to strip.
+    #
+    # 🔴 IT EXISTS BECAUSE THE TWO HAD SILENTLY DIVERGED. This class labelled the PRINTED form —
+    # «ТОВ «Ключ»» — while a receipt of the same seller labelled «Ключ», so two documents of one
+    # claim carried two strings for one merchant. Nothing caught it: the contract's comparison
+    # rule strips the legal form, so both compare equal to a consumer, and only a cross-document
+    # test asking whether a claim agrees with itself could see it.
+    trade_name: str
     code: str | None
     account: str | None
     bank: str | None
@@ -1672,7 +1687,8 @@ class PaymentConfirmation:
             fee=self.fee,
             total_charged=self.total_charged,
             date=self.issued_at.date(),
-            counterparty=self.payee.name,
+            # The BARE trade name, not the printed one — see `Party.trade_name`.
+            counterparty=self.payee.trade_name,
             payer=self.payer.name,
             payment_purpose=self.purpose,
             document_code=self.document_code,
@@ -1775,7 +1791,7 @@ def build_payment_confirmation(
     vendor: dict,
     payer_name: str,
     payer_tax_id: str,
-    transfer: Decimal | None = None,
+    amount: Decimal | None = None,
     initiation: str | None = None,
     country: str = "UA",
 ) -> PaymentConfirmation:
@@ -1791,9 +1807,17 @@ def build_payment_confirmation(
     high-frequency set before it was ever printed — see `personal_names` in
     config/generation.yaml.
 
-    ``transfer`` and ``initiation`` are drawn when not given. They are parameters so a test can
-    pin the conditional block instead of hunting for a seed that produces it, and so that the
-    three initiation modes can each be rendered and looked at.
+    ``amount`` IS THE TRANSFER — the value the label's `amount` field takes, which on this class is
+    📄 the amount of the operation and not the largest number printed. It is drawn when not given.
+    THE PARAMETER IS SPELLED THE SAME ON EVERY PAYMENT BUILDER, while the dataclass field below
+    keeps its own name `transfer`: the assembler hands one claim's amount to whichever
+    payment-proving archetype the plan chose, and a keyword that differed per builder would be a
+    second table saying how to call each one. Uniformity belongs at the call boundary; the
+    distinction between a transfer and a total belongs in the model, where it means something.
+
+    ``initiation`` is drawn when not given. Both are parameters so a test can pin the conditional
+    block instead of hunting for a seed that produces it, and so that the three initiation modes can
+    each be rendered and looked at.
     """
     rules = jurisdiction(country)
     block = rules["payment_confirmation"]
@@ -1812,11 +1836,11 @@ def build_payment_confirmation(
 
     # -- the money. Drawn in ten-kopiyka steps, as prices are: neither a transfer nor a fee is
     # quoted to an arbitrary kopiyka, and whole steps keep the sum exact.
-    if transfer is None:
+    if amount is None:
         low, high = payment_confirmation_money_range("transfer_amount")
-        transfer = Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100
-    if transfer <= 0:
-        raise ValueError(f"a payment confirmation states a positive amount, got {transfer}")
+        amount = Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100
+    if amount <= 0:
+        raise ValueError(f"a payment confirmation states a positive amount, got {amount}")
 
     fee = Decimal(0)
     if rng.random() < payment_confirmation_share("nonzero_fee"):
@@ -1844,6 +1868,7 @@ def build_payment_confirmation(
     )
     payee = Party(
         name=printed_legal_name(vendor["name"], vendor["legal_form"]),
+        trade_name=vendor["name"],
         code=payee_code,
         account=generate_iban(rng, payee_bank_code, country),
         bank=payee_bank,
@@ -1855,12 +1880,19 @@ def build_payment_confirmation(
     if mode["identifies_payer"]:
         payer = Party(
             name=payer_name,
+            trade_name=payer_name,
             code=payer_tax_id,
             account=generate_iban(rng, bank_code, country),
             bank=None,
         )
     else:
-        payer = Party(name=block["parties"]["empty_value"], code=None, account=None, bank=None)
+        payer = Party(
+            name=block["parties"]["empty_value"],
+            trade_name=block["parties"]["empty_value"],
+            code=None,
+            account=None,
+            bank=None,
+        )
 
     # -- the conditional block: what a card operation adds
     auth_code = (
@@ -1905,7 +1937,7 @@ def build_payment_confirmation(
         payer=payer,
         payee=payee,
         initiation=initiation,
-        transfer=transfer,
+        transfer=amount,
         fee=fee,
         amount_caption=rng.choice(block["amount_captions"]),
         fee_caption=rng.choice(block["fee_captions"]),
@@ -1913,7 +1945,7 @@ def build_payment_confirmation(
         # 👁 The words spell the TRANSFER and not the total: 📄 the amount of the operation is the
         # requisite, and the words are the same requisite written twice.
         amount_in_words=(
-            amount_in_words_uk(transfer)
+            amount_in_words_uk(amount)
             if rng.random() < payment_confirmation_share("amount_in_words")
             else None
         ),
@@ -2039,6 +2071,12 @@ class BankStatement:
     # row so there is one row object and no way for the two to drift; the label exports the row's
     # printed NUMBER, which is what a reader of the image can point at.
     relevant_index: int
+    # The BARE trading name of the labelled row's counterparty. The row PRINTS the name with its
+    # legal form; the label carries the bare one, which config/labelling-schema.yaml makes
+    # authoritative under `normalization.party_name`. Carried on the statement rather than on every
+    # row because only one row is labelled — and see `Party.trade_name` for the defect that made
+    # both classes need it.
+    payee_trade_name: str
     decimal_separator: str
 
     def __post_init__(self) -> None:
@@ -2208,7 +2246,7 @@ class BankStatement:
             amount=row.amount,
             direction=row.direction,
             date=row.at.date(),
-            counterparty=row.counterparty_name,
+            counterparty=self.payee_trade_name,
             payer=self.holder_name,
             payment_purpose=row.purpose,
             # 👁 The observed statement's header carries no number of its own — a client, an
@@ -2481,6 +2519,7 @@ def build_bank_statement(
         ),
         rows=tuple(rows),
         relevant_index=relevant_index,
+        payee_trade_name=vendor["name"],
         decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
     )
 
@@ -2496,6 +2535,387 @@ def _draw_row_time(rng: random.Random, start: date, end: date) -> datetime:
     """A timestamp inside the statement's period, at an hour a payment is made at."""
     day = start + timedelta(days=rng.randint(0, (end - start).days))
     return datetime(day.year, day.month, day.day, rng.randint(8, 21), rng.randint(0, 59))
+
+
+@dataclass(frozen=True)
+class InvoiceParty:
+    """One side of an invoice — the supplier, or the buyer it is addressed to.
+
+    NOT `Seller`, which models the party block of a FISCAL RECEIPT: that class carries the two
+    identifier lines «ІД» and «ПН» with their prefixes, which are requisites of the receipt form and
+    appear nowhere on an invoice. Two classes rather than one with half its fields unused, because
+    the overlap is a coincidence of both documents naming a firm.
+
+    Every field but `name` and `code` is optional: 👁 an invoice names the supplier fully — address,
+    telephone, account, bank — and the buyer by name and code alone.
+    """
+
+    name: str
+    legal_form: str
+    code: str
+    code_label: str
+    address: str | None = None
+    phone: str | None = None
+    account: str | None = None
+    bank: str | None = None
+
+
+@dataclass(frozen=True)
+class Invoice:
+    """One Ukrainian рахунок на оплату, complete but not yet rendered.
+
+    🔴 AN OFFER TO PAY, AND EVERY DECISION HERE FOLLOWS FROM THAT. 📄 An invoice is not a primary
+    accounting document: it proposes that the buyer pay, and the fact of payment is established by a
+    payment document. Two consequences that a reader coming from the consumer's field list will
+    look for and not find:
+
+    * **NO PAYMENT STATUS.** 👁 0 of 2 open invoices print one, and the reason is structural rather
+      than a small sample. The consumer's requirement asks this type for a payment status — the
+      example it gives, «Zapłacono», is Polish — and that requirement is recorded as a DIVERGENCE in
+      config/labelling-schema.yaml rather than satisfied. Nothing in this repository lets a verdict
+      rest on such a line, which is the guard that matters: an oracle reading proof of payment off a
+      printed word would be deriving the answer from the thing under test.
+    * **NO `amount_due`.** 👁 1/1 has a single total block. «ДО СПЛАТИ» is 📄 line 24 of the fiscal
+      receipt form, where it differs from «СУМА» by the discount and the rounding. An invoice has
+      one total and nothing for a second field to differ from.
+
+    THIS IS THE SUBJECT DOCUMENT OF THE DOMINANT PAIR. It states what was bought and does not prove
+    payment; a confirmation or a statement proves the payment and states no subject. That is the
+    exact inverse of the bank classes, and it is why registering this archetype is what makes a
+    two-document claim buildable at all.
+
+    ⛔ NO PER-LINE VAT LETTER. 👁 The observed table prices VAT-inclusive and states the tax once at
+    the foot, so `line_items` carry `vat_letter=None` — a letter labelled and not printed would be a
+    ground-truth value unreadable from the image, which is the rule that gave the bank statement its
+    second money column. The tax total is computed from the letters BEFORE they are dropped, so the
+    figure is the same one a receipt would print.
+    """
+
+    number: str
+    issued_at: datetime
+    supplier: InvoiceParty
+    buyer: InvoiceParty
+    vat_payer: bool
+    line_items: list[LineItem]
+    # 👁 The tax contained within the total, stated once. `Decimal(0)` for a seller that is not
+    # registered, whose document carries no tax line at all.
+    vat_total: Decimal
+    unit: str
+    # 👁 1 of 2 carries an agreement; 📄 both sources call it optional.
+    agreement: str | None
+    # 📄 The recommended alternative to a payment status — how long the offer stands.
+    validity: str | None
+    signatory_name: str
+    signatory_post: str | None
+    bank_code: str
+    decimal_separator: str
+
+    @property
+    def total(self) -> Decimal:
+        """Σ over the line items. DERIVED rather than stored: an invoice states one total, and two
+        numbers that must agree should not be two numbers."""
+        return line_items_total(self.line_items)
+
+    # -- rendering ------------------------------------------------------------
+
+    def _amount(self, value: Decimal) -> str:
+        rules = jurisdiction("UA")["number_format"]
+        whole, _, fraction = f"{value:.2f}".partition(".")
+        grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
+        return f"{grouped}{self.decimal_separator}{fraction}"
+
+    def _long_date(self) -> str:
+        """👁 The title's date in words — «24 травня 2025». The month is genitive, which is the case
+        that follows a day number in Ukrainian; the names are in config/fiscal-rules.yaml."""
+        months = jurisdiction("UA")["invoice"]["long_date_months"]
+        return f"{self.issued_at.day} {months[self.issued_at.month - 1]} {self.issued_at.year}"
+
+    def render_context(self) -> dict:
+        """Everything the template prints, already formatted.
+
+        👁 THE TITLE'S DATE IS IN WORDS AND THE REST OF THE PAGE'S DATES ARE IN DIGITS, so both forms
+        appear on one document. That is a date-parsing case a corpus of receipts never presents, and
+        it is reproduced because the observed invoice does it.
+        """
+        rules = jurisdiction("UA")
+        block = rules["invoice"]
+        columns = dict(block["columns"])
+        if not self.vat_payer:
+            # 📄 A seller that is not registered prices without ПДВ, so the two money columns lose
+            # the suffix. The status is the vendor's, exactly as on a receipt.
+            columns["price"], columns["sum"] = columns["price_no_vat"], columns["sum_no_vat"]
+        return {
+            "attention_line": block["attention_line"],
+            "title": block["title_format"].format(number=self.number, date=self._long_date()),
+            "number": self.number,
+            "date": self.issued_at.strftime(rules["date_format"]),
+            "payment_order": block["payment_order_block"],
+            "party_labels": block["parties"],
+            "supplier": self.supplier,
+            "supplier_display": printed_legal_name(
+                self.supplier.name, self.supplier.legal_form
+            ),
+            "buyer": self.buyer,
+            "buyer_display": self.buyer.name,
+            "bank_code": self.bank_code,
+            "agreement": self.agreement,
+            "columns": columns,
+            "items": [
+                {
+                    "name": item.name,
+                    "qty": f"{item.qty:g}",
+                    "unit": self.unit,
+                    "price": self._amount(item.price),
+                    "sum": self._amount((item.qty * item.price).quantize(KOPIYKA)),
+                }
+                for item in self.line_items
+            ],
+            "totals_labels": block["totals"],
+            "total": self._amount(self.total),
+            "vat_total": self._amount(self.vat_total) if self.vat_payer else None,
+            "count_line": block["totals"]["count_format"].format(
+                count=len(self.line_items), amount=self._amount(self.total)
+            ),
+            "amount_in_words": amount_in_words_uk(self.total),
+            "vat_in_words": amount_in_words_uk(self.vat_total) if self.vat_payer else None,
+            "validity": self.validity,
+            "signature_labels": block["signature"],
+            "signatory_name": self.signatory_name,
+            "signatory_post": self.signatory_post,
+            # This class carries no QR — 👁 none was observed on an invoice — and the renderer
+            # requires the key on every context.
+            "qr_payload": None,
+        }
+
+    # -- labels ---------------------------------------------------------------
+
+    def ground_truth(
+        self,
+        *,
+        doc_id: str,
+        source_file: str,
+        capture: Capture,
+        field_bboxes: dict[str, tuple[float, float, float, float]],
+    ) -> DocGroundTruth:
+        """The label record for this invoice.
+
+        `amount` is the total and there is no second money field: no `amount_due`, no `fee`, no
+        `total_charged`. `counterparty` is the SUPPLIER — the party opposite the claimant, as on
+        every class — and `payer` is the buyer, which is the claimant.
+
+        NOTHING RECORDS WHETHER IT WAS PAID, and that is the point of the class rather than a gap.
+        `has_fiscal_number` and `qr_is_fiscal` are `False` because an invoice is not a fiscal
+        document at all; a consumer classifying on a fiscal marker must not find one here.
+        """
+        return DocGroundTruth(
+            doc_id=doc_id,
+            source_file=source_file,
+            doc_type=DocType.INVOICE,
+            language="uk",
+            currency="UAH",
+            amount=self.total,
+            date=self.issued_at.date(),
+            counterparty=self.supplier.name,
+            payer=self.buyer.name,
+            line_items=self.line_items,
+            has_qr=False,
+            qr_is_fiscal=False,
+            has_fiscal_number=False,
+            capture=capture,
+            field_bboxes=field_bboxes,
+        )
+
+
+def _draw_invoice_number(rng: random.Random, block: dict) -> str:
+    """👁 One of the two number shapes an open invoice was seen to carry."""
+    spec = rng.choice(block["number"]["formats"])
+    return _draw_from_pattern(rng, spec["pattern"])
+
+
+def _draw_phone(rng: random.Random) -> str:
+    """A mobile number on a published prefix and drawn digits.
+
+    📄 The prefix is one the national numbering plan assigns; the seven digits after it are drawn,
+    so the number designates nobody in particular. A number taken off a document designates
+    whoever holds it, which is why none is.
+    """
+    return f"+380 ({rng.choice(phone_prefixes())[1:]}) {rng.randint(0, 9_999_999):07d}"
+
+
+def build_invoice(
+    rng: random.Random,
+    *,
+    category_id: str,
+    issued_at: datetime,
+    vendor: dict,
+    buyer_name: str,
+    buyer_tax_id: str,
+    address: str = "м. Київ",
+    covered_only: bool = True,
+    coverage_target: Decimal | None = None,
+    item_count: int | None = None,
+    country: str = "UA",
+) -> Invoice:
+    """Build one Ukrainian рахунок на оплату.
+
+    THE BASKET IS DRAWN EXACTLY AS A RECEIPT'S IS — same knobs, same meaning, and deliberately the
+    same helpers: `covered_only` for a `covered` claim, `coverage_target` for a mixed one. Coverage
+    is a property of what was bought and not of the document that lists it, so an invoice and a
+    receipt listing the same basket must produce the same covered fraction. Two builders drawing
+    baskets two ways would make the verdict depend on which document class a claim happened to get.
+
+    `buyer_name` and `buyer_tax_id` are the CLAIMANT's — an invoice is addressed to somebody, and an
+    invoice addressed to anybody else would evidence nothing about the persona filing the claim.
+    This is where an invoice differs structurally from a receipt: a till receipt names no buyer
+    because the payer is standing at the till, while an offer to pay has to say to whom it is made.
+    """
+    rules = jurisdiction(country)
+    block = rules["invoice"]
+    vat_payer = vendor_is_vat_payer(vendor)
+
+    # -- what was bought. The receipt's own helpers, called with the receipt's own arguments.
+    count = item_count if item_count is not None else rng.randint(2, 4)
+    if not 1 <= count <= MAX_LINE_ITEMS:
+        raise ValueError(f"an invoice carries 1 to {MAX_LINE_ITEMS} lines, not {count}")
+
+    if covered_only:
+        if coverage_target is not None:
+            raise ValueError(
+                "coverage_target describes a mixed basket; covered_only=True already means "
+                "every line is covered"
+            )
+        catalogue = category(category_id)["covered_items"]
+        kinds = sellable_kinds(catalogue, vendor)
+        if not kinds:
+            raise ValueError(
+                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
+                f"category {category_id!r} covers"
+            )
+        items = _draw_distinct_items(
+            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
+        )
+    else:
+        if coverage_target is None:
+            raise ValueError(
+                "a mixed basket needs the coverage_target the planner chose — the builder "
+                "realizes a verdict, it does not decide one"
+            )
+        if not Decimal(0) < coverage_target < Decimal(1):
+            raise ValueError(
+                f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
+            )
+        items = _build_mixed_basket(
+            rng,
+            category_id=category_id,
+            vendor=vendor,
+            count=count,
+            coverage_target=coverage_target,
+        )
+
+    # -- the tax, computed from the letters and THEN the letters dropped. ⛔ The observed table has
+    # no per-line letter column, so a label carrying one would be unreadable from the image; the
+    # figure itself is the same one a receipt would print, which is why it is taken first.
+    vat_total = sum(
+        (line.vat for line in _build_tax_lines(items, vat_payer=vat_payer)), Decimal(0)
+    ).quantize(KOPIYKA)
+    # `model_copy` and not `dataclasses.replace`: `LineItem` is a pydantic model. The first
+    # version of this line used `replace` and raised on the first render, which is the cheapest
+    # way this could have failed.
+    items = [item.model_copy(update={"vat_letter": None}) for item in items]
+
+    # -- who is selling. 👁 The supplier block names the firm, its code, its address, sometimes a
+    # telephone, and always an account with the bank holding it.
+    is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
+    bank_code = _draw_bank_code(rng, country)
+    supplier = InvoiceParty(
+        name=vendor["name"],
+        legal_form=vendor["legal_form"],
+        code=generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng),
+        code_label=block["parties"]["supplier_code_label"],
+        address=address,
+        phone=_draw_phone(rng) if rng.random() < invoice_share("phone") else None,
+        account=generate_iban(rng, bank_code, country),
+        bank=rng.choice(banks(country)),
+    )
+    # ⚠️ The buyer is a natural person and carries a РНОКПП. 👁 The observed invoice was addressed to
+    # a company; the narrowing is declared in config/labelling-schema.yaml.
+    buyer = InvoiceParty(
+        name=buyer_name,
+        legal_form="PERSON",
+        code=buyer_tax_id,
+        code_label=block["parties"]["buyer_code_label"],
+    )
+
+    agreement = None
+    if rng.random() < invoice_share("agreement"):
+        # 👁 «№ Д-27/25 від 10.05.2025 надання послуг» — a number, a date and a subject in words.
+        signed = issued_at - timedelta(days=rng.randint(10, 400))
+        agreement = (
+            f"№ Д-{rng.randint(1, 999)}/{signed.year % 100} "
+            f"від {signed.strftime(rules['date_format'])} надання послуг"
+        )
+
+    validity = None
+    if rng.random() < invoice_share("validity"):
+        until = issued_at + timedelta(days=rng.randint(*invoice_count_range("validity_days")))
+        validity = block["validity_format"].format(date=until.strftime(rules["date_format"]))
+
+    # 📄 A sole trader signs in their own name and states no post; a company names the post of the
+    # authorized person. The name is a surname with initials — ⛔ narrower than the observed full
+    # name, and declared as such where the format lives.
+    signatory_name = (
+        vendor["name"] if is_sole_trader else personal_signatory(rng, rules["language"])
+    )
+    return Invoice(
+        number=_draw_invoice_number(rng, block),
+        issued_at=issued_at,
+        supplier=supplier,
+        buyer=buyer,
+        vat_payer=vat_payer,
+        line_items=items,
+        vat_total=vat_total,
+        # 👁 Services are counted in «посл.», goods in «шт.». Read from what the vendor sells rather
+        # than drawn: a gym membership is not measured in pieces.
+        unit=block["units"]["service" if _sells_services(vendor) else "goods"],
+        agreement=agreement,
+        validity=validity,
+        signatory_name=signatory_name,
+        signatory_post=(
+            None if is_sole_trader else rng.choice(block["signature"]["posts"])
+        ),
+        bank_code=bank_code,
+        decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
+    )
+
+
+# Vendor profiles that sell a SERVICE rather than a thing, for the unit column. Read from the
+# profile because that is where what a vendor sells already lives; a profile absent from this set
+# sells goods, which is the safe default — «шт.» beside a service reads as a clerical slip, while
+# «посл.» beside a bottle of vitamins reads as a different document.
+_SERVICE_PROFILES = frozenset(
+    {
+        "insurer", "language_school", "private_tutor", "exam_centre", "training_centre",
+        "online_learning_platform", "conference_organizer", "gym", "pool", "fitness_studio",
+        "mental_health_clinic", "therapy_practice", "nutrition_practice", "art_studio",
+        "music_school", "photo_school", "hobby_club",
+    }
+)
+
+
+def _sells_services(vendor: dict) -> bool:
+    return vendor["profile"] in _SERVICE_PROFILES
+
+
+def personal_signatory(rng: random.Random, language: str) -> str:
+    """The person who wrote the invoice out, as «Прізвище І. Б.».
+
+    ⛔ NARROWER THAN OBSERVED: the real invoice prints a full given name and patronymic. This form
+    carries the same information for extraction — a personal name in the signature block — while
+    drawing only from the narrowed high-frequency surname pool, so a published image never names a
+    person more specifically than that pool justifies. Same rule and same pool as a sole trader's
+    printed name; see `personal_names` in config/generation.yaml.
+    """
+    return sole_trader_name(rng, "UA" if language == "uk" else language.upper())
 
 
 # =============================================================================

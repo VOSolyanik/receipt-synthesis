@@ -178,6 +178,47 @@ ARCHETYPES: dict[str, Archetype] = {
             "hobby",
         ),
     ),
+    # 🔴 THE FOURTH DOCUMENT CLASS, AND THE ONE THAT ACTIVATES THE DOMINANT PAIR. It is the exact
+    # inverse of the two bank classes: an invoice states WHAT WAS BOUGHT and proves no payment —
+    # 📄 a рахунок на оплату is an offer to pay, not a primary accounting document. So
+    # `_select_documents`
+    # can now assemble both facts from two documents for the first time, and a claim whose evidence
+    # is split is buildable rather than merely modelled.
+    #
+    # IT CARRIES EVERY CATEGORY, and here that is a positive claim rather than the bank classes'
+    # "nothing on the page can contradict one": an invoice LISTS ITEMS, so it carries a category
+    # exactly when a basket can be drawn for it — and every category of policy.yaml has priced item
+    # kinds and vendors that can carry both a covered and a mixed basket. Checked by a test rather
+    # than asserted here.
+    #
+    # ⚠️ THE PAIR IS EXERCISED IN SIX CATEGORIES, NOT SEVEN, and the reason is worth knowing before
+    # reading a dataset: `_select_documents` PREFERS a single document proving both facts, and the
+    # three fiscal receipts carry `vitamins_nutrition`. So that category still gets a receipt and
+    # the other six get an invoice plus a payment document. Registering the invoice for
+    # `vitamins_nutrition` changes nothing about it today and is not a special case waiting to
+    # happen: it is what a fourth receipt-less jurisdiction or a withdrawn receipt archetype would
+    # need.
+    #
+    # 🔴 AND IT LEAVES THE REGISTRY WITH NO PAYMENT-ONLY CATEGORY AT ALL. That case — a category
+    # covered by payment-proving archetypes alone, which `documentable_categories` must refuse —
+    # was asserted from the registry until this entry landed, and is now asserted on a hand-built
+    # archetype list in `tests/test_pipeline.py`, which is stronger: the mechanism stops depending
+    # on a registry that changes every time a template lands.
+    "ua_invoice": Archetype(
+        slug="ua_invoice",
+        doc_type=DocType.INVOICE,
+        country=Country.UA,
+        language="uk",
+        categories=(
+            "medical_insurance",
+            "language_courses",
+            "professional_development",
+            "sport",
+            "mental_health",
+            "vitamins_nutrition",
+            "hobby",
+        ),
+    ),
 }
 
 
@@ -191,10 +232,15 @@ REALIZABLE_VERDICTS: tuple[Verdict, ...] = (Verdict.COVERED, Verdict.PARTIALLY_C
 _UNREALIZABLE_REASONS: dict[Verdict, str] = {
     Verdict.NOT_PROOF_OF_PAYMENT: (
         "is the MONEY-MOVED slot of `document_evidence` left unestablished, and needs a claim "
-        "every document of which is a `proves_payment: false` type in policy.yaml — an "
-        "invoice, an act, a sales slip. `policy_engine.resolve_evidence` labels such a claim "
-        "today; no template in ARCHETYPES carries one of those types, so nothing can build it. "
-        "The document type is the whole mechanism: amounts, baskets and dates are not consulted"
+        "every document of which is a `proves_payment: false` type in policy.yaml — an invoice, "
+        "an act, a sales slip. `policy_engine.resolve_evidence` labels such a claim today, and "
+        "WHAT IS MISSING CHANGED WHEN THE INVOICE ARCHETYPE LANDED: an archetype of such a type "
+        "now exists, so the gap is no longer the template. What does not exist is a planner that "
+        "deliberately plans an INCOMPLETE claim — `_select_documents` assembles both facts or "
+        "refuses, because the two verdicts this planner draws both need complete evidence, and "
+        "`documentable_categories` reports a category it cannot complete as not documentable "
+        "rather than letting such a plan be made. The document type is still the whole mechanism: "
+        "amounts, baskets and dates are not consulted"
     ),
     Verdict.INSUFFICIENT_EVIDENCE: (
         "is the other two slots of `document_evidence`. WHAT WAS BOUGHT, left unestablished by "
@@ -203,8 +249,9 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
         "coverage arithmetic — `policy_engine` labels all three causes correctly today, each "
         "with its own name in `imperfection`. WHAT IS MISSING IS NO LONGER THE SAME THING FOR "
         "ALL THREE, and the difference matters to whoever closes this. For "
-        "`subject_not_evidenced` the archetype now EXISTS — a bank payment confirmation states "
-        "no subject — and what is missing is a planner that deliberately plans an INCOMPLETE "
+        "`subject_not_evidenced` the archetypes now EXIST — a bank payment confirmation and a bank "
+        "statement each state no subject — and what is missing is a planner that deliberately "
+        "plans an INCOMPLETE "
         "claim: `_select_documents` assembles both facts or refuses, because the two verdicts "
         "this planner draws both need complete evidence, and `documentable_categories` reports "
         "a payment-only category as not documentable rather than letting such a plan be made. "
@@ -448,9 +495,13 @@ def documentable_categories(persona: Persona) -> list[str]:
     """The persona's benefit categories a COMPLETE claim can be documented in.
 
     Ignores the ledger entirely — this is a question about templates, and it is the one
-    `assembler._draw_documentable_persona` asks before any claim exists. Empty is a normal
-    answer while the template set is incomplete, not an error: the registered archetypes carry one
-    category between them as a complete claim, so most personas hold nothing that can be built.
+    `assembler._draw_documentable_persona` asks before any claim exists. Empty is a normal answer
+    while the template set is incomplete, not an error — and it stopped being the common answer when
+    the invoice archetype landed: every Ukrainian category can now be completed, six of them by an
+    invoice plus a payment document and `vitamins_nutrition` by a fiscal receipt. Both halves of the
+    sentence matter, because a persona that holds no completable category is now the rare case
+    rather than the usual one, and `_draw_documentable_persona`'s retry loop is correspondingly
+    less exercised.
 
     COMPLETE, not merely covered by some archetype. A category whose only registered archetype is
     a payment confirmation has a document and no claim: the payment is proven and what was bought

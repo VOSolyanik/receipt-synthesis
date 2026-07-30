@@ -648,6 +648,41 @@ payment_confirmation:
 
 
 # =============================================================================
+# Invoice — the draw inputs
+# =============================================================================
+#
+# What the document PRINTS is `invoice` in config/fiscal-rules.yaml. Here are the rates at which
+# its optional requisites appear.
+#
+# ⚠️ TWO OPEN INVOICES ARE THE WHOLE OF THE EVIDENCE, and 📄 there is no approved form for this
+# document, so variation is large by construction and a share below is a JUDGEMENT informed by two
+# documents rather than a frequency. Each says which it is.
+invoice:
+  # 👁 1 of 2 carries a «Договір:» line naming an agreement by number and date. 📄 Both sources list
+  # it as an optional requisite — "не завжди" — so it is drawn rather than always printed.
+  agreement_share: 0.5
+
+  # 📄 A validity line is the RECOMMENDED alternative to a payment status: an invoice is an offer,
+  # and an offer stands for a period. ⚠️ A judgement: neither open invoice printed one, and the
+  # recommendation is what supports it. It is printed at a minority rate for that reason, and it is
+  # the positive form of this class's central fact — 🔴 that no payment status exists to print.
+  validity_share: 0.35
+  validity_days_range: [5, 30]
+
+  # How long before the payment the invoice is dated is NOT here: it is `_SUBJECT_LEAD_DAYS` in
+  # claim_planner, because the gap between an invoice and its settlement is a property of the CLAIM
+  # rather than of the document, and the planner is what dates a claim's documents.
+
+  # 👁 1 of 2 prints a telephone number in the supplier block. A number is DRAWN from a published
+  # range rather than taken from any document — see `phone_prefixes` below.
+  phone_share: 0.5
+  # 📄 The mobile prefixes assigned by the national numbering plan. A number formed from one of
+  # these and seven drawn digits designates nobody in particular; printing a real one would
+  # designate whoever holds it.
+  phone_prefixes: ["050", "063", "066", "067", "068", "093", "095", "096", "097", "098", "099"]
+
+
+# =============================================================================
 # Bank statement — the draw inputs
 # =============================================================================
 #

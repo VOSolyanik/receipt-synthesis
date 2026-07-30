@@ -1,0 +1,238 @@
+/*
+ * Ukrainian invoice — рахунок на оплату, A4 portrait.
+ *
+ * SELF-CONTAINED, like the two bank classes. An invoice shares no layout with a till roll, and
+ * nothing with a statement beyond both being a page of A4.
+ *
+ * THE PAPER. 📄 A4 is 210 × 297 mm (ISO 216), stated in `invoice.page` in
+ * config/fiscal-rules.yaml and rendered here at 96 dpi — the resolution a PDF page is shown at on
+ * screen, which is how an invoice reaches a claimant: 794 × 1123 px. The same scale as the payment
+ * confirmation and for the same reason; the receipts' 8 px/mm is a different fact about a printed
+ * strip.
+ *
+ * `min-height` rather than `height`: a long line-item name or a twenty-line basket lengthens the
+ * sheet instead of clipping it. A bounding box running past the bottom of the image is the one
+ * failure a fixed height would guarantee.
+ *
+ * 📄 THERE IS NO APPROVED FORM for this document, so this is one plausible arrangement of the
+ * requisites every source lists rather than a reproduction of a prescribed layout. What is
+ * reproduced faithfully is 👁 the specimen payment order above the title, which is what makes a real
+ * 1С/BAS invoice recognizable — and which prints the recipient's requisites a second time.
+ *
+ * Font stacks follow fonts/README.md: "Noto Sans" leads the prose, "Noto Sans Mono" the money and
+ * the identifiers, and both carry a Noto face so Chromium always has one to substitute ₴ from.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
+
+.page {
+  box-sizing: border-box;
+  width: 794px;
+  min-height: 1123px;
+  padding: 44px 52px 40px;
+  background: #ffffff;
+  color: #14171c;
+  font-family: "Noto Sans", "Roboto", sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.muted {
+  color: #3d444d;
+}
+
+/* -- the attention line ---------------------------------------------------- */
+
+/* 👁 Above everything, in small type. It is a condition of the offer, not a record of payment. */
+.attention {
+  font-size: 10px;
+  font-style: italic;
+  color: #3d444d;
+  margin-bottom: 10px;
+}
+
+/* -- the specimen payment order -------------------------------------------- */
+
+.payment-order {
+  border: 1px solid #14171c;
+  padding: 6px 8px 4px;
+}
+
+.po-caption {
+  font-size: 10px;
+  text-align: center;
+  color: #3d444d;
+  margin-bottom: 4px;
+}
+
+.po-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.po-grid td {
+  border: 1px solid #9aa4b1;
+  padding: 2px 5px;
+  vertical-align: top;
+}
+
+.po-label {
+  width: 118px;
+  color: #3d444d;
+  font-size: 10px;
+}
+
+.po-value {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 10px;
+  overflow-wrap: break-word;
+}
+
+/* -- title and parties ----------------------------------------------------- */
+
+.title {
+  margin: 18px 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.parties {
+  border-top: 1px solid #14171c;
+  border-bottom: 1px solid #14171c;
+  padding: 8px 0;
+}
+
+.party {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.party:last-child {
+  margin-bottom: 0;
+}
+
+.party .caption {
+  min-width: 96px;
+  font-weight: 700;
+}
+
+.party-body {
+  flex: 1;
+}
+
+.party-name {
+  font-weight: 700;
+}
+
+/* -- the items table ------------------------------------------------------- */
+
+.items {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+  font-size: 11px;
+}
+
+.items th {
+  border: 1px solid #14171c;
+  background: #eef1f5;
+  padding: 4px 5px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.items td {
+  border: 1px solid #9aa4b1;
+  padding: 4px 5px;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.c-idx {
+  width: 26px;
+  text-align: center;
+}
+
+.c-qty {
+  width: 52px;
+  text-align: right;
+}
+
+.c-unit {
+  width: 44px;
+  text-align: center;
+}
+
+/* Money right-aligned and monospaced, so the column reads as a column. */
+.c-money {
+  width: 96px;
+  text-align: right;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+}
+
+/* -- totals and words ------------------------------------------------------ */
+
+.totals {
+  margin-top: 10px;
+}
+
+.total-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.total-row .caption {
+  font-weight: 700;
+}
+
+.total-row .money {
+  min-width: 96px;
+  text-align: right;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.summary {
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.words {
+  font-style: italic;
+}
+
+.validity {
+  margin-top: 12px;
+  font-size: 11px;
+  color: #3d444d;
+}
+
+/* -- signature ------------------------------------------------------------- */
+
+.signature {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-top: 34px;
+  border-top: 1px solid #c8cfd8;
+  padding-top: 10px;
+}
+
+.signature .caption {
+  font-weight: 700;
+}
+
+.sign-line .muted {
+  margin-left: 10px;
+}

@@ -39,6 +39,7 @@ from receipt_synth.content_builder import (
     is_valid_iban,
     is_valid_rnokpp,
     passes_luhn,
+    printed_legal_name,
     unissuable_card_number,
     validate_amount_in_words,
 )
@@ -68,7 +69,38 @@ def make(seed: int = 20260417, vendor: dict = COMPANY, initiation: str | None = 
         payer_name="Ковальчук Олена Петрівна",
         payer_tax_id="2345678901",
         initiation=initiation,
-        transfer=transfer,
+        # RENAMED FROM `transfer=` when the invoice landed: every payment-proving builder now takes
+        # the claim's amount under the same keyword, so the assembler can hand it to whichever
+        # archetype the plan chose. The dataclass FIELD is still `transfer` — the distinction
+        # between the amount of the operation and the total charged is the point of this class.
+        amount=transfer,
+    )
+
+
+def test_the_label_carries_the_payees_bare_trade_name_and_the_page_prints_its_legal_form():
+    """🔴 THE LABEL AND THE PRINTED FORM ARE NOT THE SAME STRING, and this class had them the same.
+
+    config/labelling-schema.yaml makes the BARE trading name authoritative under
+    `normalization.party_name` — "this file makes the bare name authoritative" — because a legal
+    form is a property of the seller's registration rather than of the merchant identity a claim is
+    about. This class labelled the PRINTED form, «ТОВ «Аптека АНЦ»», while a fiscal receipt of the
+    same seller labelled «Аптека АНЦ».
+
+    NOTHING COULD SEE IT. The contract's comparison strips the legal form, so both strings compare
+    equal to any consumer; it took a cross-document test asking whether one claim agrees with itself
+    to find two names for one merchant. Asserted here, on the class, so the fix has a guard of its
+    own rather than depending on which document types a pipeline fixture happens to draw.
+    """
+    confirmation = make(vendor=COMPANY)
+    record = truth(confirmation)
+
+    assert record.counterparty == COMPANY["name"]
+    assert confirmation.payee.name == printed_legal_name(
+        COMPANY["name"], COMPANY["legal_form"]
+    )
+    assert record.counterparty != confirmation.payee.name, (
+        "the label and the printed form coincide, so this test cannot tell them apart — pick a "
+        "vendor whose legal form is printed"
     )
 
 

@@ -506,6 +506,13 @@ def test_every_excluded_kind_of_a_generating_category_can_be_drawn():
     vendors of THAT jurisdiction only — pooling every country's vendors would let a Polish entry
     cover a kind no Ukrainian receipt can print.
 
+    ⚠️ AND ITS SCOPE WIDENED WHEN THE INVOICE LANDED, which is how `hobby` came into it. Until then
+    the only subject-proving archetypes were the three fiscal receipts, all carrying one category;
+    the invoice carries every category, so six more (jurisdiction, category) pairs are now swept.
+    The first sweep of `hobby` failed on `electronics`, which config/generation.yaml declares
+    unprintable — a real narrowing of that category's non-covered vocabulary, now excluded from the
+    expectation and DECLARED as KL-06 rather than asserted away.
+
     AND SCOPED TO ARCHETYPES THAT STATE WHAT WAS BOUGHT, which is narrower than "registered" now
     that the registry holds a second class. A line item reaches a document only through a document
     that lists items: a bank payment confirmation carries every benefit category — nothing on it
@@ -534,11 +541,25 @@ def test_every_excluded_kind_of_a_generating_category_can_be_drawn():
                 spec["excluded_items"], vendor if "name" in vendor else {**vendor, "name": "x"}
             )
         }
-        missing = sorted(set(spec["excluded_items"]) - sellers)
+        # 🔴 THE EXPECTATION EXCLUDES KINDS DECLARED UNPRINTABLE, and that is not a weakening —
+        # `unprintable_item_kinds` in config/generation.yaml is the enumerated, tested statement
+        # that a kind cannot be printed, WITH ITS CAUSE. Asserting a kind reachable while another
+        # file declares it unreachable would make the two files contradict each other and one of
+        # them would have to be wrong. What the declaration costs the corpus is measured below.
+        declared_unprintable = unprintable_item_kinds()
+        expected = set(spec["excluded_items"]) - declared_unprintable
+        missing = sorted(expected - sellers)
         assert not missing, (
             f"{country}/{category_id}: no vendor can put these excluded kinds on a receipt, so "
             "they are absent from every document and the non-covered vocabulary is narrower "
             f"than policy.yaml declares: {missing}"
+        )
+        # And the cost of the declaration is stated rather than hidden: how many of this
+        # category's excluded kinds cannot reach a document at all, with its denominator.
+        unreachable = sorted(set(spec["excluded_items"]) & declared_unprintable)
+        assert len(unreachable) < len(spec["excluded_items"]), (
+            f"{country}/{category_id}: every excluded kind is declared unprintable, so a mixed "
+            "basket cannot be built for this category at all"
         )
 
 

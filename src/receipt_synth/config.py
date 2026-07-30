@@ -389,6 +389,55 @@ def initiating_systems(language: str) -> tuple[str, ...]:
     return tuple(systems)
 
 
+# --- generation.yaml: the invoice draw inputs ----------------------------------
+#
+# Third and last per-class group. Three classes now share one shape — a `_share` family, a range
+# family — and the third occurrence is where abstracting it becomes right rather than premature.
+# It is deliberately NOT abstracted in this commit: the invoice is the change under review, and a
+# refactor of the two accessors that already work would put an unrelated diff in front of it.
+# Recorded here as the next cleanup rather than left to be noticed.
+
+
+def _invoice_generation() -> dict[str, Any]:
+    return load_generation()["invoice"]
+
+
+@cache
+def invoice_share(name: str) -> float:
+    """The rate at which an optional requisite of an invoice is printed."""
+    block = _invoice_generation()
+    key = f"{name}_share"
+    if key not in block:
+        raise KeyError(
+            f"config/generation.yaml declares no `invoice.{key}`; it has "
+            f"{sorted(k for k in block if k.endswith('_share'))}"
+        )
+    return float(block[key])
+
+
+@cache
+def invoice_count_range(name: str) -> tuple[int, int]:
+    """An inclusive range of whole things in the invoice block — days of validity."""
+    block = _invoice_generation()
+    key = f"{name}_range"
+    if key not in block:
+        raise KeyError(f"config/generation.yaml declares no `invoice.{key}`")
+    low, high = (int(value) for value in block[key])
+    if low > high:
+        raise ValueError(f"config/generation.yaml has `invoice.{key}` reversed: {low}-{high}")
+    return low, high
+
+
+@cache
+def phone_prefixes() -> tuple[str, ...]:
+    """📄 The mobile prefixes of the national numbering plan.
+
+    A number built from one of these and drawn digits designates nobody; a number copied off a
+    document designates whoever holds it, which is why none is.
+    """
+    return tuple(_invoice_generation()["phone_prefixes"])
+
+
 # --- generation.yaml: the bank-statement draw inputs ---------------------------
 #
 # A group of its own, mirroring the confirmation's above, because it reads a different block of

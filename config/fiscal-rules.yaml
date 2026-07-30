@@ -594,6 +594,131 @@ jurisdictions:
           - "https://example.com/app"
           - "https://example.com/mobile"
 
+    invoice:
+      # 🔴 A РАХУНОК НА ОПЛАТУ IS AN OFFER TO PAY, NOT A PRIMARY ACCOUNTING DOCUMENT, and that one
+      # 📄 fact decides most of this block. The seller PROPOSES that the buyer pay; the fact of
+      # payment is established by a payment document, never by this one. 📄 A paid invoice may serve
+      # as a primary document, but its paidness is established by the payment instruction or the
+      # statement — not by a line printed on the invoice.
+      #
+      # 🔴 THEREFORE NO PAYMENT STATUS IS PRINTED — 👁 0 of 2 open invoices carry one, and the reason
+      # is structural rather than a small sample. And 🔴 NO «ДО СПЛАТИ»: 👁 1/1 has a SINGLE total
+      # block. «ДО СПЛАТИ» is 📄 line 24 of the FISCAL RECEIPT form, where it differs from «СУМА» by
+      # the discount and the rounding; an invoice has one total and nothing to differ from.
+      #
+      # 📄 THERE IS NO APPROVED FORM for this document, so layout variation is large by
+      # construction. This is one arrangement of the requisites every source lists.
+
+      # 👁 The topmost line of the observed invoice, above everything including the title. It is the
+      # nearest thing the document has to a statement about payment — and note what it says: paying
+      # is agreement to terms, not a record that payment happened.
+      attention_line: "Увага! Оплата цього рахунку означає погодження з умовами поставки товарів"
+
+      # 👁 A4 portrait, the paper an invoice is issued on.
+      page: { width_mm: 210, height_mm: 297 }
+
+      title_format: "Рахунок на оплату № {number} від {date} р."
+      # 👁 The observed title writes its date in words — «від 24 травня 2025 р.» — while the table
+      # and the agreement line use digits. Both forms therefore appear on one page, which is a
+      # date-parsing case a corpus of receipts alone never presents. The month names are in the
+      # genitive, which is the case that follows a day number in Ukrainian.
+      long_date_months:
+        - "січня"
+        - "лютого"
+        - "березня"
+        - "квітня"
+        - "травня"
+        - "червня"
+        - "липня"
+        - "серпня"
+        - "вересня"
+        - "жовтня"
+        - "листопада"
+        - "грудня"
+
+      # 👁 Two number shapes on two open invoices: a long through-number and a short sequential one.
+      # ⛔ A third form with a hyphenated prefix appears in a payment purpose quoting an invoice, not
+      # on an invoice itself, so it is not reproduced from that evidence.
+      number:
+        formats:
+          - { pattern: "[0-9]{10}" }
+          - { pattern: "[0-9]{3,4}" }
+
+      # ⚠️ THE PAYMENT-ORDER SAMPLE BLOCK, and it is the most interesting thing on the page for
+      # extraction. 👁 1/1 — the classic 1С/BAS invoice prints a filled-in specimen of a payment
+      # order ABOVE the title, carrying the recipient's name, code, bank and account. Those four
+      # values are therefore PRINTED TWICE on one sheet: once here and once in the supplier block.
+      #
+      # 🔴 That is a genuine ambiguity for a consumer — "which of the two identical values do I
+      # label?" — and it is reproduced rather than smoothed away, because it is what a real invoice
+      # does. The label carries the seller once; the duplication is a property of the page.
+      payment_order_block:
+        caption: "Зразок заповнення платіжного доручення"
+        recipient_label: "Одержувач"
+        code_label: "Код"
+        bank_label: "Банк одержувача"
+        bank_code_label: "Код банку"
+        account_label: "КРЕДИТ рах. №"
+
+      parties:
+        supplier_label: "Постачальник:"
+        buyer_label: "Покупець:"
+        agreement_label: "Договір:"
+        address_label: "Адреса:"
+        phone_label: "Тел.:"
+        account_label: "IBAN"
+        bank_label: "в банку"
+        # ⚠️ THE BUYER IS THE CLAIMANT, a natural person, so the code beside the name is a РНОКПП.
+        # 👁 The observed invoice was addressed to a company and printed a ЄДРПОУ. Same reasoning as
+        # the statement's account holder: an invoice addressed to somebody else evidences nothing
+        # about what this claimant bought. ⛔ A personal buyer on this arrangement was not observed.
+        buyer_code_label: "РНОКПП"
+        supplier_code_label: "Код"
+
+      # 👁 The table of the observed invoice, in its column order. ⛔ NO PER-LINE VAT LETTER COLUMN —
+      # the prices are VAT-inclusive and the tax is stated once at the foot — so a line item of this
+      # class carries NO `vat_letter` in its label either. A letter labelled and not printed would be
+      # a ground-truth value unreadable from the image, which is the rule that gave the bank
+      # statement its second money column.
+      columns:
+        index: "№"
+        name: "Товари (роботи, послуги)"
+        qty: "Кіл-сть"
+        unit: "Од."
+        price: "Ціна з ПДВ"
+        sum: "Сума з ПДВ"
+        # 📄 A seller that is not registered for ПДВ prices without it, so the two money columns
+        # lose the suffix. The status is the vendor's, exactly as on a receipt.
+        price_no_vat: "Ціна"
+        sum_no_vat: "Сума"
+      # 👁 The unit of measure column. Services are counted in «посл.», goods in «шт.».
+      units: { service: "посл.", goods: "шт." }
+
+      totals:
+        # 👁 A registered payer prints the total and the tax contained within it.
+        total_label: "Разом:"
+        vat_label: "У т.ч. ПДВ:"
+        # 📄 A non-payer prints one line and no tax line at all.
+        single_label: "Разом до сплати:"
+        count_format: "Всього найменувань {count}, на суму {amount} грн"
+        vat_in_words_label: "У т.ч. ПДВ:"
+
+      # 👁 «Виписав(ла):» with a name and a post. ⛔ NARROWER THAN OBSERVED: the real invoice prints
+      # the signatory's full name, and this one prints a surname with initials — the form the
+      # narrowed personal-name pool supports. A full given name and patronymic drawn freely would
+      # put a more specific personal name on a published image than any rule here justifies.
+      signature:
+        label: "Виписав(ла):"
+        posts: ["Директор", "Головний бухгалтер", "Менеджер з продажу"]
+        # 📄 A sole trader signs in their own name and states no post; a company names the post of
+        # the authorized person. 📄 A stamp is NOT mandatory on this document.
+        sole_trader_post: null
+
+      # 📄 The recommended alternative to a payment status: how long the offer stands. It is what
+      # occupies the place a «Оплачено» line would occupy on a Polish faktura, and printing it is
+      # this class's positive statement that the document is an OFFER.
+      validity_format: "Рахунок дійсний до {date} р."
+
     bank_statement:
       # 👁 ONE CORPORATE CURRENT-ACCOUNT STATEMENT was observed — 4 pages, 89 operations, a
       # period of one day — and this block is its arrangement. ⚠️ «Банківська виписка» is not one

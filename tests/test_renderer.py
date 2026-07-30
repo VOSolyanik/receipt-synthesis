@@ -27,6 +27,7 @@ from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.config import jurisdiction
 from receipt_synth.content_builder import (
     build_bank_statement,
+    build_invoice,
     build_payment_confirmation,
     build_prro_receipt,
     resolve_vendor,
@@ -61,6 +62,9 @@ CONFIRMATION_SLUGS = sorted(
 )
 STATEMENT_SLUGS = sorted(
     slug for slug, a in ARCHETYPES.items() if a.doc_type is DocType.BANK_STATEMENT
+)
+INVOICE_SLUGS = sorted(
+    slug for slug, a in ARCHETYPES.items() if a.doc_type is DocType.INVOICE
 )
 
 
@@ -162,6 +166,23 @@ def make_statement(seed: int = 20260512, vendor: dict = PAYER):
     )
 
 
+def make_invoice(seed: int = 20260512, vendor: dict = PAYER):
+    """One invoice, for the whole-registry tests below.
+
+    The class's own tests are in test_invoice.py; this exists so that every test here that sweeps
+    the registry sweeps this archetype too.
+    """
+    return build_invoice(
+        random.Random(seed),
+        category_id="vitamins_nutrition",
+        issued_at=datetime(2026, 5, 12, 10, 15),
+        vendor=vendor,
+        buyer_name="Ковальчук Олена Петрівна",
+        buyer_tax_id="2345678901",
+        address="м. Київ, вул. Хрещатик, 22",
+    )
+
+
 def context_for(slug: str) -> dict:
     """A render context for any registered archetype, built by its document class.
 
@@ -178,6 +199,8 @@ def context_for(slug: str) -> dict:
         return make_confirmation().render_context()
     if doc_type is DocType.BANK_STATEMENT:
         return make_statement().render_context()
+    if doc_type is DocType.INVOICE:
+        return make_invoice().render_context()
     raise AssertionError(
         f"{slug} is a {doc_type.value}, and this module has no context for that class — a "
         "registered archetype nothing here can render is one no test below covers"

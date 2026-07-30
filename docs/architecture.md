@@ -473,6 +473,7 @@ twenty-four rows are twenty-five templates. **Five exist today**, across three d
 | `ua_prro_receipt`, `ua_prro_receipt_58mm`, `ua_rro_receipt` | `fiscal_receipt` — the whole class for Ukraine |
 | `ua_bank_payment_confirmation` | `payment_confirmation` |
 | `ua_bank_statement` | `bank_statement` |
+| `ua_invoice` | `invoice` |
 
 The three receipts share one body, `templates/ua_fiscal_receipt.jinja`, and differ in the paper width and in
 the fiscal identity the register prints. That is deliberate and it is also a limit: real registers differ in
@@ -485,9 +486,15 @@ the fields four issuers all carry, and the statement models the **corporate** ac
 of at least three layouts that go by that name. Both limits are declared in `config/labelling-schema.yaml`
 rather than left to be discovered from a score.
 
-**Only the fiscal receipts reach a dataset today.** A claim needs both facts, and the two bank classes prove
-one apiece; the class that proves the other — an invoice — is not written, so `claim_planner` reports those
-categories as not-yet-documentable rather than planning a claim its own document selector would refuse.
+**All four classes reach a dataset.** The invoice is what changed that: it states what was bought and proves
+no payment, the exact inverse of the two bank classes, so a claim's evidence can be **split across two
+documents** for the first time. Six of the seven Ukrainian categories are documented by such a pair; the
+seventh, `vitamins_nutrition`, still produces a single fiscal receipt, because the planner prefers one
+document that proves both facts wherever one is registered.
+
+A pair is **one transaction, counted once**. The invoice and the payment that settles it describe the same
+movement of money, so a claim's amount is one document's and never the sum — see *Both facts, or no
+reimbursement* above.
 
 ### Ukraine
 
