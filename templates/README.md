@@ -33,6 +33,7 @@ every extractable element with `data-field="<name>"`, and reaches a dataset.
 | `ua_platform_receipt` | the same class in Ukrainian and UAH |
 | `platform_receipt.jinja` + `.css` | the body and the page rules the last two share |
 | `ua_insurance_contract` | a three-page insurance contract — one document, several pages |
+| `ua_claim_bundle` | an invoice and the confirmation that settled it — one file, two documents |
 
 Render them with:
 
@@ -49,7 +50,7 @@ every file in this directory.
 **No labels and no bounding boxes, deliberately.** Not one `data-field` attribute appears in any
 of these files — so `RenderedDocument.field_bboxes` comes back empty by construction and the
 render script writes no JSON beside the images. The field names would have to come from the
-labelling contract, and for two of the six the contract's relevant field is still an open
+labelling contract, and for two of the seven the contract's relevant field is still an open
 question (RC-08). Naming fields here would be inventing that answer in markup, where nothing
 reviews it. **Labels and boxes arrive with the connection, not with the layout.**
 
@@ -552,6 +553,116 @@ is an order of magnitude.
 
 ---
 
+## `ua_claim_bundle` — one file, two documents
+
+`ua_insurance_contract` breaks *one page = one document* in one direction: one document across
+three pages. This breaks it in the other. A file-splitting step measured on a corpus holding only
+the first is **still scoring against a guarantee** — every cut it needs to make is a cut it never
+has to refuse. Both directions, or the measurement is not a measurement.
+
+👁 **And it is an observed pattern rather than a hypothesis.** Claimants really do staple the
+documents of one claim into a single PDF before submitting them.
+
+### Sources, counted honestly
+
+**No new public source, and one practitioner observation. Saying so is the point of counting.**
+
+* The *stitching* is 👁 **one observation of a submission practice, made by this project's author
+  in their own workplace**. It is not a public source, it is not a document, and **no real
+  document was read, held or copied to produce it** — what was observed is that people combine
+  files, which is a habit rather than an artifact. One observation is thin evidence and it is
+  recorded as one.
+* The two documents *inside* the file need no new sources, because they are not new documents:
+  they are `ua_invoice` and `ua_bank_payment_confirmation`, whose layouts are already evidenced
+  where those archetypes are, and whose evidence this file neither adds to nor weakens.
+
+### 🔴 The stitching adds nothing, and that is the whole difficulty
+
+Compare the contract: it numbers its own pages, repeats its own number on each of them, and
+carries a running head. **The document tells you which pages belong together.**
+
+Here there is no cover page, no continuous pagination, no unifying header and no page numbering
+across the file. Each page carries only its own document's marks, and **nothing on the file says
+the two are different documents**. The only mark the stitching leaves is the gap between sheets —
+one CSS rule, and the entire visual difference between this file and the two documents in it.
+
+That asymmetry is why both archetypes are needed. One is a document that *insists* its pages are
+one thing; the other is a file that says *nothing at all* about what its pages are.
+
+### The two pages are one claim by construction, not by coincidence
+
+Five things tie them, and the render script sets each rather than hoping the draws agree: one
+vendor instance passed to both builders; one buyer named identically; the invoice's own total
+handed to the confirmation as its transfer, which is the order the assembler uses; the
+confirmation dated four days after the invoice, because an invoice is issued and then settled; and
+🔴 **the invoice's real number and date written into the payment purpose** — the link a
+cross-document check keys on. That last one had to be overridden: the builder draws those
+placeholders independently and would otherwise have printed a purpose naming an invoice that is
+not in the file.
+
+### 🔴 What putting the two on one page revealed about the shipped generator
+
+**The invoice and the confirmation print different identifiers for the same payee.** In the render
+inspected here the invoice gives the seller `Код 15122186` and an IBAN, and the confirmation gives
+the same named firm `Код 14607473` and a different IBAN. Same name, two ЄДРПОУ, two accounts.
+
+⚠️ **This is not a property of the mock-up. It is a property of the shipped builders**, and it
+reaches the production corpus: `assembler` resolves a vendor once and passes that instance to both
+builders, and `build_invoice` and `build_payment_confirmation` each call `generate_edrpou` and
+`generate_iban` on their own. The architecture states that six of the seven Ukrainian categories
+are documented by exactly such a pair, so this holds across the corpus's multi-document claims.
+
+What makes it worth reporting rather than shrugging at is that **the constraint was recognized and
+solved for one field and not extended to its neighbours**. `resolve_vendor`'s own docstring says a
+draw repeated per document *"would print two different sellers on two documents of one purchase"*,
+and fixes the NAME once per vendor instance for that exact reason. The identifiers were left
+drawn per document, and no test asks whether two documents of one claim agree on them.
+
+The consequence is concrete: a downstream counterparty cross-check comparing tax codes would fail
+on **every genuine invoice-and-payment pair in the corpus**. A team measuring such a check would
+read its own correct implementation as broken — or, worse, conclude that counterparty codes are
+not worth comparing.
+
+⛔ **Not fixed here.** It lives in `src/`, which this branch does not touch, and it is a change to
+what the production corpus contains rather than to a mock-up. Recorded for the author.
+
+### 👁 A domain observation: «which amount» has no answer without a key
+
+Three documents in this repository now show the same thing in three different shapes, and it is
+worth stating as a property of the domain rather than as a requirement on any system.
+
+* **The bank statement.** Already measured: the shoulder returned the **first row** of the table
+  instead of the relevant one. Many candidate numbers, one of them the claim's.
+* **The insurance contract.** The largest figure is the sum insured; the money that moved is the
+  premium, roughly forty times smaller and two rows below. Two candidates, and the salient one is
+  the wrong one — wrong by a factor rather than by a margin.
+* **This bundle.** The invoice's total and the confirmation's transfer are the **same number**,
+  both correct, and they describe **one** movement of money. The failure here is not picking the
+  wrong number; it is picking the right one **twice**. The architecture already states the rule —
+  *a pair is one transaction, counted once* — and until now no artifact could test it.
+
+The common factor is not that these documents are long or multi-row. It is that **a document does
+not carry the key that says which of its numbers a claim is about.** The key belongs to the claim,
+not to the paper: the statement needs to know which row, the contract which of two figures, the
+bundle that two figures are one event. A pipeline that answers "which amount" from the document
+alone is answering a question the document was never asked.
+
+This is an observation, not a demand. What follows from it is a decision about where that key
+comes from, and that decision is not this branch's.
+
+### Narrower than reality: the bundle
+
+* **Two documents, in the order a claimant would put them.** Three or more, and orders other than
+  invoice-then-payment, are equally real and not produced.
+* **Both pages are exactly A4**, because both inner archetypes are. A stitched file whose pages
+  are different sizes — a phone screenshot bound after a scanned sheet — is common and not modelled.
+* **Stacked PNG sheets rather than a PDF**, on the same terms as the contract: this repository
+  pins ReportLab for the container, and producing it is part of connecting the archetype.
+* **Nothing is degraded.** A real stitched file is usually a mix — one page scanned, one exported
+  clean — and that mix is itself a segmentation cue. Here both pages are pristine renders.
+
+---
+
 ## What was looked at, and what was seen
 
 The renders were inspected by eye, not merely rendered. What that inspection changed:
@@ -595,3 +706,11 @@ The renders were inspected by eye, not merely rendered. What that inspection cha
 * **The contract's subject, object and territory were set in the monospaced face**, flush right
   with the figures. They are sentences, not data, and monospace made them read as data. The face
   is now chosen per row by a flag from the context rather than by position in the table.
+* **The bundle's two pages named the same firm and gave it two different tax codes and two
+  different IBANs.** Reading the file top to bottom is what made it visible — the two documents
+  are correct apart and contradict each other together. It is the shipped builders' behaviour and
+  not the mock-up's, it reaches the production corpus, and it is written up above rather than
+  fixed, because the fix is in `src/`.
+* **The invoice page is blank for its lower half.** That is the shipped `ua_invoice` archetype's
+  own proportion with a three-line basket, carried through unchanged — the bundle neither caused
+  it nor hides it, and a stitched file really does contain whatever its parts look like.
