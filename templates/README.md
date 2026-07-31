@@ -32,6 +32,7 @@ every extractable element with `data-field="<name>"`, and reaches a dataset.
 | `eu_platform_receipt` | a platform receipt in English and EUR |
 | `ua_platform_receipt` | the same class in Ukrainian and UAH |
 | `platform_receipt.jinja` + `.css` | the body and the page rules the last two share |
+| `ua_insurance_contract` | a three-page insurance contract — one document, several pages |
 
 Render them with:
 
@@ -48,7 +49,7 @@ every file in this directory.
 **No labels and no bounding boxes, deliberately.** Not one `data-field` attribute appears in any
 of these files — so `RenderedDocument.field_bboxes` comes back empty by construction and the
 render script writes no JSON beside the images. The field names would have to come from the
-labelling contract, and for two of the five the contract's relevant field is still an open
+labelling contract, and for two of the six the contract's relevant field is still an open
 question (RC-08). Naming fields here would be inventing that answer in markup, where nothing
 reviews it. **Labels and boxes arrive with the connection, not with the layout.**
 
@@ -452,6 +453,105 @@ answer costs nothing until it is.
 
 ---
 
+## `ua_insurance_contract` — the control that makes «one page = one document» falsifiable
+
+### 🔴 Why a multi-page document at all
+
+**Every archetype in this repository renders exactly one page.** A corpus built from them cannot
+contradict the rule *one page is one document* — so a later step that splits a submitted file into
+logical documents would score a **perfect result on it while never having been tested**. A
+measurement whose ideal is guaranteed by the construction of the data measures the construction,
+not the system.
+
+This document is the control. **One document, three pages**, in one file. Without something like
+it in the corpus, a segmentation figure is not a weak result — it is not a result.
+
+### ⛔ It is explicitly not evidence, and it cannot be labelled today
+
+`medical_insurance` in `config/policy.yaml` states in as many words that a claim of that category
+is proven by *a bank payment confirmation whose payment purpose names the policy and the insurer*,
+and that **«the policy document itself is out of scope and is never parsed»**. So this archetype
+belongs to the catch-all class and to nothing else: it exists to be **segmented and classified**,
+never read for a verdict.
+
+🔴 And the generator could not label it as the catch-all even if it were connected: `DocType` in
+`schemas.py` has **no `other` member and no `contract` member**, both of which the consumer's class
+vocabulary names. That is **RC-14**, still `blocked_on: decision`. So this mock-up sits on the far
+side of an open contract question, exactly as `ua_non_fiscal_receipt` sits on the far side of
+RC-08 — and the same discipline applies: no `data-field` here either, because naming fields would
+be inventing the answer in markup.
+
+### Sources, counted honestly
+
+**Two independent legal source families. No photograph of a real contract among them, and the
+clause prose is invented.**
+
+1. **📄 Article 89(2) of the law on insurance (№ 1909-IX)** lists **nineteen** particulars an
+   insurance contract must contain — the document's name, the insurer's name and address, the
+   policyholder's, the subject and object of the insurance, the sum insured, the tariff, the list
+   of insured risks, the list of exclusions, the term and territory, the premium with its payment
+   procedure, the amendment and termination procedure, the payout procedure and timelines, the
+   grounds for refusing a payout, the parties' rights and obligations, and the dispute-resolution
+   procedure. **That is what makes three pages evidenced rather than chosen.** A one-page
+   insurance contract would be the invention here; nineteen mandatory particulars do not fit on a
+   sheet, and the layout places them across three.
+2. **📄 Article 979 of the Civil Code** makes the **contract** the thing and allows it to be
+   *issued* as a поліс or сертифікат — so a поліс is a **form** of the contract, not a separate
+   document class. The document is therefore titled as a contract and the word «поліс» appears
+   nowhere on it: printing both would suggest the corpus holds two classes where the law holds one.
+
+⚠️ **The clause prose is invented and short**, and both halves are deliberate. Invented is safe —
+a contract clause is a text, not a mark under which a firm trades, and no real document was read
+to produce any of it. Short is a **declared limit**: what is modelled is the page structure and
+where the required particulars fall, which is what a segmenter and a classifier read. Real
+contract prose runs several times longer, and padding a mock-up to look right would mean inventing
+legal text at length to no measurable end.
+
+### What carries the segmentation signal
+
+Three things, and none of them is enough alone:
+
+* **The continuation pages carry no title, no parties and no requisites** — a running head naming
+  the document, and clauses that begin mid-numbering. That is what a wrongly-cut page looks like.
+* **A page footer on every sheet**, carrying «Сторінка N з 3» *beside the document's own number*.
+  The count says how many pages the document has; the number says **which** document they belong
+  to, which is what a file holding two documents would have to be split on.
+* **One `data-document` root for three sheets.** The renderer frames the image on that element, so
+  the image is the whole **file**. A root per sheet would have produced three documents, which is
+  the confusion this archetype exists to break.
+
+### 🔴 A salience trap of a different order
+
+The largest figure on the document is the **sum insured**, and it is not an amount anyone paid.
+The premium is what money changed hands for, and it is roughly forty times smaller and printed two
+rows below. The policy puts this document out of scope precisely so nothing has to read either —
+but a system that has not applied that rule and reaches for the most prominent figure is wrong **by
+a factor, not by a margin**. The payment confirmation carries the same trap as a fee; here the gap
+is an order of magnitude.
+
+### Narrower than reality: the contract
+
+* **A PNG of stacked sheets, not a PDF.** A real multi-page document reaches a verifier as a PDF,
+  and this repository already pins ReportLab for exactly that. Producing the container is part of
+  connecting the archetype; the mock-up shows the layout and the page structure, not the file
+  format. The grey field between sheets asserts no particular viewer — a reproduced toolbar would.
+* ⛔ **There is no pagination engine.** A sheet has a fixed height and **clips**; which section
+  lands on which page is decided in `tools/render_mockups.py`, not by the stylesheet. A section
+  that grows past its sheet is a defect to be caught by eye, and the render has to be looked at
+  whenever the clause list changes.
+* 🔴 **ONE document per file — the other half of the control is NOT built.** This falsifies *one
+  page = one document* in one direction only: one document spanning several pages. The opposite
+  case — **one file holding two documents**, a contract followed by its appendix or an act — is
+  just as real, just as common in what people submit, and would break the rule the other way. It
+  is named here rather than built, because it is a second archetype and this session was asked for
+  one. A segmentation measurement wants both.
+* **One layout and one insurer.** Real insurers' contract layouts differ; one arrangement of the
+  required particulars is modelled, on the same terms as the A4 confirmation's declared gap.
+* **No stamp.** The signature rules are printed empty, which is 👁 the state such a scan is usually
+  in before signing; a scan of a *signed* contract is a further variant not produced here.
+
+---
+
 ## What was looked at, and what was seen
 
 The renders were inspected by eye, not merely rendered. What that inspection changed:
@@ -485,3 +585,13 @@ The renders were inspected by eye, not merely rendered. What that inspection cha
   captions keep their own case now.
 * **Both platform receipts are blank for their bottom third**, exactly as the A4 confirmation is,
   and for the same reason: it is the sheet's own proportion. Left alone.
+* **The contract's second page was half empty and its third ended in mid-air.** Two separate
+  defects from one render: the clause sections were unevenly distributed, and the signature block
+  sat directly under the last clause instead of at the foot of the sheet. A page that ends with a
+  large blank area teaches a segmenter that white space marks a page break, which is exactly the
+  wrong lesson from a control built to test page breaks. The sections were rebalanced, one moved
+  to the second page, and the signatures are now pushed to the foot — where the whitespace above
+  them is a real property of a signed contract rather than a layout accident.
+* **The contract's subject, object and territory were set in the monospaced face**, flush right
+  with the figures. They are sentences, not data, and monospace made them read as data. The face
+  is now chosen per row by a flag from the context rather than by position in the table.
