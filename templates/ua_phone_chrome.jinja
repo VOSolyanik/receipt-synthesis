@@ -1,0 +1,79 @@
+{#
+  The phone chrome — the parts of a screenshot that belong to the DEVICE rather than to
+  whatever is on it: the status bar, the back arrow, the tab bar, the home indicator.
+
+  A FRAGMENT, NOT AN ARCHETYPE, and the extension says so: `templates/*.html` is one renderable
+  document each, and this file is imported by two of them — `ua_bank_app_transaction` and
+  `ua_bank_receipt_in_app`. It declares no `data-document` root; the importing template does.
+  Its stylesheet is `ua_phone_chrome.css`, included alongside each importer's own.
+
+  WHY THE CHROME IS SHARED WHILE THE SCREENS ARE NOT. The two screens are different documents —
+  one carries a transaction card and one carries a whole payment confirmation — but the device
+  around them is the same device. Two spellings of one status bar would drift, and a corpus in
+  which the battery is drawn one way on one archetype and another way on the next teaches the
+  difference as if it meant something.
+
+  ⚠️ EVERY VALUE PASSED IN HERE IS INVENTED — the clock, the battery charge, the signal. No
+  carrier name is drawn at all, because no public pool of them exists in this repository and one
+  written here would be a mark invented to look plausible. Nothing in this fragment identifies a
+  device, an operating system version or a person.
+#}
+
+{# The status bar. Three vector glyphs and a clock — all of it that is legible on a real
+   capture at this size, so all of it there is any basis for drawing. #}
+{% macro status_bar(clock, battery_fill_px) -%}
+<div class="statusbar">
+  <span class="clock">{{ clock }}</span>
+  <span class="indicators">
+    <svg class="glyph" viewBox="0 0 54 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="0"  y="24" width="9" height="12" rx="2.5" fill="currentColor"/>
+      <rect x="15" y="17" width="9" height="19" rx="2.5" fill="currentColor"/>
+      <rect x="30" y="9"  width="9" height="27" rx="2.5" fill="currentColor"/>
+      <rect x="45" y="1"  width="9" height="35" rx="2.5" fill="currentColor" opacity="0.35"/>
+    </svg>
+    <svg class="glyph" viewBox="0 0 48 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M4 13a28 28 0 0 1 40 0" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+      <path d="M12 22a17 17 0 0 1 24 0" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="24" cy="31" r="4" fill="currentColor"/>
+    </svg>
+    <svg class="glyph battery" viewBox="0 0 66 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="1" y="1" width="56" height="30" rx="9" fill="none" stroke="currentColor" stroke-width="3" opacity="0.5"/>
+      <rect x="5" y="5" width="{{ battery_fill_px }}" height="22" rx="6" fill="currentColor"/>
+      <path d="M61 11v10a7 7 0 0 0 0-10z" fill="currentColor" opacity="0.5"/>
+    </svg>
+  </span>
+</div>
+{%- endmacro %}
+
+{# The back arrow. Not a requisite of anything — it is one of the marks that says "this is an
+   application and not a document", which is the classification signal such an image gives
+   honestly, as against the amount and the merchant, which mislead. #}
+{% macro back_chevron() -%}
+<svg class="chevron-back" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M15 4 L7 12 L15 20" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+{%- endmacro %}
+
+{% macro chevron_right() -%}
+<svg class="chevron" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M9 4 L17 12 L9 20" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+{%- endmacro %}
+
+{# The application's own navigation, pinned to the foot of the screen. The first tab is the
+   selected one; nothing depends on which, and a screen with none selected does not occur. #}
+{% macro tab_bar(tabs) -%}
+<nav class="tabbar">
+  {% for tab in tabs %}
+  <span class="tab {% if loop.first %}tab-active{% endif %}">{{ tab }}</span>
+  {% endfor %}
+</nav>
+{%- endmacro %}
+
+{# The bar at the very bottom of a modern phone screen. No text and no meaning — it is on the
+   capture, so it is on the render. #}
+{% macro home_indicator() -%}
+<div class="home-indicator"></div>
+{%- endmacro %}

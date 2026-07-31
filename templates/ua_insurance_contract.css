@@ -1,0 +1,256 @@
+/*
+ * Ukrainian voluntary health insurance contract — three A4 sheets in one image.
+ *
+ * THE PAPER, AND WHY THERE ARE THREE OF IT. A4 at 96 dpi — 794 × 1123 px per sheet — the scale
+ * the payment confirmation and the platform receipts already use, because all of them reach a
+ * claimant as a page shown on a screen. What is new here is that the DOCUMENT is not the sheet:
+ * `.document` holds three `.sheet` elements, the renderer frames the image on `.document`, and
+ * the image is therefore the whole file rather than one page of it.
+ *
+ * `height` rather than `min-height` on a sheet, which is the opposite of every other archetype
+ * here and is the point: a page is a fixed rectangle, and content that outgrows it belongs on the
+ * next one. A sheet that stretched to fit its clauses would be a scroll with a page number
+ * printed on it, and the page boundaries are the thing this archetype exists to show. ⚠️ The
+ * consequence is that overflowing content is CLIPPED rather than reflowed — there is no
+ * pagination engine here, the split across sheets is decided in the render script, and a clause
+ * list grown past its sheet is a defect to be seen by eye rather than a layout that adapts.
+ *
+ * THE FIELD BETWEEN SHEETS IS NEUTRAL GREY AND CARRIES NO VIEWER CHROME. A real multi-page
+ * document reaches a verifier as a PDF, and this repository pins ReportLab for exactly that;
+ * producing the container is part of connecting the archetype, not part of mocking up its layout.
+ * A grey gap says "these are separate pages of one file" without asserting which application was
+ * showing them, which a reproduced toolbar would.
+ *
+ * Font stack: "Noto Sans" throughout, with "Noto Sans Mono" on identifiers and amounts — the
+ * house rule from fonts/README.md, and the same arrangement the other A4 classes use.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  /* The field the sheets sit on, visible only in the gaps between them. */
+  background: #d8dce2;
+}
+
+.document {
+  width: 794px;
+  padding: 0;
+  background: #d8dce2;
+  font-family: "Noto Sans", "Roboto", sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #15181d;
+}
+
+/* A flex column so the signature block can be pushed to the foot of the LAST sheet — see
+   `.signatures` below. The page footer is absolutely positioned and therefore out of this flow,
+   which is what lets it sit at the very bottom of every sheet regardless. */
+.sheet {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 794px;
+  height: 1123px;
+  padding: 62px 68px 54px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* The gap that makes two sheets two sheets. Between them only — a margin above the first would
+   frame the whole file in grey and change what the image is of. */
+.sheet + .sheet {
+  margin-top: 16px;
+}
+
+/* -- first page: title and requisites -------------------------------------- */
+
+.doc-head {
+  text-align: center;
+  padding-bottom: 18px;
+  border-bottom: 2px solid #15181d;
+}
+
+.doc-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.doc-number {
+  margin-top: 6px;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 13px;
+}
+
+/* Place on the left and date on the right, the way a Ukrainian contract heads itself. */
+.doc-place {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+  font-size: 12px;
+}
+
+.doc-date {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+}
+
+.parties {
+  display: flex;
+  gap: 26px;
+  margin-top: 22px;
+}
+
+.party {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 14px;
+  background: #f5f7fa;
+  border: 1px solid #dfe4ec;
+  overflow-wrap: anywhere;
+}
+
+.party-role {
+  color: #59606b;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.party-name {
+  margin-top: 2px;
+  font-weight: 700;
+}
+
+.party-line {
+  font-size: 11px;
+  color: #3d444e;
+}
+
+/* -- the required particulars, as a label/value column --------------------- */
+
+.facts {
+  margin-top: 20px;
+  border-top: 1px solid #dfe4ec;
+}
+
+.fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 7px 0;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.fact-label {
+  color: #3d444e;
+}
+
+/* The body face by default and the mono one only where the value is a FIGURE or a DATE. A
+   monospaced line of Ukrainian prose set flush right reads as data rather than as the sentence
+   it is, and three of the required particulars — the subject, the object and the territory — are
+   sentences. The flag comes from the context rather than from a guess at the string. */
+.fact-value {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.fact-value.mono {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+}
+
+/* 🔴 The sum insured, set larger than everything around it. That is what such a document does,
+   and it is the salience trap: the money that actually moved is the premium two rows below, at a
+   fraction of the figure. */
+.fact-strong .fact-value {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* -- continuation pages ---------------------------------------------------- */
+
+/* 👁 The only thing at the top of pages two and three. A segmenter that ignores it has nothing
+   else on the page tying it to page one. */
+.running-head {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #c9cfd8;
+  color: #59606b;
+  font-size: 11px;
+}
+
+/* -- clauses --------------------------------------------------------------- */
+
+.clause-block {
+  margin-top: 18px;
+}
+
+.clause-heading {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.clause {
+  margin: 0 0 5px;
+  text-align: justify;
+}
+
+/* -- signatures ------------------------------------------------------------ */
+
+/* 👁 SIGNATURES SIT AT THE FOOT OF THE LAST PAGE, not directly under the last clause, and
+   `margin-top: auto` is what puts them there however long the clauses above run. The whitespace
+   this leaves between the final clause and the signatures is a real property of a signed
+   contract — and it is the ONE place on this document where a large blank area is correct,
+   which is why the pages above it are filled instead. */
+.signatures {
+  display: flex;
+  gap: 40px;
+  margin-top: auto;
+  margin-bottom: 46px;
+}
+
+.signature {
+  flex: 1 1 0;
+}
+
+.signature-role {
+  color: #59606b;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+/* Printed empty: the contract is signed by hand after it is printed, which is 👁 the state such
+   a scan is usually in. */
+.signature-rule {
+  height: 34px;
+  border-bottom: 1px solid #6c7480;
+}
+
+.signature-caption {
+  margin-top: 2px;
+  color: #59606b;
+  font-size: 10px;
+}
+
+/* -- page footer ----------------------------------------------------------- */
+
+/* Absolutely positioned so it sits at the foot of the SHEET rather than under the last clause.
+   A page number that floats up to the middle of a short page is a page number a segmenter cannot
+   rely on, and the whole value of this archetype is that the page structure is legible. */
+.page-foot {
+  position: absolute;
+  left: 68px;
+  right: 68px;
+  bottom: 30px;
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid #dfe4ec;
+  color: #6c7480;
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 10px;
+}

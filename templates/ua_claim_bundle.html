@@ -1,0 +1,73 @@
+{#
+  ONE FILE, TWO DOCUMENTS — an invoice and the bank confirmation that settled it, stitched into
+  one multi-page file the way a claimant submits them.
+
+  ⚠️ A MOCK-UP, on the same terms as the others here: not registered in `ARCHETYPES`, no builder,
+  no run, and NO `data-field` attributes — the renderer collects no bounding box from it and
+  nothing here becomes a label. See templates/README.md.
+
+  🔴 THE OTHER HALF OF THE SEGMENTATION CONTROL. `ua_insurance_contract` breaks «one page = one
+  document» in one direction: one document across three pages. This breaks it in the other: two
+  documents in one file. A file-splitting step measured on a corpus containing only the first
+  would still be scoring against a guarantee — every cut it needs to make would be a cut it never
+  has to refuse. Both directions or neither.
+
+  👁 AND IT IS AN OBSERVED PATTERN RATHER THAN A HYPOTHESIS: claimants really do staple the
+  documents of one claim into a single PDF before submitting them.
+
+  🔴 THE STITCHING ADDS NOTHING, AND THAT IS THE WHOLE DIFFICULTY. Compare the contract: it
+  numbers its own pages, repeats its own number on each of them, and carries a running head — the
+  document tells you which pages belong together. Here there is no cover page, no continuous
+  pagination, no unifying header, and no page numbering across the file. Each page carries only
+  its own document's marks, and **nothing on the file says the two are different documents**. A
+  segmenter has nothing to key on but the documents themselves.
+
+  🔴 NEITHER BODY IS REWRITTEN OR COPIED. The two sheets hold `ua_invoice` and
+  `ua_bank_payment_confirmation` — the shipped templates, rendered from the shipped builders'
+  contexts by the shipped renderer, written to disk and embedded as frames. The same route
+  `ua_bank_receipt_in_app` takes, for the same reason and at the same cost: connecting this means
+  the renderer learns to render documents inside another one. What it buys is that the pages of
+  this file ARE the documents the dataset already contains, so a segmentation result on it is a
+  result about those documents rather than about two files written to resemble them.
+
+  THE TWO PAGES ARE ONE CLAIM, and the render script links them rather than hoping they agree:
+  one vendor instance, one buyer, the invoice's own total handed to the confirmation as the
+  transfer, the confirmation dated after the invoice, and the invoice's real number and date
+  written into the payment purpose. That last one is the LINK — the thing a cross-document check
+  keys on — and without the override the builder would have drawn an invoice number naming no
+  document in the file.
+#}
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# ONE `data-document` FOR THE WHOLE FILE. The renderer frames the image on this element, so the
+   image is the FILE — which is the unit a splitting step is given, and the unit whose contents it
+   has to disagree with. A root per sheet would have answered the question the archetype asks. #}
+<div class="file" data-document="claim_bundle">
+
+  {% for sheet in sheets %}
+  <section class="sheet">
+    {# Rendered at its own width, which is the file's width: both classes are A4 at 96 dpi, so
+       nothing is scaled and the pages are the documents at their own size. #}
+    <iframe class="doc" src="{{ sheet.url }}" title="{{ sheet.title }}"
+            style="width: {{ sheet.width }}px; height: {{ sheet.height }}px;"></iframe>
+  </section>
+  {% endfor %}
+
+</div>
+</body>
+</html>

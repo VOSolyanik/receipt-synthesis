@@ -1,0 +1,38 @@
+{#
+  Platform receipt, Ukrainian, UAH — the domestic control for the English variant.
+
+  The body is templates/platform_receipt.jinja, shared with `eu_platform_receipt`; the paper is
+  ua_platform_receipt.css. Language and currency are data, not markup.
+
+  ⚠️ A MOCK-UP: not registered, no builder, no run, no `data-field` attributes.
+
+  WHY A UKRAINIAN VARIANT AT ALL, when the point of the class is a second currency. Because a
+  currency dimension with one document in it measures the document, not the dimension. The pair
+  is what makes a difference readable: same class, same layout, same field set, and a corpus can
+  ask whether a result moved because the currency changed or because the class did.
+
+  🔴 IT IS NOT A TRANSLATION OF THE OTHER ONE, and the README says so rather than letting a
+  reader assume it. Three things separate them, and the third is law:
+
+    * language — uk against en;
+    * currency — UAH against EUR;
+    * TAX TREATMENT. This seller is a Ukrainian company registered for ПДВ, so 📄 it prints its
+      identifiers and a 20% tax line, and carries NO note denying that it is a tax document. The
+      English variant carries that note and none of those requisites. Reading the pair as a clean
+      two-variable comparison would credit the currency with a difference the tax block caused.
+
+  THE SELLER IS DRAWN FROM `config/vendors.json`, READ AND NOT MODIFIED — an
+  `online_learning_platform` of the `professional_development` category, a public Ukrainian mark
+  already in the pool for exactly that trade. No mark was added anywhere for this archetype: the
+  foreign platform on the English variant is a public mark too, named in the render script under
+  a comment saying it belongs in that file once the class is connected.
+
+  ⛔ A FOREIGN PLATFORM'S UKRAINIAN RECEIPT IS NOT MODELLED, and the omission is deliberate. 📄
+  Under Law № 1525-IX a non-resident supplying electronic services to Ukrainian individuals
+  registers for ПДВ under ст. 208¹ ПКУ, receives an individual tax number and charges 20% — so
+  such a document exists and would be the sharper artifact, one seller issuing both variants.
+  Printing it would mean printing a named foreign company's Ukrainian tax registration, which is
+  a checkable claim about a real firm that this branch has not checked and must not assert. A
+  domestic seller states only what config/vendors.json already states.
+#}
+{% include "platform_receipt.jinja" %}

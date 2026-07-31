@@ -1,0 +1,129 @@
+/*
+ * Ukrainian mobile-bank transaction screen — what this archetype adds to the phone chrome.
+ *
+ * Everything the two screenshot archetypes share is in templates/ua_phone_chrome.css, which
+ * this template includes ahead of this file: the screen geometry, the palette, the status bar,
+ * the tab bar and the foot. What is here is the ONE SCREEN — the hero block, the rows and the
+ * action menu. The reasoning behind the 3× device-pixel unit and the deliberately generic
+ * palette is stated once, in that file.
+ */
+
+.overflow {
+  font-size: 48px;
+  letter-spacing: 3px;
+  color: #9aa0aa;
+}
+
+/* -- the hero block -------------------------------------------------------- */
+
+.hero {
+  padding: 84px 72px 0;
+  text-align: center;
+}
+
+/* 🔴 The counterparty as the card network carries it: a processor prefix, an asterisk and a
+   truncated tail. NOT set in monospace, although the string is machine-shaped: the phone
+   renders it in the interface face like any other line, and setting it apart typographically
+   would tell a reader something the real screen does not. */
+.merchant {
+  font-size: 69px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  overflow-wrap: anywhere;
+}
+
+.chip {
+  display: inline-block;
+  margin-top: 27px;
+  padding: 12px 33px;
+  border-radius: 999px;
+  background: #1c1f26;
+  color: #b9bfc9;
+  font-size: 39px;
+}
+
+.when {
+  margin-top: 27px;
+  color: #8d939e;
+  font-size: 42px;
+}
+
+/* 👁 The biggest thing on the screen, and the sign is part of it. Tabular figures, the way an
+   interface sets a currency amount. */
+.amount {
+  margin-top: 45px;
+  font-size: 126px;
+  font-weight: 700;
+  letter-spacing: -2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- the rows -------------------------------------------------------------- */
+
+.cards {
+  padding: 90px 48px 0;
+}
+
+.card {
+  background: #16181d;
+  border-radius: 42px;
+  padding: 0 42px;
+}
+
+.card + .card {
+  margin-top: 36px;
+}
+
+.card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 36px;
+  padding: 39px 0;
+}
+
+.card-row + .card-row {
+  border-top: 3px solid #23262d;
+}
+
+.label {
+  color: #8d939e;
+  font-size: 45px;
+  white-space: nowrap;
+}
+
+.value {
+  font-size: 45px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* The description row is EMPTY on a fresh operation, and it is empty here: the app invites the
+   owner to add a note. An extractor that reads it gets an invitation, not a purpose of payment.
+   A third form of emptiness beside the two the A4 confirmation already models — a hyphen
+   printed as a value, and a caption with nothing under it. */
+.placeholder {
+  color: #5d636d;
+  font-size: 45px;
+}
+
+/* -- the action menu ------------------------------------------------------- */
+
+.actions {
+  padding: 60px 48px 0;
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 45px 42px;
+  background: #16181d;
+  border-radius: 42px;
+  font-size: 48px;
+  color: #cdd3dd;
+}
+
+.action + .action {
+  margin-top: 24px;
+}

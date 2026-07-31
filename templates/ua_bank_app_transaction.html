@@ -1,0 +1,132 @@
+{#
+  Ukrainian mobile-bank TRANSACTION SCREEN — a screenshot of one operation inside the app.
+
+  ⚠️ A MOCK-UP, on the same terms as the other two in this directory: not registered in
+  `ARCHETYPES`, no builder produces it, no run contains it, and it carries NO `data-field`
+  attributes — so the renderer collects no bounding box from it and nothing here becomes a
+  label. That absence is a decision, not an unfinished edge. See templates/README.md.
+
+  🔴 WHAT MAKES IT WORTH BUILDING IS EVERYTHING IT DOES NOT CARRY. It is the strongest NEGATIVE
+  example this repository can hold for the payment class: it looks like proof of payment to a
+  person, and it carries none of the requisites by which proof of payment is recognized —
+
+    ⛔ no document number      ⛔ no authorization code   ⛔ no RRN
+    ⛔ no stamp                ⛔ no signature            ⛔ no amount in words
+    ⛔ no payer or payee requisites, no account, no purpose of payment
+
+  Every one of those is printed by `ua_bank_payment_confirmation`, and this screen is what the
+  same payment looks like two taps earlier. People send this one, because it is two taps.
+
+  A classifier reading a large amount, a merchant and the word «квитанція» in the interface has
+  every reason to call it a payment confirmation; extraction then hunts for fields that are not
+  on the image, and the verdict fails for a reason no log traces back to the TYPE OF INPUT. That
+  is the failure this document exists to make visible. Formally the class is already covered —
+  `other` routes to `in_review`, which is the correct outcome — but a corpus that contains no
+  such image never measures whether the system arrives there.
+
+  🔴 THE MERCHANT DESCRIPTOR IS A SECOND, SEPARATE PHENOMENON, and no document in this
+  repository has ever printed one. The counterparty line is NOT a legal name: it is
+  `<PROCESSOR>*<tail>`, the string a payment processor puts into the card network's message. The
+  prefix is a public Ukrainian processor read from `payment_providers` and `aggregators` in
+  config/vendors.json — public marks, used for exactly the trade they are publicly in. The tail
+  is the merchant's name as the descriptor field leaves it: uppercased, truncated, the legal
+  form dropped. So the bank says one string and an invoice for the same purchase says another,
+  and a counterparty cross-check comparing the two fails on a document pair that is entirely
+  genuine. ⚠️ THE NORMALIZATION RULE IS NOT THIS REPOSITORY'S WORK — a consumer decides how to
+  compare them. This template's job is to PRINT the phenomenon so there is something to decide.
+
+  SOURCE AND ITS LIMIT. The element list — status bar, back arrow, descriptor, category chip,
+  the date in words with the time beside it, the signed amount in the largest type, the rows
+  below it, and an action menu containing «Переглянути квитанцію» — is the arrangement observed
+  on public screenshots of Ukrainian banking apps and recorded in the project's research notes.
+  ⛔ NO ISSUER'S VISUAL DESIGN IS REPRODUCED; the reasoning is in ua_phone_chrome.css.
+#}
+{% from "ua_phone_chrome.jinja" import status_bar, back_chevron, chevron_right, tab_bar, home_indicator %}
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{% include "ua_phone_chrome.css" %}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# One document root, as every renderable template in this directory declares. #}
+<div class="screen" data-document="bank_app_transaction">
+
+  {{ status_bar(status_time, battery_fill_px) }}
+
+  <div class="navbar">
+    {{ back_chevron() }}
+    <span class="overflow">•••</span>
+  </div>
+
+  <section class="hero">
+    {# 🔴 THE DESCRIPTOR. Not a legal name — see the header comment. #}
+    <div class="merchant">{{ merchant_descriptor }}</div>
+    {# ⚠️ THE CHIP IS THE BANK'S CATEGORY, AND IT IS DRAWN INDEPENDENTLY OF WHAT WAS BOUGHT —
+       deliberately. A bank categorizes by the payment ROUTE, so a purchase settled through a
+       utility-payment aggregator lands under utilities whatever the merchant sells. It is
+       therefore a third thing on this screen that looks like evidence and is not, and it must
+       never be mistaken for a category of config/policy.yaml, which is what a benefit plan
+       reimburses. #}
+    <div class="chip">{{ category }}</div>
+    {# 👁 The date is written out in words with the time beside it, which is how the screen
+       states it and NOT how any document in this repository does. A consumer parsing
+       «2 лютого 2024, 13:46» needs a different reader than the one that parses 02.02.2024. #}
+    <div class="when">{{ datetime_words }}</div>
+    {# 👁 The largest element on the screen, and SIGNED. The minus is the direction of the
+       operation — money leaving the account — and it is the one thing this screen states that
+       the A4 confirmation does not print at all. #}
+    <div class="amount">{{ amount_signed }}</div>
+  </section>
+
+  {# The rows under the amount. Each is a property of the ACCOUNT rather than of the purchase,
+     which is exactly why none of them proves anything about what was bought. #}
+  <section class="cards">
+    <div class="card">
+      <div class="card-row">
+        <span class="label">{{ description_label }}</span>
+        <span class="placeholder">{{ description_placeholder }}</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-row">
+        <span class="label">{{ balance_label }}</span>
+        <span class="value">{{ balance }}</span>
+      </div>
+      <div class="card-row">
+        <span class="label">{{ payment_method_label }}</span>
+        <span class="value">{{ payment_method }}</span>
+      </div>
+    </div>
+  </section>
+
+  {# 🔴 «Переглянути квитанцію» IS THE LINK BETWEEN THIS ARCHETYPE AND THE OTHER TWO. The formal
+     document exists — it is one tap away, and `ua_bank_receipt_in_app` is what that tap opens.
+     A screen printing a link to a receipt is not the receipt, and a classifier reading the word
+     «квитанція» off this image is reading a BUTTON. #}
+  <section class="actions">
+    {% for action in actions %}
+    <div class="action">
+      <span>{{ action }}</span>
+      {{ chevron_right() }}
+    </div>
+    {% endfor %}
+  </section>
+
+  {{ tab_bar(tabs) }}
+  {{ home_indicator() }}
+
+</div>
+</body>
+</html>

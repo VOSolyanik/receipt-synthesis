@@ -1,0 +1,164 @@
+{#
+  Ukrainian voluntary health insurance contract — договір добровільного медичного страхування.
+  THREE PAGES IN ONE FILE, and that is the whole reason it exists.
+
+  ⚠️ A MOCK-UP, on the same terms as the others in this directory: not registered in
+  `ARCHETYPES`, no builder, no run, and NO `data-field` attributes — so the renderer collects no
+  bounding box and nothing here becomes a label. See templates/README.md.
+
+  🔴 WHY: «ONE PAGE = ONE DOCUMENT» IS CURRENTLY TRUE BY CONSTRUCTION. Every archetype in this
+  repository renders exactly one page, so a corpus built from them cannot contradict that rule —
+  and a later step that splits a submitted file into logical documents would score a perfect
+  result on it while never having been tested. A measurement whose ideal is guaranteed by the
+  construction of the data measures the construction, not the system. This document is the
+  control that makes the rule falsifiable: ONE document, THREE pages.
+
+  ⛔ AND IT IS EXPLICITLY NOT EVIDENCE. `medical_insurance` in config/policy.yaml states in as
+  many words that a claim is proven by a bank payment confirmation whose purpose names the policy,
+  and that «the policy document itself is out of scope and is never parsed». So this belongs to
+  the catch-all class and to nothing else. It exists to be SEGMENTED and CLASSIFIED, never to be
+  read for a verdict — and 🔴 the generator cannot even label it as the catch-all today: `DocType`
+  in schemas.py has no `other` member and no `contract` member, which is RC-14, still open.
+
+  WHAT MAKES THE PAGE COUNT EVIDENCED RATHER THAN CHOSEN. 📄 Article 89(2) of the law on
+  insurance (№ 1909-IX) lists NINETEEN particulars an insurance contract must contain — among
+  them the list of insured risks, the list of exclusions, the payout procedure, the grounds for
+  refusing a payout, the parties' rights and obligations, the amendment and termination procedure
+  and the dispute-resolution procedure. That is not a page of content. The layout below places
+  those nineteen across three sheets, which is what they come to; a one-page insurance contract
+  would be the invention here, not a three-page one.
+
+  📄 A SECOND, INDEPENDENT SOURCE decides what the document is called. Article 979 of the Civil
+  Code makes the contract the thing and allows it to be ISSUED as a поліс or сертифікат — so the
+  поліс is a FORM of the contract rather than a separate document class. The title printed here
+  is therefore the contract's, and «поліс» appears nowhere: naming it both would suggest the
+  corpus holds two classes where the law holds one.
+
+  ⚠️ THE CLAUSE PROSE IS INVENTED AND SHORT. What is modelled is the PAGE STRUCTURE and the
+  placement of the required particulars — which is what a segmenter and a classifier read. Real
+  contract prose runs far longer, and a mock-up that padded itself to look right would be
+  inventing legal text at length to no measurable end. The limit is declared in
+  templates/README.md rather than left to be discovered from a render.
+#}
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# ONE `data-document` FOR THREE SHEETS, and the placement is the point rather than a detail. The
+   renderer frames the image on this element, so the image is THE WHOLE FILE — three pages — and
+   not one page of it. A root per sheet would have produced three documents, which is the very
+   confusion this archetype exists to break. #}
+<div class="document" data-document="insurance_contract">
+
+  {% for page in pages %}
+  <section class="sheet">
+
+    {% if loop.first %}
+    {# 📄 Item 1 of Article 89(2) — the name of the document and of the insurance product. #}
+    <header class="doc-head">
+      <h1 class="doc-title">{{ title }}</h1>
+      <div class="doc-number">{{ number_label }} {{ number }}</div>
+      <div class="doc-place">{{ place }}<span class="doc-date">{{ date }}</span></div>
+    </header>
+
+    {# 📄 Items 2 and 3 — the insurer's name and address, and the policyholder's name and date of
+       birth. The insurer's licence line is 👁 what such a document carries beside them; the
+       registry entry it refers to is public. #}
+    <section class="parties">
+      <div class="party">
+        <div class="party-role">{{ labels.insurer }}</div>
+        <div class="party-name">{{ insurer.name }}</div>
+        <div class="party-line">{{ insurer.address }}</div>
+        <div class="party-line">{{ labels.tax_code }} {{ insurer.tax_code }}</div>
+        <div class="party-line">{{ insurer.licence }}</div>
+      </div>
+      <div class="party">
+        <div class="party-role">{{ labels.policyholder }}</div>
+        <div class="party-name">{{ policyholder.name }}</div>
+        <div class="party-line">{{ labels.born }} {{ policyholder.born }}</div>
+        <div class="party-line">{{ policyholder.address }}</div>
+        <div class="party-line">{{ labels.tax_id }} {{ policyholder.tax_id }}</div>
+      </div>
+    </section>
+
+    {# 📄 Items 4, 5, 7, 11, 12 and 13 — the subject and object of the insurance, the sum insured,
+       the tariff, the term and territory, and the premium with its payment schedule.
+
+       🔴 THE LARGEST FIGURE ON THE DOCUMENT IS THE SUM INSURED, AND IT IS NOT AN AMOUNT ANYONE
+       PAID. The premium is what money changed hands for, and it is an order of magnitude smaller
+       and printed lower down. `medical_insurance` in config/policy.yaml puts this document out of
+       scope precisely so that nothing has to read either number — but a system that has not
+       applied that rule and reaches for the most prominent figure is wrong by a factor, not by a
+       margin. The same salience trap the payment confirmation carries as a fee, at a different
+       scale. #}
+    <section class="facts">
+      {% for fact in facts %}
+      <div class="fact {% if fact.emphasis %}fact-strong{% endif %}">
+        <span class="fact-label">{{ fact.label }}</span>
+        <span class="fact-value {% if fact.mono %}mono{% endif %}">{{ fact.value }}</span>
+      </div>
+      {% endfor %}
+    </section>
+    {% else %}
+    {# 👁 A CONTINUATION PAGE, and what it carries is the whole segmentation signal: no title, no
+       parties, no requisites — a running head naming the document it belongs to, and clauses that
+       begin mid-numbering. A page that looks like this and is treated as its own document has
+       been cut in the wrong place, and nothing but the running head and the page footer says so. #}
+    <div class="running-head">{{ running_head }}</div>
+    {% endif %}
+
+    {% for section in page.sections %}
+    <section class="clause-block">
+      <h2 class="clause-heading">{{ section.heading }}</h2>
+      {% for clause in section.clauses %}
+      <p class="clause">{{ clause }}</p>
+      {% endfor %}
+    </section>
+    {% endfor %}
+
+    {% if loop.last %}
+    {# 📄 Item 17 closes on the signatures. 👁 The stamp beside them is what an issued contract
+       carries; it spells no personal name, for the reason the payment confirmation's signature
+       gives — a legible name in script would put one on a published image for nothing. #}
+    <section class="signatures">
+      <div class="signature">
+        <div class="signature-role">{{ labels.insurer }}</div>
+        <div class="signature-rule"></div>
+        <div class="signature-caption">{{ labels.signature_caption }}</div>
+      </div>
+      <div class="signature">
+        <div class="signature-role">{{ labels.policyholder }}</div>
+        <div class="signature-rule"></div>
+        <div class="signature-caption">{{ labels.signature_caption }}</div>
+      </div>
+    </section>
+    {% endif %}
+
+    {# THE PAGE FOOTER IS THE OTHER HALF OF THE SEGMENTATION SIGNAL — «page N of M» beside the
+       document's own number, on every sheet. Both are needed and neither is enough: the count
+       says how many pages the document has, and the number says WHICH document they belong to,
+       which is what a file holding two documents would need to be split on. #}
+    <footer class="page-foot">
+      <span>{{ number_label }} {{ number }}</span>
+      <span>{{ page.folio }}</span>
+    </footer>
+
+  </section>
+  {% endfor %}
+
+</div>
+</body>
+</html>

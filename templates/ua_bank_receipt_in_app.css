@@ -1,0 +1,67 @@
+/*
+ * A bank payment confirmation captured inside the banking app — what this archetype adds to
+ * the phone chrome.
+ *
+ * Everything the two screenshot archetypes share is in templates/ua_phone_chrome.css, included
+ * ahead of this file. What is here is the SHEET: the white card the document sits on, the frame
+ * that holds the document, and the share button under it.
+ */
+
+.screen-title {
+  font-size: 51px;
+  font-weight: 600;
+}
+
+/* Balances the back arrow on the other side so the heading sits on the centre line of the
+   screen rather than on the centre of the space left over beside the arrow. */
+.nav-spacer {
+  width: 66px;
+  flex: 0 0 auto;
+}
+
+/* -- the document on its card ---------------------------------------------- */
+
+.sheet {
+  padding: 54px 48px 0;
+}
+
+/* 🔴 THE ONLY PLACE ON A PHONE SCREEN WHERE PAPER-WHITE APPEARS, and that is the whole visual
+   argument of the archetype: the document is the same white sheet it is on A4, set into an
+   interface that is not. `overflow: hidden` with the rounded corners is what makes the card
+   read as a card — the frame inside it is square, and its corners would otherwise show.
+   The HEIGHT IS SET INLINE by the template, from the document's real rendered height. */
+.doc-frame {
+  overflow: hidden;
+  border-radius: 36px;
+  background: #ffffff;
+}
+
+/* The document is rendered at its own size and scaled down to the card. `transform-origin`
+   at the top left keeps the scaled box anchored to the corner of the card, so the wrapper's
+   height — scale × the document's height — is exactly the space the scaled document occupies.
+   A centred origin would leave the document floating half out of its own card. */
+.doc {
+  display: block;
+  border: 0;
+  transform-origin: top left;
+}
+
+/* -- the share button ------------------------------------------------------ */
+
+.share {
+  padding: 54px 48px 0;
+  text-align: center;
+}
+
+/* Neutral grey rather than an accent hue, for the reason the whole palette is neutral: an
+   accent colour is the most recognizable thing about a banking app, and this file reproduces
+   no issuer's design. */
+.share-button {
+  display: block;
+  padding: 42px 0;
+  border-radius: 42px;
+  background: #23262d;
+  color: #e8eaee;
+  font-size: 48px;
+  font-weight: 600;
+}

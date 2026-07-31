@@ -1,0 +1,33 @@
+/*
+ * Ukrainian non-fiscal sales slip — товарний чек, 80 mm thermal paper.
+ *
+ * Everything shared with the fiscal receipts is in templates/ua_fiscal_receipt.css, which this
+ * template includes ahead of this file. THAT SHARING IS THE POINT rather than a saving: the trap
+ * only works if the two documents are the same object to the eye, and a stylesheet written from
+ * scratch here would drift into looking like a different kind of paper.
+ *
+ * The paper is 640 px — 80 mm at the 8 px/mm scale this repository renders Ukrainian receipts
+ * at, the wide entry of `receipt.widths_mm` in config/fiscal-rules.yaml. Only the wide roll is
+ * mocked up; the narrow one is a second template when this archetype is connected, exactly as
+ * the fiscal class already splits.
+ */
+
+.receipt {
+  width: 640px;
+  padding: 26px 30px 34px;
+}
+
+/* The two lines the accounting law adds and the fiscal form has no room for. Set apart from the
+   title above them, because a name and a signature are an attestation rather than a further
+   line of the document's identity. */
+.issued-by {
+  margin-top: 12px;
+}
+
+/* The rule a signature is written on, printed empty: the slip is signed by hand after it is
+   printed. Narrower than the paper and centred, as a signature line is. */
+.sign-line {
+  width: 60%;
+  margin: 26px auto 2px;
+  border-bottom: 1px solid #444444;
+}

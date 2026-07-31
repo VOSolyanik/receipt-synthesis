@@ -1,0 +1,239 @@
+/*
+ * Platform receipt — the rules SHARED by both archetypes of this class.
+ *
+ * Included by templates/platform_receipt.jinja ahead of each archetype's own `<slug>.css`, so a
+ * per-archetype rule overrides one here. THE PAPER WIDTH IS NOT IN THIS FILE: it belongs to each
+ * archetype, the way it does for the fiscal receipts, and the test suite reads it out of
+ * `<slug>.css`.
+ *
+ * THE PAPER. A4 at 96 dpi — 794 × 1123 px — the same scale and the same reasoning as the bank
+ * payment confirmation: this is a PDF or an emailed page shown on a screen, not a thermal strip
+ * captured at print resolution. `min-height` rather than `height`, so more lines lengthen the
+ * sheet instead of running off the bottom of it.
+ *
+ * ⛔ NO ISSUER'S VISUAL DESIGN IS REPRODUCED, on the same reasoning as the phone chrome. Real
+ * platform receipts are branded and no two look alike; copying one would be a claim about that
+ * company's design made from material that cannot be cited. What is modelled is the ARRANGEMENT
+ * of the fields, which is what a document-understanding system reads. The palette here is
+ * deliberately plain — near-black on white, one grey — and carries no logo and no accent hue.
+ *
+ * ⚠️ ONE LAYOUT FOR THE WHOLE CLASS, and it is a narrowing rather than a finding: the field set
+ * is evidenced, the visual diversity between platforms is not modelled, and a consumer must not
+ * read robustness to platform layouts off a score on this corpus. The same limit the A4
+ * confirmation carries, for the same reason.
+ *
+ * Font stack: "Noto Sans" leads the prose and "Noto Sans Mono" every figure and identifier, and
+ * both name "Noto Sans" — the house rule from fonts/README.md, since Roboto has no ₴ glyph and
+ * Chromium must always have a Noto face to substitute from. The mono face on the amounts is what
+ * keeps two currencies' figures in one column when they sit in one corpus.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
+
+.page {
+  box-sizing: border-box;
+  min-height: 1123px;
+  padding: 64px 68px 56px;
+  background: #ffffff;
+  color: #15181d;
+  font-family: "Noto Sans", "Roboto", sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.mono {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+}
+
+.muted {
+  color: #59606b;
+}
+
+.caption {
+  color: #59606b;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.small {
+  font-size: 11px;
+}
+
+/* -- header ---------------------------------------------------------------- */
+
+.head {
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e3e7ed;
+}
+
+/* The platform's name, and on the EU variant the only thing the seller block contains. No logo:
+   a rendered wordmark would be a reproduction of a real company's asset, and the name in the
+   page's own face asserts nothing beyond the name. */
+.brand {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+/* -- title and the amount paid --------------------------------------------- */
+
+.title-block {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 30px;
+}
+
+.title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.paid {
+  text-align: right;
+}
+
+/* 👁 The largest figure on the page is the amount paid, which on this class is also the amount
+   of the claim — unlike the bank confirmation, where the biggest number is the total charged and
+   the claim's amount is the transfer beneath it. Two classes, opposite salience rules. */
+.paid-amount {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+}
+
+/* -- the three meta fields ------------------------------------------------- */
+
+.meta {
+  display: flex;
+  gap: 30px;
+  margin-top: 30px;
+  padding: 16px 18px;
+  background: #f6f8fa;
+  border-radius: 4px;
+}
+
+.meta-item {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meta-item .mono {
+  font-size: 12px;
+}
+
+/* -- the buyer ------------------------------------------------------------- */
+
+.party {
+  margin-top: 26px;
+}
+
+.party-name {
+  font-weight: 700;
+}
+
+/* -- the lines ------------------------------------------------------------- */
+
+.lines {
+  width: 100%;
+  margin-top: 26px;
+  border-collapse: collapse;
+}
+
+.lines th {
+  padding: 0 0 8px;
+  border-bottom: 1px solid #15181d;
+  color: #59606b;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.lines td {
+  padding: 12px 0;
+  border-bottom: 1px solid #e3e7ed;
+  vertical-align: top;
+}
+
+.col-desc {
+  width: 66%;
+  overflow-wrap: anywhere;
+}
+
+.col-qty {
+  width: 10%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.col-amount,
+.lines th.col-amount {
+  width: 24%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* -- totals ---------------------------------------------------------------- */
+
+/* Right-aligned in a column narrower than the page, the way a totals block sits under the last
+   line of a table rather than across the whole sheet. */
+.totals {
+  width: 58%;
+  margin: 20px 0 0 auto;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 5px 0;
+}
+
+/* The totals captions are the DOCUMENT'S OWN WORDING and keep their own case. `.caption`
+   uppercases, which is right for the small field labels above — «RECEIPT NUMBER», «ОПИС» — and
+   wrong here: the Ukrainian labels come from `invoice.totals` in config/fiscal-rules.yaml, where
+   «У т.ч. ПДВ:» is written the way an invoice writes it, and uppercasing it in a stylesheet
+   overrides a value config settled. */
+.totals .caption {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.grand {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid #15181d;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* -- foot ------------------------------------------------------------------ */
+
+.foot {
+  margin-top: 46px;
+  padding-top: 16px;
+  border-top: 1px solid #e3e7ed;
+}
+
+/* 🔴 The negative marker gets a rule of its own so that it is legible at the foot of a page
+   rather than lost in it — 👁 which is where such a line sits and how it reads. It is set in the
+   body face and not shouted: the document is not warning anybody, it is stating its own kind. */
+.notice {
+  font-weight: 600;
+  margin-bottom: 6px;
+}

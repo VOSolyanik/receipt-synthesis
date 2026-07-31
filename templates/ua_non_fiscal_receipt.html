@@ -1,0 +1,176 @@
+{#
+  Ukrainian NON-FISCAL sales slip — товарний чек, issued without a cash register.
+
+  ⚠️ A MOCK-UP. It is not registered in `ARCHETYPES`, no builder produces it, no run contains
+  it, and it carries NO `data-field` attributes — so the renderer collects no bounding box from
+  it and nothing here becomes a label. That absence is a decision and not an unfinished edge:
+  the field names would have to come from the labelling contract, and the contract's marker
+  field is still open (RC-08). See templates/README.md.
+
+  WHAT THIS DOCUMENT IS FOR. The consuming system's rule is that a NEGATIVE fiscality marker
+  overrides every positive fiscality signal a document carries. Nothing in this repository
+  prints such a marker, so the rule has no test document — the whole argument rests on a class
+  the corpus does not contain. This page is that document.
+
+  WHAT THE SOURCES ACTUALLY SAY, AND WHY THIS PAGE LOOKS THE WAY IT DOES.
+
+  📄 The form and content of a товарний чек is NOT defined by law — that is stated by the tax
+  service itself, and it is why this is a mock-up of a convention rather than of a form. What
+  the tax service does state (БЗ 109.10, quoted identically by four independent outlets) is a
+  MINIMUM: the document must carry the wording «Товарний чек», and its content must satisfy
+  п. 2 розд. II of the Положення про форму та зміст розрахункових документів (наказ Мінфіну
+  № 13 від 21.01.2016) — the fiscal receipt's own form — EXCEPT for the fiscal number of the
+  register and the wording «ФІСКАЛЬНИЙ ЧЕК».
+
+  🔴 SO THE NEGATIVE MARKER IS NOT THE STRING THE CONTRACT ASSUMES. The contract names
+  «НЕ ФІСКАЛЬНИЙ ЧЕК» as the Ukrainian negative marker. No public source found says that string
+  is printed on a SALES document. What the sources evidence is two other things, and both are
+  printed here:
+
+    * a POSITIVE SELF-IDENTIFYING TITLE — «ТОВАРНИЙ ЧЕК» — standing where «ФІСКАЛЬНИЙ ЧЕК»
+      would stand on the fiscal form;
+    * an ABSENCE — no fiscal number, no fiscal wording, no register's maker, no online marker,
+      no QR. The contract's own vocabulary already admits an absence as one kind of negative
+      marker ("an empty receipt-number field"), so this is inside the rule rather than beside it.
+
+  A SECOND LEGAL SOURCE, INDEPENDENT OF THE FIRST, decides the two lines at the foot. A товарний
+  чек is a primary accounting document, so ст. 9 of the law on accounting (№ 996-XIV) requires
+  it to name the person responsible for the operation and to carry that person's signature.
+  A fiscal receipt carries neither. They are printed here for that reason and no other.
+
+  ⛔ NOT MODELLED, and named so it is not read off the render: the HANDWRITTEN товарний чек on a
+  pre-printed pad, which is the other real variety and a different image problem entirely.
+
+  Body deliberately NOT shared with templates/ua_fiscal_receipt.jinja. The shared body prints
+  the fiscal identity unconditionally, and making it conditional would edit a file three shipped
+  archetypes render from — a change to the corpus, made from a mock-up. The stylesheet IS shared:
+  `ua_fiscal_receipt.css` carries the till-roll rules, and a second copy of them would be a
+  second thing to keep in step.
+#}
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{% include "ua_fiscal_receipt.css" %}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# One document root, as every template in this directory declares. #}
+<div class="receipt" data-document="non_fiscal_receipt">
+
+  {# The seller block is the fiscal receipt's, minus one line. 📄 A ПДВ payer is obliged to use a
+     register, so the seller of a товарний чек is a non-payer — no «ПН» line exists to print, and
+     the identification code «ІД» stands alone. That is an inference from who may issue this
+     document at all, not an observation of one. #}
+  <header class="block centered">
+    <div class="seller-name">{{ seller_display }}</div>
+    <div>{{ seller.address }}</div>
+    {% if seller.tax_code %}
+    <div>{{ seller.tax_code_label }} <span>{{ seller.tax_code }}</span></div>
+    {% endif %}
+  </header>
+
+  <div class="rule"></div>
+
+  {# The basket, printed exactly as the fiscal body prints it — WITHOUT the ПДВ letter, which a
+     non-payer's line does not carry. This is the trap: the merchandise, the arithmetic and the
+     column layout are those of a fiscal receipt, so nothing here tells a classifier anything. #}
+  <section class="block">
+    {% for item in items %}
+    <div class="item">
+      <div class="item-name">{{ item.name }}</div>
+      <div class="row">
+        <span class="item-qty">{{ item.qty }} &times; {{ item.price }}</span>
+        <span class="item-sum">{{ item.sum }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  <div class="rule"></div>
+
+  {# The four amount lines of 📄 the form, in the form's order, from `receipt.totals_labels` in
+     config/fiscal-rules.yaml — the same values the fiscal archetypes read. A non-payer prints no
+     tax rows between them, so the block is four lines rather than four plus the ПДВ summary. #}
+  <section class="block">
+    <div class="row total">
+      <span>{{ totals_labels.total }}</span>
+      <span>{{ total }}</span>
+    </div>
+    <div class="row">
+      <span>{{ totals_labels.discount }}</span>
+      <span>{{ discount }}</span>
+    </div>
+    <div class="row">
+      <span>{{ totals_labels.rounding }}</span>
+      <span>{{ rounding }}</span>
+    </div>
+    <div class="row total">
+      <span>{{ totals_labels.amount_due }}</span>
+      <span>{{ amount_due }}</span>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="block">
+    <div class="row">
+      <span>{{ payment_method }}</span>
+      <span>{{ amount_due }}</span>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="block">
+    <div class="caption">Сума прописом:</div>
+    <div>{{ amount_in_words }}</div>
+  </section>
+
+  <div class="rule"></div>
+
+  {# 🔴 THE WHOLE POINT OF THE ARCHETYPE IS IN THIS BLOCK, and it is mostly what is missing.
+
+     PRESENT: the document's number, its date and time, and the title «ТОВАРНИЙ ЧЕК» standing in
+     the slot the fiscal title occupies. THE POSITION OF THE TITLE IS THE WEAKEST CLAIM ON THE
+     PAGE — it follows from the tax service's "the same content as the form, minus two items",
+     not from a sample, and a real товарний чек may well head the document with it instead.
+
+     ABSENT, and each absence is a requisite of the fiscal form that this document may not carry:
+     the fiscal number of the register («ФН»), the factory serial («ЗН»), the wording
+     «ФІСКАЛЬНИЙ ЧЕК», the name of the register's maker, the online/offline marker, and the QR.
+     ⚠️ The QR is dropped because 📄 it is a requisite of the fiscal form (line 29) — NOT because
+     a QR means a document is fiscal. This repository holds the opposite: bank confirmations
+     carry marketing QRs and a decoded payload is the only thing that says anything. #}
+  <footer class="block centered">
+    <div>ЧЕК № <span>{{ receipt_number }}</span></div>
+    <div>
+      <span>{{ date }}</span>
+      <span>{{ time }}</span>
+    </div>
+    <div class="fiscal-title">{{ title }}</div>
+
+    {# 📄 ст. 9 of the accounting law № 996-XIV: a primary document names the person responsible
+       for the operation and carries their signature. A fiscal receipt carries neither, so these
+       two lines are where this document is MORE than the fiscal one rather than less. The
+       signature rule is printed with no ink on it — the slip is signed by hand after printing. #}
+    <div class="issued-by">{{ issuer_label }} <span>{{ issuer_name }}</span></div>
+    <div class="sign-line"></div>
+    <div class="caption">{{ signature_label }}</div>
+
+    <div class="thanks">{{ footer }}</div>
+  </footer>
+
+</div>
+</body>
+</html>

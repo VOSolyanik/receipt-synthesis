@@ -1,0 +1,34 @@
+{#
+  Platform receipt, English, EUR — the document that puts a second currency and a second
+  language into the corpus.
+
+  The body is templates/platform_receipt.jinja, shared with the Ukrainian variant of this class;
+  the paper is eu_platform_receipt.css. What makes this document English and EUR is DATA and not
+  markup: `labels`, `currency` and the amounts arrive in the context, and the body contains no
+  printed word of either language.
+
+  ⚠️ A MOCK-UP: not registered, no builder, no run, no `data-field` attributes.
+
+  🔴 WHAT THIS DOCUMENT WOULD DO TO THE ORACLE, stated here because it is the reason the archetype
+  is worth building and the reason it is NOT connected. `policy_engine._check_currency` REFUSES a
+  document whose currency is not `reporting_currency` — it raises, and its own docstring says it
+  deliberately offers no conversion, because "a rate applied here would put a number in the
+  ground truth that nothing in the dataset can prove". That is correct while every archetype
+  emits UAH. The moment this one exists, the refusal stops being a guard against an upstream
+  contradiction and becomes an unmade decision: either the ground truth carries a converted
+  number, or the claim's amount stays in EUR and the limit comparison moves to the consumer.
+  Connecting this template without settling that would turn a raise into a crash on real data.
+
+  ⛔ AND `config/fx-rates.yaml` IS READ BY NOTHING. `config.load_fx_rates` has no caller in
+  `src/`, and the file's own header explains that the rates are static so that conversion stays
+  deterministic — a property of a conversion no code performs. `tools/render_mockups.py` is the
+  first thing in this repository to call it, and even there the converted figure is printed to
+  the console rather than onto the page.
+
+  ⚠️ EUR RATHER THAN USD, and the choice is the repository's vocabulary rather than a preference:
+  `Country` in schemas.py holds UA, PL, DE and ES, `config/vendors.json` already keys a block by
+  `EU`, and the architecture table already names EU rows. There is no US jurisdiction here to
+  hang a USD document on, and inventing one for a mock-up would be inventing a jurisdiction.
+  Both codes are in config/fx-rates.yaml, so the other variant costs a context and no template.
+#}
+{% include "platform_receipt.jinja" %}

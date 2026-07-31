@@ -1,0 +1,203 @@
+{#
+  Platform receipt — the body SHARED by the two archetypes of this class.
+
+  A FRAGMENT, NOT AN ARCHETYPE, and the extension says so: `templates/*.html` is one renderable
+  document each, and this file is included by two of them — `eu_platform_receipt` (English, EUR)
+  and `ua_platform_receipt` (Ukrainian, UAH). Each including template brings its own stylesheet
+  on top of `platform_receipt.css`.
+
+  ⚠️ MOCK-UPS, on the same terms as the other four in this directory: not registered in
+  `ARCHETYPES`, no builder, no run, and NO `data-field` attributes anywhere — so the renderer
+  collects no bounding box and nothing here becomes a label. See templates/README.md.
+
+  🔴 WHY THIS CLASS EXISTS: THE CORPUS HAS ONE CURRENCY AND ONE LANGUAGE. The contract's own
+  reference profile records it as a finding rather than a footnote — `single_valued_dimensions`,
+  `currency_UAH: 1315` and `language_uk: 1315` out of 1315 documents, with the note that the run
+  therefore does not EXERCISE either dimension and that a per-currency or per-language figure
+  computed on it is the corpus average under another name. Foreign-currency conversion is
+  declared core to the system and no document in the corpus is in a foreign currency.
+
+  ONE BODY FOR TWO DOCUMENTS, AND THE LANGUAGE IS DATA. Every caption arrives in `labels`; the
+  markup contains no printed word of either language. That is not tidiness — it is what makes
+  "the same document in two languages" a fact about the render rather than a claim about two
+  files that were written to look alike.
+
+  THREE AXES SEPARATE THE TWO, NOT TWO, AND THE THIRD IS LAW RATHER THAN NOISE:
+
+    * language — `labels`;
+    * currency — the amounts and the code beside them;
+    * TAX TREATMENT. 📄 A domestic Ukrainian supplier registered for ПДВ prints its identifiers
+      and a 20% tax line. A platform receipt in the English-speaking practice is 👁 commonly a
+      RECEIPT AND NOT A TAX INVOICE, and says so in as many words. The conditional blocks below
+      are that axis, and the README declares it rather than pretending the pair is a clean
+      two-variable comparison.
+
+  🔴 WHAT AN EU RECEIPT LACKS IS ITSELF EVIDENCED, and by the same method the non-fiscal slip
+  used. 📄 Article 226 of Directive 2006/112/EC gives an exhaustive list of the particulars a VAT
+  invoice must carry — among them the supplier's full name and address, the supplier's VAT
+  identification number and the customer's. A document that declares itself not a VAT invoice is
+  a document that may carry none of those, and this one carries none of those. The absence is
+  the checklist read backwards, exactly as the fiscal form was for `ua_non_fiscal_receipt`.
+
+  ⛔ NO CONVERSION IS PRINTED, and that is the point rather than an omission. No public source
+  found shows such a receipt stating a rate or an equivalent in the buyer's home currency. So a
+  claim evidenced by a EUR receipt and a UAH payment carries its conversion NOWHERE ON PAPER —
+  which is the concrete form of what `policy_engine._check_currency` already says in prose: a
+  converted amount would be a number in the ground truth that nothing in the dataset can prove.
+#}
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{% include "platform_receipt.css" %}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# data-document marks the page root — exactly one per renderable template, counted through the
+   include, which is how the two archetypes sharing this body satisfy that rule. #}
+<div class="page" data-document="platform_receipt">
+
+  {# The seller. 👁 A platform receipt leads with the platform's own name and nothing beside it;
+     a street address and a tax number are 📄 invoice particulars, and this document declares
+     itself not to be one. The Ukrainian variant DOES print both, because its seller is a
+     domestic company for which they are ordinary requisites. #}
+  <header class="head">
+    <div class="brand">{{ seller.name }}</div>
+    {% if seller.address %}
+    <div class="muted">{{ seller.address }}</div>
+    {% endif %}
+    {% if seller.tax_code %}
+    <div class="muted">{{ seller.tax_code_label }} {{ seller.tax_code }}</div>
+    {% endif %}
+    {% if seller.vat_number %}
+    <div class="muted">{{ seller.vat_number_label }} {{ seller.vat_number }}</div>
+    {% endif %}
+  </header>
+
+  {# 🔴 THE TITLE SAYS «RECEIPT», NOT «INVOICE», and the distinction is the whole tax treatment
+     of the document. The amount paid is repeated in the largest type on the page beside it,
+     which is 👁 what such a receipt leads with — the fact that money moved, before any detail
+     of what it was for. #}
+  <section class="title-block">
+    <h1 class="title">{{ labels.title }}</h1>
+    <div class="paid">
+      <div class="paid-amount">{{ total }}&nbsp;{{ currency }}</div>
+      <div class="muted">{{ labels.paid_caption }}</div>
+    </div>
+  </section>
+
+  <section class="meta">
+    <div class="meta-item">
+      <div class="caption">{{ labels.receipt_number }}</div>
+      <div class="mono">{{ receipt_number }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="caption">{{ labels.date_paid }}</div>
+      <div class="mono">{{ date }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="caption">{{ labels.payment_method }}</div>
+      <div class="mono">{{ card_masked }}</div>
+    </div>
+  </section>
+
+  {# The buyer. 👁 A consumer receipt names the buyer and their country and stops there — no tax
+     number, because a private individual has none to state for this purpose, and 📄 the
+     customer's VAT identification number is an invoice particular this document does not claim
+     to carry. #}
+  <section class="party">
+    <div class="caption">{{ labels.billed_to }}</div>
+    <div class="party-name">{{ buyer.name }}</div>
+    <div class="muted">{{ buyer.country }}</div>
+  </section>
+
+  {# The lines. 📄 The quantity and nature of the service is an invoice particular AND 👁 the one
+     part of it a receipt does carry: it is what the buyer is checking when they open the file.
+
+     ⚠️ THE COURSE TITLES ARE INVENTED, and that is deliberate and safe rather than a shortcut: a
+     course is a WORK, not a mark under which a firm trades, and config/generation.yaml admits
+     invented works while admitting no invented marks. The seller's name is the opposite case and
+     is a public mark. #}
+  <table class="lines">
+    <thead>
+      <tr>
+        <th class="col-desc">{{ labels.description }}</th>
+        <th class="col-qty">{{ labels.quantity }}</th>
+        <th class="col-amount">{{ labels.amount }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td class="col-desc">
+          <div>{{ line.name }}</div>
+          {% if line.period %}<div class="muted small">{{ line.period }}</div>{% endif %}
+        </td>
+        <td class="col-qty mono">{{ line.qty }}</td>
+        <td class="col-amount mono">{{ line.amount }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# 🔴 THE CURRENCY CODE TRAVELS WITH EVERY AMOUNT, on both variants. The corpus prints no
+     currency beside a number anywhere else, because with one currency there was nothing to
+     distinguish; the moment a second exists, a bare figure is ambiguous on the page in exactly
+     the way it is ambiguous in a label. #}
+  <section class="totals">
+    <div class="row">
+      <span class="caption">{{ labels.subtotal }}</span>
+      <span class="mono">{{ subtotal }}&nbsp;{{ currency }}</span>
+    </div>
+
+    {# 📄 Present only where the supplier charges the tax. A Ukrainian company registered for ПДВ
+       prints the rate and the amount; the receipt that declares itself not a tax invoice prints
+       neither, and printing a zero row there would assert a tax treatment rather than omit one. #}
+    {% if vat %}
+    <div class="row">
+      <span class="caption">{{ vat.label }}</span>
+      <span class="mono">{{ vat.amount }}&nbsp;{{ currency }}</span>
+    </div>
+    {% endif %}
+
+    <div class="row grand">
+      <span>{{ labels.total }}</span>
+      <span class="mono">{{ total }}&nbsp;{{ currency }}</span>
+    </div>
+  </section>
+
+  {# THE WHOLE FOOT IS CONDITIONAL, not merely its rows, and the Ukrainian variant is why: it
+     carries neither note, and an unconditional `<footer>` drew its top rule across the page with
+     nothing under it — a line announcing an empty block. The A4 confirmation learned the same
+     thing and states it in the same words; correct and ugly is still a defect on every image of
+     a class. #}
+  {% if not_a_tax_invoice_note or support_note %}
+  <footer class="foot">
+    {# 🔴 THE NEGATIVE MARKER, AND IT IS A STRING WITH A POSITION — which the Ukrainian
+       non-fiscal slip's marker was not. 👁 Four independent commentators describe this wording
+       as printed on real platform receipts. Where the contract's «marker text plus its position»
+       field could not represent an absence, it represents THIS exactly. The two mock-ups
+       together are therefore an argument about the SHAPE of that field rather than about one
+       document — see templates/README.md. #}
+    {% if not_a_tax_invoice_note %}
+    <div class="notice">{{ not_a_tax_invoice_note }}</div>
+    {% endif %}
+    {% if support_note %}
+    <div class="muted small">{{ support_note }}</div>
+    {% endif %}
+  </footer>
+  {% endif %}
+
+</div>
+</body>
+</html>

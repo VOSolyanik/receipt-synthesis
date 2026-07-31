@@ -1,0 +1,18 @@
+/*
+ * Platform receipt, English, EUR — A4.
+ *
+ * Everything else is in templates/platform_receipt.css, which the shared body includes before
+ * this file. What is here is the paper: 794 px, A4 at 96 dpi, the same scale as the bank payment
+ * confirmation and for the same reason — a page shown on a screen rather than a strip captured
+ * at print resolution.
+ *
+ * Identical to the Ukrainian variant's stylesheet today, and that is the finding rather than an
+ * oversight: the two documents differ in language, in currency and in tax treatment, and in
+ * NOTHING VISUAL. Both files exist all the same, because the paper belongs to the archetype —
+ * the test suite reads the width out of `<slug>.css`, and a width that migrated into the shared
+ * file would leave one archetype silently taking the other's page.
+ */
+
+.page {
+  width: 794px;
+}

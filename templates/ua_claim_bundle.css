@@ -1,0 +1,52 @@
+/*
+ * One file, two documents — an invoice and the confirmation that settled it, stacked.
+ *
+ * DELIBERATELY ALMOST EMPTY, and the emptiness is the archetype. A stylesheet is where a
+ * multi-page document gets its running heads, its page numbers and its unifying frame; this file
+ * has none of those to give, because STITCHING TWO PDFS ADDS NOTHING. What is here is a grey
+ * field, a white sheet per page and the gap between them — the same treatment
+ * `ua_insurance_contract` uses, so that the difference between the two archetypes is visible in
+ * the content rather than manufactured by the styling.
+ *
+ * THE SHEETS ARE SIZED BY THEIR CONTENT, not by a constant. The contract's sheets are a fixed A4
+ * rectangle because a page of one document is; here each sheet is exactly as tall as the document
+ * inside it, measured by the render script from that document's own render. A fixed height would
+ * either clip a long invoice or pad a short confirmation, and both would be this file asserting a
+ * page geometry that the documents it contains did not have.
+ *
+ * No font stack and no type rules: every glyph on the page is drawn inside a frame by the
+ * stylesheet of the document in it. This file styles the paper, and nothing else.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  /* The field the sheets sit on, visible only in the gap between them. */
+  background: #d8dce2;
+}
+
+.file {
+  width: 794px;
+  background: #d8dce2;
+}
+
+.sheet {
+  /* `line-height: 0` so the inline frame leaves no descender gap under itself — the strip of grey
+     that would otherwise appear at the foot of every page and read as part of the paper. */
+  line-height: 0;
+  background: #ffffff;
+}
+
+/* The gap that makes two pages two pages, and 🔴 THE ONLY MARK THE STITCHING LEAVES. Between the
+   sheets only: a margin above the first would frame the file in grey and change what the image
+   is of. Worth stating plainly — this rule is the entire visual difference between this file and
+   the two documents in it, which is why segmenting it is a real problem rather than a formality. */
+.sheet + .sheet {
+  margin-top: 16px;
+}
+
+.doc {
+  display: block;
+  border: 0;
+}
