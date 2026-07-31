@@ -1,0 +1,14 @@
+/*
+ * Platform receipt, Ukrainian, UAH — A4.
+ *
+ * Everything else is in templates/platform_receipt.css, which the shared body includes before
+ * this file. What is here is the paper: 794 px, A4 at 96 dpi.
+ *
+ * Identical to the English variant's stylesheet, and deliberately so — see the note in
+ * eu_platform_receipt.css. The two documents differ in language, currency and tax treatment, and
+ * in nothing visual; the width lives per archetype because the paper belongs to the archetype.
+ */
+
+.page {
+  width: 794px;
+}
