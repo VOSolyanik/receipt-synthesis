@@ -118,6 +118,24 @@ and an empty receipt-number field. For Ukraine:
   ПРРО's «СЛУЖБОВИЙ ДОКУМЕНТ» — is on a **service** document (a cash movement), not a sale, and
   comes from the author's own receipts rather than a public source.
 
+### 🔴 The shape of the slot, not the wording of the rule
+
+Worth separating from the finding above, because it is a different kind of defect and the first of
+its kind recorded here. **The rule is right and its prose is right; what cannot hold the answer is
+the shape of the field.** The contract's rule already admits an absence as a negative marker — it
+names an empty receipt-number field as one of the three kinds — so nothing in the wording needs
+changing. But the slot RC-08 proposes is *marker text together with its position in the text*, and
+an absence has neither. There is no string to store and no coordinate to store it at. A generator
+filling that field for this document would have to write something that is not on the page.
+
+Every gap this repository has recorded until now was a gap in what a document states, closable by
+observing more documents or by wording a rule more carefully. This one is closed by neither: an
+absence is representable only by a field whose type can say *"this requisite is not here"* —
+a set of requisites found missing, or a per-requisite presence flag — and no amount of further
+observation turns it into a string. So the question RC-08 has to answer first is not *which
+wording* but *what shape*, and answering the second by continuing to assume the first is how a
+contract comes to have a field that is always empty and never wrong.
+
 **Is that enough to close RC-08? No — and the gap is nameable.** What is missing is an observation
 of a real **sales** document that prints an explicit denial. Until one exists, RC-08's field
 cannot be specified as a string with a position without that specification being an invention.
