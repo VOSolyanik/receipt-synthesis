@@ -30,12 +30,18 @@ import argparse
 import random
 import sys
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from receipt_synth.config import jurisdiction, load_fx_rates, load_vendors
+from receipt_synth.config import (
+    jurisdiction,
+    load_fx_rates,
+    load_vendors,
+    payment_purposes,
+)
 from receipt_synth.content_builder import (
+    build_invoice,
     build_payment_confirmation,
     build_prro_receipt,
     generate_edrpou,
@@ -50,6 +56,11 @@ DEFAULT_OUT = Path(tempfile.gettempdir()) / "receipt-synth-mockups"
 # The instant every mock-up is dated from. Fixed rather than "now": an image that changes with
 # the clock is one no second run reproduces, which is the property this repository is built on.
 ISSUED_AT = datetime(2026, 3, 17, 13, 52, 41)
+
+# 📄 An invoice is issued and then settled. How long that takes is not a fact any source here
+# states, so it is a fixed plausible gap rather than a draw: what the bundle needs is that the
+# payment is LATER than the invoice, which is a property of the pair and not of its length.
+SETTLEMENT_DELAY_DAYS = 4
 
 # ---------------------------------------------------------------------------
 # Ukrainian strings that have no home in config/ yet.
@@ -815,6 +826,108 @@ def ua_platform_receipt_context(rng: random.Random) -> dict:
     }
 
 
+def claim_bundle_context(rng: random.Random, renderer: Renderer, out_dir: Path) -> dict:
+    """One file holding TWO documents — an invoice and the confirmation that settled it.
+
+    🔴 THE OTHER HALF OF THE SEGMENTATION CONTROL. `ua_insurance_contract` puts one document
+    across several pages; this puts several documents in one file. A splitting step measured on a
+    corpus with only the first is still measured against a guarantee — every cut it needs is a cut
+    it never has to refuse.
+
+    🔴 NEITHER DOCUMENT IS REWRITTEN. Both are the shipped archetypes, built by the shipped
+    builders and rendered by the shipped renderer, written to disk and embedded as frames — the
+    route `ua_bank_receipt_in_app` takes, at the same cost and for the same reason.
+
+    THE TWO ARE ONE CLAIM BY CONSTRUCTION, not by coincidence. Five things tie them:
+
+      * ONE VENDOR INSTANCE, resolved once and passed to both, so two documents cannot name two
+        firms — the constraint `resolve_vendor` exists to enforce;
+      * one buyer, named identically on both;
+      * THE INVOICE'S OWN TOTAL handed to the confirmation as its transfer, which is the order the
+        assembler uses: the document that lists the purchase fixes the money, and the payment
+        document is told what it settles;
+      * the confirmation dated AFTER the invoice, because an invoice is issued and then settled;
+      * 🔴 the invoice's real number and date written into the payment purpose. That is THE LINK,
+        the field a cross-document check keys on — and it has to be overridden, because the
+        builder draws those placeholders independently and would otherwise print a purpose naming
+        an invoice that is not in the file.
+    """
+    vendor = resolve_vendor(
+        rng,
+        next(
+            entry
+            for entry in load_vendors()["vendors"]["UA"]["professional_development"]
+            if entry.get("profile") == "training_centre" and "name" in entry
+        ),
+        "UA",
+    )
+    buyer = {"name": UA_BUYER["name"], "tax_id": "2345678901"}
+
+    invoice = build_invoice(
+        rng,
+        category_id="professional_development",
+        issued_at=ISSUED_AT,
+        vendor=vendor,
+        buyer_name=buyer["name"],
+        buyer_tax_id=buyer["tax_id"],
+    )
+    # 📄 An invoice is issued and then settled, so the payment is later. Days rather than minutes:
+    # a claimant pays an invoice on a different day, and two documents timestamped a minute apart
+    # would be a pair no claim produces.
+    settled_at = ISSUED_AT + timedelta(days=SETTLEMENT_DELAY_DAYS)
+    confirmation = build_payment_confirmation(
+        rng,
+        issued_at=settled_at,
+        vendor=vendor,
+        payer_name=buyer["name"],
+        payer_tax_id=buyer["tax_id"],
+        amount=invoice.total,
+    )
+
+    invoice_context = invoice.render_context()
+    confirmation_context = confirmation.render_context()
+
+    # 🔴 THE LINK, overridden rather than hoped for. The template is read from
+    # config/generation.yaml — the one purpose that carries both placeholders — and filled with
+    # the number and date of the invoice that is actually on the previous page.
+    purpose_template = next(
+        template
+        for template in payment_purposes("uk")
+        if "{invoice_no}" in template and "{invoice_date}" in template
+    )
+    confirmation_context["purpose"] = purpose_template.format(
+        invoice_no=invoice.number,
+        invoice_date=ISSUED_AT.strftime(jurisdiction("UA")["date_format"]),
+    )
+
+    sheets = []
+    for slug, page, context in (
+        ("ua_invoice", "page1_invoice", invoice_context),
+        ("ua_bank_payment_confirmation", "page2_confirmation", confirmation_context),
+    ):
+        document_path = out_dir / f"ua_claim_bundle.{page}.html"
+        document_path.write_text(renderer.build_html(slug, context), encoding="utf-8")
+        # RENDERED SEPARATELY AS WELL, and not only to be measured: the two singles beside the
+        # bundle are what a reader compares it against — the file, and the documents it is made
+        # of, which is the whole question a splitting step is asked.
+        rendered = renderer.render(slug, context, out_dir / f"ua_claim_bundle.{page}.png")
+        sheets.append(
+            {
+                "url": document_path.as_uri(),
+                "title": slug,
+                "width": rendered.width,
+                "height": rendered.height,
+            }
+        )
+
+    print(
+        f"  note: the bundle is {len(sheets)} documents in one file — invoice "
+        f"{invoice.number} for {_amount(invoice.total)} UAH and the confirmation that settles "
+        "it. NOTHING ON THE FILE SAYS THEY ARE TWO."
+    )
+    return {"sheets": sheets, "qr_payload": None}
+
+
 def _report_conversion(eur_total: Decimal) -> None:
     """State the conversion the corpus cannot show, and say where the rate came from.
 
@@ -858,6 +971,7 @@ def render_all(out_dir: Path, seed: int) -> list[Path]:
             ("eu_platform_receipt", lambda: eu_platform_receipt_context(rng)),
             ("ua_platform_receipt", lambda: ua_platform_receipt_context(rng)),
             ("ua_insurance_contract", lambda: insurance_contract_context(rng)),
+            ("ua_claim_bundle", lambda: claim_bundle_context(rng, renderer, out_dir)),
         ):
             context = build_context()
             # Keys the run needs and no template prints. Popped rather than left for Jinja to
