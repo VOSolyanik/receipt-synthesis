@@ -4,9 +4,9 @@ One renderable document per `<slug>.html`, its layout in `<slug>.css`. Files wit
 extension are **fragments**, included or imported by several templates and renderable on their
 own by nothing.
 
-Most of this directory is the shipped corpus. Three templates are **mock-ups**, and this file is
-about them, because a reader who cannot tell the two apart will read a mock-up as a claim about
-the dataset.
+Most of this directory is the shipped corpus. The rest are **mock-ups**, and this file is about
+them, because a reader who cannot tell the two apart will read a mock-up as a claim about the
+dataset.
 
 ## Shipped
 
@@ -28,7 +28,10 @@ every extractable element with `data-field="<name>"`, and reaches a dataset.
 | `ua_non_fiscal_receipt` | товарний чек — a sales slip issued without a cash register |
 | `ua_bank_app_transaction` | one operation as a banking application shows it |
 | `ua_bank_receipt_in_app` | `ua_bank_payment_confirmation`, captured inside that application |
-| `ua_phone_chrome.jinja` + `.css` | the status bar, tab bar and back arrow the last two share |
+| `ua_phone_chrome.jinja` + `.css` | the status bar, tab bar and back arrow those two share |
+| `eu_platform_receipt` | a platform receipt in English and EUR |
+| `ua_platform_receipt` | the same class in Ukrainian and UAH |
+| `platform_receipt.jinja` + `.css` | the body and the page rules the last two share |
 
 Render them with:
 
@@ -42,12 +45,12 @@ uv run python tools/render_mockups.py --out <a directory outside this repository
 one. The generator cannot produce them and no test renders them beyond the one guard that sweeps
 every file in this directory.
 
-**No labels and no bounding boxes, deliberately.** Not one `data-field` attribute appears in the
-three files — so `RenderedDocument.field_bboxes` comes back empty by construction and the render
-script writes no JSON beside the images. The field names would have to come from the labelling
-contract, and for the first of the three the contract's relevant field is still an open question
-(RC-08). Naming fields here would be inventing that answer in markup, where nothing reviews it.
-**Labels and boxes arrive with the connection, not with the layout.**
+**No labels and no bounding boxes, deliberately.** Not one `data-field` attribute appears in any
+of these files — so `RenderedDocument.field_bboxes` comes back empty by construction and the
+render script writes no JSON beside the images. The field names would have to come from the
+labelling contract, and for two of the five the contract's relevant field is still an open
+question (RC-08). Naming fields here would be inventing that answer in markup, where nothing
+reviews it. **Labels and boxes arrive with the connection, not with the layout.**
 
 **Nothing in `config/` changed.** Not the labelling contract, not the policy, not the fiscal
 rules, not the vendor lists. Where a mock-up needs a Ukrainian string that config does not carry,
@@ -234,6 +237,123 @@ archetype's whole argument, and it is meant to be looked at as a pair.
 
 ---
 
+## `eu_platform_receipt` and `ua_platform_receipt` — the second currency and the second language
+
+### 🔴 The corpus has one of each, and the contract says so itself
+
+The authoritative reference profile records it as a finding rather than a footnote:
+`single_valued_dimensions` — **`currency_UAH: 1315`** and **`language_uk: 1315`** out of 1315
+documents — with the note that the run therefore does not **exercise** either dimension, and that
+a per-currency or per-language figure computed on it is the corpus average under another name.
+
+Foreign-currency conversion is declared core to the system. **No document in the corpus is in a
+foreign currency.** These two are the first that would be, and they are a pair on purpose: a
+dimension with one document in it measures the document, not the dimension.
+
+### 🔴 Two things this class runs straight into, both of them structural
+
+**The oracle refuses foreign currency.** `policy_engine._check_currency` raises on any document
+whose currency is not `reporting_currency`, and its docstring says it deliberately offers no
+conversion, because *"a rate applied here would put a number in the ground truth that nothing in
+the dataset can prove"*. That is **correct** while every archetype emits UAH: a foreign-currency
+document really would mean something upstream had gone wrong. The moment this archetype exists,
+the same code stops being a guard against a contradiction and becomes an unmade decision — either
+the ground truth carries a converted number, or the claim's amount stays in EUR and the limit
+comparison moves to the consumer, where the contract's own `currency` note already puts it.
+Connecting this template without settling that turns a deliberate raise into a crash on real data.
+
+**`config/fx-rates.yaml` is read by nothing.** `config.load_fx_rates` has **no caller in `src/`**;
+the only other mentions of the file in the tree are two documentation tables describing it. Its
+header explains that the rates are static so that conversion stays deterministic — a property of a
+conversion no code performs. `tools/render_mockups.py` is the first caller in the repository, and
+even there the converted figure is printed to the console, never onto a page, because there is no
+document behind it.
+
+**Nothing on either receipt states a rate or an equivalent.** No public source found shows such a
+receipt doing so, so neither does this one. That is what makes the pair useful rather than what
+makes it incomplete: a claim evidenced by a EUR receipt and a UAH bank payment carries its
+conversion **nowhere on paper**, which is the abstract sentence in the policy engine made concrete.
+
+### Sources, counted honestly
+
+**Four independent source families. No photograph of a real document among them.**
+
+1. **📄 EU law — Article 226 of Directive 2006/112/EC**, the exhaustive list of particulars a VAT
+   invoice must carry. Used *backwards*, as the fiscal form was for `ua_non_fiscal_receipt`: the
+   English receipt declares itself not an invoice, so it may lack the supplier's address, the
+   supplier's VAT identification number, the customer's, the tax rate and the tax amount — and it
+   lacks exactly those. ⚠️ Three files quote the article; they are **one source**, the Directive.
+2. **📄 UA law — Law № 1525-IX with ст. 208¹ ПКУ and Section VIII of the VAT-registration
+   regulation**: a non-resident supplying electronic services to Ukrainian individuals registers
+   for ПДВ, receives an individual tax number and charges 20%. Several tax-service pages and three
+   professional outlets restate it; again **one source**, the law. Used to decide what is *not*
+   built — see the limit below.
+3. **Vendor documentation — the payment platform's own published guidance on what a receipt
+   contains**: business information, receipt number and date, an itemized list, and payment
+   information including the total, the method and any tax. That field set is what both variants
+   print. A primary source of a different kind from the two above, and independent of them.
+4. **👁 Accounting practice — the wording «This is not a VAT invoice»**. Four independent
+   commentators describe it as printed on real platform receipts, explaining what it means for a
+   buyer who wants to deduct the tax. ⚠️ These four are independent of each other, unlike the
+   restatements in (1) and (2) — but **not one of them shows an image of a receipt carrying it**,
+   so the wording is evidenced by description and never by observation.
+
+### 🔴 What this adds to the RC-08 argument
+
+The Ukrainian non-fiscal slip's negative marker is an **absence** — no string, no coordinate — and
+the section above concludes that a field shaped as *marker text plus its position* cannot hold it.
+
+This class supplies the other half of that argument. «This is not a VAT invoice.» **is** a string
+with a position: it sits at the foot of the page, it can be quoted, and the proposed field shape
+represents it exactly. So the two mock-ups together say something neither says alone — the field
+shape is not wrong, it is **incomplete**. It covers the printed denial and cannot express the
+denial-by-omission, and both occur. Whatever RC-08 settles on has to hold both, or it will look
+correct on every English document and be silently empty on every Ukrainian one.
+
+⚠️ And the configured constant diverges here too. `receipt.non_fiscal_marker` in the **EU block**
+of `config/fiscal-rules.yaml` is `"NOT A FISCAL DOCUMENT"` — a claim about *fiscality*, a
+cash-register concept. What the sources evidence is a claim about being a *tax invoice*, which is
+a different thing: a receipt can be perfectly fiscal and still not be the document that lets a
+buyer deduct the tax. The mock-up prints the evidenced wording; **config is untouched**.
+
+### The pair differs on three axes, not two
+
+Reading it as a clean two-variable comparison would credit the currency with a difference the tax
+block caused. The three:
+
+* **language** — `en` against `uk`, and it is data: every caption arrives in a `labels` dictionary
+  and the shared body contains no printed word of either language;
+* **currency** — EUR against UAH, with both separators read from `number_format` in
+  `config/fiscal-rules.yaml`, which sets them opposite ways round for the two jurisdictions;
+* **tax treatment**, which is **law and not noise**. The Ukrainian seller is a domestic company
+  registered for ПДВ, so it prints its identifiers and a «У т.ч. ПДВ» line — the Ukrainian
+  convention of a VAT-inclusive price — and makes no statement about not being a tax document. The
+  English one carries the denial and none of those requisites.
+
+### Narrower than reality: the platform receipt
+
+* **EUR rather than USD**, and the reason is the repository's own vocabulary: `Country` in
+  `schemas.py` holds UA, PL, DE and ES, `config/fiscal-rules.yaml` already carries an `EU` block
+  with `language: en`, `currency: EUR` and `date_format: %Y-%m-%d`, and there is no US
+  jurisdiction here to hang a USD document on. Both codes are in `config/fx-rates.yaml`, so the
+  USD variant costs a context and no template.
+* ⛔ **A foreign platform's Ukrainian receipt is not built**, and it would be the sharper artifact —
+  one seller issuing both variants, differing in nothing but language and currency. Printing it
+  means printing a named foreign company's Ukrainian tax registration, which is a checkable claim
+  about a real firm that this branch has not checked and must not assert. The domestic seller
+  states only what `config/vendors.json` already states.
+* ⛔ **No issuer's visual design is reproduced.** Real platform receipts are branded and no two look
+  alike; one plain layout is modelled and the diversity is a declared gap — the same limit the A4
+  confirmation carries.
+* **One line-item shape.** Two courses, quantity one each. Subscriptions, proration, refunds and
+  coupon lines are all real and none is modelled.
+* **The seller's name is a public mark and its identifiers are generated** — the same construction
+  the bank confirmation already uses, where a real bank's name sits beside an invented bank code.
+  Every ground-truth record carries `"synthetic": true`, and the README says what these artifacts
+  are.
+
+---
+
 ## What was looked at, and what was seen
 
 The renders were inspected by eye, not merely rendered. What that inspection changed:
@@ -253,3 +373,17 @@ The renders were inspected by eye, not merely rendered. What that inspection cha
   documented: a bank categorizes by the payment route, so a purchase settled through a
   utility-payment aggregator lands under utilities whatever the merchant sells. A third thing on
   that screen that looks like evidence and is not.
+* **The Ukrainian platform receipt drew its footer rule across the page with nothing under it.**
+  It carries neither of the two footer notes, and the `<footer>` was unconditional — a line
+  announcing an empty block. The whole foot is conditional now, which is the same defect and the
+  same fix the A4 confirmation already records in its own comments.
+* **Both platform receipts priced every line identically**, because one drawn price was repeated
+  across the table. It reads as a template filling itself rather than as a purchase, and a corpus
+  where every line of a document carries the same figure teaches an extractor that it only has to
+  read one of them. Each line is now priced independently.
+* **«У т.ч. ПДВ:» came out uppercased** by the `.caption` rule that is right for the small field
+  labels above it. That label is a value `config/fiscal-rules.yaml` settled, written the way an
+  invoice writes it, and a stylesheet had been overriding the casing config chose. The totals
+  captions keep their own case now.
+* **Both platform receipts are blank for their bottom third**, exactly as the A4 confirmation is,
+  and for the same reason: it is the sheet's own proportion. Left alone.
