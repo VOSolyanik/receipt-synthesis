@@ -28,6 +28,7 @@ CONTRACT = yaml.safe_load((CONFIG_DIR / "labelling-schema.yaml").read_text(encod
 
 NORMALIZATION = CONTRACT["normalization"]
 STATUS_VOCABULARY = CONTRACT["status_vocabulary"]
+BLOCKED_ON_VOCABULARY = CONTRACT["blocked_on_vocabulary"]
 
 # The four blocks that carry a `fields:` list of label field records. Named here because the
 # contract has no key that enumerates them; everything else below is derived.
@@ -38,21 +39,23 @@ def _fields() -> list[tuple[str, dict]]:
     return [(block, field) for block in FIELD_BLOCKS for field in CONTRACT[block]["fields"]]
 
 
-def _statuses(node, path: str = "") -> list[tuple[str, str]]:
-    """Every `status:` value anywhere in the contract, with the path that carries it.
+def _slots(slot: str, node, path: str = "") -> list[tuple[str, str]]:
+    """Every `<slot>:` string value anywhere in the contract, with the path that carries it.
 
-    A structural walk rather than a lookup of the places a status is expected: the whole point is
-    to find the slot nobody remembered.
+    A structural walk rather than a lookup of the places the slot is expected: the whole point is
+    to find the one nobody remembered. Written once because two keys of this file are reserved
+    words drawn from a declared vocabulary — `status:` and `blocked_on:` — and a second copy of
+    the walk would be a second thing to keep in step.
     """
     found: list[tuple[str, str]] = []
     if isinstance(node, dict):
         for key, value in node.items():
-            if key == "status" and isinstance(value, str):
+            if key == slot and isinstance(value, str):
                 found.append((path, value))
-            found.extend(_statuses(value, f"{path}.{key}" if path else str(key)))
+            found.extend(_slots(slot, value, f"{path}.{key}" if path else str(key)))
     elif isinstance(node, list):
         for index, value in enumerate(node):
-            found.extend(_statuses(value, f"{path}[{index}]"))
+            found.extend(_slots(slot, value, f"{path}[{index}]"))
     return found
 
 
@@ -126,7 +129,7 @@ def test_every_status_is_a_word_of_the_vocabulary():
     first commit, and two sentences in `required_changes`. The first joined the vocabulary; the
     two sentences moved to `progress:`, which is prose and is read rather than indexed.
     """
-    statuses = _statuses(CONTRACT)
+    statuses = _slots("status", CONTRACT)
     assert statuses, "no `status:` key found anywhere — this test asserts nothing"
 
     outside = sorted({(path, value) for path, value in statuses if value not in STATUS_VOCABULARY})
@@ -140,9 +143,51 @@ def test_every_status_is_a_word_of_the_vocabulary():
 def test_every_vocabulary_word_is_used():
     """A declared word nothing carries is a distinction the file no longer draws, and it invites a
     consumer to write a branch that can never be taken."""
-    in_use = {value for _, value in _statuses(CONTRACT)}
+    in_use = {value for _, value in _slots("status", CONTRACT)}
     unused = sorted(set(STATUS_VOCABULARY) - in_use)
     assert not unused, f"{unused} are declared in `status_vocabulary` and carried by nothing"
+
+
+# --------------------------------------------------------- the blocked_on vocabulary --
+
+
+def test_every_blocked_on_is_a_word_of_the_vocabulary():
+    """🔴 THE SAME DEFECT AS `status:`, ONE KEY OVER, AND WITH A WORSE FAILURE. `blocked_on:` is
+    how a consumer sorts `required_changes` into what can be picked up and what waits on the
+    author, so a paragraph in the slot does not merely fail to compare — it compares FALSE.
+    Three of the sixteen entries held one until contract version 22, and two of those three begin
+    with the word `decision`, so `blocked_on == "decision"` was false for entries blocked on
+    precisely a decision and a consumer filtering for mechanical work silently mis-sorted them.
+
+    The qualifying sentences were worth keeping and only the slot was wrong, so they live in
+    `blocked_on_note:` beside the word — prose, read rather than branched on.
+    """
+    blocked = _slots("blocked_on", CONTRACT)
+    assert blocked, "no `blocked_on:` key found anywhere — this test asserts nothing"
+
+    outside = sorted(
+        {(path, value) for path, value in blocked if value not in BLOCKED_ON_VOCABULARY}
+    )
+    assert not outside, (
+        f"{len(outside)} of {len(blocked)} `blocked_on:` values are not one of the "
+        f"{len(BLOCKED_ON_VOCABULARY)} words of `blocked_on_vocabulary` "
+        f"({sorted(BLOCKED_ON_VOCABULARY)}): {outside}"
+    )
+
+
+def test_every_blocked_on_vocabulary_word_is_used():
+    """A declared word nothing carries is a distinction the file no longer draws, and it invites a
+    consumer to write a branch that can never be taken.
+
+    It has teeth here rather than being symmetry for its own sake: `done` was added in contract
+    version 22 for a single entry, RC-06, whose slot had been reading `nothing` — the word this
+    file declares to mean WITHDRAWN — while the change had in fact been made. If that entry is
+    ever the last one carrying the word, this is what says so instead of the word quietly becoming
+    a fifth meaning nobody asserts.
+    """
+    in_use = {value for _, value in _slots("blocked_on", CONTRACT)}
+    unused = sorted(set(BLOCKED_ON_VOCABULARY) - in_use)
+    assert not unused, f"{unused} are declared in `blocked_on_vocabulary` and carried by nothing"
 
 
 # ------------------------------------------------- the prd_required_fields generator column --

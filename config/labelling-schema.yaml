@@ -51,13 +51,50 @@
 #   case names a class that does not exist.
 #   `tests/test_contract_indexes.py` — new in version 21. Every index this file offers a consumer
 #   resolves: a field's `normalize` names a real rule, every rule is named by at least one field,
-#   every `status` is a word of `status_vocabulary`, every `generator:` cell of a
-#   `prd_required_fields` table is a list of real label field names. It exists because a
-#   HAND-MAINTAINED index diverged from what it indexed eight times while under active attention,
-#   and the repair was to delete the index and keep the checks.
+#   every `status` is a word of `status_vocabulary`, every `blocked_on` a word of
+#   `blocked_on_vocabulary` (version 22), each vocabulary's every word carried by something, and
+#   every `generator:` cell of a `prd_required_fields` table a list of real label field names. It
+#   exists because a HAND-MAINTAINED index diverged from what it indexed eight times while under
+#   active attention, and the repair was to delete the index and keep the checks.
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 22 by THE FOURTH INDEX OF THIS FILE BECOMING DATA — the last one version 21 named and
+# left. NO LABEL RECORD GAINED OR LOST A KEY, NO COMPARISON RULE CHANGED, AND THE DRAW DID NOT MOVE:
+# `src/` reads nothing here, so nothing below can reach a document.
+#
+#   🔴 `blocked_on:` IS A RESERVED WORD AND ITS SET IS NOW READABLE. The words it may take were
+#   declared in a COMMENT, where YAML cannot see them, so a consumer branching on the key had no way
+#   to read the set it was branching against short of parsing prose. They are now
+#   `blocked_on_vocabulary`, the shape `status_vocabulary` already had, and two tests hold every
+#   slot to it and every word to at least one slot.
+#
+#   🔴 THREE OF THE SIXTEEN `required_changes` ENTRIES HELD A PARAGRAPH IN THAT SLOT, and this is
+#   the half a consumer feels. Unlike a sentence in a `status:` slot, which compares against
+#   nothing, two of these BEGAN with the right word and then qualified it — so
+#   `blocked_on == "decision"` was FALSE for entries blocked on precisely a decision, and a
+#   consumer sorting the list into mechanical work and author's calls mis-sorted them while
+#   raising nothing. The qualifications were worth keeping and only the slot was wrong: they sit in
+#   `blocked_on_note:` beside the word.
+#
+#   ⚠️ THE VOCABULARY GAINS A FOURTH WORD, `done`, AND THAT IS AN ADMISSION RATHER THAN A TIDY-UP.
+#   RC-06's change is made — `content_builder.PaymentConfirmation` carries the fields — and the
+#   three existing words could not say so: not awaiting a decision, not mechanical work waiting to
+#   be done, and not withdrawn. It had been wearing `nothing`, which this file declares to mean
+#   WITHDRAWN, so the contract was asserting that a completed change had been dropped. "What work
+#   is left" answers the same for both words and "was this ever implemented" answers the opposite,
+#   which is why they must not share one. A word was added because the file needed one; none was
+#   invented to make a slot parse.
+#
+#   ⚠️ AND RC-06'S OLD SENTENCE WAS STALE, so it is corrected rather than carried across: it named
+#   an invoice archetype as the outstanding condition, and RP-06 counts 293 payment confirmations
+#   among its 1315 documents. THE SAME STALENESS REACHES
+#   `document_types.payment_confirmation.status`, WHICH STILL READS `forward_contract` AND IS NOT
+#   TOUCHED — moving a type to `emitted` is the field-by-field check against a real run that
+#   `status_vocabulary` demands, which is a measurement and the author's call, not something to
+#   infer from a count while repairing a neighbouring key. The contradiction is recorded at RC-06
+#   rather than silently half-fixed.
+#
 # Bumped to 21 by THREE INDEXES OF THIS FILE BECOMING DATA. NO LABEL RECORD GAINED OR LOST A KEY,
 # NO COMPARISON RULE CHANGED, AND THE DRAW DID NOT MOVE — `src/` reads nothing here, so nothing
 # below can reach a document. What changes is what a consumer may key on, and one of the three was
@@ -635,7 +672,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 21
+version: 22
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -5367,11 +5404,26 @@ run_profiles:
 # and whether it is mechanical or waits on a decision — because a change that waits on a
 # decision must not be made by whoever happens to read this next.
 #
-#   blocked_on: decision  — the author must choose between two defensible answers
-#   blocked_on: none      — mechanical; the data already exists and is discarded
-#   blocked_on: nothing   — withdrawn: the divergence was settled the other way, and nothing
-#                           in this repository changes. The entry stays so its id keeps
-#                           resolving and the decision stays visible.
+# The four words `blocked_on:` may take are declared as DATA, in `blocked_on_vocabulary` directly
+# below, for the reason the rest of this version is about: they were declared in this comment
+# until version 22, where YAML cannot see them at all — so a consumer branching on the key had no
+# way to read the set it was branching against, short of parsing a comment. `status_vocabulary` is
+# the shape being copied.
+#
+# 🔴 `blocked_on:` HOLDS ONE OF THOSE FOUR WORDS AND NOTHING ELSE, and a test holds it to that.
+# THREE OF THE SIXTEEN ENTRIES HELD A PARAGRAPH until version 22 — the same defect the `status:`
+# slots carried, one key over, and with the same consequence: `blocked_on == "decision"` was FALSE
+# for two entries that are blocked on precisely a decision, so a consumer filtering for
+# mechanically-actionable work silently mis-sorted them. The qualifying sentences were worth
+# keeping and the slot was wrong, so they live in `blocked_on_note:` beside the word — prose, read
+# rather than branched on.
+#
+# ⚠️ THE FOURTH WORD IS AN ADMISSION, NOT A TIDY-UP. `done` was added because RC-06 is finished
+# and the three existing words could not say so: it is not awaiting a decision, it is not
+# mechanical work waiting to be done, and it was not withdrawn. It had been wearing `nothing`,
+# which this file declares to mean WITHDRAWN — so the vocabulary was asserting that a completed
+# change had been dropped. A word was added because the file needed one; none was invented to
+# make a slot parse.
 #
 # ⚠️ AN ENTRY HERE CARRIES NO `status:`, AND THE KEY THAT LOOKS LIKE ONE IS `progress:`. Two
 # entries spelled it `status:` until version 21 and put a SENTENCE in the slot — "done in version
@@ -5382,6 +5434,25 @@ run_profiles:
 # shortened into a word that would have said less than either. `progress:` is prose, appears only
 # where an entry is partly done, and is deliberately not a vocabulary: what "partly" means differs
 # per entry and the entry's own `change:` is where that is said.
+
+blocked_on_vocabulary:
+  decision: >
+    The author must choose between two defensible answers. A change that waits on a decision must
+    not be made by whoever happens to read this next.
+  none: >
+    Mechanical, and OPEN: the data already exists inside the generator and is discarded at label
+    time. Nothing has to be decided first.
+  nothing: >
+    WITHDRAWN. The divergence was settled the other way and nothing in this repository changes.
+    The entry stays so its id keeps resolving and the decision stays visible.
+  done: >
+    THE CHANGE WAS MADE. Nothing remains because the ask was FULFILLED — which is a different fact
+    from `nothing`, and the two must not share a word: a consumer asking "what work is left" gets
+    the same answer from both, and one asking "was this ever implemented" gets opposite ones. The
+    entry's `progress:` and `change:` say what was built.
+
+    Added in version 22 because RC-06 needed it. It had been carrying `nothing`, so the contract
+    was asserting that a completed change had been dropped.
 
 required_changes:
 
@@ -5445,10 +5516,25 @@ required_changes:
       genuine requisite of the card operation and is printed. Deduplication for this class rests on
       `document_code` — 👁 8 of 8, 📄 mandatory, and the key of the official check services — and NOT
       on the authorization code, which cannot be one at six digits.
-    blocked_on: >
-      nothing. What remains is not a change to `src/` but a class of claim: no dataset contains such
-      a document, because a claim needs both facts and this class proves one. It arrives with an
-      invoice archetype.
+    blocked_on: done
+    blocked_on_note: >
+      THE `src/` CHANGE IS MADE — see `progress:` and `change:` above. This slot read `nothing`
+      until version 22, which this file declares to mean WITHDRAWN, and this entry was fulfilled
+      rather than dropped.
+
+      ⚠️ AND THE SENTENCE THAT SAT HERE WAS STALE, so it is corrected rather than carried across.
+      It said "no dataset contains such a document … it arrives with an invoice archetype". The
+      invoice archetype was written, and `run_profiles` RP-06 — the authoritative delivered corpus
+      — counts 293 payment confirmations among its 1315 documents. The condition this entry named
+      as outstanding has been met.
+
+      🔴 THE SAME STALENESS REACHES `document_types.payment_confirmation.status`, WHICH STILL READS
+      `forward_contract`, AND IS NOT TOUCHED HERE. That word means NOT PRESENT IN THE DATASET, and
+      RP-06 refutes it for this class and for two others. Moving a type to `emitted` requires the
+      field-by-field check against a real run that `status_vocabulary` demands, which is a
+      measurement and the author's call — not something to infer from a count while repairing a
+      neighbouring key. Recorded here so the contradiction is visible rather than silently
+      half-fixed.
 
   - id: RC-07
     file: src/receipt_synth/schemas.py
@@ -5501,9 +5587,12 @@ required_changes:
       vocabulary of things that happen. Four media, three channels. What it actually needs is
       either a separate field on the file, or the consumer's shape adopted whole, and that is a
       modelling decision rather than a missing branch.
-    blocked_on: >
-      decision — for the field's name, its home (file or document), and how the undamaged case is
-      expressed. The recipes are no longer part of this entry.
+    blocked_on: decision
+    blocked_on_note: >
+      FOR THE FIELD'S NAME, ITS HOME (file or document), AND HOW THE UNDAMAGED CASE IS EXPRESSED.
+      The recipes are no longer part of this entry — see `progress:`. The word was always
+      `decision`; only the scope of the decision needed saying, and saying it in the slot made the
+      slot unreadable.
 
   - id: RC-12
     file: src/receipt_synth/assembler.py, schemas.py
@@ -5532,9 +5621,11 @@ required_changes:
       STILL OPEN and needing a decision: the consumer treats `partially_paid` and
       `partially_covered` as independent axes that may hold at once, which a single-valued
       `Verdict` cannot express.
-    blocked_on: >
-      decision — for the two-axis question only. The `rejected` half is closed and the naming
-      half is settled by the mapping table.
+    blocked_on: decision
+    blocked_on_note: >
+      FOR THE TWO-AXIS QUESTION ONLY. The `rejected` half is closed and the naming half is settled
+      by the mapping table — both are recorded in `change:` above rather than removed, because
+      what is done and what remains are different questions about one entry.
 
   - id: RC-14
     file: src/receipt_synth/schemas.py
