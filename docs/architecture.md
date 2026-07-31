@@ -489,6 +489,25 @@ These two causes are the linkage slot; the missing **subject** document is the o
 owns. Together they are why the verdict still exists after the period case moved to `rejected`: in all three
 something genuinely *is* unestablished.
 
+### What ties a claim's documents together
+
+The cross-checks above are what the *oracle* asks. The generator has the matching obligation: the two
+documents of a claim describe one transaction between one pair of parties, so the things they both print have
+to agree — and, more subtly, have to agree in a way a system could **earn**.
+
+Both halves are decided in one place. The claim's vendor is resolved once (`content_builder.resolve_vendor`)
+and its identity — tax code, account, bank — is drawn once as a `PartyIdentity` and handed to every builder of
+that claim. A per-document draw prints one firm under two registry codes and two accounts, which makes linking
+by identifier not *hard* but *impossible*; that is what the generator did until the identity was introduced,
+on every multi-document claim of the first production corpus.
+
+The opposite failure matters as much and is easier to miss: a field printed **identically** on both pages
+scores perfectly for any system, by construction, and measures nothing. So each shared field is classified as
+matching trivially, never matching, or resolvable — and the derivation, the classification of every field, and
+what is still trivial are in [cross-document-fields.md](cross-document-fields.md).
+`tools/cross_document_audit.py` measures any generated corpus against that table, reading the printed text
+rather than the builder's own fields.
+
 ### The period is checked on the payment
 
 A limit is consumed when money moves, so a claim is dated by its **proof of payment** and the active period
