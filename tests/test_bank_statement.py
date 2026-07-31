@@ -728,11 +728,17 @@ def test_a_statement_purpose_is_filled_only_from_a_document_reference():
     Ukrainian sentence ever written, and would have passed whatever the pool said.
 
     What IS checkable is the agreement between the two sides: every template's placeholder set
-    against the arguments `purpose_of` supplies. A template naming a third placeholder raises, and a
-    builder that dropped one of the two raises — so the pool cannot start printing merchandise
+    against the arguments `purpose_of` supplies. A template naming a fourth placeholder raises, and
+    a builder that dropped one of the three raises — so the pool cannot start printing merchandise
     without this going red.
+
+    ⚠️ `delivery_note_no` JOINED THE SET, AND IT IS NOT A LOOSENING. It names a ВН, a delivery note,
+    which is a document class no claim holds — so it is filled from a draw while `invoice_no` on the
+    labelled row is filled from the claim's own invoice. The two were one placeholder until the
+    cross-document work, which meant a delivery note could be given an invoice's number; see
+    docs/cross-document-fields.md and the note beside the templates in config/generation.yaml.
     """
-    supplied = {"invoice_no", "invoice_date"}
+    supplied = {"invoice_no", "invoice_date", "delivery_note_no"}
     for kind in ("debit", "credit", "credit_from_self", "service_fee"):
         for template in statement_purposes("uk", kind):
             named = {f for _, f, _, _ in Formatter().parse(template) if f}

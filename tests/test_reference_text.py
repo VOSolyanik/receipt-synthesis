@@ -395,7 +395,7 @@ def test_the_label_carries_both_and_they_survive_the_degrader(renderer, tmp_path
     )
     vendor = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy",
               "vat_payer": True}
-    document = assembler._build_document(
+    document, _ = assembler._build_document(
         random.Random(7),
         persona=generate_persona(random.Random(4), persona_id="p001", country=Country.UA),
         plan=plan, document_plan=plan.documents[0],

@@ -825,11 +825,14 @@ def test_the_assembler_builds_a_fiscal_receipt_and_tells_it_the_capture_channel(
     vendor = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
 
     with Renderer() as renderer:
-        document = assembler._build_document(
+        document, reference = assembler._build_document(
             random.Random(7), persona=persona, plan=plan, document_plan=plan.documents[0],
             vendor=vendor, identity=draw_party_identity(random.Random(7), vendor, "UA"),
             doc_id="p001_c1_d1", renderer=renderer, out_dir=tmp_path,
         )
+
+    # A fiscal receipt is a whole claim, so nothing in its claim can cite it.
+    assert reference is None
 
     assert document.doc_type is DocType.FISCAL_RECEIPT
     # The channel reached the builder: the VAT row's form is one the document's OWN capture allows.

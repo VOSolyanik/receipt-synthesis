@@ -955,6 +955,29 @@ def draw_party_identity(
     )
 
 
+@dataclass(frozen=True)
+class DocumentReference:
+    """The document a payment's purpose line cites: its number, and the date it bears.
+
+    🔴 A REFERENCE IS A CROSS-DOCUMENT FIELD OF ITS OWN, and it used to be drawn independently on
+    each side — the invoice printed one number in its title, and the payment beside it cited a
+    number drawn from `rng.randint(1, 9999)`, so the two never agreed on any pair of the delivered
+    corpus. Passing the subject document's own reference makes the citation resolvable: it is
+    embedded in free text on the payment side and written into a title on the subject side, and the
+    DATE is spelled in words on one page and in digits on the other, so the two ends still have to
+    be parsed and normalized before they can be compared. That is the difference between a field a
+    system can earn a score on and one it cannot.
+
+    ⛔ It is NOT passed to every purpose line. A statement's ordinary rows and a purpose naming a
+    ВН — a delivery note, a different class of document — refer to documents that are not in the
+    claim, and that is the whole reason a payment document establishes nothing about what was
+    bought. See `_cited_number` and docs/cross-document-fields.md.
+    """
+
+    number: str
+    issued_at: datetime
+
+
 def vendor_can_carry(vendor: dict, category_id: str, *, mixed: bool) -> bool:
     """Whether this vendor can issue the receipt a plan asks for.
 
@@ -1951,6 +1974,43 @@ def _draw_signature_path(rng: random.Random) -> str:
     return f"M 0 22 {curves}"
 
 
+def _fill_reference(
+    rng: random.Random,
+    template: str,
+    rules: dict,
+    at: datetime,
+    cites: DocumentReference | None,
+) -> str:
+    """A purpose line with the document it names filled in.
+
+    `cites` is the claim's own subject document, and where it is given the line names THAT
+    invoice — its number and the date it bears. Where it is not, the line names a document outside
+    the claim, which is the honest case for every ordinary statement row and for a payment
+    document built on its own.
+
+    ⚠️ `{delivery_note_no}` IS NEVER FILLED FROM `cites`. A ВН is a delivery note and no claim
+    holds one, so its number stays drawn however the caller was called — see the note beside the
+    templates in config/generation.yaml for why the two placeholders are separate.
+
+    🔴 THE SAME THREE VALUES ARE DRAWN WHETHER OR NOT `cites` IS GIVEN, and one of the three is
+    then discarded. A branch that skipped the draw would make the LENGTH of the run's draw depend
+    on whether a claim happened to have a subject document, so every later value in the whole run
+    would shift with it — the same reason `build_bank_statement` nudges a colliding amount instead
+    of redrawing it.
+    """
+    drawn_number = f"{rng.randint(1, 9999)}"
+    drawn_date = at - timedelta(days=rng.randint(0, 20))
+    delivery_note_no = f"{rng.randint(1, 9999)}"
+    number, issued_at = (
+        (cites.number, cites.issued_at) if cites else (drawn_number, drawn_date)
+    )
+    return template.format(
+        invoice_no=number,
+        invoice_date=issued_at.strftime(rules["date_format"]),
+        delivery_note_no=delivery_note_no,
+    )
+
+
 def build_payment_confirmation(
     rng: random.Random,
     *,
@@ -1961,6 +2021,7 @@ def build_payment_confirmation(
     payer_tax_id: str,
     amount: Decimal | None = None,
     initiation: str | None = None,
+    cites: DocumentReference | None = None,
     country: str = "UA",
 ) -> PaymentConfirmation:
     """Build one Ukrainian bank payment confirmation.
@@ -1976,6 +2037,9 @@ def build_payment_confirmation(
     it — which is exactly the defect this parameter exists to remove. It is not drawn here because
     it is a property of the CLAIM's payee and not of this page.
 
+    ``cites`` is the claim's subject document, when it has one. Given, the purpose line names that
+    invoice; omitted, it names a document outside the claim, which is what a confirmation built on
+    its own honestly does.
 
     ``payer_name`` and ``payer_tax_id`` come from the persona. This is the first archetype that
     prints a persona's own name, which is why the surname pool was narrowed to a published
@@ -2080,15 +2144,13 @@ def build_payment_confirmation(
     if mode["prints_purpose"]:
         template = rng.choice(payment_purposes(rules["language"]))
         # An invoice number and its date, filled here rather than from the placeholder
-        # vocabulary: this is a reference to another document, not merchandise. 🔴 It is also the
-        # whole reason the purpose proves nothing about the subject — it names a document, and
-        # that document is not in the claim.
-        purpose = template.format(
-            invoice_no=f"{rng.randint(1, 9999)}",
-            invoice_date=(issued_at - timedelta(days=rng.randint(0, 20))).strftime(
-                rules["date_format"]
-            ),
-        )
+        # vocabulary: this is a reference to another document, not merchandise. 🔴 It still proves
+        # nothing about the SUBJECT — it names a document, and a document number says nothing
+        # about what was bought — but where `cites` is given it names the claim's OWN invoice, so
+        # the two documents can be linked by somebody willing to parse both ends. Some templates
+        # name no document at all; that absence is deliberate and is what stops a linker from
+        # assuming the reference is always there.
+        purpose = _fill_reference(rng, template, rules, issued_at, cites)
 
     terminal_label = terminal_value = None
     if rng.random() < payment_confirmation_share("terminal"):
@@ -2488,6 +2550,7 @@ def build_bank_statement(
     payer_name: str,
     payer_tax_id: str,
     amount: Decimal | None = None,
+    cites: DocumentReference | None = None,
     country: str = "UA",
 ) -> BankStatement:
     """Build one Ukrainian bank account statement, on one page.
@@ -2506,6 +2569,10 @@ def build_bank_statement(
     persona and are the ACCOUNT HOLDER — a statement of anybody else's account would evidence
     nothing about this claimant's money.
 
+    `cites` is the claim's subject document. ⛔ IT REACHES THE LABELLED ROW AND NO OTHER. Every
+    ordinary row names a document outside the claim, which is the whole reason a statement
+    establishes nothing about what was bought, and a page whose every row cited the same invoice
+    would be a different document altogether.
 
     `amount` is the labelled transaction's amount, drawn when not given. It is a parameter for the
     reason the confirmation's `transfer` is one: a caller pairing this statement with an invoice
@@ -2575,17 +2642,16 @@ def build_bank_statement(
             their.bank_name,
         )
 
-    def purpose_of(kind: str, at: datetime) -> str:
-        """A purpose line, with the invoice it refers to filled in.
+    def purpose_of(kind: str, at: datetime, cites: DocumentReference | None = None) -> str:
+        """A purpose line, with the document it refers to filled in.
 
-        🔴 It refers to a document that is not in the claim, which is the whole reason a statement
-        establishes nothing about what was bought.
+        🔴 Without `cites` it refers to a document that is not in the claim, which is the whole
+        reason a statement establishes nothing about what was bought. The LABELLED row passes the
+        claim's invoice, so that one row can be linked to the invoice beside it — and a purpose
+        naming a ВН still points outside the claim even there, because a delivery note is a
+        different class of document.
         """
-        template = rng.choice(purposes[kind])
-        return template.format(
-            invoice_no=f"{rng.randint(1, 9999)}",
-            invoice_date=(at - timedelta(days=rng.randint(0, 20))).strftime(rules["date_format"]),
-        )
+        return _fill_reference(rng, rng.choice(purposes[kind]), rules, at, cites)
 
     relevant_name = printed_legal_name(vendor["name"], vendor["legal_form"])
     rows: list[StatementRow] = []
@@ -2654,14 +2720,14 @@ def build_bank_statement(
     )
 
     # -- the labelled transaction. The ONE row that carries the claim's own payee, and therefore
-    # the only row printing the claim's identity.
+    # the only row printing the claim's identity and citing the claim's invoice.
     rows.append(
         StatementRow(
             number=numbers[ordinary + 1],
             at=issued_at,
             amount=amount,
             direction=Direction.DEBIT,
-            purpose=purpose_of("debit", issued_at),
+            purpose=purpose_of("debit", issued_at, cites),
             counterparty_name=relevant_name,
             counterparty_code=identity.tax_code,
             counterparty_account=identity.account,
@@ -2797,6 +2863,16 @@ class Invoice:
         """Σ over the line items. DERIVED rather than stored: an invoice states one total, and two
         numbers that must agree should not be two numbers."""
         return line_items_total(self.line_items)
+
+    @property
+    def reference(self) -> DocumentReference:
+        """How a payment document names this invoice.
+
+        A property rather than a field the assembler assembles: the number and the date are already
+        on this object, and a caller composing them itself would be a second place that decides what
+        a reference to an invoice consists of.
+        """
+        return DocumentReference(number=self.number, issued_at=self.issued_at)
 
     # -- rendering ------------------------------------------------------------
 

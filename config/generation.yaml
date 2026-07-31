@@ -794,17 +794,26 @@ bank_statement:
   # confirmation's: here a generic category of goods was at least sometimes named, so the
   # confirmation's 0-of-7 is the stronger observation and this one confirms rather than carries it.
   #
-  # `{invoice_no}` and `{invoice_date}` are filled by `content_builder`, as they are for a
-  # confirmation: a reference to another document is not merchandise, so it does not come from
-  # the placeholder vocabulary above.
+  # `{invoice_no}`, `{invoice_date}` and `{delivery_note_no}` are filled by `content_builder`, as
+  # `{invoice_no}` is for a confirmation: a reference to another document is not merchandise, so it
+  # does not come from the placeholder vocabulary above.
+  #
+  # 🔴 «РАХУНОК» AND «ВН» ARE TWO DIFFERENT DOCUMENT CLASSES, AND THEY DO NOT SHARE A PLACEHOLDER.
+  # A рахунок is an invoice, and the labelled row of a statement cites THE CLAIM'S OWN invoice —
+  # that is the one cross-document reference this corpus offers. A ВН is a видаткова накладна, a
+  # delivery note, and no claim contains one, so its number is drawn and points outside the claim.
+  # Both used to be `{invoice_no}`, which is why the distinction is written here rather than
+  # inferred from the wording: filling a delivery note with the claim's invoice number would
+  # manufacture a reference that resolves to the wrong document class, and a linking system that
+  # matched on «№» alone would score a correct-looking hit on it.
   purposes:
     uk:
       debit:
-        - "Оплата за товар згідно ВН № {invoice_no}, у т.ч. ПДВ 20%"
+        - "Оплата за товар згідно ВН № {delivery_note_no}, у т.ч. ПДВ 20%"
         - "Оплата за послуги згідно рахунку № {invoice_no} від {invoice_date}"
         - "Оплата за витратні матеріали згідно рахунку № {invoice_no}, у т.ч. ПДВ 20%"
         - "Оплата згідно рахунку № {invoice_no} від {invoice_date}"
-        - "Оплата за обладнання згідно ВН № {invoice_no}, у т.ч. ПДВ 20%"
+        - "Оплата за обладнання згідно ВН № {delivery_note_no}, у т.ч. ПДВ 20%"
       # 👁 A credit row's purpose cannot be an «Оплата за…»: the money is arriving. The observed
       # forms are a return of funds and a transfer between the holder's own accounts — and note
       # that a RETURN is exactly why a credit can never be proof of an expense.

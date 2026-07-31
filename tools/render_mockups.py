@@ -38,7 +38,6 @@ from receipt_synth.config import (
     jurisdiction,
     load_fx_rates,
     load_vendors,
-    payment_purposes,
 )
 from receipt_synth.content_builder import (
     build_invoice,
@@ -62,6 +61,11 @@ ISSUED_AT = datetime(2026, 3, 17, 13, 52, 41)
 # states, so it is a fixed plausible gap rather than a draw: what the bundle needs is that the
 # payment is LATER than the invoice, which is a property of the pair and not of its length.
 SETTLEMENT_DELAY_DAYS = 4
+
+# How many confirmations the claim bundle may draw before one of them prints a purpose naming the
+# invoice. Two of the five configured purposes name no document, so a handful of draws is expected;
+# the bound is here so that a pool with no such purpose left fails by name instead of looping.
+_PURPOSE_DRAW_LIMIT = 40
 
 # ---------------------------------------------------------------------------
 # Ukrainian strings that have no home in config/ yet.
@@ -895,32 +899,34 @@ def claim_bundle_context(rng: random.Random, renderer: Renderer, out_dir: Path) 
     # archetype exists to pose. Pinning it here is a choice about what the MOCK-UP shows; the
     # corpus keeps drawing all three.
     #
-    confirmation = build_payment_confirmation(
-        rng,
-        issued_at=settled_at,
-        vendor=vendor,
-        identity=identity,
-        payer_name=buyer["name"],
-        payer_tax_id=buyer["tax_id"],
-        amount=invoice.total,
-        initiation="transfer",
-    )
+    # 🔴 AND THE PURPOSE IS REDRAWN UNTIL IT NAMES A DOCUMENT — not edited afterwards. Two of the
+    # configured purposes name no document at all, which is deliberate and is a real part of the
+    # corpus, but a bundle drawing one of them shows a pair with nothing tying its pages. The
+    # difference from what this function used to do is the whole point: the NUMBER still comes from
+    # `invoice.reference` through the builder, so the page cannot say something a run could not.
+    # What is chosen here is which of the configured cases to photograph.
+    for _ in range(_PURPOSE_DRAW_LIMIT):
+        confirmation = build_payment_confirmation(
+            rng,
+            issued_at=settled_at,
+            vendor=vendor,
+            identity=identity,
+            payer_name=buyer["name"],
+            payer_tax_id=buyer["tax_id"],
+            amount=invoice.total,
+            initiation="transfer",
+            cites=invoice.reference,
+        )
+        if invoice.number in (confirmation.purpose or ""):
+            break
+    else:
+        raise RuntimeError(
+            f"no confirmation in {_PURPOSE_DRAW_LIMIT} draws printed a purpose naming the "
+            "invoice; check that config/generation.yaml still holds a purpose with {invoice_no}"
+        )
 
     invoice_context = invoice.render_context()
     confirmation_context = confirmation.render_context()
-
-    # 🔴 THE LINK, overridden rather than hoped for. The template is read from
-    # config/generation.yaml — the one purpose that carries both placeholders — and filled with
-    # the number and date of the invoice that is actually on the previous page.
-    purpose_template = next(
-        template
-        for template in payment_purposes("uk")
-        if "{invoice_no}" in template and "{invoice_date}" in template
-    )
-    confirmation_context["purpose"] = purpose_template.format(
-        invoice_no=invoice.number,
-        invoice_date=ISSUED_AT.strftime(jurisdiction("UA")["date_format"]),
-    )
 
     sheets = []
     for slug, page, context in (
