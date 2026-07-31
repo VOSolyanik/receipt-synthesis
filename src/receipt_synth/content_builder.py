@@ -887,6 +887,74 @@ def vendor_is_vat_payer(vendor: dict) -> bool:
     return bool(vendor["vat_payer"])
 
 
+@dataclass(frozen=True)
+class PartyIdentity:
+    """Who a party IS on paper, drawn ONCE PER CLAIM and printed on every document of it.
+
+    🔴 THE CONSTRAINT `resolve_vendor` SOLVES FOR THE NAME, SOLVED FOR THE NUMBERS TOO. That
+    docstring says a per-document draw "would print two different sellers on two documents of one
+    purchase", and it was right — but it fixed only the name, so `generate_edrpou` and
+    `generate_iban` went on being called once per builder and every identifier of one seller
+    differed between the two documents of the same claim. Measured on the delivered corpus: 587
+    pairs, and the seller's tax code and IBAN disagreed on 587 of them, while the name agreed on
+    587 of them. See docs/cross-document-fields.md.
+
+    Why that is worse than an ordinary wrong value: **linking documents of one claim is what this
+    corpus exists to pose as a problem**, and a field that never matches is not a hard instance of
+    that problem — it is an unsolvable one. A system scored on it scores zero by construction, and
+    the number says something about the generator rather than about the system. The name matching
+    byte for byte is the same defect from the other side.
+
+    ⚠️ `bank_name` AND `bank_code` BELONG TO THE IDENTITY AND NOT TO THE DOCUMENT, because
+    `account` is built on `bank_code` — an IBAN carries its bank's МФО in the clear. A document
+    drawing its own bank while printing the claim's account would print a bank code that
+    contradicts the account beside it, which is a defect no cross-document check would catch and
+    every reader of one page would see.
+
+    Not to be confused with `Seller`, `Party` or `InvoiceParty`: those are the party blocks three
+    document classes PRINT, each with its own captions and its own optional fields. This is the
+    identity all three print, and it is drawn where a claim is assembled rather than where a page
+    is composed.
+    """
+
+    tax_code: str
+    vat_number: str | None
+    bank_name: str
+    bank_code: str
+    account: str
+
+
+def draw_party_identity(
+    rng: random.Random, vendor: dict, country: str = "UA"
+) -> PartyIdentity:
+    """Draw one party's identity — the register the code comes from follows the legal form.
+
+    A ФОП has no ЄДРПОУ at all, so an eight-digit code beside a sole trader's name would be an
+    identifier no register could resolve to the party printed next to it. The ПН is derived from
+    the ІД rather than drawn, for the reason `_vat_number` gives, and is drawn here even for the
+    classes that never print it: it costs one value from the generator and keeps the draw the same
+    length whichever archetype the claim turns out to use.
+
+    Called once per claim by the assembler, and once per ORDINARY STATEMENT ROW by
+    `build_bank_statement` — those counterparties are different firms on purpose, and a fresh
+    identity per row is what they need.
+    """
+    is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
+    tax_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
+    bank_code = _draw_bank_code(rng, country)
+    return PartyIdentity(
+        tax_code=tax_code,
+        vat_number=(
+            _vat_number(rng, tax_code, is_sole_trader=is_sole_trader)
+            if vendor_is_vat_payer(vendor)
+            else None
+        ),
+        bank_name=rng.choice(banks(country)),
+        bank_code=bank_code,
+        account=generate_iban(rng, bank_code, country),
+    )
+
+
 def vendor_can_carry(vendor: dict, category_id: str, *, mixed: bool) -> bool:
     """Whether this vendor can issue the receipt a plan asks for.
 
@@ -1254,6 +1322,7 @@ def build_prro_receipt(
     category_id: str,
     issued_at: datetime,
     vendor: dict,
+    identity: PartyIdentity,
     address: str = "м. Київ",
     covered_only: bool = True,
     coverage_target: Decimal | None = None,
@@ -1273,6 +1342,11 @@ def build_prro_receipt(
     beside the ІД line it always prints and whether the document has a VAT block, and its
     ``legal_form`` decides how the name is printed and which register both identifiers come from.
     Ask `vendor_can_carry` before choosing one for a mixed basket.
+
+    ``identity`` carries those two identifiers, drawn once for the claim. Required on this builder
+    as on the other three even though a fiscal receipt is a whole claim by itself: an optional
+    parameter here would leave one class deciding who a seller is by a route of its own, and the
+    day a receipt is paired with anything it would be the class that got missed.
 
     ``registrar`` names a key of ``receipt.registrars`` in config/fiscal-rules.yaml — ``prro``
     for the software register, ``rro`` for the classic hardware one. IT DECIDES THE FISCAL
@@ -1350,21 +1424,22 @@ def build_prro_receipt(
     # beside it. The ПН exists only for a registered payer, and is derived from the ІД rather
     # than drawn independently, so the two lines cannot contradict each other. See `identifiers`
     # in config/fiscal-rules.yaml for the sources and for what is not settled.
+    # Both identifiers come from `identity`, drawn once for the claim. A fiscal receipt is a whole
+    # claim on its own today, so nothing of this one is compared against a second document — the
+    # parameter is here so that ONE mechanism decides who a seller is, rather than three builders
+    # deciding it three ways and the fourth being fixed later.
     is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
     id_code_rules = rules["identifiers"]["rnokpp" if is_sole_trader else "edrpou"]
     vat_number_rules = rules["identifiers"]["vat_number"]
 
-    tax_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
     seller = Seller(
         name=vendor["name"],
         legal_form=vendor["legal_form"],
         address=address,
         vat_payer=vat_payer,
-        tax_code=tax_code,
+        tax_code=identity.tax_code,
         tax_code_label=id_code_rules["label"],
-        vat_number=(
-            _vat_number(rng, tax_code, is_sole_trader=is_sole_trader) if vat_payer else None
-        ),
+        vat_number=identity.vat_number,
         vat_number_label=vat_number_rules["label"],
     )
 
@@ -1881,6 +1956,7 @@ def build_payment_confirmation(
     *,
     issued_at: datetime,
     vendor: dict,
+    identity: PartyIdentity,
     payer_name: str,
     payer_tax_id: str,
     amount: Decimal | None = None,
@@ -1893,6 +1969,13 @@ def build_payment_confirmation(
     instance is passed to every document of a claim so two documents cannot name two firms. Its
     ``profile`` is not consulted: this document lists nothing, so what the payee sells cannot be
     read off it, which is the whole reason the type proves no subject.
+
+    ``identity`` is that payee's `PartyIdentity`, and it is REQUIRED for the reason ``capture`` is
+    required on the receipt builder: a default would draw a valid-looking code and IBAN, the
+    document would render, and the only symptom would be that it disagreed with the invoice beside
+    it — which is exactly the defect this parameter exists to remove. It is not drawn here because
+    it is a property of the CLAIM's payee and not of this page.
+
 
     ``payer_name`` and ``payer_tax_id`` come from the persona. This is the first archetype that
     prints a persona's own name, which is why the surname pool was narrowed to a published
@@ -1939,13 +2022,12 @@ def build_payment_confirmation(
         fee_low, fee_high = payment_confirmation_money_range("fee")
         fee = Decimal(rng.randrange(_minor(fee_low), _minor(fee_high), 10)) / 100
 
-    # -- the two parties
+    # -- the two parties. The PAYER's bank is this document's own — the confirmation is issued by
+    # the bank that moved the money — while the PAYEE's comes from the claim's identity, because
+    # the account printed for the payee is the claim's and an IBAN carries its bank's code.
     bank_name = rng.choice(banks(country))
     bank_code = _draw_bank_code(rng, country)
-    payee_bank_code = _draw_bank_code(rng, country)
 
-    is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
-    payee_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
     # 👁 The SECOND form of emptiness — a caption with nothing under it — observed on the
     # recipient's bank among three such fields on one document. ⛔ The same form was observed on
     # the recipient's NAME too and is deliberately not produced there: `counterparty` is a
@@ -1956,13 +2038,13 @@ def build_payment_confirmation(
     payee_bank = (
         None
         if rng.random() < payment_confirmation_share("empty_captioned_field")
-        else f"{rng.choice(banks(country))}, {payee_bank_label} {payee_bank_code}"
+        else f"{identity.bank_name}, {payee_bank_label} {identity.bank_code}"
     )
     payee = Party(
         name=printed_legal_name(vendor["name"], vendor["legal_form"]),
         trade_name=vendor["name"],
-        code=payee_code,
-        account=generate_iban(rng, payee_bank_code, country),
+        code=identity.tax_code,
+        account=identity.account,
         bank=payee_bank,
     )
 
@@ -2402,6 +2484,7 @@ def build_bank_statement(
     *,
     issued_at: datetime,
     vendor: dict,
+    identity: PartyIdentity,
     payer_name: str,
     payer_tax_id: str,
     amount: Decimal | None = None,
@@ -2417,9 +2500,12 @@ def build_bank_statement(
 
     `vendor` is the claim's payee, resolved, and it appears on the labelled row and on no other:
     no ordinary row repeats that counterparty, so the row the label points at is the only one
-    matching the claim's other document. `payer_name` and `payer_tax_id` come from the persona and
-    are the ACCOUNT HOLDER — a statement of anybody else's account would evidence nothing about
-    this claimant's money.
+    matching the claim's other document. `identity` is that payee's, and it is what makes the
+    match hold on more than the NAME: the labelled row prints the claim's tax code, account and
+    bank, while every ordinary row draws its own. `payer_name` and `payer_tax_id` come from the
+    persona and are the ACCOUNT HOLDER — a statement of anybody else's account would evidence
+    nothing about this claimant's money.
+
 
     `amount` is the labelled transaction's amount, drawn when not given. It is a parameter for the
     reason the confirmation's `transfer` is one: a caller pairing this statement with an invoice
@@ -2474,19 +2560,19 @@ def build_bank_statement(
     }
 
     def counterparty_of(entry: dict) -> tuple[str, str, str, str]:
-        """The four printed fields of a counterparty: name, code, account, bank."""
+        """The four printed fields of a counterparty: name, code, account, bank.
+
+        A FRESH IDENTITY PER ROW, and that is correct here: these are other firms the holder paid,
+        each appearing once on the page. The claim's own payee is the one counterparty whose
+        identity is fixed for the whole claim, and it is not drawn through this function.
+        """
         resolved = resolve_vendor(rng, entry, country)
-        code = (
-            generate_rnokpp(rng)
-            if resolved["legal_form"] == _SOLE_TRADER
-            else generate_edrpou(rng)
-        )
-        their_bank_code = _draw_bank_code(rng, country)
+        their = draw_party_identity(rng, resolved, country)
         return (
             printed_legal_name(resolved["name"], resolved["legal_form"]),
-            code,
-            generate_iban(rng, their_bank_code, country),
-            rng.choice(banks(country)),
+            their.tax_code,
+            their.account,
+            their.bank_name,
         )
 
     def purpose_of(kind: str, at: datetime) -> str:
@@ -2567,8 +2653,8 @@ def build_bank_statement(
         )
     )
 
-    # -- the labelled transaction
-    payee_bank_code = _draw_bank_code(rng, country)
+    # -- the labelled transaction. The ONE row that carries the claim's own payee, and therefore
+    # the only row printing the claim's identity.
     rows.append(
         StatementRow(
             number=numbers[ordinary + 1],
@@ -2577,13 +2663,9 @@ def build_bank_statement(
             direction=Direction.DEBIT,
             purpose=purpose_of("debit", issued_at),
             counterparty_name=relevant_name,
-            counterparty_code=(
-                generate_rnokpp(rng)
-                if vendor["legal_form"] == _SOLE_TRADER
-                else generate_edrpou(rng)
-            ),
-            counterparty_account=generate_iban(rng, payee_bank_code, country),
-            counterparty_bank=rng.choice(banks(country)),
+            counterparty_code=identity.tax_code,
+            counterparty_account=identity.account,
+            counterparty_bank=identity.bank_name,
         )
     )
 
@@ -2856,6 +2938,7 @@ def build_invoice(
     category_id: str,
     issued_at: datetime,
     vendor: dict,
+    identity: PartyIdentity,
     buyer_name: str,
     buyer_tax_id: str,
     address: str = "м. Київ",
@@ -2871,6 +2954,11 @@ def build_invoice(
     is a property of what was bought and not of the document that lists it, so an invoice and a
     receipt listing the same basket must produce the same covered fraction. Two builders drawing
     baskets two ways would make the verdict depend on which document class a claim happened to get.
+
+    `identity` is the SUPPLIER's `PartyIdentity` — its code, its account and the bank holding it —
+    drawn once for the claim so that the payment document settling this invoice names the same
+    party by the same numbers. Required rather than defaulted: a builder that quietly drew its own
+    would produce a document that renders perfectly and agrees with nothing.
 
     `buyer_name` and `buyer_tax_id` are the CLAIMANT's — an invoice is addressed to somebody, and an
     invoice addressed to anybody else would evidence nothing about the persona filing the claim.
@@ -2932,18 +3020,22 @@ def build_invoice(
     items = [item.model_copy(update={"vat_letter": None}) for item in items]
 
     # -- who is selling. 👁 The supplier block names the firm, its code, its address, sometimes a
-    # telephone, and always an account with the bank holding it.
+    # telephone, and always an account with the bank holding it. Every one of those requisites but
+    # the address and the telephone is the CLAIM's, not this page's: an invoice and the payment
+    # settling it name one seller, and naming it by four independently drawn numbers is what made
+    # the pair unlinkable. 👁 The bank is printed twice on this form — beside the account in the
+    # supplier block and again in the payment-order sample at the head — and both read the same
+    # value here, which is why the sample block takes `supplier.bank` rather than a draw.
     is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
-    bank_code = _draw_bank_code(rng, country)
     supplier = InvoiceParty(
         name=vendor["name"],
         legal_form=vendor["legal_form"],
-        code=generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng),
+        code=identity.tax_code,
         code_label=block["parties"]["supplier_code_label"],
         address=address,
         phone=_draw_phone(rng) if rng.random() < invoice_share("phone") else None,
-        account=generate_iban(rng, bank_code, country),
-        bank=rng.choice(banks(country)),
+        account=identity.account,
+        bank=identity.bank_name,
     )
     # ⚠️ The buyer is a natural person and carries a РНОКПП. 👁 The observed invoice was addressed to
     # a company; the narrowing is declared in config/labelling-schema.yaml.
@@ -2991,7 +3083,7 @@ def build_invoice(
         signatory_post=(
             None if is_sole_trader else rng.choice(block["signature"]["posts"])
         ),
-        bank_code=bank_code,
+        bank_code=identity.bank_code,
         decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
     )
 

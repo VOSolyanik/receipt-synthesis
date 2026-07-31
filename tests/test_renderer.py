@@ -26,10 +26,12 @@ from receipt_synth.assembler import _BUILDERS
 from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.config import jurisdiction
 from receipt_synth.content_builder import (
+    PartyIdentity,
     build_bank_statement,
     build_invoice,
     build_payment_confirmation,
     build_prro_receipt,
+    draw_party_identity,
     resolve_vendor,
 )
 from receipt_synth.renderer import FONT_FILES, FONTS_DIR, TEMPLATES_DIR, Renderer, qr_svg
@@ -123,6 +125,17 @@ PAYER_SOLE_TRADER = resolve_vendor(
 )
 
 
+def identity_for(vendor: dict, seed: int = 606) -> PartyIdentity:
+    """Who a seller is on paper, for a module that renders single documents.
+
+    Drawn from a generator of its own rather than from the builder's, which is the arrangement the
+    assembler uses for a real claim: the identity belongs to the CLAIM and the page is handed it.
+    A test that needs two documents to name the same seller passes the same instance to both — see
+    test_cross_document_identity.py, which is where that is asserted.
+    """
+    return draw_party_identity(random.Random(seed), vendor, "UA")
+
+
 def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "prro",
                  capture: Capture = Capture.SCREENSHOT):
     return build_prro_receipt(
@@ -130,6 +143,7 @@ def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "p
         category_id="vitamins_nutrition",
         issued_at=datetime(2026, 8, 3, 14, 22, 51),
         vendor=vendor,
+        identity=identity_for(vendor),
         address="м. Київ, вул. Хрещатик, 22",
         registrar=registrar,
         # STATED AT EVERY CALL SITE since the builder's default was removed: the channel decides
@@ -149,6 +163,7 @@ def make_confirmation(seed: int = 20260417, vendor: dict = PAYER, initiation: st
         random.Random(seed),
         issued_at=datetime(2026, 4, 17, 11, 3, 9),
         vendor=vendor,
+        identity=identity_for(vendor),
         payer_name="Ковальчук Олена Петрівна",
         payer_tax_id="2345678901",
         initiation=initiation,
@@ -165,6 +180,7 @@ def make_statement(seed: int = 20260512, vendor: dict = PAYER):
         random.Random(seed),
         issued_at=datetime(2026, 5, 12, 14, 33),
         vendor=vendor,
+        identity=identity_for(vendor),
         payer_name="Ковальчук Олена Петрівна",
         payer_tax_id="2345678901",
     )
@@ -181,6 +197,7 @@ def make_invoice(seed: int = 20260512, vendor: dict = PAYER):
         category_id="vitamins_nutrition",
         issued_at=datetime(2026, 5, 12, 10, 15),
         vendor=vendor,
+        identity=identity_for(vendor),
         buyer_name="Ковальчук Олена Петрівна",
         buyer_tax_id="2345678901",
         address="м. Київ, вул. Хрещатик, 22",

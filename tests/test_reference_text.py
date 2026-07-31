@@ -25,6 +25,7 @@ from html import unescape
 import pytest
 
 from receipt_synth.claim_planner import ARCHETYPES
+from receipt_synth.content_builder import draw_party_identity
 from receipt_synth.renderer import Renderer
 from test_renderer import REGISTERED_SLUGS, context_for
 
@@ -188,15 +189,21 @@ def test_a_non_text_marker_really_is_outside_the_text_extent(renderer, tmp_path)
     """The exclusion above must EXCLUDE something, or it is a list that weakens an assertion for no
     reason. The confirmation's QR sits below its last line of text, so its box genuinely falls
     outside — which is why the exemption exists rather than being defensive."""
-    from receipt_synth.content_builder import build_payment_confirmation, resolve_vendor
+    from receipt_synth.content_builder import (
+        build_payment_confirmation,
+        draw_party_identity,
+        resolve_vendor,
+    )
 
     vendor = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
     for seed in range(40):
         rng = random.Random(seed)
+        resolved = resolve_vendor(rng, vendor, "UA")
         confirmation = build_payment_confirmation(
             rng,
             issued_at=datetime(2026, 4, 17, 11, 3, 9),
-            vendor=resolve_vendor(rng, vendor, "UA"),
+            vendor=resolved,
+            identity=draw_party_identity(rng, resolved, "UA"),
             payer_name="Ковальчук Олена Петрівна",
             payer_tax_id="2345678901",
         )
@@ -386,12 +393,14 @@ def test_the_label_carries_both_and_they_survive_the_degrader(renderer, tmp_path
         verdict=Verdict.COVERED, issued_at=when,
         documents=(DocumentPlan(archetype=receipt, issued_at=when),),
     )
+    vendor = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy",
+              "vat_payer": True}
     document = assembler._build_document(
         random.Random(7),
         persona=generate_persona(random.Random(4), persona_id="p001", country=Country.UA),
         plan=plan, document_plan=plan.documents[0],
-        vendor={"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy",
-                "vat_payer": True},
+        vendor=vendor,
+        identity=draw_party_identity(random.Random(7), vendor, "UA"),
         doc_id="p001_c1_d1", renderer=renderer, out_dir=tmp_path,
     )
 

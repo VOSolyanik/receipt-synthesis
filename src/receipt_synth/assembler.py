@@ -36,10 +36,12 @@ from receipt_synth.claim_planner import (
 from receipt_synth.config import load_vendors, mismatch_delta_range
 from receipt_synth.content_builder import (
     KOPIYKA,
+    PartyIdentity,
     build_bank_statement,
     build_invoice,
     build_payment_confirmation,
     build_prro_receipt,
+    draw_party_identity,
     resolve_vendor,
     vendor_can_carry,
 )
@@ -331,6 +333,7 @@ def _build_document(
     plan: ClaimPlan,
     document_plan: DocumentPlan,
     vendor: dict,
+    identity: PartyIdentity,
     doc_id: str,
     renderer: Renderer,
     out_dir: Path,
@@ -344,10 +347,16 @@ def _build_document(
     settles. The order is not an accident of the loop: a claim's money is a property of what was
     bought, so the document that lists the purchase is the one that fixes it.
 
+
     `vendor` is passed in rather than chosen here. It is the claim's vendor instance, and
     every document of the claim has to name the same seller — while a sole trader's name
     was a stored constant that held by the nature of the type, and a drawn name can differ,
     so it is now a constraint somebody has to keep.
+
+    `identity` is that seller's code, account and bank, drawn once for the claim beside the vendor.
+    The `vendor` constraint was solved for the NAME alone, and every other identifier of one seller
+    went on being drawn per document — 587 pairs of the delivered corpus, 587 disagreements. See
+    `content_builder.PartyIdentity` and docs/cross-document-fields.md.
 
     The basket goes to the claim's SUBJECT document and to no other. Sizing is a claim-level
     decision (`ClaimPlan.coverage_target`, `item_count`), and giving the same basket to a
@@ -387,6 +396,7 @@ def _build_document(
             "category_id": plan.category,
             "issued_at": document_plan.issued_at,
             "vendor": vendor,
+            "identity": identity,
             # No "м." prefix: Faker's uk_UA city names already carry their settlement type
             # ("хутір Великі Мости"), and prefixing produced "м. хутір Великі Мости".
             "address": persona.location.city,
@@ -424,6 +434,7 @@ def _build_document(
             rng,
             issued_at=document_plan.issued_at,
             vendor=vendor,
+            identity=identity,
             payer_name=persona.full_name,
             payer_tax_id=persona.tax_id,
             amount=settles,
@@ -569,6 +580,12 @@ def generate_dataset(
                     plan.category,
                     mixed=plan.coverage_target is not None,
                 )
+                # And WHO THAT VENDOR IS ON PAPER, drawn here for the same reason and in the same
+                # place. The name was fixed per claim and the code, the account and the bank were
+                # not, so two documents of one purchase named one seller by four different numbers
+                # — on every pair of the delivered corpus. The constraint was known; it had been
+                # applied to one field.
+                identity = draw_party_identity(rng, vendor, persona.location.country.value)
                 # A claim is a list of documents, and since the invoice archetype landed it may
                 # genuinely hold two. A LOOP RATHER THAN A COMPREHENSION, because the documents are
                 # no longer independent: the subject document fixes the claim's amount and the
@@ -588,6 +605,7 @@ def generate_dataset(
                         plan=plan,
                         document_plan=document_plan,
                         vendor=vendor,
+                        identity=identity,
                         doc_id=f"{plan.claim_id}_d{index}",
                         renderer=renderer,
                         out_dir=out_dir,

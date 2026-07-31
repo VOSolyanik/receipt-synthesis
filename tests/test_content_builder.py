@@ -35,6 +35,7 @@ from receipt_synth.content_builder import (
     MAX_LINE_ITEMS,
     _fill_placeholders,
     build_prro_receipt,
+    draw_party_identity,
     estimated_line_value,
     is_valid_rnokpp,
     legal_name,
@@ -87,6 +88,7 @@ def build(seed: int, vendor: dict = VENDOR, **kwargs):
         category_id="vitamins_nutrition",
         issued_at=ISSUED_AT,
         vendor=vendor,
+        identity=kwargs.pop("identity", draw_party_identity(random.Random(seed), vendor, "UA")),
         # The channel is stated at every call site: the builder has no default, because one
         # equal to the only live value hid a wiring break until a mutation survived.
         capture=kwargs.pop("capture", Capture.SCREENSHOT),
@@ -614,6 +616,7 @@ def test_a_covered_only_vendor_cannot_carry_a_mixed_basket():
             category_id="language_courses",
             issued_at=ISSUED_AT,
             vendor=COVERED_ONLY,
+            identity=draw_party_identity(random.Random(1), COVERED_ONLY, "UA"),
             covered_only=False,
             coverage_target=Decimal("0.7"),
             capture=Capture.SCREENSHOT,

@@ -32,6 +32,7 @@ from receipt_synth.content_builder import (
     BankStatement,
     StatementRow,
     build_bank_statement,
+    draw_party_identity,
     generate_rnokpp,
     is_valid_edrpou,
     is_valid_iban,
@@ -74,10 +75,12 @@ WHEN = datetime(2026, 5, 12, 14, 33)
 def make_statement(seed: int = 20260512, vendor: dict = PAYER, amount: str | None = None):
     """One statement. `amount` pins the labelled transaction where a test needs to know it."""
     rng = random.Random(seed)
+    resolved = resolve_vendor(rng, vendor, "UA")
     return build_bank_statement(
         rng,
         issued_at=WHEN,
-        vendor=resolve_vendor(rng, vendor, "UA"),
+        vendor=resolved,
+        identity=draw_party_identity(rng, resolved, "UA"),
         payer_name=HOLDER_NAME,
         payer_tax_id=HOLDER_CODE,
         amount=Decimal(amount) if amount else None,
@@ -545,7 +548,11 @@ def test_every_row_of_every_statement_fits_the_declared_sheet(renderer, tmp_path
     push the tallest statements onto a second sheet, which is the case a single render misses."""
     height = _px("height_mm")
     tallest = 0
-    for seed in (10, 16, 21, 22, 27, 30, 34):
+    # ⚠️ A LIST OF SEEDS IS A MEASUREMENT OF ONE DRAW STREAM, and it goes stale whenever the stream
+    # moves. Re-picked when the seller's identity became a claim-level draw: the previous set had
+    # stopped reaching 25 rows, and the assertion below is what said so rather than the test quietly
+    # exercising 24 for ever.
+    for seed in (3, 5, 6, 16, 20, 21, 22):
         statement = make_statement(seed)
         result = renderer.render(SLUG, statement.render_context(), tmp_path / f"{seed}.png")
         tallest = max(tallest, len(statement.rows))

@@ -42,7 +42,11 @@ from receipt_synth.claim_planner import (
 )
 from receipt_synth.cli import main
 from receipt_synth.config import high_frequency_surnames, jurisdiction, load_policy
-from receipt_synth.content_builder import MAX_LINE_ITEMS, is_valid_rnokpp
+from receipt_synth.content_builder import (
+    MAX_LINE_ITEMS,
+    draw_party_identity,
+    is_valid_rnokpp,
+)
 from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
@@ -823,7 +827,8 @@ def test_the_assembler_builds_a_fiscal_receipt_and_tells_it_the_capture_channel(
     with Renderer() as renderer:
         document = assembler._build_document(
             random.Random(7), persona=persona, plan=plan, document_plan=plan.documents[0],
-            vendor=vendor, doc_id="p001_c1_d1", renderer=renderer, out_dir=tmp_path,
+            vendor=vendor, identity=draw_party_identity(random.Random(7), vendor, "UA"),
+            doc_id="p001_c1_d1", renderer=renderer, out_dir=tmp_path,
         )
 
     assert document.doc_type is DocType.FISCAL_RECEIPT
