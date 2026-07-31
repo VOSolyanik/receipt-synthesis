@@ -25,6 +25,7 @@ from receipt_synth.config import CONFIG_DIR, category, jurisdiction, load_policy
 from receipt_synth.content_builder import (
     Invoice,
     build_invoice,
+    draw_party_identity,
     generate_rnokpp,
     is_valid_edrpou,
     is_valid_iban,
@@ -73,11 +74,13 @@ def make_invoice(
     coverage_target: str | None = None,
 ) -> Invoice:
     rng = random.Random(seed)
+    resolved = resolve_vendor(rng, vendor, "UA")
     return build_invoice(
         rng,
         category_id=category_id,
         issued_at=WHEN,
-        vendor=resolve_vendor(rng, vendor, "UA"),
+        vendor=resolved,
+        identity=draw_party_identity(rng, resolved, "UA"),
         buyer_name=BUYER_NAME,
         buyer_tax_id=BUYER_CODE,
         address="м. Київ, вул. Хрещатик, 22",

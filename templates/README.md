@@ -80,10 +80,12 @@ and EUR, and the same class in Ukrainian and UAH.
   documents in one file. Both directions, or a segmentation figure is not a figure.
 * **Look for:** what marks the boundary between the two documents — **nothing but the grey gap.**
   No cover page, no continuous pagination, no unifying header. Then the linkage that makes them
-  one claim: the payment purpose names the invoice on the page above it, and the amounts match.
-  🔴 **And then the defect this file revealed:** the two pages name the same firm and give it two
-  different ЄДРПОУ and two different IBANs. That is the **shipped generator's** behaviour, not the
-  mock-up's, and it reaches the production corpus.
+  one claim: the payment purpose names the invoice on the page above it, the amounts match, and
+  the two pages give the same firm one ЄДРПОУ and one IBAN.
+  🔴 **That last part is what this file revealed and what has since been fixed:** the two pages
+  used to name one firm by two different ЄДРПОУ and two different IBANs — the **shipped
+  generator's** behaviour, not the mock-up's. It is written up below, with the old figures kept as
+  the record of what the defect looked like.
 
 ---
 
@@ -685,40 +687,65 @@ one thing; the other is a file that says *nothing at all* about what its pages a
 
 ### The two pages are one claim by construction, not by coincidence
 
-Five things tie them, and the render script sets each rather than hoping the draws agree: one
-vendor instance passed to both builders; one buyer named identically; the invoice's own total
-handed to the confirmation as its transfer, which is the order the assembler uses; the
+Six things tie them, and **every one now comes from the builders** rather than from the render
+script: one vendor instance passed to both; one `PartyIdentity` passed to both, so the firm named
+on both pages carries one tax code and one account; one buyer named identically; the invoice's own
+total handed to the confirmation as its transfer, which is the order the assembler uses; the
 confirmation dated four days after the invoice, because an invoice is issued and then settled; and
-🔴 **the invoice's real number and date written into the payment purpose** — the link a
-cross-document check keys on. That last one had to be overridden: the builder draws those
-placeholders independently and would otherwise have printed a purpose naming an invoice that is
-not in the file.
+the invoice's own number and date written into the payment purpose by the builder that was told
+what the payment cites.
 
-### 🔴 What putting the two on one page revealed about the shipped generator
+🔴 **Two of those six used to be patched here by hand, and removing the patch is the point.** The
+script set the payment purpose itself, because the builder drew that number independently and
+would otherwise have printed a purpose naming an invoice that is not in the file. A mock-up that
+repairs what the shipped builders get wrong **reports a link the generator does not produce** —
+and every eye spent checking the picture is spent confirming the patch rather than the generator.
+The one thing it could not patch was the pair of identifiers, and that is what made the defect
+visible.
 
-**The invoice and the confirmation print different identifiers for the same payee.** In the render
-inspected here the invoice gives the seller `Код 15122186` and an IBAN, and the confirmation gives
-the same named firm `Код 14607473` and a different IBAN. Same name, two ЄДРПОУ, two accounts.
+The render script still makes one choice about what to *photograph*: it redraws the confirmation
+until the drawn purpose is one that names a document at all. Two of the five configured purposes
+name none, which is deliberate and is a real part of the corpus — but a bundle showing one of them
+shows a pair with nothing tying its pages. **The number is still the builder's.**
 
-⚠️ **This is not a property of the mock-up. It is a property of the shipped builders**, and it
-reaches the production corpus: `assembler` resolves a vendor once and passes that instance to both
-builders, and `build_invoice` and `build_payment_confirmation` each call `generate_edrpou` and
-`generate_iban` on their own. The architecture states that six of the seven Ukrainian categories
-are documented by exactly such a pair, so this holds across the corpus's multi-document claims.
+### 🔴 What putting the two on one page revealed about the shipped generator — and what it prints now
 
-What makes it worth reporting rather than shrugging at is that **the constraint was recognized and
+**This section is kept as the record of a fixed defect.** The figures below are what the broken
+builders produced; they are not what the current mock-up shows, and they are preserved because
+they are the only account of what the defect looked like on a page.
+
+**Then.** The invoice and the confirmation printed different identifiers for the same payee: the
+invoice gave the seller `Код 15122186` and an IBAN, and the confirmation gave the same named firm
+`Код 14607473` and a different IBAN. Same name, two ЄДРПОУ, two accounts.
+
+⚠️ **That was never a property of the mock-up. It was a property of the shipped builders**, and it
+reached the production corpus: `assembler` resolved a vendor once and passed that instance to both
+builders, while `build_invoice` and `build_payment_confirmation` each called `generate_edrpou` and
+`generate_iban` on their own. Measured afterwards on the delivered corpus, from the printed text of
+every pair: **587 invoice-and-payment pairs, 587 disagreements** on the tax code and on the IBAN,
+and 587 agreements on the name.
+
+What made it worth reporting rather than shrugging at is that **the constraint was recognized and
 solved for one field and not extended to its neighbours**. `resolve_vendor`'s own docstring says a
 draw repeated per document *"would print two different sellers on two documents of one purchase"*,
-and fixes the NAME once per vendor instance for that exact reason. The identifiers were left
-drawn per document, and no test asks whether two documents of one claim agree on them.
+and fixed the NAME once per vendor instance for that exact reason. The identifiers were left drawn
+per document, and no test asked whether two documents of one claim agree on them.
 
-The consequence is concrete: a downstream counterparty cross-check comparing tax codes would fail
-on **every genuine invoice-and-payment pair in the corpus**. A team measuring such a check would
-read its own correct implementation as broken — or, worse, conclude that counterparty codes are
-not worth comparing.
+The consequence was concrete: a downstream counterparty cross-check comparing tax codes would have
+failed on **every genuine invoice-and-payment pair in the corpus**. A team measuring such a check
+would have read its own correct implementation as broken — or, worse, concluded that counterparty
+codes are not worth comparing.
 
-⛔ **Not fixed here.** It lives in `src/`, which this branch does not touch, and it is a change to
-what the production corpus contains rather than to a mock-up. Recorded for the author.
+**Now.** The seller's tax code, account and bank are drawn once per claim as a `PartyIdentity` and
+carried to every builder, and the payment's purpose cites the claim's own invoice. Both pages of
+the current bundle print one code and one account for one firm, and the confirmation names the
+invoice on the sheet before it. The derivation of which fields this covers, which it does not, and
+which are still trivially equal is `docs/cross-document-fields.md`; `tools/cross_document_audit.py`
+measures any corpus against it.
+
+⚠️ **The corpus delivered before this change still has the defect in it.** It is regenerated once,
+at the start of the next iteration, and every figure quoted from it until then describes a corpus
+that no longer reflects the generator.
 
 ### 👁 A domain observation: «which amount» has no answer without a key
 
@@ -802,9 +829,11 @@ The renders were inspected by eye, not merely rendered. What that inspection cha
   is now chosen per row by a flag from the context rather than by position in the table.
 * **The bundle's two pages named the same firm and gave it two different tax codes and two
   different IBANs.** Reading the file top to bottom is what made it visible — the two documents
-  are correct apart and contradict each other together. It is the shipped builders' behaviour and
-  not the mock-up's, it reaches the production corpus, and it is written up above rather than
-  fixed, because the fix is in `src/`.
+  are correct apart and contradict each other together. It was the shipped builders' behaviour and
+  not the mock-up's, and it reached the production corpus. **Since fixed in `src/`**: the seller's
+  identity is drawn once per claim, and this mock-up's own hand-patched payment purpose was
+  removed with it, because a fixture that repairs what the builders get wrong hides the thing it
+  was built to show. See `docs/cross-document-fields.md`.
 * **The invoice page is blank for its lower half.** That is the shipped `ua_invoice` archetype's
   own proportion with a three-line basket, carried through unchanged — the bundle neither caused
   it nor hides it, and a stitched file really does contain whatever its parts look like.

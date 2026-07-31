@@ -33,6 +33,7 @@ from receipt_synth.claim_planner import ARCHETYPES, evidence_of
 from receipt_synth.config import CONFIG_DIR, initiation_shares, jurisdiction, load_policy
 from receipt_synth.content_builder import (
     build_payment_confirmation,
+    draw_party_identity,
     generate_iban,
     iban_check_digits,
     is_valid_edrpou,
@@ -66,6 +67,7 @@ def make(seed: int = 20260417, vendor: dict = COMPANY, initiation: str | None = 
         random.Random(seed),
         issued_at=WHEN,
         vendor=vendor,
+        identity=draw_party_identity(random.Random(seed), vendor, "UA"),
         payer_name="Ковальчук Олена Петрівна",
         payer_tax_id="2345678901",
         initiation=initiation,

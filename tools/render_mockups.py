@@ -38,12 +38,12 @@ from receipt_synth.config import (
     jurisdiction,
     load_fx_rates,
     load_vendors,
-    payment_purposes,
 )
 from receipt_synth.content_builder import (
     build_invoice,
     build_payment_confirmation,
     build_prro_receipt,
+    draw_party_identity,
     generate_edrpou,
     printed_legal_name,
     resolve_vendor,
@@ -61,6 +61,11 @@ ISSUED_AT = datetime(2026, 3, 17, 13, 52, 41)
 # states, so it is a fixed plausible gap rather than a draw: what the bundle needs is that the
 # payment is LATER than the invoice, which is a property of the pair and not of its length.
 SETTLEMENT_DELAY_DAYS = 4
+
+# How many confirmations the claim bundle may draw before one of them prints a purpose naming the
+# invoice. Two of the five configured purposes name no document, so a handful of draws is expected;
+# the bound is here so that a pool with no such purpose left fails by name instead of looping.
+_PURPOSE_DRAW_LIMIT = 40
 
 # ---------------------------------------------------------------------------
 # Ukrainian strings that have no home in config/ yet.
@@ -460,6 +465,7 @@ def non_fiscal_context(rng: random.Random) -> dict:
         category_id="vitamins_nutrition",
         issued_at=ISSUED_AT,
         vendor=vendor,
+        identity=draw_party_identity(rng, vendor, "UA"),
         capture=Capture.SCAN,
     )
     context = receipt.render_context()
@@ -539,11 +545,13 @@ def receipt_in_app_context(
     not a spare image: the pair is the archetype's whole argument — one document, two carriers,
     and whoever looks at them has to see the same document twice.
     """
+    payee = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy",
+             "vat_payer": True}
     confirmation = build_payment_confirmation(
         rng,
         issued_at=ISSUED_AT,
-        vendor={"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy",
-                "vat_payer": True},
+        vendor=payee,
+        identity=draw_party_identity(rng, payee, "UA"),
         payer_name="Ковальчук Олена Петрівна",
         payer_tax_id="2345678901",
     )
@@ -842,15 +850,24 @@ def claim_bundle_context(rng: random.Random, renderer: Renderer, out_dir: Path) 
 
       * ONE VENDOR INSTANCE, resolved once and passed to both, so two documents cannot name two
         firms — the constraint `resolve_vendor` exists to enforce;
+      * ONE `PartyIdentity`, drawn once and passed to both, so the two cannot name that one firm by
+        two tax codes and two accounts;
       * one buyer, named identically on both;
       * THE INVOICE'S OWN TOTAL handed to the confirmation as its transfer, which is the order the
         assembler uses: the document that lists the purchase fixes the money, and the payment
         document is told what it settles;
       * the confirmation dated AFTER the invoice, because an invoice is issued and then settled;
-      * 🔴 the invoice's real number and date written into the payment purpose. That is THE LINK,
-        the field a cross-document check keys on — and it has to be overridden, because the
-        builder draws those placeholders independently and would otherwise print a purpose naming
-        an invoice that is not in the file.
+      * the invoice's own reference handed to the confirmation, so the payment purpose names the
+        invoice on the previous page.
+
+    🔴 TWO OF THOSE FIVE USED TO BE OVERRIDDEN HERE BY HAND, and this function is why they no
+    longer are. Rendering the pair on one sheet is what made the divergence visible — the two pages
+    printed one firm under two ЄДРПОУ — and the mock-up then patched the payment purpose in this
+    file so that at least the reference would agree. A fixture that repairs by hand what the
+    builders get wrong is the defect it was meant to expose: it reports a link the shipped
+    generator does not produce, and every eye that checks the picture is spent confirming the
+    patch. Both facts now come from the builders, so this page shows what a run shows. See
+    docs/cross-document-fields.md, and templates/README.md for what the broken pair looked like.
     """
     vendor = resolve_vendor(
         rng,
@@ -862,12 +879,14 @@ def claim_bundle_context(rng: random.Random, renderer: Renderer, out_dir: Path) 
         "UA",
     )
     buyer = {"name": UA_BUYER["name"], "tax_id": "2345678901"}
+    identity = draw_party_identity(rng, vendor, "UA")
 
     invoice = build_invoice(
         rng,
         category_id="professional_development",
         issued_at=ISSUED_AT,
         vendor=vendor,
+        identity=identity,
         buyer_name=buyer["name"],
         buyer_tax_id=buyer["tax_id"],
     )
@@ -875,30 +894,39 @@ def claim_bundle_context(rng: random.Random, renderer: Renderer, out_dir: Path) 
     # a claimant pays an invoice on a different day, and two documents timestamped a minute apart
     # would be a pair no claim produces.
     settled_at = ISSUED_AT + timedelta(days=SETTLEMENT_DELAY_DAYS)
-    confirmation = build_payment_confirmation(
-        rng,
-        issued_at=settled_at,
-        vendor=vendor,
-        payer_name=buyer["name"],
-        payer_tax_id=buyer["tax_id"],
-        amount=invoice.total,
-    )
+    # `initiation="transfer"` rather than a draw: it is the mode that prints a purpose AND names
+    # the payer, and a bundle whose second page states neither shows nothing about the link the
+    # archetype exists to pose. Pinning it here is a choice about what the MOCK-UP shows; the
+    # corpus keeps drawing all three.
+    #
+    # 🔴 AND THE PURPOSE IS REDRAWN UNTIL IT NAMES A DOCUMENT — not edited afterwards. Two of the
+    # configured purposes name no document at all, which is deliberate and is a real part of the
+    # corpus, but a bundle drawing one of them shows a pair with nothing tying its pages. The
+    # difference from what this function used to do is the whole point: the NUMBER still comes from
+    # `invoice.reference` through the builder, so the page cannot say something a run could not.
+    # What is chosen here is which of the configured cases to photograph.
+    for _ in range(_PURPOSE_DRAW_LIMIT):
+        confirmation = build_payment_confirmation(
+            rng,
+            issued_at=settled_at,
+            vendor=vendor,
+            identity=identity,
+            payer_name=buyer["name"],
+            payer_tax_id=buyer["tax_id"],
+            amount=invoice.total,
+            initiation="transfer",
+            cites=invoice.reference,
+        )
+        if invoice.number in (confirmation.purpose or ""):
+            break
+    else:
+        raise RuntimeError(
+            f"no confirmation in {_PURPOSE_DRAW_LIMIT} draws printed a purpose naming the "
+            "invoice; check that config/generation.yaml still holds a purpose with {invoice_no}"
+        )
 
     invoice_context = invoice.render_context()
     confirmation_context = confirmation.render_context()
-
-    # 🔴 THE LINK, overridden rather than hoped for. The template is read from
-    # config/generation.yaml — the one purpose that carries both placeholders — and filled with
-    # the number and date of the invoice that is actually on the previous page.
-    purpose_template = next(
-        template
-        for template in payment_purposes("uk")
-        if "{invoice_no}" in template and "{invoice_date}" in template
-    )
-    confirmation_context["purpose"] = purpose_template.format(
-        invoice_no=invoice.number,
-        invoice_date=ISSUED_AT.strftime(jurisdiction("UA")["date_format"]),
-    )
 
     sheets = []
     for slug, page, context in (

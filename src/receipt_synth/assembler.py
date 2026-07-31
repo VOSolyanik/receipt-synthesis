@@ -36,10 +36,13 @@ from receipt_synth.claim_planner import (
 from receipt_synth.config import load_vendors, mismatch_delta_range
 from receipt_synth.content_builder import (
     KOPIYKA,
+    DocumentReference,
+    PartyIdentity,
     build_bank_statement,
     build_invoice,
     build_payment_confirmation,
     build_prro_receipt,
+    draw_party_identity,
     resolve_vendor,
     vendor_can_carry,
 )
@@ -331,12 +334,17 @@ def _build_document(
     plan: ClaimPlan,
     document_plan: DocumentPlan,
     vendor: dict,
+    identity: PartyIdentity,
     doc_id: str,
     renderer: Renderer,
     out_dir: Path,
     settles: Decimal | None = None,
-) -> DocGroundTruth:
-    """One document of a claim.
+    cites: DocumentReference | None = None,
+) -> tuple[DocGroundTruth, DocumentReference | None]:
+    """One document of a claim, and the reference by which another document of it can cite this one.
+
+    The second half of the return value is `None` for every class but the invoice: a payment
+    document is not cited by anything in its own claim, and a fiscal receipt is the whole claim.
 
     `settles` is THE AMOUNT THIS DOCUMENT'S CLAIM IS ABOUT, and it is required for a document that
     proves the payment and ignored by one that states the subject. The subject document decides the
@@ -344,10 +352,20 @@ def _build_document(
     settles. The order is not an accident of the loop: a claim's money is a property of what was
     bought, so the document that lists the purchase is the one that fixes it.
 
+    `cites` travels the same route and for the same reason: the subject document is built first, and
+    what a payment's purpose line names is a property of the claim rather than of the page. Passed
+    to the payment class and ignored by the subject class, which cites nothing — an invoice is
+    issued before there is a payment to point at.
+
     `vendor` is passed in rather than chosen here. It is the claim's vendor instance, and
     every document of the claim has to name the same seller — while a sole trader's name
     was a stored constant that held by the nature of the type, and a drawn name can differ,
     so it is now a constraint somebody has to keep.
+
+    `identity` is that seller's code, account and bank, drawn once for the claim beside the vendor.
+    The `vendor` constraint was solved for the NAME alone, and every other identifier of one seller
+    went on being drawn per document — 587 pairs of the delivered corpus, 587 disagreements. See
+    `content_builder.PartyIdentity` and docs/cross-document-fields.md.
 
     The basket goes to the claim's SUBJECT document and to no other. Sizing is a claim-level
     decision (`ClaimPlan.coverage_target`, `item_count`), and giving the same basket to a
@@ -387,6 +405,7 @@ def _build_document(
             "category_id": plan.category,
             "issued_at": document_plan.issued_at,
             "vendor": vendor,
+            "identity": identity,
             # No "м." prefix: Faker's uk_UA city names already carry their settlement type
             # ("хутір Великі Мости"), and prefixing produced "м. хутір Великі Мости".
             "address": persona.location.city,
@@ -424,9 +443,11 @@ def _build_document(
             rng,
             issued_at=document_plan.issued_at,
             vendor=vendor,
+            identity=identity,
             payer_name=persona.full_name,
             payer_tax_id=persona.tax_id,
             amount=settles,
+            cites=cites,
         )
 
     image_path = out_dir / "images" / f"{doc_id}.png"
@@ -462,14 +483,20 @@ def _build_document(
         image_path.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(image_path), moved.image)
 
-    return document.ground_truth(
-        doc_id=doc_id,
-        source_file=image_path.name,
-        capture=capture,
-        field_bboxes=boxes,
-        reference_text=clean.reference_text,
-        content_bbox=content_bbox,
-        content_lost_edges=lost,
+    return (
+        document.ground_truth(
+            doc_id=doc_id,
+            source_file=image_path.name,
+            capture=capture,
+            field_bboxes=boxes,
+            reference_text=clean.reference_text,
+            content_bbox=content_bbox,
+            content_lost_edges=lost,
+        ),
+        # Asked of the document rather than composed here: what a reference to an invoice consists
+        # of is the invoice's business. A class that nothing cites has no such property and returns
+        # nothing, so registering one does not bring this branch a case to handle.
+        getattr(document, "reference", None),
     )
 
 
@@ -569,6 +596,12 @@ def generate_dataset(
                     plan.category,
                     mixed=plan.coverage_target is not None,
                 )
+                # And WHO THAT VENDOR IS ON PAPER, drawn here for the same reason and in the same
+                # place. The name was fixed per claim and the code, the account and the bank were
+                # not, so two documents of one purchase named one seller by four different numbers
+                # — on every pair of the delivered corpus. The constraint was known; it had been
+                # applied to one field.
+                identity = draw_party_identity(rng, vendor, persona.location.country.value)
                 # A claim is a list of documents, and since the invoice archetype landed it may
                 # genuinely hold two. A LOOP RATHER THAN A COMPREHENSION, because the documents are
                 # no longer independent: the subject document fixes the claim's amount and the
@@ -581,20 +614,27 @@ def generate_dataset(
                 # single document is its own subject and its own payment.
                 documents: list[DocGroundTruth] = []
                 settles: Decimal | None = None
+                cites: DocumentReference | None = None
                 for index, document_plan in enumerate(plan.documents, start=1):
-                    document = _build_document(
+                    document, reference = _build_document(
                         rng,
                         persona=persona,
                         plan=plan,
                         document_plan=document_plan,
                         vendor=vendor,
+                        identity=identity,
                         doc_id=f"{plan.claim_id}_d{index}",
                         renderer=renderer,
                         out_dir=out_dir,
                         settles=settles,
+                        cites=cites,
                     )
                     if evidence_of(document_plan.archetype).proves_subject:
                         settles = _amount_the_payment_states(rng, plan, document.amount)
+                        # What the payment document will cite. It travels beside `settles` because
+                        # it is the same kind of fact — a property of the claim that the subject
+                        # document decides and the payment document has to be told.
+                        cites = reference
                     documents.append(document)
                 # The oracle, not the plan, decides the label. The plan's verdict was the
                 # target; where the two differ the balance report says so.

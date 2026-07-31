@@ -36,6 +36,7 @@ from receipt_synth.config import jurisdiction, load_vendors
 from receipt_synth.content_builder import (
     _build_tax_lines,
     build_prro_receipt,
+    draw_party_identity,
     is_valid_edrpou,
     is_valid_rnokpp,
     resolve_vendor,
@@ -91,6 +92,7 @@ def build(seed: int, vendor: dict, **kwargs):
         category_id="vitamins_nutrition",
         issued_at=ISSUED_AT,
         vendor=vendor,
+        identity=draw_party_identity(random.Random(seed), vendor, "UA"),
         # The channel is stated at every call site: the builder has no default, because one
         # equal to the only live value hid a wiring break until a mutation survived.
         capture=kwargs.pop("capture", Capture.SCREENSHOT),

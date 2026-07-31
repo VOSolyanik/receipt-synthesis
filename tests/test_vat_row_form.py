@@ -31,7 +31,11 @@ from datetime import datetime
 import pytest
 
 from receipt_synth.config import jurisdiction
-from receipt_synth.content_builder import build_prro_receipt, resolve_vendor
+from receipt_synth.content_builder import (
+    build_prro_receipt,
+    draw_party_identity,
+    resolve_vendor,
+)
 from receipt_synth.renderer import Renderer
 from receipt_synth.schemas import Capture, Medium
 
@@ -50,11 +54,13 @@ SEEDS = 60
 
 def make(seed: int, capture: Capture, vendor: dict = PAYER):
     rng = random.Random(seed)
+    resolved = resolve_vendor(rng, vendor, "UA")
     return build_prro_receipt(
         rng,
         category_id="vitamins_nutrition",
         issued_at=WHEN,
-        vendor=resolve_vendor(rng, vendor, "UA"),
+        vendor=resolved,
+        identity=draw_party_identity(rng, resolved, "UA"),
         address="м. Київ",
         capture=capture,
     )

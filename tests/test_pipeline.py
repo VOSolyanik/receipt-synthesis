@@ -42,7 +42,11 @@ from receipt_synth.claim_planner import (
 )
 from receipt_synth.cli import main
 from receipt_synth.config import high_frequency_surnames, jurisdiction, load_policy
-from receipt_synth.content_builder import MAX_LINE_ITEMS, is_valid_rnokpp
+from receipt_synth.content_builder import (
+    MAX_LINE_ITEMS,
+    draw_party_identity,
+    is_valid_rnokpp,
+)
 from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
@@ -821,10 +825,14 @@ def test_the_assembler_builds_a_fiscal_receipt_and_tells_it_the_capture_channel(
     vendor = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
 
     with Renderer() as renderer:
-        document = assembler._build_document(
+        document, reference = assembler._build_document(
             random.Random(7), persona=persona, plan=plan, document_plan=plan.documents[0],
-            vendor=vendor, doc_id="p001_c1_d1", renderer=renderer, out_dir=tmp_path,
+            vendor=vendor, identity=draw_party_identity(random.Random(7), vendor, "UA"),
+            doc_id="p001_c1_d1", renderer=renderer, out_dir=tmp_path,
         )
+
+    # A fiscal receipt is a whole claim, so nothing in its claim can cite it.
+    assert reference is None
 
     assert document.doc_type is DocType.FISCAL_RECEIPT
     # The channel reached the builder: the VAT row's form is one the document's OWN capture allows.
@@ -921,6 +929,79 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
     )
     print(f"\ncross-document self-consistency: {len(multi)} of {len(result.claims)} claims "
           f"carry two documents; checks applied {dict(checked)}")
+
+
+def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_claim_dataset):
+    """The test above, one layer down: on the PAGE rather than on the label.
+
+    🔴 IT IS HERE AND NOT ONLY IN test_cross_document_identity.py BECAUSE OF WHAT THAT MODULE
+    CANNOT SEE. That module builds a pair the way the assembler builds one and asserts on the two
+    rendered pages — which proves the builders honour a shared identity, and proves nothing about
+    whether the ASSEMBLER hands them one. `identity=` is a required parameter, so dropping it fails
+    loudly; `cites=` is not, so an assembler that stopped passing it would go on producing valid
+    documents whose purpose lines cite a stranger, and every assertion in that module would still
+    pass. This one runs the whole pipeline and reads what came out.
+
+    ⚠️ AND IT IS THE MEASUREMENT THAT FOUND THE DEFECT, with the same reader — `fields_of` of
+    tools/cross_document_audit.py, regexes over `reference_text`. On the delivered corpus that
+    measurement returned 587 pairs and 0 agreements on the seller's tax code and IBAN; the same
+    instrument runs here so the number cannot quietly go back.
+    """
+    from cross_document_audit import fields_of
+
+    result, _ = multi_claim_dataset
+    by_id = {document.doc_id: document for document in result.documents}
+
+    readable = Counter()
+    agree = Counter()
+    pairs = 0
+    for claim in result.claims:
+        documents = [by_id[doc_id] for doc_id in claim.documents]
+        if len(documents) < 2:
+            continue
+        pairs += 1
+        subject, payment = (
+            fields_of(d.model_dump(mode="json"))
+            for d in sorted(
+                documents, key=lambda d: not document_evidence(d.doc_type).proves_subject
+            )
+        )
+        for field in ("seller_name", "seller_tax_code", "seller_account", "seller_bank_name"):
+            if subject[field] is None or payment[field] is None:
+                continue
+            readable[field] += 1
+            agree[field] += subject[field] == payment[field]
+        if payment["invoice_number"] is not None:
+            readable["invoice_number"] += 1
+            agree["invoice_number"] += (
+                subject["invoice_number"] == payment["invoice_number"]
+            )
+
+    assert pairs, "no claim of this run carries two documents — nothing was measured"
+    # 👁 THE PAYEE'S BANK IS SOMETIMES A CAPTION WITH NOTHING UNDER IT, observed on the recipient's
+    # bank of a real confirmation, so that row is readable on most pairs and not on all. The two
+    # bounds are therefore different assertions rather than one loosened to fit: three requisites
+    # are printed on every pair, and the fourth must AGREE wherever it is printed at all.
+    for field in ("seller_name", "seller_tax_code", "seller_account"):
+        assert readable[field] == pairs, (
+            f"{field} was readable on {readable[field]} of {pairs} pairs; a field the audit "
+            "cannot read is a field it cannot report on either"
+        )
+    assert readable["seller_bank_name"], "no pair printed the payee's bank on both documents"
+    for field in ("seller_name", "seller_tax_code", "seller_account", "seller_bank_name"):
+        assert agree[field] == readable[field], (
+            f"{field} agrees on {agree[field]} of {readable[field]} pairs that print it — see "
+            "docs/cross-document-fields.md"
+        )
+    assert readable["invoice_number"], (
+        "no payment document of this run cited an invoice, so the reference row was not measured"
+    )
+    assert agree["invoice_number"] == readable["invoice_number"], (
+        f"{agree['invoice_number']} of {readable['invoice_number']} citations name the claim's "
+        "own invoice"
+    )
+    print(f"\ncross-document identity, read off the page: {pairs} pairs; "
+          f"agree {dict(agree)} of readable {dict(readable)}")
 
 
 def test_both_cross_check_causes_occur_and_a_claim_carries_exactly_one(multi_claim_dataset):

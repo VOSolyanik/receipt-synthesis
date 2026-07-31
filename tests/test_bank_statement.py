@@ -32,6 +32,7 @@ from receipt_synth.content_builder import (
     BankStatement,
     StatementRow,
     build_bank_statement,
+    draw_party_identity,
     generate_rnokpp,
     is_valid_edrpou,
     is_valid_iban,
@@ -74,10 +75,12 @@ WHEN = datetime(2026, 5, 12, 14, 33)
 def make_statement(seed: int = 20260512, vendor: dict = PAYER, amount: str | None = None):
     """One statement. `amount` pins the labelled transaction where a test needs to know it."""
     rng = random.Random(seed)
+    resolved = resolve_vendor(rng, vendor, "UA")
     return build_bank_statement(
         rng,
         issued_at=WHEN,
-        vendor=resolve_vendor(rng, vendor, "UA"),
+        vendor=resolved,
+        identity=draw_party_identity(rng, resolved, "UA"),
         payer_name=HOLDER_NAME,
         payer_tax_id=HOLDER_CODE,
         amount=Decimal(amount) if amount else None,
@@ -545,7 +548,11 @@ def test_every_row_of_every_statement_fits_the_declared_sheet(renderer, tmp_path
     push the tallest statements onto a second sheet, which is the case a single render misses."""
     height = _px("height_mm")
     tallest = 0
-    for seed in (10, 16, 21, 22, 27, 30, 34):
+    # ⚠️ A LIST OF SEEDS IS A MEASUREMENT OF ONE DRAW STREAM, and it goes stale whenever the stream
+    # moves. Re-picked when the seller's identity became a claim-level draw: the previous set had
+    # stopped reaching 25 rows, and the assertion below is what said so rather than the test quietly
+    # exercising 24 for ever.
+    for seed in (3, 5, 6, 16, 20, 21, 22):
         statement = make_statement(seed)
         result = renderer.render(SLUG, statement.render_context(), tmp_path / f"{seed}.png")
         tallest = max(tallest, len(statement.rows))
@@ -721,11 +728,17 @@ def test_a_statement_purpose_is_filled_only_from_a_document_reference():
     Ukrainian sentence ever written, and would have passed whatever the pool said.
 
     What IS checkable is the agreement between the two sides: every template's placeholder set
-    against the arguments `purpose_of` supplies. A template naming a third placeholder raises, and a
-    builder that dropped one of the two raises — so the pool cannot start printing merchandise
+    against the arguments `purpose_of` supplies. A template naming a fourth placeholder raises, and
+    a builder that dropped one of the three raises — so the pool cannot start printing merchandise
     without this going red.
+
+    ⚠️ `delivery_note_no` JOINED THE SET, AND IT IS NOT A LOOSENING. It names a ВН, a delivery note,
+    which is a document class no claim holds — so it is filled from a draw while `invoice_no` on the
+    labelled row is filled from the claim's own invoice. The two were one placeholder until the
+    cross-document work, which meant a delivery note could be given an invoice's number; see
+    docs/cross-document-fields.md and the note beside the templates in config/generation.yaml.
     """
-    supplied = {"invoice_no", "invoice_date"}
+    supplied = {"invoice_no", "invoice_date", "delivery_note_no"}
     for kind in ("debit", "credit", "credit_from_self", "service_fee"):
         for template in statement_purposes("uk", kind):
             named = {f for _, f, _, _ in Formatter().parse(template) if f}

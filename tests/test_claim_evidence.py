@@ -45,6 +45,7 @@ from receipt_synth.claim_planner import (
     evidence_of,
     plan_claim,
 )
+from receipt_synth.content_builder import PartyIdentity
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
@@ -1012,6 +1013,12 @@ def test_a_planned_archetype_with_no_builder_fails_by_name():
     with pytest.raises(NotImplementedError, match="ua_act"):
         assembler._build_document(
             random.Random(1), persona=_persona(), plan=plan,
-            document_plan=plan.documents[0], vendor={}, doc_id="c1_d1",
-            renderer=None, out_dir=Path("."),
+            document_plan=plan.documents[0], vendor={},
+            # Hand-built rather than drawn: the refusal must happen BEFORE anything reads either,
+            # and a drawn identity would need a vendor this test deliberately does not supply.
+            identity=PartyIdentity(
+                tax_code="12345678", vat_number=None, bank_name="bank",
+                bank_code="123456", account="UA000000000000000000000000000",
+            ),
+            doc_id="c1_d1", renderer=None, out_dir=Path("."),
         )
