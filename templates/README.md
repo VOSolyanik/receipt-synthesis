@@ -8,6 +8,100 @@ Most of this directory is the shipped corpus. The rest are **mock-ups**, and thi
 them, because a reader who cannot tell the two apart will read a mock-up as a claim about the
 dataset.
 
+## The six mock-ups at a glance
+
+**Six archetypes across seven renderable templates.** Render them all with one command; every
+image lands in the directory given, outside this repository:
+
+```sh
+uv run python tools/render_mockups.py --out <a directory outside this repository>
+```
+
+Sizes below are from the default seed. Heights that depend on drawn content — a basket, a
+purpose — move with the seed; the fixed ones are marked.
+
+---
+
+**1 · `ua_non_fiscal_receipt`** — a товарний чек: a sales slip issued without a cash register.
+* **File:** `ua_non_fiscal_receipt.png` · 640 × ~665 px, an 80 mm till roll.
+* **Makes measurable:** **RC-08.** The consuming system's rule is that a negative fiscality marker
+  overrides every positive signal, and no document in the corpus prints one — so the rule has
+  never had a test document. This is it.
+* **Look for:** «ТОВАРНИЙ ЧЕК» standing in the slot where «ФІСКАЛЬНИЙ ЧЕК» sits on a real fiscal
+  receipt, and then for what is **missing** — no ФН, no ЗН, no QR, no register maker, no online
+  marker. Worth opening beside any `ua_prro_receipt` from the production run: the basket, the
+  arithmetic and the columns are identical, and the fiscal identity is the whole difference.
+
+**2 · `ua_bank_app_transaction`** — one operation as a banking application shows it.
+* **File:** `ua_bank_app_transaction.png` · 1170 × 2532 px, a phone screen at 3×.
+* **Makes measurable:** the **strongest negative example for the payment class** — it looks like
+  proof of payment and carries none of the requisites by which proof of payment is recognized.
+* **Look for:** the counterparty line — `CITY24*ПОНОМАРЕНКО С.Л.`, a processor prefix and a
+  mangled tail, which no document here has ever printed. Then check the screen for a document
+  number, an authorization code, an RRN, a stamp, a signature, a purpose: **none of them is
+  there.** The category chip also disagrees with what was bought, on purpose.
+
+**3 · `ua_bank_receipt_in_app`** — the same payment confirmation, captured inside the app.
+* **Files:** `ua_bank_receipt_in_app.png` · 1170 × 2532 px, **beside** `ua_bank_payment_confirmation.png`
+  · 794 × 1123 px — the A4 twin. **The pair is the artifact; look at both.**
+* **Makes measurable:** that **the medium does not change the ground truth.** One document, two
+  carriers, and the labels must agree.
+* **Look for:** that the white card really is the same document as the A4 sheet, field for field.
+  Then the screen heading «Квитанція № …» sitting over a document whose own heading reads
+  «Платіжна інструкція» — same number, two wordings, and not staged.
+
+**4 · `eu_platform_receipt`** and **5 · `ua_platform_receipt`** — a platform receipt, in English
+and EUR, and the same class in Ukrainian and UAH.
+* **Files:** `eu_platform_receipt.png` and `ua_platform_receipt.png` · both 794 × 1123 px, fixed.
+* **Makes measurable:** the **currency and language dimensions**, which the corpus does not
+  exercise at all — the contract's own reference profile records `currency_UAH: 1315` and
+  `language_uk: 1315` out of 1315 documents. Also **the other half of RC-08**: the English one
+  carries a negative marker that IS a string with a position, where the Ukrainian slip's was an
+  absence.
+* **Look for:** «This is not a VAT invoice.» at the foot of the English page, and its **absence**
+  on the Ukrainian one, which prints a ПДВ line instead. Then the number formats, which run
+  opposite ways — `397.05` against `5 713,03`. Nothing on either page states a rate: the
+  conversion this pair implies is **nowhere on paper**, and that is deliberate.
+
+**6 · `ua_insurance_contract`** — a three-page voluntary health insurance contract.
+* **File:** `ua_insurance_contract.png` · 794 × 3401 px, fixed — three A4 sheets in one image.
+* **Makes measurable:** **«one page = one document», broken in one direction** — one document
+  across several pages. Every other archetype here renders exactly one page, so a file-splitting
+  step would otherwise score a perfect result against a guarantee.
+* **Look for:** the page footers «Сторінка N з 3» beside the document's own number, and pages two
+  and three with **no title, no parties and no requisites** — a running head and clauses that
+  begin mid-numbering. Also the salience trap: the largest figure is the **sum insured**, and the
+  money that moved is the **premium** two rows below, roughly forty times smaller.
+
+**7 · `ua_claim_bundle`** — an invoice and the bank confirmation that settled it, in one file.
+* **Files:** `ua_claim_bundle.png` · 794 × 2262 px, **beside** `ua_claim_bundle.page1_invoice.png`
+  and `ua_claim_bundle.page2_confirmation.png` — the file, and the two documents it is made of.
+* **Makes measurable:** **«one page = one document», broken in the other direction** — two
+  documents in one file. Both directions, or a segmentation figure is not a figure.
+* **Look for:** what marks the boundary between the two documents — **nothing but the grey gap.**
+  No cover page, no continuous pagination, no unifying header. Then the linkage that makes them
+  one claim: the payment purpose names the invoice on the page above it, and the amounts match.
+  🔴 **And then the defect this file revealed:** the two pages name the same firm and give it two
+  different ЄДРПОУ and two different IBANs. That is the **shipped generator's** behaviour, not the
+  mock-up's, and it reaches the production corpus.
+
+---
+
+### What this branch deliberately does not contain
+
+**No labels and no bounding boxes** — not one `data-field` attribute in any of the seven
+templates, so `field_bboxes` comes back empty by construction and no JSON is written beside any
+image. **No connection to the dataset** — nothing is registered in `ARCHETYPES`, no builder exists
+in `_BUILDERS`, and no run of any size contains one of these documents. **No change to the
+contract or to any configuration** — `config/` and `src/` are untouched across the whole branch,
+the labelling schema's version is not raised, and the two places where a mock-up prints wording
+that diverges from a configured constant (`non_fiscal_marker`, in both the UA and the EU blocks)
+leave that constant exactly as it is. Every one of these is a boundary the branch was given, not
+an unfinished edge: the field names would have to come from the contract, two of the seven sit on
+the far side of contract questions that are still open (RC-08 and RC-14), and connecting anything
+before the production measurement would change what that measurement means. **Nothing here is
+waiting to be found; it is waiting to be decided.**
+
 ## Shipped
 
 | Template | Class |
