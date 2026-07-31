@@ -172,14 +172,21 @@ It is **not stratified**, deliberately. Stratifying would tune the corpus, and t
 the report makes a shortfall visible rather than repairing it — so instead the report *names* any verdict or
 document class the corpus contains and a side does not.
 
-**The default fraction is a half, and the familiar 85/15 would be a convention imported without its
-premise.** 85/15 belongs to tasks where a model *learns* on the larger side, and the larger side is large
-because learning consumes examples. Nothing is trained on this dataset. The partition here guards against
-fitting the *measurement*: a consumer inspects documents, finds where extraction errs, adjusts, and a figure
-does not count on the documents it was tuned against. Inspection needs a few dozen documents; measurement
-wants as many as the corpus allows. And the floor under the measurement side is not a convention at all —
-a per-class figure needs its 30 documents *on the side it is measured on*, so the thinnest class sets how
-large that side must be. `--split` overrides the default for a consumer that really does train.
+**There is no default fraction. `--split` is required, exactly as `--seed` is.** A seed is required so that
+nobody runs unreproducibly by accident; the same argument applies to a partition nobody declared. The split
+fraction decides which documents a figure may be quoted on — a decision about the *measurement*, not a
+convenience — and a default would let a run be performed without that decision ever having been made, with
+the resulting partition carrying the authority of something chosen.
+
+**What to pass is a half, and the familiar 85/15 would be a convention imported without its premise.** 85/15
+belongs to tasks where a model *learns* on the larger side, and the larger side is large because learning
+consumes examples. Nothing is trained on this dataset. The partition here guards against fitting the
+*measurement*: a consumer inspects documents, finds where extraction errs, adjusts, and a figure does not
+count on the documents it was tuned against. Inspection needs a few dozen documents; measurement wants as
+many as the corpus allows. And the floor under the measurement side is not a convention at all — a per-class
+figure needs its 30 documents *on the side it is measured on*, so the thinnest class sets how large that side
+must be. A consumer that really does train has every reason to pass something else, which is guidance and
+never a default.
 
 The report covers verdicts against `verdict_mix`, imperfection causes, document classes, currency, language,
 capture channels with their completeness subsets, and the partition. Two rules hold throughout: **every

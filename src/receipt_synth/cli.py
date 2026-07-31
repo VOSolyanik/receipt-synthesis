@@ -1,10 +1,17 @@
 """Command line entry point.
 
-    generate-dataset --seed 20260803 --out out
+    generate-dataset --seed 20260803 --split 0.5 --out out
 
 The seed is required rather than defaulted. A dataset is only reproducible if the number
 that produced it is something the caller chose and can write down; a default would let a
 run look reproducible without anyone having recorded what to reproduce it with.
+
+`--split` is required for the same reason, and it is the same reason rather than a similar
+one. The split fraction is a DECISION ABOUT THE MEASUREMENT — which documents a figure may
+be quoted on — so a default would let a run be performed without that decision ever having
+been declared, and the resulting partition would carry the authority of something chosen.
+The argument for a half is guidance on what to pass, not the reason for a default; it lives
+in README.md's flag table and in docs/architecture.md.
 """
 
 from __future__ import annotations
@@ -14,7 +21,6 @@ from pathlib import Path
 
 from receipt_synth import __version__
 from receipt_synth.assembler import (
-    DEFAULT_TRAIN_FRACTION,
     balance_report,
     generate_dataset,
 )
@@ -44,14 +50,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--split",
         type=float,
-        default=DEFAULT_TRAIN_FRACTION,
+        required=True,
         metavar="TRAIN_FRACTION",
         help=(
-            "fraction of PERSONAS assigned to train, the rest to validation "
-            f"(default {DEFAULT_TRAIN_FRACTION}, because nothing is trained on this dataset and "
-            "the measurement side has to be big enough to carry a per-class figure for the "
-            "thinnest class); the partition is by persona because annual limits are cumulative "
-            "per persona, and it is not stratified"
+            "fraction of PERSONAS assigned to train, the rest to validation; required, because "
+            "the partition decides which documents a figure may be quoted on and a run must not "
+            "be performed without that having been declared. Pass 0.5 unless your consumer really "
+            "does train: nothing is trained on this dataset, and the measurement side has to be "
+            "big enough to carry a per-class figure for the thinnest class. The partition is by "
+            "persona because annual limits are cumulative per persona, and it is not stratified"
         ),
     )
     parser.add_argument(

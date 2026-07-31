@@ -154,6 +154,45 @@ def test_every_profile_names_the_run_it_measured(profile):
     assert isinstance(profile["authoritative"], bool)
 
 
+def test_a_command_that_cannot_be_run_says_so_where_it_is_recorded():
+    """🔴 `--split` IS REQUIRED, SO A RECORDED COMMAND WITHOUT ONE NO LONGER EXECUTES.
+
+    A `command` here has two jobs: it says what was run, and it is the handle by which a reader
+    reproduces the run. Requiring the flag put those in conflict for the profiles taken before the
+    partition existed — their commands are ACCURATE AND NOT RUNNABLE, and neither resolution is
+    available: inventing a fraction would make a run claim a partition it never had, and deleting
+    the profile would destroy the record that the run happened.
+
+    So the tension is recorded rather than resolved, and this holds the CLASS rather than the three
+    entries that have it today. A profile added later whose command omits the flag is either a run
+    that inherited a default — in which case the value is knowable and belongs in the command — or
+    one that predates the flag, in which case it has to say so. Silence is the only outcome ruled
+    out, because silence is what leaves a reader pasting an unexecutable line into a shell.
+    """
+    profiles = PROFILES["profiles"]
+    assert profiles, "no profiles, so this test would assert nothing"
+
+    unexplained = [
+        p["id"] for p in profiles
+        if "--split" not in p["command"]
+        and len(str(p.get("the_command_predates_the_split_flag", ""))) < 100
+    ]
+    assert not unexplained, (
+        f"{len(unexplained)} of {len(profiles)} profiles record a command that will be refused "
+        f"for want of --split and do not say why: {unexplained}"
+    )
+
+    # Both sides of the split have to be occupied, or the check above is satisfied by a shape
+    # nobody is in. A file where every command carried the flag would pass it vacuously.
+    runnable = [p["id"] for p in profiles if "--split" in p["command"]]
+    historical = [p["id"] for p in profiles if "the_command_predates_the_split_flag" in p]
+    assert runnable, "no profile records a runnable command, so the exemption exempts everything"
+    assert historical, (
+        "no profile carries the historical annotation, so the branch that permits an unrunnable "
+        "command is untested"
+    )
+
+
 @pytest.mark.parametrize("profile", PROFILES["profiles"], ids=lambda p: p["id"])
 def test_every_distribution_in_a_profile_carries_its_denominator(profile):
     """The discipline that survives the move. A block of counts with no denominator reads as

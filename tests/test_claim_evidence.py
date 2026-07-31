@@ -947,7 +947,11 @@ def test_the_vendor_is_chosen_once_per_claim_however_many_documents_it_has(tmp_p
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(assembler, "_pick_vendor", counting)
         result = assembler.generate_dataset(
-            seed=20260803, out_dir=tmp_path, personas=2, claims_per_persona=3
+            seed=20260803,
+            out_dir=tmp_path,
+            train_fraction=0.5,
+            personas=2,
+            claims_per_persona=3,
         )
 
     assert calls, "this run built no claim"
@@ -966,7 +970,9 @@ def test_document_ids_are_numbered_from_the_plan_and_not_fixed_at_one(tmp_path):
     """
     from receipt_synth.assembler import generate_dataset
 
-    result = generate_dataset(seed=20260803, out_dir=tmp_path, personas=2, claims_per_persona=3)
+    result = generate_dataset(
+        seed=20260803, out_dir=tmp_path, train_fraction=0.5, personas=2, claims_per_persona=3
+    )
 
     written = {document.doc_id for document in result.documents}
     for claim, plan in zip(result.claims, result.plans, strict=True):

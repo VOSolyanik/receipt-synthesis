@@ -51,7 +51,7 @@ make check
 ## Usage
 
 ```bash
-uv run generate-dataset --seed 42 --personas 30 --claims-per-persona 5 --out out/
+uv run generate-dataset --seed 42 --split 0.5 --personas 30 --claims-per-persona 5 --out out/
 ```
 
 Every flag:
@@ -62,7 +62,7 @@ Every flag:
 | `--out` | `out` | Output directory. |
 | `--personas` | `1` | How many synthetic people to generate. |
 | `--claims-per-persona` | `1` | An **upper bound**. Planning stops early once a persona has no category with an annual balance left, which is also the only way the cumulative-limit mechanism is exercised. |
-| `--split` | `0.5` | Fraction of **personas** assigned to train. Half rather than the familiar 85/15, because **nothing is trained on this dataset**: the partition guards against fitting the measurement, inspecting failures needs a few dozen documents, and the measurement side has to be large enough to carry a per-class figure for the thinnest class. The partition is by persona because annual limits are cumulative per persona; it is **not** stratified. |
+| `--split` | *required* | Fraction of **personas** assigned to train. Required rather than defaulted, for the same reason as `--seed` and not merely a similar one: the partition decides which documents a figure may be quoted on, so it is a decision about the **measurement**, and a default would let a run be performed without that decision ever having been declared. **Pass `0.5`** unless your consumer really does train — half rather than the familiar 85/15, because **nothing is trained on this dataset**: the partition guards against fitting the measurement, inspecting failures needs a few dozen documents, and the measurement side has to be large enough to carry a per-class figure for the thinnest class. The partition is by persona because annual limits are cumulative per persona; it is **not** stratified. |
 | `--country` | `UA` | Jurisdiction whose fiscal rules apply. |
 | `--version` | — | Print the version and exit. |
 

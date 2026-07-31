@@ -18,7 +18,6 @@ import pytest
 
 from receipt_synth import claim_planner
 from receipt_synth.assembler import (
-    DEFAULT_TRAIN_FRACTION,
     balance_report,
     generate_dataset,
 )
@@ -724,7 +723,7 @@ def test_a_capture_channel_with_no_recipe_raises_rather_than_borrowing_one():
 @pytest.fixture(scope="module")
 def dataset(tmp_path_factory):
     out = tmp_path_factory.mktemp("dataset")
-    return generate_dataset(seed=SEED, out_dir=out), out
+    return generate_dataset(seed=SEED, out_dir=out, train_fraction=0.5), out
 
 
 def test_the_run_builds_exactly_the_documents_its_plans_asked_for(dataset):
@@ -1063,7 +1062,12 @@ def test_a_covered_claim_carries_the_policy_engines_answer(dataset):
 def multi_claim_dataset(tmp_path_factory):
     """Enough personas × claims that the cumulative-limit mechanism actually fires."""
     out = tmp_path_factory.mktemp("multi")
-    return generate_dataset(seed=SEED, out_dir=out, personas=4, claims_per_persona=8), out
+    return (
+        generate_dataset(
+            seed=SEED, out_dir=out, train_fraction=0.5, personas=4, claims_per_persona=8
+        ),
+        out,
+    )
 
 
 def documents_of(result):
@@ -1580,10 +1584,10 @@ def test_a_dataset_without_plans_still_reports():
 
 def test_the_multi_claim_run_is_reproducible(tmp_path):
     first = generate_dataset(
-        seed=SEED, out_dir=tmp_path / "a", personas=3, claims_per_persona=5
+        seed=SEED, out_dir=tmp_path / "a", train_fraction=0.5, personas=3, claims_per_persona=5
     )
     second = generate_dataset(
-        seed=SEED, out_dir=tmp_path / "b", personas=3, claims_per_persona=5
+        seed=SEED, out_dir=tmp_path / "b", train_fraction=0.5, personas=3, claims_per_persona=5
     )
     assert first.as_manifest() == second.as_manifest()
     assert balance_report(first) == balance_report(second)
@@ -1591,7 +1595,7 @@ def test_the_multi_claim_run_is_reproducible(tmp_path):
 
 def test_at_least_one_claim_is_refused(tmp_path):
     with pytest.raises(ValueError):
-        generate_dataset(seed=SEED, out_dir=tmp_path, claims_per_persona=0)
+        generate_dataset(seed=SEED, out_dir=tmp_path, train_fraction=0.5, claims_per_persona=0)
 
 
 def test_manifest_is_valid_json_and_declares_its_provenance(dataset):
@@ -1659,7 +1663,10 @@ def test_the_partition_reaches_the_written_labels_and_the_manifest(multi_claim_d
     assert written["split"] == document.split.value
     assert written_claim["split"] == claim.split.value
     assert manifest["split"]["unit"] == "persona"
-    assert manifest["split"]["train_fraction_requested"] == DEFAULT_TRAIN_FRACTION
+    # 0.5 because THIS FIXTURE PASSED 0.5, not because anything defaults to it — nothing does any
+    # more. The comparison is stronger for it: the test now chooses the input and checks that the
+    # manifest echoes the request, where before both sides read one constant the code supplied.
+    assert manifest["split"]["train_fraction_requested"] == 0.5
 
     realized = manifest["split"]["realized"]
     assert sum(side["claims"] for side in realized.values()) == len(result.claims), (
@@ -1687,8 +1694,8 @@ def test_bboxes_in_the_written_labels_index_the_written_image(dataset):
 def test_the_same_seed_reproduces_the_dataset(tmp_path):
     """The promise the repository is built on: it ships the generator and the seed, not
     the data."""
-    first = generate_dataset(seed=SEED, out_dir=tmp_path / "a")
-    second = generate_dataset(seed=SEED, out_dir=tmp_path / "b")
+    first = generate_dataset(seed=SEED, out_dir=tmp_path / "a", train_fraction=0.5)
+    second = generate_dataset(seed=SEED, out_dir=tmp_path / "b", train_fraction=0.5)
 
     assert first.as_manifest() == second.as_manifest()
     name = first.documents[0].source_file
@@ -1698,7 +1705,7 @@ def test_the_same_seed_reproduces_the_dataset(tmp_path):
 
 
 def test_a_different_seed_produces_a_different_dataset(tmp_path):
-    other = generate_dataset(seed=SEED + 1, out_dir=tmp_path / "c")
+    other = generate_dataset(seed=SEED + 1, out_dir=tmp_path / "c", train_fraction=0.5)
     assert other.documents[0].amount != 0
 
 
@@ -1706,19 +1713,26 @@ def test_line_items_do_not_repeat_a_printed_name(tmp_path):
     """A cash register lists an article once and states how many. The same name twice at
     two prices is not a receipt."""
     for seed in range(SEED, SEED + 5):
-        result = generate_dataset(seed=seed, out_dir=tmp_path / f"s{seed}")
+        result = generate_dataset(seed=seed, out_dir=tmp_path / f"s{seed}", train_fraction=0.5)
         names = [item.name for item in result.documents[0].line_items]
         assert len(names) == len(set(names))
 
 
 def test_cli_runs_and_reports(tmp_path, capsys):
-    assert main(["--seed", str(SEED), "--out", str(tmp_path)]) == 0
+    assert main(["--seed", str(SEED), "--split", "0.5", "--out", str(tmp_path)]) == 0
     assert "receipt-synth" in capsys.readouterr().out
     assert (tmp_path / "ground_truth.json").is_file()
 
 
 def test_cli_requires_a_seed(capsys):
     """A default seed would let a run look reproducible without anyone having recorded
-    what to reproduce it with."""
+    what to reproduce it with.
+
+    🔴 `--split` IS SUPPLIED SO THAT ONLY THE SEED IS MISSING. It became required too, and a call
+    omitting both raises `SystemExit` whichever of them argparse is enforcing — so the test would
+    have stayed green with `--seed` defaulted again, asserting nothing. The message is checked for
+    the same reason: the raise alone does not say which argument produced it.
+    """
     with pytest.raises(SystemExit):
-        main(["--out", "out"])
+        main(["--out", "out", "--split", "0.5"])
+    assert "--seed" in capsys.readouterr().err

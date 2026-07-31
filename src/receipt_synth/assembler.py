@@ -103,29 +103,6 @@ _CONTENT_BBOX_KEY = "__content_extent__"
 # channel for a given seed, exactly as reordering any drawn-from list in this repository does.
 CAPTURE_CHANNELS = (Capture.SCREENSHOT, Capture.PHOTO, Capture.SCAN)
 
-# What fraction of the PERSONAS go to the development side. Still a convention — nothing measured
-# it — but no longer a BORROWED one, and the change from 0.85 is the whole point of this comment.
-#
-# 🔴 NOTHING IS TRAINED ON THIS DATASET, so the premise under 85/15 is absent. That ratio comes from
-# tasks where a model LEARNS on the larger side and the smaller side is merely held out; the larger
-# side has to be large because learning is what consumes examples. Here the two sides answer a
-# different question. The partition guards against fitting the MEASUREMENT: whoever uses this corpus
-# looks into documents, finds where extraction or classification errs, and adjusts accordingly — and
-# a figure does not count on the documents that were looked at and tuned against. That is all the
-# `train` side is for, and inspecting failures needs a few dozen documents, not several hundred.
-#
-# So the measurement side should be as large as the corpus allows, and the number that decides how
-# large it must be AT MINIMUM is not a convention at all: it is the THINNEST document class. A
-# per-class figure needs MIN_DOCUMENTS_PER_TARGET_CLASS on the side it is measured on, and
-# `fiscal_receipt` runs near 8% of documents, so a validation side below roughly 30% of the corpus
-# cannot carry one however healthy the corpus row looks. Half clears that with margin while still
-# leaving a development side an order of magnitude larger than inspection needs.
-#
-# ⚠️ IT IS A DEFAULT AND NOT A RULE. `--split` overrides it, and a caller whose consumer really does
-# train has every reason to. What the default may not do is arrive carrying the authority of a
-# convention whose premise nobody checked, which is what 0.85 did here.
-DEFAULT_TRAIN_FRACTION = 0.5
-
 # 🔴 THE MINIMUM NUMBER OF DOCUMENTS A PER-CLASS FIGURE MAY BE QUOTED ON. Below it a per-class
 # accuracy is not a measurement: at p ≈ 0.9 and n = 30 the 95% Wilson interval is about ±0.10, so
 # "0.91" and "0.85" are the same reading. THE THRESHOLD IS REPORTED AND NEVER ENFORCED — nothing
@@ -138,6 +115,15 @@ def assign_splits(
     persona_ids: Sequence[str], *, seed: int, train_fraction: float
 ) -> dict[str, Split]:
     """Which side of the partition each persona is on. See `schemas.Split` for the unit.
+
+    🔴 `train_fraction` HAS NO DEFAULT, HERE OR ANYWHERE ABOVE. It is a decision about the
+    MEASUREMENT, and a default would let a run be performed without that decision ever having been
+    declared — the argument `--seed` already wins in this repository, applied to a partition nobody
+    declared. A caller has to pass one; what to pass, and why a half is the answer for a consumer
+    that trains nothing, is in README.md's flag table and in `docs/architecture.md` under the
+    assembler. The binding constraint is `MIN_DOCUMENTS_PER_TARGET_CLASS` above: a per-class figure
+    needs that many documents ON THE SIDE IT IS MEASURED ON, so the thinnest class sets how small
+    the validation side may ever be.
 
     🔴 SEEDED INDEPENDENTLY OF THE GENERATOR'S OWN DRAW, from `f"split:{seed}"` rather than from
     the root generator. That is what makes the partition a LABELLING OF AN EXISTING CORPUS instead
@@ -523,10 +509,10 @@ def generate_dataset(
     *,
     seed: int,
     out_dir: Path,
+    train_fraction: float,
     personas: int = 1,
     claims_per_persona: int = 1,
     country: Country = Country.UA,
-    train_fraction: float = DEFAULT_TRAIN_FRACTION,
 ) -> Dataset:
     """Generate the dataset for a seed, writing images and labels under `out_dir`.
 
@@ -537,6 +523,11 @@ def generate_dataset(
     `claims_per_persona` is a ceiling. Each persona carries its own ledger, and the
     planner stops early once no category of theirs has an annual balance left — which is
     also the only way the cumulative-limit mechanism can be exercised at all.
+
+    `train_fraction` IS REQUIRED AND SITS WITH `seed` FOR THE SAME REASON — a run performed
+    without the partition ever having been declared documents a measurement nobody chose. It has
+    no default at this entry point either: a default here would be the same defect one layer below
+    the command line, where it would be harder to see. See `assign_splits`.
     """
     if claims_per_persona < 1:
         raise ValueError(f"a persona files at least one claim, not {claims_per_persona}")

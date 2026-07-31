@@ -124,8 +124,13 @@ below 30% of the corpus could not carry one. A half clears that with margin, lea
 side an order of magnitude above what inspection needs, and requires no argument about a number nobody
 measured.
 
-The same reasoning now sets the generator's default: `--split` defaults to `0.5`. A consumer whose
-pipeline really does train should pass the flag rather than inherit it.
+**The generator has no default fraction, and this paragraph is the only thing on this page that has
+changed since the run.** It used to read "the same reasoning now sets the generator's default:
+`--split` defaults to `0.5`". It does not: `--split` is **required**, for the reason `--seed` is
+required — the fraction decides which documents a figure may be quoted on, and a run must not be
+performed with a partition nobody declared. The reasoning above did not go with the default; it
+became guidance on **what to pass**, and `0.5` is still the answer for a consumer that trains
+nothing. This run declared it on the command line, as the table at the top of this page shows.
 
 | side | personas | claims | documents | share of claims |
 | --- | ---: | ---: | ---: | ---: |

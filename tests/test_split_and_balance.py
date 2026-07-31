@@ -21,7 +21,6 @@ from decimal import Decimal
 import pytest
 
 from receipt_synth.assembler import (
-    DEFAULT_TRAIN_FRACTION,
     MIN_DOCUMENTS_PER_TARGET_CLASS,
     Dataset,
     assign_splits,
@@ -147,59 +146,103 @@ def test_a_fraction_that_is_not_a_partition_is_refused(fraction):
 def test_a_run_too_small_to_partition_gets_an_empty_side_rather_than_a_forced_one():
     """🔴 NO SIDE IS TOPPED UP, and WHICH side comes out empty follows the fraction.
 
-    One persona at the default is a single side. It used to be the training one, because the
-    default used to be 0.85; at 0.5 `round(1 × 0.5)` is 0 and the persona lands on validation
-    instead. The property under test is unchanged and is not about which side wins: forcing a
-    persona across would satisfy the SHAPE of a partition while producing a side of one person —
-    worse than nothing, because it looks like something.
+    One persona at a half is a single side: `round(1 × 0.5)` is 0, so the persona lands on
+    VALIDATION. Forcing it across would satisfy the SHAPE of a partition while producing a side of
+    one person — worse than nothing, because it looks like something. The 0.5 is a chosen input,
+    not an inherited one; there is no default left to inherit.
+
+    🔴 THE ASSERTION IS THE SIDE, NOT THE COUNT OF SIDES, AND THE OLD FORM WAS VACUOUS. It read
+    `len(set(split.values())) == 1`, which is TRUE OF ANY IMPLEMENTATION: one persona goes in, so
+    one entry comes out, so one distinct value comes out. A top-up that clamps `train_size` to at
+    least 1 — the exact defect the docstring warns about — survived it, because clamping still
+    yields a single-entry dict. There is no fixed point outside the thing under test in a count
+    derived from an input of size one; the SIDE is that fixed point, computed on paper from
+    `round(1 × 0.5) = 0`, and a clamp moves it to `train` immediately.
     """
-    split = assign_splits(personas(1), seed=1, train_fraction=DEFAULT_TRAIN_FRACTION)
+    split = assign_splits(personas(1), seed=1, train_fraction=0.5)
 
-    assert len(set(split.values())) == 1, "a single persona cannot occupy two sides"
-
-
-def test_the_default_fraction_is_not_the_convention_borrowed_from_training():
-    """🔴 THE DEFAULT IS 0.5 AND THE REASON IS THAT NOTHING IS TRAINED ON THIS DATASET.
-
-    85/15 belongs to tasks where a model LEARNS on the larger side, and the larger side is large
-    because learning consumes examples. Here both sides answer a different question: the partition
-    guards against fitting the MEASUREMENT — whoever uses this corpus inspects documents, finds
-    where extraction errs and adjusts, and a figure does not count on the documents that were
-    inspected and tuned against. Inspection needs a few dozen documents; measurement wants as many
-    as the corpus allows.
-
-    Pinned as a test rather than left in a comment because a borrowed convention is exactly the
-    kind of number that creeps back in during an unrelated edit, carrying an authority it never
-    earned. Changing it should require saying so here.
-    """
-    assert DEFAULT_TRAIN_FRACTION == 0.5
-
-
-def test_the_default_gives_the_measurement_side_at_least_half():
-    """The PROPERTY behind the digit above, so the two tests fail for different reasons.
-
-    A drift back toward a training convention would raise the train share above a half, and this
-    catches that without pinning any particular value — 0.5, 0.4 and 0.3 all pass, 0.85 does not.
-    The binding constraint on how large validation must be is not a convention at all: a per-class
-    figure needs MIN_DOCUMENTS_PER_TARGET_CLASS on the side it is measured on, and the thinnest
-    target class runs near 8% of documents.
-    """
-    validation_fraction = 1 - DEFAULT_TRAIN_FRACTION
-
-    assert validation_fraction >= DEFAULT_TRAIN_FRACTION, (
-        f"the default sends {DEFAULT_TRAIN_FRACTION:.0%} to a side that trains nothing, leaving "
-        f"{validation_fraction:.0%} to carry every per-class figure"
+    assert split == {"p001": Split.VALIDATION}, (
+        "the one persona was not left on the side the fraction puts it on — a run too small to "
+        f"partition got a forced side instead of an empty one: {split}"
     )
 
 
-def test_the_cli_default_is_the_assembler_default_rather_than_its_own_copy():
-    """Two spellings of one decision drift apart, and this one would drift silently: a run would
-    partition differently from a direct call to `generate_dataset`, and nothing would say so."""
+def test_the_split_fraction_cannot_be_inherited_from_a_default():
+    """🔴 WHAT THE DELETED `DEFAULT_TRAIN_FRACTION == 0.5` TEST WAS PROTECTING, AT ITS ROOT.
+
+    That test pinned a digit so that 85/15 — a convention whose premise is absent here, since
+    nothing is trained on this dataset — could not creep back during an unrelated edit carrying an
+    authority it never earned. The constant is gone, so the digit cannot be pinned. But the digit
+    was never the thing: what it guarded is that A PARTITION NOBODY DECLARED MUST NOT BE APPLIED,
+    and having no default at all is the strictly stronger form — there is no number left to creep
+    back INTO.
+
+    Checked at EVERY entry point rather than at the one that held the constant, because a default
+    written as a bare literal in a signature is the same defect and less visible than a named
+    constant was. The old test could not have caught that at all: it compared one constant against
+    one digit and said nothing about a second spelling elsewhere.
+    """
+    import inspect
+
+    from receipt_synth.assembler import generate_dataset
+
+    for entry in (assign_splits, generate_dataset):
+        parameter = inspect.signature(entry).parameters["train_fraction"]
+        assert parameter.default is inspect.Parameter.empty, (
+            f"{entry.__name__} defaults train_fraction to {parameter.default!r}, so a run can be "
+            "performed without the partition ever having been declared"
+        )
+
+
+def test_the_guidance_on_what_to_pass_outlived_the_constant():
+    """🔴 THE ARGUMENT FOR A HALF DID NOT DISAPPEAR WITH THE DEFAULT — IT CHANGED JOBS.
+
+    The deleted `1 - default >= default` test held the PROPERTY behind the digit: the measurement
+    side never smaller than the development side, because nothing is trained on this dataset and a
+    per-class figure needs MIN_DOCUMENTS_PER_TARGET_CLASS on the side it is MEASURED on, so the
+    thinnest class sets the floor. With no default there is no fraction of ours to hold that
+    property against — the caller's is not ours to constrain, and a consumer that really does train
+    has every reason to pass something else.
+
+    So the same reasoning is held where it now has to work: as GUIDANCE READ BEFORE CHOOSING. A
+    required flag whose help says only "a number between 0 and 1" would have removed the default
+    and lost the argument with it, which is the failure this test exists to make loud. `--help` is
+    the copy that ships with the tool, so it is the one a test can reach.
+
+    `_actions` rather than `format_help()`: the guidance has to be checked as the SPLIT flag's
+    text, and a substring search over the whole help would pass on a `0.5` printed by any other
+    flag added later.
+    """
     from receipt_synth.cli import build_parser
 
-    parsed = build_parser().parse_args(["--seed", "1"])
+    guidance = next(
+        action.help for action in build_parser()._actions if action.dest == "split"
+    )
 
-    assert parsed.split == DEFAULT_TRAIN_FRACTION
+    assert "0.5" in guidance, "the help no longer says what to pass"
+    assert "thinnest" in guidance, "the help names a number without the argument that produced it"
+    assert "required" in guidance, "the help does not say the decision has to be made"
+
+
+def test_a_run_that_declares_no_split_is_refused_rather_than_defaulted(capsys):
+    """The command-line half of the same property, and the half a user meets.
+
+    Replaces a test that asserted the parser's default equalled the assembler's, which guarded
+    against two spellings of one decision drifting apart. With no default anywhere there is exactly
+    one spelling — the caller's — so that drift cannot occur, and what is worth holding instead is
+    that the OMISSION IS REFUSED rather than filled in silently.
+
+    The message is asserted as well as the exit: argparse raises `SystemExit` for a mistyped flag
+    too, so the raise alone would stay green if `--split` went back to being optional.
+    """
+    from receipt_synth.cli import build_parser
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--seed", "1"])
+    assert "--split" in capsys.readouterr().err
+
+    parsed = build_parser().parse_args(["--seed", "1", "--split", "0.4"])
+    assert parsed.split == 0.4
 
 
 # ------------------------------------------------------------ report: the split --

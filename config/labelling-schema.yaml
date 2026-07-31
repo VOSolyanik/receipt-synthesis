@@ -60,6 +60,38 @@
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 24 by A RECORDED COMMAND BECOMING RUNNABLE AGAIN. NO LABEL RECORD GAINED OR LOST A KEY,
+# NO COMPARISON RULE CHANGED, NO COUNT IN ANY PROFILE MOVED, AND THE DRAW DID NOT MOVE: `src/` reads
+# nothing here, and what changed in `src/` is the ABSENCE of a default rather than a value.
+#
+#   🔴 `--split` IS REQUIRED AND HAS NO DEFAULT. `assembler.DEFAULT_TRAIN_FRACTION` — named at the
+#   version 20 entry below, which is history and is left standing — DOES NOT EXIST ANY MORE, in the
+#   command line or in `generate_dataset`. The reasoning is `--seed`'s, applied one argument over:
+#   the split fraction decides which documents a figure may be quoted on, so it is a decision about
+#   the MEASUREMENT, and a default lets a run be performed without that decision ever having been
+#   declared. ⚠️ A CONSUMER'S OWN INVOCATION OF THIS GENERATOR NOW FAILS UNTIL IT PASSES `--split`.
+#
+#   ⚠️ THE ARGUMENT FOR A HALF SURVIVES AND CHANGES JOBS. It was the justification for a default;
+#   it is now guidance on what to pass, and it lives in README.md's flag table, in
+#   `docs/architecture.md` under the assembler, and at RP-06's `why_the_partition_is_half` — which
+#   is amended in ONE PARAGRAPH, to stop naming a symbol that no longer exists, and in no count.
+#
+#   🔴 TWO PROFILES' COMMANDS GAINED `--split 0.85`, AND NEITHER RUN CHANGED. RP-04 and RP-05 ran
+#   with the flag's default in effect, and the value that was applied is knowable from the history
+#   at those versions. Their commands would otherwise be unexecutable, and — worse — a reader who
+#   dropped the flag mentally back to "whatever the default is" would reproduce a DIFFERENT corpus,
+#   the default having moved from 0.85 to 0.5 at version 20. An inherited value was written down;
+#   nothing was re-run. `split.train_fraction_requested` on both profiles already said 0.85.
+#
+#   🔴 THREE PROFILES' COMMANDS ARE ACCURATE AND NO LONGER RUNNABLE, AND THAT IS RECORDED RATHER
+#   THAN REPAIRED. RP-01, RP-02 and RP-03 predate the partition entirely, so there is no fraction
+#   they inherited and none may be invented for them; RP-03 additionally cannot take `--split 0.85`
+#   without becoming RP-04's command. A consumer must NOT paste those three into a shell. The rule
+#   and the three cases are stated once, at `run_profiles.a_command_that_predates_the_split_flag`.
+#
+#   `sources.reference_run` GAINED `--split 0.5` and is the one command here that is a handle rather
+#   than a record — it has to execute. No `status: emitted` statement turns on the fraction.
+#
 # Bumped to 23 by THE FIFTH INDEX OF THIS FILE BECOMING DATA, AND IT IS THE ONE THAT WAS ACTIVELY
 # MISLEADING. NO LABEL RECORD GAINED OR LOST A KEY, NO COMPARISON RULE CHANGED, AND THE DRAW DID
 # NOT MOVE: `src/` reads nothing here, so nothing below can reach a document.
@@ -705,7 +737,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 23
+version: 24
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -759,9 +791,15 @@ sources:
     degrader.py (capture modes), and config/policy.yaml (the labelling policy).
   reference_run: >
     Every `status: emitted` statement below was verified against
-    `generate-dataset --seed 42 --personas 2 --claims-per-persona 4`. The generator version
-    is not repeated in this file: every label record carries its own `generator_version`,
+    `generate-dataset --seed 42 --personas 2 --claims-per-persona 4 --split 0.5`. The generator
+    version is not repeated in this file: every label record carries its own `generator_version`,
     and a copy here would be a second thing to keep in step.
+
+    ⚠️ `--split 0.5` WAS ADDED IN VERSION 24, WHERE THE FLAG BECAME REQUIRED. Unlike a profile, this
+    is a re-verification handle rather than a record of one run — it has to execute — and NO
+    `status: emitted` STATEMENT TURNS ON THE FRACTION'S VALUE: `split` declares the vocabulary
+    `[train, validation]` and nothing here asserts a count or a side. A half is what the flag
+    defaulted to while these statements were last re-checked.
   consumer: >
     The neighbouring product requirements document — its extraction fields per document
     type and its entity model, its classifier classes and metric, its extraction
@@ -4765,12 +4803,48 @@ run_profiles:
     the corpus this file is talking about.
 
   a_profile_describes_the_version_it_names: >
-    🔴 FOUR PROFILES BELOW CARRY THE SAME COMMAND, AND SOME OF THEM DIFFERENT NUMBERS, AND THAT IS
-    NOT A CONTRADICTION. RP-01, RP-03, RP-04 and RP-05 were all taken from `--seed 42 --personas 48
-    --claims-per-persona 8`. Version 17 added a per-document draw — the capture channel — so the
-    same seed no longer produces the same documents: `generator_version_at_measurement` on each
-    profile is what tells them apart, and the LATEST version's profile is the one that describes
-    what the command does now.
+    🔴 FOUR PROFILES BELOW WERE TAKEN FROM THE SAME INVOCATION, AND SOME OF THEM CARRY DIFFERENT
+    NUMBERS, AND THAT IS NOT A CONTRADICTION. RP-01, RP-03, RP-04 and RP-05 were all run as `--seed
+    42 --personas 48 --claims-per-persona 8`. Version 17 added a per-document draw — the capture
+    channel — so the same seed no longer produces the same documents:
+    `generator_version_at_measurement` on each profile is what tells them apart, and the LATEST
+    version's profile is the one that describes what the command does now.
+
+    ⚠️ TWO OF THE FOUR NOW SPELL A `--split` THE OTHER TWO CANNOT, so the `command` strings are no
+    longer identical even where the invocation was. RP-04 and RP-05 ran with a partition and had
+    its fraction defaulted; RP-01 and RP-03 predate partitioning. See
+    `a_command_that_predates_the_split_flag`.
+
+  a_command_that_predates_the_split_flag: >
+    🔴 A RECORDED COMMAND HAS TWO JOBS AND VERSION 24 PUT THEM IN CONFLICT FOR THREE PROFILES. It
+    says what was run, and it is the handle by which a reader reproduces the run. `--split` became
+    REQUIRED and lost its default in version 24 — the fraction is a decision about the measurement,
+    and a default lets a run be performed without that decision ever having been declared — so a
+    command with no `--split` no longer executes.
+
+    THE PROFILES FALL INTO THREE CASES AND EACH IS TREATED DIFFERENTLY, ON THE HISTORY RATHER THAN
+    ON INFERENCE:
+
+      RP-06 passed the fraction explicitly. Nothing was done to it.
+
+      RP-04 and RP-05 RAN WITH A DEFAULT IN EFFECT, and the value that was applied is knowable:
+      0.85, at the `receipt-synth` commits those versions were taken on. Their commands now state
+      it, so they reproduce the run they describe. Each says so at its own
+      `the_command_states_a_fraction_the_run_inherited`.
+
+      RP-01, RP-02 and RP-03 PREDATE THE FLAG ENTIRELY — there was no partition and no fraction to
+      inherit. 🔴 THEIR COMMANDS ARE ACCURATE AND NOT RUNNABLE, AND THAT TENSION IS RECORDED RATHER
+      THAN RESOLVED, because the two available resolutions are both worse than stating it. Adding a
+      fraction would make a run claim a partition it never had, and for RP-03 would additionally
+      make its command identical to RP-04's, collapsing two profiles onto one invocation. Deleting
+      the profiles would destroy the record that the runs happened, which is the one thing a profile
+      is evidence of.
+
+    ⚠️ SO: A COMMAND ON RP-01, RP-02 OR RP-03 IS A HISTORICAL RECORD AND MUST NOT BE PASTED INTO A
+    SHELL. It will be refused for want of `--split`, and that refusal is CORRECT — the run it
+    describes had no such argument. RP-01 and RP-02 do not reproduce their corpora under any
+    arguments in any case, the draw having moved in version 17; RP-03's documents are still
+    current, and the way to reproduce them WITH a partition is RP-04's command.
 
     ⚠️ AND WHERE THE NUMBERS DO NOT DIFFER, THE PROFILES STILL DO. RP-03, RP-04 and RP-05 describe
     ONE corpus — the draw has not moved since version 17 — so they agree count for count. What
@@ -4842,9 +4916,15 @@ run_profiles:
           one. A half clears that with margin, leaves the development side an order of magnitude
           above what inspection needs, and requires no argument about a number nobody measured.
 
-          The same reasoning now sets the generator's own default — see
-          `assembler.DEFAULT_TRAIN_FRACTION`, changed from 0.85 to 0.5 with this run and pinned by
-          a test.
+          AMENDED IN VERSION 24, AND ONLY THIS PARAGRAPH — NOT ONE COUNT ABOVE OR BELOW IT MOVED.
+          It used to end "the same reasoning now sets the generator's own default — see
+          `assembler.DEFAULT_TRAIN_FRACTION`, changed from 0.85 to 0.5 with this run and pinned by a
+          test". That constant NO LONGER EXISTS: `--split` is required and carries no default, so
+          the sentence named a symbol a reader would grep for and not find. The reasoning did not go
+          with it — it stopped being the justification for a DEFAULT and became guidance on WHAT TO
+          PASS, which is where README.md's flag table and `docs/architecture.md` now carry it. This
+          run declared 0.5 on its command line and its command above says so, exactly as it did
+          before the flag became required.
       size:
         personas: 96
         claims_ordered: 768
@@ -5034,7 +5114,19 @@ run_profiles:
         RP-06's two changes are legible: everything a consumer needed in order to read a figure
         computed on it is still here, and the comparison is what shows why a corpus can clear the
         per-class minimum and still be unusable for the measurement it was built for.
-      command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8"
+      command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8 --split 0.85"
+      the_command_states_a_fraction_the_run_inherited: >
+        🔴 `--split 0.85` WAS ADDED TO THE COMMAND IN VERSION 24 AND THE RUN IS UNCHANGED. This run
+        passed no `--split`: the flag existed and carried a default, which at
+        `receipt-synth` commit `c4cbb66` was 0.85. The flag is required now and carries no default,
+        so the command as recorded would REFUSE TO RUN — and the older reading, "whatever the
+        default is today", would reproduce a DIFFERENT corpus, because the default moved to 0.5 one
+        version later. The fraction is therefore stated explicitly, which is what the run actually
+        applied and what `split.train_fraction_requested` below has recorded all along.
+
+        WHAT IS RECORDED IS THE RUN, NOT A REPAIR TO IT. Nothing was re-run and no count changed;
+        an inherited value was written down. See `a_command_that_predates_the_split_flag` at the
+        head of this section for the profiles where that repair is NOT available.
       seed: 42
       generator_version_at_measurement: contract version 19, receipt-synth 0.1.0
       corpus_identity:
@@ -5238,7 +5330,21 @@ run_profiles:
         THE PARTITION, MEASURED ON RP-03'S OWN CORPUS. It records only what version 18 added; every
         other figure is RP-03's and is not repeated here, because the two runs produced the SAME
         DOCUMENTS — see `documents_identical_to`.
-      command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8"
+      command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8 --split 0.85"
+      the_command_states_a_fraction_the_run_inherited: >
+        🔴 `--split 0.85` WAS ADDED TO THE COMMAND IN VERSION 24 AND THE RUN IS UNCHANGED. This is
+        the FIRST run that had a partition at all: the flag arrived with the version this profile
+        records, `receipt-synth` commit `a47de39`, defaulting to 0.85, and this run inherited it
+        rather than passing it. The flag is required now and carries no default, so the command as
+        recorded would refuse to run, and reading it as "the default of the day" would reproduce a
+        different partition. The fraction is stated explicitly and matches
+        `split.train_fraction_requested` below.
+
+        ⚠️ THIS IS ALSO WHY RP-03 DID NOT GET THE SAME TREATMENT. RP-03's command plus `--split
+        0.85` IS this command — the two runs share a corpus, as `documents_identical_to` says, and
+        differ in that one was partitioned and the other predates partitioning entirely. Retrofit
+        the flag onto RP-03 and the two profiles become one command describing two runs, with the
+        earlier one silently claiming a partition it never had.
       seed: 42
       generator_version_at_measurement: contract version 18
       documents_identical_to: >
@@ -5301,6 +5407,12 @@ run_profiles:
         The first run with all three capture channels live. Supersedes RP-01 as the example of what
         the reference command produces — same command, moved draw.
       command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8"
+      the_command_predates_the_split_flag: >
+        ACCURATE AND NOT RUNNABLE, DELIBERATELY. There was no partition at version 17, so no
+        `--split` was passed and none may be added: this command plus `--split 0.85` is RP-04's
+        command, and RP-04 is the profile of that run. The documents are still current — the draw
+        has not moved since — so RP-04 is where a reader goes to reproduce them with a partition.
+        See `a_command_that_predates_the_split_flag`.
       seed: 42
       generator_version_at_measurement: contract version 17
       claims_ordered: 384
@@ -5385,6 +5497,11 @@ run_profiles:
       authoritative: false
       purpose: the smallest run that exercises every mechanism; used for most examples below
       command: "generate-dataset --seed 42 --personas 48 --claims-per-persona 8"
+      the_command_predates_the_split_flag: >
+        ACCURATE AND NOT RUNNABLE, DELIBERATELY. There was no partition at version 14, so no
+        `--split` was passed and none may be added. This command reproduces nothing under any
+        arguments in any case: the draw moved in version 17. See
+        `a_command_that_predates_the_split_flag`.
       seed: 42
       generator_version_at_measurement: contract version 14
       claims_ordered: 384
@@ -5444,6 +5561,10 @@ run_profiles:
         The pipeline test fixture. Small, and recorded because two limitations are detected on it
         rather than on RP-01 — the cross-document self-consistency check runs here.
       command: "generate-dataset --seed 20260803 --personas 4 --claims-per-persona 8"
+      the_command_predates_the_split_flag: >
+        ACCURATE AND NOT RUNNABLE, DELIBERATELY — as RP-01, and for the same two reasons: version 14
+        had no partition to declare, and version 17 moved the draw. See
+        `a_command_that_predates_the_split_flag`.
       seed: 20260803
       generator_version_at_measurement: contract version 14
       claims_built: 31

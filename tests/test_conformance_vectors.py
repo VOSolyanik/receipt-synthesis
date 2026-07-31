@@ -230,7 +230,9 @@ def labels(tmp_path_factory):
     from receipt_synth.assembler import generate_dataset
 
     out = tmp_path_factory.mktemp("conformance")
-    generate_dataset(seed=20260803, out_dir=out, personas=2, claims_per_persona=4)
+    generate_dataset(
+        seed=20260803, out_dir=out, train_fraction=0.5, personas=2, claims_per_persona=4
+    )
     return [json.loads(p.read_text()) for p in sorted((out / "labels").glob("*.json"))
             if not p.name.endswith(".claim.json")]
 
