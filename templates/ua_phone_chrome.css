@@ -1,0 +1,149 @@
+/*
+ * The phone chrome — the rules SHARED by every screenshot archetype.
+ *
+ * Included by `ua_bank_app_transaction.html` and `ua_bank_receipt_in_app.html` ahead of each
+ * one's own `<slug>.css`, so a per-archetype rule overrides one here. The same arrangement the
+ * fiscal receipts use with `ua_fiscal_receipt.css`, and for the same reason.
+ *
+ * THE PAPER IS A SCREEN, AND THE UNIT IS THE DEVICE PIXEL rather than the CSS pixel a phone
+ * stylesheet is written in. 1170 × 2532 is a 390 × 844 pt phone at a scale factor of 3, one of
+ * the commonest geometries a real screenshot arrives in — so every length in these files is
+ * three times the number an application's own stylesheet would carry, and 48 px of type is
+ * 16 pt of type. The renderer draws one CSS pixel as one image pixel, so writing the sizes out
+ * at 3× is what makes the render the SIZE of a real capture instead of a small picture of one.
+ *
+ * That is a THIRD scale in this repository — 8 px/mm for a thermal roll, 96 dpi for an A4
+ * sheet, and this — and deliberately so: the three are different objects captured by different
+ * means, and one scale for all of them would teach the corpus a size no medium has.
+ *
+ * ⛔ THE PALETTE IS GENERIC AND NAMES NO ISSUER. A dark interface, neutral grey cards, no accent
+ * hue at all. Ukrainian banking apps do not look like this and do not look like each other;
+ * reproducing any of them would be a claim about that bank's design, made from screenshots that
+ * cannot be cited. What is modelled is the ARRANGEMENT of the elements, which is what a
+ * document-understanding system reads. The brand is not modelled, and that gap is declared in
+ * templates/README.md rather than left to be found in a score.
+ *
+ * Font stack: "Noto Sans" leads and carries the ₴ glyph, which Roboto does not have — the house
+ * rule from fonts/README.md. "Noto Sans Mono" appears nowhere: a phone interface is not
+ * monospaced, and the column alignment a receipt gets from a character cell is done here with
+ * flexbox.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0d0e11;
+}
+
+/* `.screen`, not `.page` and not `.receipt`. This class is neither a sheet nor a roll, and a
+   rule written for paper must not reach it through a shared name. */
+.screen {
+  box-sizing: border-box;
+  width: 1170px;
+  min-height: 2532px;
+  display: flex;
+  flex-direction: column;
+  background: #0d0e11;
+  color: #f3f4f6;
+  font-family: "Noto Sans", "Roboto", sans-serif;
+  font-size: 48px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* -- status bar ------------------------------------------------------------ */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 33px 90px 0;
+}
+
+.clock {
+  font-size: 51px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.indicators {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.glyph {
+  display: block;
+  height: 33px;
+  width: auto;
+}
+
+.battery {
+  height: 30px;
+}
+
+/* -- navigation ------------------------------------------------------------ */
+
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 45px 60px 0;
+}
+
+.chevron-back {
+  width: 66px;
+  height: 66px;
+  flex: 0 0 auto;
+}
+
+.chevron {
+  width: 42px;
+  height: 42px;
+  color: #5d636d;
+  flex: 0 0 auto;
+}
+
+/* -- tab bar and the foot of the screen ------------------------------------ */
+
+/* `margin-top: auto` pins the bar to the foot however tall the content above it turns out. The
+   screen is a fixed height and its content is not — a transaction card is short and a whole
+   payment confirmation is not — so the two archetypes need the same rule for opposite reasons. */
+.tabbar {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 42px 36px 24px;
+  border-top: 3px solid #1c1f26;
+  background: #101216;
+}
+
+.tab {
+  font-size: 36px;
+  color: #6b717b;
+}
+
+.tab-active {
+  color: #e8eaee;
+  font-weight: 600;
+}
+
+.home-indicator {
+  height: 45px;
+  background: #101216;
+  position: relative;
+}
+
+.home-indicator::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: 402px;
+  height: 15px;
+  border-radius: 999px;
+  background: #4a4f58;
+}
