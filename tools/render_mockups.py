@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Render the three mock-up archetypes to PNGs, so they can be looked at.
+"""Render the mock-up archetypes to PNGs, so they can be looked at.
 
     uv run python tools/render_mockups.py [--out DIR] [--seed N]
 
-WHY THIS IS A SCRIPT AND NOT PART OF THE PIPELINE. The three templates it renders are
-MOCK-UPS: none is registered in `claim_planner.ARCHETYPES`, none has a builder in
+WHY THIS IS A SCRIPT AND NOT PART OF THE PIPELINE. Every template it renders is a MOCK-UP:
+none is registered in `claim_planner.ARCHETYPES`, none has a builder in
 `assembler._BUILDERS`, and none may reach a dataset yet — the production run measures four
 document classes, and adding layout variety before that measurement would change what the
 measurement means. So there is no place in the pipeline for them, and inventing one would be
@@ -14,7 +14,7 @@ THE OUTPUT GOES OUTSIDE THE REPOSITORY by default, for the same reason `out/` is
 rendered images are not what this repository ships. `--out` overrides it, and a path inside
 the repository is refused rather than quietly written.
 
-NOTHING HERE PRODUCES A LABEL. No `data-field` attribute exists in any of the three templates,
+NOTHING HERE PRODUCES A LABEL. No `data-field` attribute exists in any of the templates,
 so `RenderedDocument.field_bboxes` comes back empty by construction, and this script writes no
 JSON beside the images. That is the boundary the branch was given: labels and boxes arrive with
 the connection, not with the layout.
@@ -34,10 +34,11 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-from receipt_synth.config import jurisdiction, load_vendors
+from receipt_synth.config import jurisdiction, load_fx_rates, load_vendors
 from receipt_synth.content_builder import (
     build_payment_confirmation,
     build_prro_receipt,
+    generate_edrpou,
     resolve_vendor,
 )
 from receipt_synth.renderer import REPO_ROOT, Renderer
@@ -113,16 +114,101 @@ SCREEN_WIDTH_PX = 1170
 SHEET_PADDING_PX = 48
 CARD_WIDTH_PX = SCREEN_WIDTH_PX - 2 * SHEET_PADDING_PX
 
+# ---------------------------------------------------------------------------
+# The platform-receipt class — a second currency and a second language.
+# ---------------------------------------------------------------------------
+
+# 🔴 A PUBLIC MARK, AND IT BELONGS IN config/vendors.json. It is here for the same reason every
+# other string in this block is: the archetype is not connected, and declaring a vendor for a
+# document no run produces would put data in the live file for a document that does not exist.
+# It satisfies the rule at the head of config/generation.yaml — a publicly known mark, used only
+# for the trade it is publicly in, which for this one is selling online courses to individuals.
+# NOTHING IS PRINTED BESIDE IT THAT ASSERTS ANYTHING ABOUT THE COMPANY: no address, no tax
+# number, no registration. Those are 📄 invoice particulars under Article 226 of Directive
+# 2006/112/EC, and this document declares itself not to be an invoice, so their absence is
+# evidenced rather than convenient. See templates/README.md.
+FOREIGN_PLATFORM = "Coursera"
+
+# 🔴 THE NEGATIVE MARKER OF THIS CLASS, AND IT IS NOT THE STRING CONFIG HOLDS EITHER.
+# `receipt.non_fiscal_marker` in the EU block of config/fiscal-rules.yaml is "NOT A FISCAL
+# DOCUMENT" — a statement about FISCALITY, which is a cash-register concept. 👁 What four
+# independent commentators describe as printed on real platform receipts is a statement about
+# being a TAX INVOICE, which is a different claim: a receipt can be perfectly fiscal and still
+# not be the document that lets a buyer deduct the tax. The two are not synonyms and the mock-up
+# does not treat them as such; config is left untouched, and which wording that field should
+# carry is the author's decision.
+NOT_A_TAX_INVOICE = "This is not a VAT invoice."
+
+# Interface wording of a platform receipt. Not law and not marks — the captions the field set
+# arrives under. Both dictionaries carry the SAME KEYS, which is what makes the template's
+# claim — that language is data — checkable rather than asserted.
+EN_LABELS = {
+    "title": "Receipt",
+    "paid_caption": "Amount paid",
+    "receipt_number": "Receipt number",
+    "date_paid": "Date paid",
+    "payment_method": "Payment method",
+    "billed_to": "Billed to",
+    "description": "Description",
+    "quantity": "Qty",
+    "amount": "Amount",
+    "subtotal": "Subtotal",
+    "total": "Total",
+}
+UA_LABELS = {
+    "title": "Квитанція",
+    "paid_caption": "Сплачено",
+    "receipt_number": "Номер квитанції",
+    "date_paid": "Дата оплати",
+    "payment_method": "Спосіб оплати",
+    "billed_to": "Платник",
+    "description": "Опис",
+    "quantity": "К-сть",
+    "amount": "Сума",
+    "subtotal": "Разом",
+    "total": "До сплати",
+}
+
+# ⚠️ INVENTED, AND SAFE BECAUSE OF WHAT THEY ARE. A course is a WORK, not a mark under which a
+# firm trades — config/generation.yaml admits invented works in as many words while admitting no
+# invented marks. Naming a real course would instead assert that a named platform sells it.
+EN_COURSES = (
+    ("Foundations of Applied Data Analysis", "12 weeks · self-paced"),
+    ("Product Analytics for Engineering Teams", "8 weeks · self-paced"),
+)
+UA_COURSES = (
+    ("Основи аналізу даних на практиці", "12 тижнів · у власному темпі"),
+    ("Продуктова аналітика для інженерів", "8 тижнів · у власному темпі"),
+)
+
+EN_BUYER = {"name": "Olena Kovalchuk", "country": "Ukraine"}
+UA_BUYER = {"name": "Ковальчук Олена Петрівна", "country": "Україна"}
+
 # The battery glyph in ua_phone_chrome.jinja is 56 px of shell with a 5 px inset, so a full
 # charge is 46 px of fill. Invented, like the clock beside it.
 BATTERY_FULL_PX = 46
 
 
-def _amount_uk(value: Decimal) -> str:
-    """An amount the way a Ukrainian interface writes it: comma decimals, spaced thousands."""
+def _amount(value: Decimal, country: str = "UA") -> str:
+    """An amount printed the way a jurisdiction writes one.
+
+    Both separators come from `number_format` in config/fiscal-rules.yaml rather than from
+    literals here — UA groups thousands with a NO-BREAK SPACE and the EU block with a comma, and
+    the decimal separator goes the other way round. Two currencies in one corpus is exactly the
+    condition under which a hard-coded separator starts printing one jurisdiction's number in
+    another's dress, with nothing downstream to report it.
+
+    UA declares TWO decimal separators and the last is taken. The contract says real ПРРО
+    vendors print both and that the choice is drawn per document; drawing it here would make a
+    mock-up's pixels depend on where in the run it was built, and these documents exist to be
+    compared with each other.
+    """
+    number_format = jurisdiction(country)["number_format"]
+    decimal_separator = number_format["decimal_separator_variants"][-1]
+    thousands_separator = number_format["thousands_separator"]
     whole, _, fraction = f"{value:.2f}".partition(".")
-    grouped = f"{int(whole):,}".replace(",", " ")
-    return f"{grouped},{fraction}"
+    grouped = f"{int(whole):,}".replace(",", thousands_separator)
+    return f"{grouped}{decimal_separator}{fraction}"
 
 
 def _date_in_words(moment: datetime) -> str:
@@ -244,11 +330,11 @@ def app_transaction_context(rng: random.Random) -> dict:
         "datetime_words": _date_in_words(ISSUED_AT),
         # 👁 Signed, with the true minus sign rather than a hyphen — money leaving the account.
         # The direction is the one fact this screen states that the A4 confirmation never prints.
-        "amount_signed": f"−{_amount_uk(amount)} {CURRENCY_SIGN}",
+        "amount_signed": f"−{_amount(amount)} {CURRENCY_SIGN}",
         "description_label": APP_STRINGS["description_label"],
         "description_placeholder": APP_STRINGS["description_placeholder"],
         "balance_label": APP_STRINGS["balance_label"],
-        "balance": f"{_amount_uk(balance)} {CURRENCY_SIGN}",
+        "balance": f"{_amount(balance)} {CURRENCY_SIGN}",
         "payment_method_label": APP_STRINGS["payment_method_label"],
         "payment_method": f"{bank} ••{rng.randrange(1000, 10000)}",
         "actions": APP_ACTIONS,
@@ -318,6 +404,166 @@ def receipt_in_app_context(
     }
 
 
+def _platform_lines(
+    rng: random.Random, courses: tuple, price_range: tuple[int, int], country: str
+) -> tuple[list[dict], Decimal]:
+    """The table of what was bought, and what it comes to — one row per course.
+
+    A PRICE PER LINE, not one price repeated. Two courses at the same figure is what the first
+    render showed, and it reads as a template filling itself rather than as a purchase: real
+    courses are priced independently, and a corpus in which every line of a document carries the
+    same number teaches an extractor that it only has to read one of them.
+
+    Quantity is always one — a course is bought once. The column is on the page because 📄 the
+    extent and nature of the service is an invoice particular and 👁 a receipt prints the column
+    regardless, not because anything here varies it.
+    """
+    lines, total = [], Decimal(0)
+    for name, period in courses:
+        price = Decimal(rng.randrange(*price_range)) / 100
+        total += price
+        lines.append(
+            {"name": name, "period": period, "qty": "1", "amount": _amount(price, country)}
+        )
+    return lines, total
+
+
+def eu_platform_receipt_context(rng: random.Random) -> dict:
+    """A platform receipt in English and EUR — the second language and the second currency.
+
+    🔴 EVERY REQUISITE OF A VAT INVOICE IS ABSENT, and each absence is 📄 an item of the
+    exhaustive list in Article 226 of Directive 2006/112/EC: no supplier address, no supplier VAT
+    identification number, no customer VAT identification number, no tax rate and no tax amount.
+    The document says as much in the footer, which is the whole reason it may lack them. The
+    method is the one `ua_non_fiscal_receipt` used on the Ukrainian fiscal form — read the list of
+    required particulars backwards and print the document that carries none of them.
+
+    ⛔ NO CONVERSION IS PRINTED. No public source found shows such a receipt stating a rate or an
+    equivalent in the buyer's home currency, so none is stated, and the claim this document
+    evidences therefore carries its conversion nowhere on paper.
+    """
+    rules = jurisdiction("EU")
+    lines, total = _platform_lines(rng, EN_COURSES, (4_900, 24_900), "EU")
+
+    return {
+        "language": rules["language"],
+        "labels": EN_LABELS,
+        "currency": rules["currency"],
+        "seller": {
+            "name": FOREIGN_PLATFORM,
+            "address": None,
+            "tax_code": None,
+            "tax_code_label": None,
+            "vat_number": None,
+            "vat_number_label": None,
+        },
+        "buyer": EN_BUYER,
+        "receipt_number": f"{rng.randrange(1000, 10000)}-{rng.randrange(1000, 10000)}",
+        "date": ISSUED_AT.strftime(rules["date_format"]),
+        "card_masked": f"•••• {rng.randrange(1000, 10000)}",
+        "lines": lines,
+        "subtotal": _amount(total, "EU"),
+        # No tax block at all. A zero row would ASSERT a tax treatment, and the absence of the
+        # block is what this document's own footer is about.
+        "vat": None,
+        "total": _amount(total, "EU"),
+        "not_a_tax_invoice_note": NOT_A_TAX_INVOICE,
+        "support_note": None,
+        "qr_payload": None,
+        # Not printed anywhere on the page — carried out of here so the run can report it.
+        "_amount_decimal": total,
+    }
+
+
+def ua_platform_receipt_context(rng: random.Random) -> dict:
+    """The same class in Ukrainian and UAH — the domestic control.
+
+    The seller is read from config/vendors.json: an `online_learning_platform` of the
+    `professional_development` category, a public Ukrainian mark already in the pool for exactly
+    that trade. Its identifiers are generated with the shipped checksum builders, the way every
+    other Ukrainian seller in this repository gets them.
+
+    📄 THE TAX LINE IS «У т.ч. ПДВ», WHICH IS NOT AN ADDITION. The Ukrainian convention prints a
+    VAT-inclusive price and states the tax contained in it, so the subtotal and the total are the
+    same figure and the tax row sits between them for information. That is what `ua_invoice`
+    already does, and its labels are read from config/fiscal-rules.yaml rather than restated.
+    """
+    platform = next(
+        entry
+        for entry in load_vendors()["vendors"]["UA"]["professional_development"]
+        if entry.get("profile") == "online_learning_platform"
+    )
+    rules = jurisdiction("UA")
+    totals_labels = rules["invoice"]["totals"]
+    vat_rate = rules["vat_rates"]["standard"]
+
+    lines, gross = _platform_lines(rng, UA_COURSES, (90_000, 400_000), "UA")
+    # The tax CONTAINED in a gross price, not added to it: gross × rate / (100 + rate).
+    vat_amount = (gross * Decimal(str(vat_rate)) / (100 + Decimal(str(vat_rate)))).quantize(
+        Decimal("0.01")
+    )
+
+    edrpou = generate_edrpou(rng)
+    labels = dict(UA_LABELS)
+    labels["subtotal"] = totals_labels["total_label"]
+    labels["total"] = totals_labels["single_label"]
+
+    return {
+        "language": rules["language"],
+        "labels": labels,
+        "currency": rules["currency"],
+        "seller": {
+            # A ТОВ prints its mark in quotes, the way `legal_name` renders one.
+            "name": f"ТОВ «{platform['name']}»",
+            "address": "м. Київ, вул. Хрещатик, 22",
+            "tax_code": edrpou,
+            "tax_code_label": rules["identifiers"]["edrpou"]["label"],
+            "vat_number": f"{edrpou}{rng.randrange(1000, 10000)}",
+            "vat_number_label": rules["identifiers"]["vat_number"]["label"],
+        },
+        "buyer": UA_BUYER,
+        "receipt_number": f"{rng.randrange(1000, 10000)}-{rng.randrange(1000, 10000)}",
+        "date": ISSUED_AT.strftime(rules["date_format"]),
+        "card_masked": f"•••• {rng.randrange(1000, 10000)}",
+        "lines": lines,
+        "subtotal": _amount(gross, "UA"),
+        "vat": {
+            "label": f"{totals_labels['vat_label']} {vat_rate:g}%",
+            "amount": _amount(vat_amount, "UA"),
+        },
+        "total": _amount(gross, "UA"),
+        # 👁 No such note. This seller is registered for ПДВ and prints the tax, so it makes no
+        # statement about not being a tax document — and no Ukrainian equivalent of the English
+        # wording was found in any public source. The asymmetry is declared in templates/README.md
+        # rather than smoothed over with a translation nothing evidences.
+        "not_a_tax_invoice_note": None,
+        "support_note": None,
+        "qr_payload": None,
+        "_amount_decimal": gross,
+    }
+
+
+def _report_conversion(eur_total: Decimal) -> None:
+    """State the conversion the corpus cannot show, and say where the rate came from.
+
+    ⛔ `config.load_fx_rates` HAS NO CALLER IN `src/`. The file exists, its header explains that
+    the rates are static so that conversion stays deterministic, and no code converts anything —
+    `policy_engine._check_currency` raises on a foreign-currency document instead, deliberately,
+    because a converted amount would be a number in the ground truth that nothing in the dataset
+    can prove. This line is the first call in the repository, and it prints to the console rather
+    than onto the page for exactly that reason: the figure has no document behind it.
+    """
+    fx = load_fx_rates()
+    rate = Decimal(str(fx["rates"]["EUR"]))
+    base = fx["base"]
+    converted = (eur_total * rate).quantize(Decimal("0.01"))
+    print(
+        f"  note: the EUR receipt totals {eur_total} EUR = {converted} {base} at "
+        f"{rate} {base}/EUR (config/fx-rates.yaml). NOT PRINTED ON ANY DOCUMENT — no public "
+        "source shows such a receipt stating a rate, and no code in src/ converts."
+    )
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -337,8 +583,16 @@ def render_all(out_dir: Path, seed: int) -> list[Path]:
             ("ua_non_fiscal_receipt", lambda: non_fiscal_context(rng)),
             ("ua_bank_app_transaction", lambda: app_transaction_context(rng)),
             ("ua_bank_receipt_in_app", lambda: receipt_in_app_context(rng, renderer, out_dir)),
+            ("eu_platform_receipt", lambda: eu_platform_receipt_context(rng)),
+            ("ua_platform_receipt", lambda: ua_platform_receipt_context(rng)),
         ):
-            result = renderer.render(slug, build_context(), out_dir / f"{slug}.png")
+            context = build_context()
+            # Keys the run needs and no template prints. Popped rather than left for Jinja to
+            # ignore: a context is what the page says, and a value in it that reaches no page is
+            # the sort of thing a later reader wires into markup by mistake.
+            amount = context.pop("_amount_decimal", None)
+
+            result = renderer.render(slug, context, out_dir / f"{slug}.png")
             written.append(result.image_path)
             # Reported so the boundary is visible in the run rather than only in a README: a
             # template with no `data-field` attribute yields no boxes, and no labels are written.
@@ -346,6 +600,8 @@ def render_all(out_dir: Path, seed: int) -> list[Path]:
                 f"{slug}: {result.width}×{result.height} px, "
                 f"{len(result.field_bboxes)} bounding boxes, no labels"
             )
+            if slug == "eu_platform_receipt":
+                _report_conversion(amount)
 
     return written
 
