@@ -354,6 +354,104 @@ block caused. The three:
 
 ---
 
+## 🔴 A decision this branch surfaced and must not make: foreign currency in the oracle
+
+**Recorded here rather than implemented, and rather than filed anywhere else.** The change it
+describes lands in `policy_engine.py`, which is the oracle — connecting an archetype and editing
+the component the whole labelling argument rests on, both of which this branch is forbidden. It
+is not in `docs/` either: that directory is the public design reference, and an unmade decision
+put there would read as settled design. It sits beside the mock-up that surfaced it.
+
+### What the code does today, and why it was right
+
+`_check_currency` in `src/receipt_synth/policy_engine.py` (line 759 at the time of writing)
+**raises** on any document whose `currency` is not `reporting_currency`. Its own docstring says
+the refusal is deliberate and that no conversion is offered at any rate from any source, because
+*"a rate applied here would put a number in the ground truth that nothing in the dataset can
+prove"*. The raise message goes further: *"Every archetype this generator has emits UAH, so this
+document should not exist."*
+
+**That was correct, and it was not a stub.** While every archetype emitted UAH, a foreign-currency
+document could only mean something upstream had gone wrong — a jurisdiction wired to the wrong
+currency, a document attached to the wrong persona. Refusing loudly was the right response to a
+contradiction, and converting silently would have hidden it.
+
+### What changed
+
+`eu_platform_receipt` is a document in EUR that is **correct**. The same code therefore stops
+being a guard against a contradiction and becomes an **unmade decision**: the condition its
+message asserts — that no archetype emits anything but UAH — is a fact about the registry, and the
+registry is exactly what connecting this archetype changes. Whichever way the decision goes, that
+message becomes false and has to be rewritten; it is not a comment, it is what a maintainer reads
+when the run stops.
+
+Note also what did **not** change: the reason the docstring gives is still sound. Nothing on
+either platform receipt states a rate or an equivalent, so a converted number really is unprovable
+*from the documents*. The question is whether the documents are the only thing allowed to prove it.
+
+### Resolution A — convert at build time, and record the applied rate in the label
+
+`config/fx-rates.yaml` **already exists, is static by design for determinism, and is already
+vendored into the consuming MVP.** That is what makes this different from applying an invented
+number: the rate is a **shared, checkable input** that both sides load, so a consumer can
+reproduce the conversion exactly rather than take a figure on trust. The generator converts using
+that table at the document's date, and the policy engine compares against the limit in
+`reporting_currency` as it does now.
+
+🔴 **Strictly conditional on the label recording the rate that was applied** — the rate itself, not
+only its result, and beside the original amount and currency, which the contract already keeps per
+document. Without that the objection in the docstring stands unchanged, and it stands *more*
+sharply than before: a rates file can be edited, and a label carrying only a converted figure
+becomes silently unreproducible the moment it is. The rate in the label is what turns
+"unprovable" into "derived from a stated input".
+
+Consequences to accept with it:
+
+* **The contract gains fields and a version.** At least the applied rate; probably its source and
+  that file's `version`. This is a contract change, not an engine change with a contract
+  side-effect.
+* **The converted amount is a derived field and not an extraction target.** It is on no document
+  and no extractor can read it, so a per-field score on it measures nothing — the same trap the
+  contract already names for `amount_due` while that field cannot diverge from `total`. It has to
+  be marked as such or somebody will quote an F1 for it.
+* **`jitter` has to stay disabled or be recorded too.** The file offers seeded rate variation and
+  it is off; switching it on without the applied rate in the label reintroduces exactly the
+  unreproducibility this resolution exists to avoid.
+
+### Resolution B — leave the amount in its own currency, and move the comparison to the consumer
+
+The engine stops refusing and stops converting: the label keeps `amount` and `currency` per
+document, as it already does, and the limit comparison happens at approval time in the consuming
+system. **The contract's own `currency` note already describes this arrangement** — *"the consumer
+converts to a base currency at approval time using the transaction date, which is why the original
+amount, currency and date are all kept per document"* — so this resolution is the one the contract
+is currently written for.
+
+Consequences to accept with it:
+
+* **No new fields and no version bump.** The cheapest of the two by a wide margin.
+* **The verdict path is not exercised on foreign currency.** The oracle cannot compute coverage
+  against a UAH limit without converting, so such a claim gets no limit-bound verdict — it can
+  exercise classification and extraction and nothing further. That is a coherent staged answer,
+  but it must be *stated*, because it means the currency dimension is exercised on two of the
+  three things the system does and not on the third.
+* **It concedes the thing the archetype was built to test.** Foreign-currency conversion is
+  declared core; under B it stays untested end to end inside this repository, and the evidence for
+  it moves to the consumer's own tests.
+
+### Where the evidence in this repository already leans, and who decides
+
+A lean and not a decision: the repository has already paid for the input Resolution A needs.
+`fx-rates.yaml` is committed, static, versioned and vendored downstream, and the only thing
+standing between it and a defensible conversion is a label field. Resolution B is cheaper and
+gives up the measurement.
+
+**The choice is the author's, in T3, together with connecting the archetype** — the two are one
+decision, because the archetype cannot be registered without the engine having an answer, and the
+answer costs nothing until it is.
+
+---
+
 ## What was looked at, and what was seen
 
 The renders were inspected by eye, not merely rendered. What that inspection changed:
