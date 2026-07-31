@@ -52,13 +52,46 @@
 #   `tests/test_contract_indexes.py` — new in version 21. Every index this file offers a consumer
 #   resolves: a field's `normalize` names a real rule, every rule is named by at least one field,
 #   every `status` is a word of `status_vocabulary`, every `blocked_on` a word of
-#   `blocked_on_vocabulary` (version 22), each vocabulary's every word carried by something, and
+#   `blocked_on_vocabulary` (version 22), every `hurts:` a LIST of words of `hurts_vocabulary`
+#   (version 23), each vocabulary's every word carried by something, and
 #   every `generator:` cell of a `prd_required_fields` table a list of real label field names. It
 #   exists because a HAND-MAINTAINED index diverged from what it indexed eight times while under
 #   active attention, and the repair was to delete the index and keep the checks.
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 23 by THE FIFTH INDEX OF THIS FILE BECOMING DATA, AND IT IS THE ONE THAT WAS ACTIVELY
+# MISLEADING. NO LABEL RECORD GAINED OR LOST A KEY, NO COMPARISON RULE CHANGED, AND THE DRAW DID
+# NOT MOVE: `src/` reads nothing here, so nothing below can reach a document.
+#
+#   🔴 `known_limitations[].hurts` IS A YAML LIST, WHERE IT WAS A COMMA-JOINED STRING. Ten of the
+#   thirteen entries held one word and three held `training, evaluation`. A COMMA WAS THEREFORE
+#   STRUCTURE HIDING IN PUNCTUATION, the same defect version 21 removed from the `generator:`
+#   column, and a consumer must now select by MEMBERSHIP — `"evaluation" in entry["hurts"]` — never
+#   by equality.
+#
+#   🔴 AND THIS FILE'S OWN HEADER INSTRUCTED THE COMPARISON THAT BREAKS, which is what separates
+#   this from the four before it. Section 9 told a consumer that "entries marked `hurts:
+#   evaluation` are the ones that reach this consumer", and that equality was FALSE for exactly
+#   the three entries carrying two words. A consumer following the instruction silently dropped
+#   the three limitations reaching it in more than one way — including KL-02, whose own
+#   `consequence` says in so many words that it reaches both kinds of consumer. The sentence is
+#   corrected rather than deleted, because the instruction was right and only the comparison
+#   was wrong.
+#
+#   ⚠️ `hurts_vocabulary` DECLARES THREE WORDS AND THE HEADER HAD DEFINED TWO. `reporting` was
+#   carried by KL-11, KL-12 and KL-13 while the prose described only the consumer that TRAINS and
+#   the consumer that PROMPTS — a word in use and defined nowhere, which is the same defect one
+#   level up from the slot. It is defined with the other two now: what was measured is sound and
+#   stating it as a single figure is not, as against `evaluation`, where the measurement is of the
+#   wrong thing.
+#
+#   ALL THREE DOUBLE-CARRIERS WERE CHECKED AND ALL THREE ARE CORRECT, so no entry's meaning
+#   changed here — only its shape. KL-02 names both mechanisms separately at its own
+#   `consequence`; KL-04's leak inflates any metric conditioned on the VAT block as well as
+#   teaching the positive case; KL-05 is a distribution gap that a learner absorbs and a scorecard
+#   measures. None had been given a second word because one slot could not hold what it meant.
+#
 # Bumped to 22 by THE FOURTH INDEX OF THIS FILE BECOMING DATA — the last one version 21 named and
 # left. NO LABEL RECORD GAINED OR LOST A KEY, NO COMPARISON RULE CHANGED, AND THE DRAW DID NOT MOVE:
 # `src/` reads nothing here, so nothing below can reach a document.
@@ -672,7 +705,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 22
+version: 23
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -4014,8 +4047,17 @@ artifacts:
 # not read `content_builder.py`, and it should not have to: a limitation recorded only in
 # the generator's internals is a limitation nobody downstream will ever meet.
 #
-# TWO KINDS OF CONSUMER, HURT IN DIFFERENT WAYS, and the difference decides which entry
-# below matters to whom:
+# WHICH ENTRY MATTERS TO WHOM IS `hurts:`, AND IT IS A LIST. Every entry carries one, holding one
+# or more words of `hurts_vocabulary` directly below — an entry may be hurtful in more than one
+# way at once, and three of the thirteen are. 🔴 SO A CONSUMER SELECTS BY MEMBERSHIP, `"evaluation"
+# in entry["hurts"]`, AND NEVER BY EQUALITY. Until version 23 the slot was a comma-joined STRING and
+# this comment told a consumer to compare it against one — which was false for exactly the three
+# entries that carry two words, so a consumer following these instructions silently dropped the
+# three limitations that reach it in more than one way. Punctuation had been structural; a comma is
+# now a list separator or a parse error.
+#
+# TWO KINDS OF CONSUMER ARE HURT IN DIFFERENT WAYS, which is what the first two words are for; the
+# third, `reporting`, is defined with them below:
 #
 #   A consumer that TRAINS on this dataset accumulates a shortcut across examples. Given a
 #   predictor that correlates with the label, it can reach a good score without learning the
@@ -4028,7 +4070,8 @@ artifacts:
 #   the human tuning prompts and thresholds against these numbers. A metric measured here is
 #   then an estimate of behaviour on this dataset's distribution and not on an open world,
 #   and the person adjusting a prompt until the number rises is the channel by which the
-#   bias arrives. Entries marked `hurts: evaluation` are the ones that reach this consumer.
+#   bias arrives. Entries whose `hurts:` CONTAINS `evaluation` are the ones that reach this
+#   consumer — three of them also contain `training`, and equality would have missed all three.
 #
 # This is the same obligation policy.yaml states for `verdict_mix`, applied to predictors
 # rather than to class shares: report what was measured, and say on what.
@@ -4053,12 +4096,35 @@ artifacts:
 # sample of one for every such counterparty. That is a property of the vendor file and of the draw,
 # not of a run, which is why it is stated here and no count is. KL-01 depends on it and says so.
 
+hurts_vocabulary:
+  training: >
+    A consumer that LEARNS from this corpus carries the limitation away with it. Usually a
+    shortcut — a predictor that correlates with the label, so a good score is reachable without
+    the rule ever being learnt — but not only that: a narrow slice of the label space met as if
+    it were the whole (KL-06), or a corpus regularity that reads as a causal rule and is not one
+    (KL-10), damage a learner the same way and carry this word for the same reason.
+  evaluation: >
+    The limitation reaches the SCORECARD rather than the model, so it holds for a consumer that
+    accumulates nothing — one prompting a language model, seeing one document per call. The
+    number measured here then estimates behaviour on THIS dataset's distribution rather than on
+    an open world, and the human tuning prompts and thresholds until it rises is the channel by
+    which the bias arrives.
+  reporting: >
+    What was measured is sound; stating it as a single figure is not. The number needs its
+    denominator or its conditioning printed beside it — a mix that is arbitrary (KL-11), a metric
+    defined on a subset that differs per channel (KL-12), a per-class figure whose denominator is
+    the validation side rather than the corpus (KL-13). Distinct from `evaluation`, where the
+    measurement itself is of the wrong thing.
+
+    DECLARED HERE FIRST IN VERSION 23. Three entries carried it while the section header above
+    described only TWO kinds of consumer, so the third word was in use and defined nowhere.
+
 known_limitations:
 
   - id: KL-01
     name: the counterparty can foretell full coverage
     predictor: counterparty
-    hurts: training
+    hurts: [training]
     subset: >
       Documents issued by a vendor whose profile in config/vendors.json sells nothing the
       claimed category excludes. Such a vendor cannot produce a non-covered line, so every
@@ -4101,7 +4167,7 @@ known_limitations:
   - id: KL-02
     name: every non-covered line comes from one of four item kinds
     predictor: the line item itself
-    hurts: training, evaluation
+    hurts: [training, evaluation]
     subset: >
       Documents whose non-covered lines come from `vitamins_nutrition` — the category the three
       fiscal archetypes are registered for. Every non-covered line of such a document is a
@@ -4216,7 +4282,7 @@ known_limitations:
   - id: KL-03
     name: an item kind can foretell full coverage without the seller being read
     predictor: the line item itself
-    hurts: training
+    hurts: [training]
     subset: >
       A covered item kind sold only by profiles that stock nothing the same category
       excludes. A line printing that kind then guarantees a fully covered document, and —
@@ -4252,7 +4318,7 @@ known_limitations:
   - id: KL-04
     name: the counterparty foretells whether the document has a VAT block
     predictor: counterparty
-    hurts: training, evaluation
+    hurts: [training, evaluation]
     subset: >
       Every document issued by a counterparty whose name is STORED in config/vendors.json. All
       of them are registered ПДВ payers, so a stored name guarantees a per-line `vat_letter`, a
@@ -4294,7 +4360,7 @@ known_limitations:
   - id: KL-05
     name: the dataset overstates how often a receipt prints an identification code
     predictor: none — a distribution gap rather than a label leak
-    hurts: training, evaluation
+    hurts: [training, evaluation]
     subset: >
       EVERY document. All of them print the «ІД» identification code (bbox key
       `seller_tax_code`), while of the real ПРРО receipts examined only 1 of 3 carries one: two
@@ -4341,7 +4407,7 @@ known_limitations:
   - id: KL-06
     name: one category's non-covered vocabulary is narrower than the policy declares
     predictor: none — a vocabulary gap rather than a label leak
-    hurts: training
+    hurts: [training]
     subset: >
       Non-covered lines of `hobby`. policy.yaml declares three excluded kinds for it —
       `electronics`, `food_drink`, `alcohol` — and `electronics` is declared UNPRINTABLE in
@@ -4378,7 +4444,7 @@ known_limitations:
   - id: KL-07
     name: one cause of `insufficient_evidence` is in the vocabulary and never in the data
     predictor: none — a coverage gap in the cause vocabulary
-    hurts: evaluation
+    hurts: [evaluation]
     subset: >
       🔴 `subject_not_evidenced` IS NEVER REALIZED. `imperfection` has a vocabulary of six causes
       and this corpus now contains four. The two CROSS-CHECK causes became drawable when the
@@ -4423,7 +4489,7 @@ known_limitations:
   - id: KL-08
     name: the cross-check causes can never occur on a fiscal receipt
     predictor: doc_type — a document class fully determines that two causes are absent from it
-    hurts: evaluation
+    hurts: [evaluation]
     subset: >
       🔴 EVERY `fiscal_receipt` IN THE CORPUS IS THE WHOLE OF ITS CLAIM, so neither cross-check
       cause can ever be observed on one. A cross-check compares a claim's SUBJECT document with its
@@ -4459,7 +4525,7 @@ known_limitations:
   - id: KL-09
     name: a claim's payer cannot always be cross-checked across its documents
     predictor: none — a field that is deliberately empty on one variant
-    hurts: evaluation
+    hurts: [evaluation]
     subset: >
       Claims whose payment document is an INTERNET-ACQUIRING confirmation. 👁 That variant does not
       identify the payer and prints a HYPHEN as the value, which the label carries as the string
@@ -4493,7 +4559,7 @@ known_limitations:
   - id: KL-10
     name: why the VAT row takes two forms is not established
     predictor: none — an unexplained variation, not a leak
-    hurts: training
+    hurts: [training]
     subset: >
       Every `fiscal_receipt` of a registered payer. 👁 The VAT summary row is printed either as
       `ПДВ А=20,00%` or as `ПДВ А 20%`, and WHAT CAUSES THE DIFFERENCE IS UNKNOWN. The generator
@@ -4541,7 +4607,7 @@ known_limitations:
   - id: KL-11
     name: the capture mix is uniform, and uniform is a placeholder rather than a measurement
     predictor: none — an arbitrary marginal, not a leak
-    hurts: reporting
+    hurts: [reporting]
     subset: >
       EVERY DOCUMENT. The three capture channels are drawn with equal weight, so each holds about a
       third of any corpus. ⚠️ NOTHING IS KNOWN ABOUT HOW REAL REIMBURSEMENT EVIDENCE ARRIVES. No
@@ -4577,7 +4643,7 @@ known_limitations:
   - id: KL-12
     name: the character error rate is defined on a subset, and the subset differs by channel
     predictor: none — a coverage gap in one metric, not a leak
-    hurts: reporting
+    hurts: [reporting]
     subset: >
       🔴 THE DOCUMENTS WHOSE TEXT LEFT THE FRAME. `reference_text` is the reference side of a
       character error rate over the whole page, and that distance is meaningless where some of the
@@ -4610,7 +4676,7 @@ known_limitations:
   - id: KL-13
     name: the train / validation partition is not stratified, so a side may be missing a whole class
     predictor: none — an incomplete evaluation set, not a leak
-    hurts: reporting
+    hurts: [reporting]
     subset: >
       🔴 WHATEVER THE VALIDATION SIDE HAPPENS NOT TO CONTAIN. Personas are assigned to the two sides
       at random and nothing balances the result, so a side can hold no claims of a verdict the

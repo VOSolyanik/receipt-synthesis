@@ -29,6 +29,7 @@ CONTRACT = yaml.safe_load((CONFIG_DIR / "labelling-schema.yaml").read_text(encod
 NORMALIZATION = CONTRACT["normalization"]
 STATUS_VOCABULARY = CONTRACT["status_vocabulary"]
 BLOCKED_ON_VOCABULARY = CONTRACT["blocked_on_vocabulary"]
+HURTS_VOCABULARY = CONTRACT["hurts_vocabulary"]
 
 # The four blocks that carry a `fields:` list of label field records. Named here because the
 # contract has no key that enumerates them; everything else below is derived.
@@ -188,6 +189,65 @@ def test_every_blocked_on_vocabulary_word_is_used():
     in_use = {value for _, value in _slots("blocked_on", CONTRACT)}
     unused = sorted(set(BLOCKED_ON_VOCABULARY) - in_use)
     assert not unused, f"{unused} are declared in `blocked_on_vocabulary` and carried by nothing"
+
+
+# ------------------------------------------------------------- the hurts vocabulary --
+#
+# Indexed off `known_limitations` rather than walked structurally, and the difference is the
+# contract's own: `status:` and `blocked_on:` are FILE-WIDE reserved words, so the walk exists to
+# find the slot nobody remembered. `hurts:` is a COLUMN OF ONE TABLE, like the `generator:` cell
+# below, and the table is the honest denominator.
+
+
+def _hurts() -> list[tuple[str, object]]:
+    return [(entry["id"], entry.get("hurts")) for entry in CONTRACT["known_limitations"]]
+
+
+def test_every_hurts_is_a_list_of_declared_words():
+    """🔴 THE SLOT THE FILE'S OWN HEADER TOLD A CONSUMER TO COMPARE AGAINST A WORD. Ten of the
+    thirteen entries held one word and three held `training, evaluation` — a comma-joined STRING —
+    so `entry["hurts"] == "evaluation"`, which the section header instructed in so many words, was
+    FALSE for all three entries that carry two. A consumer selecting what reaches its scorecard
+    dropped three live limitations while following the instructions exactly.
+
+    Both halves are asserted here because either alone permits the defect: a list of unknown words
+    is unusable, and a known word inside a string is not a member of anything. As a list a comma is
+    a separator or a parse error, never structure hiding in punctuation.
+    """
+    rows = _hurts()
+    assert rows, "no `known_limitations` entries found — this test asserts nothing"
+
+    not_a_list = [(kl, value) for kl, value in rows if not isinstance(value, list)]
+    assert not not_a_list, (
+        f"{len(not_a_list)} of {len(rows)} `hurts:` slots are not a YAML list: {not_a_list} — "
+        f"prose in this slot makes punctuation structural"
+    )
+
+    outside = [
+        f"{kl} -> {word!r}"
+        for kl, value in rows
+        for word in value
+        if not isinstance(word, str) or word not in HURTS_VOCABULARY
+    ]
+    assert not outside, (
+        f"{len(outside)} words across {len(rows)} entries are not one of the "
+        f"{len(HURTS_VOCABULARY)} words of `hurts_vocabulary` "
+        f"({sorted(HURTS_VOCABULARY)}): {outside}"
+    )
+
+
+def test_every_hurts_vocabulary_word_is_used():
+    """A declared word nothing carries is a distinction the file no longer draws, and it invites a
+    consumer to write a branch that can never be taken.
+
+    `reporting` is why this is not symmetry for its own sake. It was carried by three entries while
+    the section header described only TWO kinds of consumer, so it was a word in use and defined
+    nowhere — the declaration in version 23 is what closed that, and this is what keeps the two
+    halves from drifting apart again in either direction.
+    """
+    in_use = {word for _, value in _hurts() for word in (value if isinstance(value, list) else [])}
+    unused = sorted(set(HURTS_VOCABULARY) - in_use)
+    assert not unused, f"{unused} are declared in `hurts_vocabulary` and carried by nothing"
 
 
 # ------------------------------------------------- the prd_required_fields generator column --
