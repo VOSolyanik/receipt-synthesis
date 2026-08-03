@@ -167,10 +167,10 @@ class Verdict(StrEnum):
     """The answer a claim gets. Values match the keys of ``verdict_mix`` in policy.yaml.
 
     Each member below states WHAT IT ITSELF IS ABOUT, and never by contrast with another
-    verdict. Three of them are easy to collapse into one another, and the construction is what
-    keeps them apart: while
-    one is written as "the case that is not the other", editing either silently moves the other.
-    See ``verdict_notes.definitions_name_their_own_slot`` in config/labelling-schema.yaml.
+    verdict. Three of them are easy to collapse into one another, and this construction is what
+    keeps them apart: defining one as "the case that is not the other" would let editing either
+    one silently move the other. See ``verdict_notes.definitions_name_their_own_slot`` in
+    config/labelling-schema.yaml.
 
     ``document_evidence`` carries two facts plus the linkage between them — three slots — and
     the two evidence verdicts divide them:
