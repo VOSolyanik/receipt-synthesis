@@ -36,6 +36,7 @@ from pathlib import Path
 
 import pytest
 
+from receipt_synth import claim_planner
 from receipt_synth.claim_planner import (
     Archetype,
     ClaimPlan,
@@ -853,6 +854,104 @@ def test_a_plan_whose_documents_would_both_carry_a_basket_is_refused():
     )
     with pytest.raises(ValueError, match="sized once"):
         _ = plan.subject_document
+
+
+def test_the_same_candidates_build_a_pair_or_a_gap_depending_only_on_the_intent():
+    """🔴 THE POINT OF `EvidenceIntent`, ASSERTED WHERE THE TWO CANNOT BE CONFUSED: one archetype
+    list, two calls, two shapes. A payment document alone is what the cause `subject_not_evidenced`
+    needs, and it must be REACHED BY ASKING — not by a subject archetype failing to turn up, which
+    is what the refusal one test below still means.
+
+    Both calls are made against the same `PAIR_REGISTRY` candidates, so nothing about the registry
+    can explain the difference. Were the gap a fallback, the default call would have produced it
+    too and this would fail on the first assertion.
+    """
+    candidates = list(PAIR_REGISTRY.values())
+    issued_at = datetime(2026, 6, 15, 12, 0)
+
+    complete = claim_planner._select_documents(random.Random(3), candidates, issued_at)
+    assert {evidence_of(d.archetype) for d in complete} == {(True, False), (False, True)}
+
+    gap = claim_planner._select_documents(
+        random.Random(3), candidates, issued_at,
+        intent=claim_planner.EvidenceIntent.EVIDENCE_GAP,
+    )
+    assert len(gap) == 1, [d.archetype.slug for d in gap]
+    assert evidence_of(gap[0].archetype) == (False, True), (
+        "a gap claim proves the payment and not the subject; a self-contained document would "
+        "leave nothing for the cause to be about"
+    )
+    assert gap[0].issued_at == issued_at, "the claim is dated by its proof of payment"
+
+
+def test_an_evidence_gap_needs_a_payment_archetype_and_says_so_when_there_is_none():
+    """The gap is in the SUBJECT and nowhere else. Asked for one where only a subject archetype is
+    registered, the planner refuses instead of returning an invoice on its own — that claim proves
+    no payment at all, which is `not_proof_of_payment`, a different verdict nobody asked for here.
+    """
+    with pytest.raises(ValueError, match="proves the payment alone"):
+        claim_planner._select_documents(
+            random.Random(3),
+            [PAIR_REGISTRY["ua_invoice"]],
+            datetime(2026, 6, 15, 12, 0),
+            intent=claim_planner.EvidenceIntent.EVIDENCE_GAP,
+        )
+
+
+def test_a_subject_not_evidenced_claim_is_planned_as_a_payment_and_nothing_else():
+    """The plan the cause needs, built through `plan_claim` rather than through the selector, so
+    that the route from a drawn cause to a shape is what is pinned.
+
+    The category is one the registry CAN document completely — `PAIR_REGISTRY` holds an invoice —
+    which is the whole distinction: the subject document is available and is deliberately not
+    planned. A gap that only occurred where nothing else was possible would be a shortage wearing
+    the name of a decision.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claim_planner, "ARCHETYPES", PAIR_REGISTRY)
+        plan = claim_planner.plan_claim(
+            random.Random(3), persona=_persona(), claim_id="c1",
+            category="vitamins_nutrition", ledger=Ledger(),
+            verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=SUBJECT_NOT_EVIDENCED,
+        )
+
+    assert plan.intent is claim_planner.EvidenceIntent.EVIDENCE_GAP
+    assert [d.archetype.slug for d in plan.documents] == ["ua_transfer"]
+    assert plan.issued_at == plan.documents[0].issued_at
+    # Nothing was sized for a basket: there is no document to carry one.
+    assert plan.coverage_target is None
+    assert plan.item_count is None
+
+
+def test_a_gap_claim_refuses_its_subject_document_by_naming_the_intent():
+    """Two refusals, one method, and they must not read alike. A COMPLETE plan with no carrier is
+    inconsistent — something went missing — while a gap plan has none by design, and a caller told
+    "0 documents state what was bought" would go looking for a template rather than at its own
+    assumption that every claim has a subject.
+    """
+    transfer = PAIR_REGISTRY["ua_transfer"]
+    gap = ClaimPlan(
+        claim_id="c1", persona_id="p001", category="vitamins_nutrition",
+        verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=SUBJECT_NOT_EVIDENCED,
+        intent=claim_planner.EvidenceIntent.EVIDENCE_GAP,
+        issued_at=datetime(2026, 6, 15, 12, 0),
+        documents=(DocumentPlan(archetype=transfer, issued_at=datetime(2026, 6, 15, 12, 0)),),
+    )
+    with pytest.raises(ValueError, match="ON PURPOSE") as deliberate:
+        _ = gap.subject_document
+
+    # The same documents WITHOUT the intent are a plan that lost its subject, and that message is
+    # the other one. Asserted as a pair: a single message serving both cases is the defect.
+    accidental = ClaimPlan(
+        claim_id="c2", persona_id="p001", category="vitamins_nutrition",
+        verdict=Verdict.COVERED, issued_at=datetime(2026, 6, 15, 12, 0),
+        documents=gap.documents,
+    )
+    with pytest.raises(ValueError, match="sized once") as lost:
+        _ = accidental.subject_document
+
+    assert "ON PURPOSE" not in str(lost.value)
+    assert "plans 0 documents" not in str(deliberate.value)
 
 
 def test_a_registry_that_cannot_establish_both_facts_is_refused():

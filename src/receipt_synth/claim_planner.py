@@ -13,7 +13,11 @@ and from the persona's ledger. The two agree on almost every claim; where they d
 the engine is right and the difference is reported, because a planner that overruled the
 oracle would be writing labels nothing derived.
 
-Four of the six verdicts are still refused rather than faked — see
+It also decides whether a claim's evidence is COMPLETE — see `EvidenceIntent`. Building a
+claim that establishes only one of the two facts is a thing this generator has to do, and
+it is done by naming the intent, never by letting a document quietly fail to turn up.
+
+Three of the six verdicts are still refused rather than faked — see
 `_UNREALIZABLE_REASONS`.
 """
 
@@ -25,12 +29,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from enum import Enum
 
 from receipt_synth.config import coverage_targets, load_policy
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
     PAYMENT_PRECEDES_SUBJECT,
+    SUBJECT_NOT_EVIDENCED,
     ClaimEvaluation,
     Evidence,
     Ledger,
@@ -225,6 +231,30 @@ ARCHETYPES: dict[str, Archetype] = {
 }
 
 
+class EvidenceIntent(Enum):
+    """Whether a claim's evidence is meant to establish both facts, or deliberately not.
+
+    🔴 THE DIFFERENCE BETWEEN "COULD NOT ASSEMBLE THE SUBJECT" AND "CHOSE NOT TO", MADE A VALUE SO
+    THAT NOBODY HAS TO INFER IT FROM A COUNT OF DOCUMENTS. `_select_documents` assembles both facts
+    or refuses, and that refusal is what stops a missing template from turning into a mislabelled
+    claim. An incomplete claim is nevertheless something this generator has to produce — a bare
+    payment confirmation is the case the corpus exists to show a system failing to notice — so the
+    refusal is lifted by NAMING the intent at the call site rather than by weakening the check.
+
+    Two documents shaped the same way can therefore mean different things, and a reader of a plan
+    can tell which: a claim whose evidence is short by accident is a bug this module still raises
+    on, and a claim whose evidence is short on purpose says so in a field.
+    """
+
+    #: Both facts. Every claim was this until the gap below was named.
+    COMPLETE = "complete"
+    #: The WHAT-WAS-BOUGHT slot of `document_evidence` left open on purpose: a payment document
+    #: and nothing beside it. The planner does not assert the resulting label — `policy_engine`
+    #: derives `insufficient_evidence` with the cause `subject_not_evidenced` from the documents
+    #: that were built, exactly as it does for every other claim.
+    EVIDENCE_GAP = "evidence_gap"
+
+
 # --- what can be realized -----------------------------------------------------
 
 # The verdicts this planner can build documents for. The others are refused rather than
@@ -236,29 +266,27 @@ REALIZABLE_VERDICTS: tuple[Verdict, ...] = (
     # 🔴 THE THIRD, AND IT ARRIVED WITH A MECHANISM RATHER THAN WITH A TEMPLATE. A claim can now be
     # planned whose subject document and whose payment document DISAGREE — about the amount, or
     # about which came first — which is what `policy_engine._cross_checks` has always labelled and
-    # what nothing could build until an archetype proving the subject alone existed. Only the two
-    # CROSS-CHECK causes are drawn; see `_UNREALIZABLE_CAUSES` for the third and why it is not.
+    # what nothing could build until an archetype proving the subject alone existed. ALL THREE of
+    # its causes are drawn: the two cross-checks, and the missing subject, which `EvidenceIntent`
+    # made plannable.
     Verdict.INSUFFICIENT_EVIDENCE,
 )
 
-# WHY A CAUSE OF A REALIZABLE VERDICT NEEDS ITS OWN TABLE. `_UNREALIZABLE_REASONS` below is keyed by
-# VERDICT, and `insufficient_evidence` is realizable now — so the reason its third cause still
-# cannot be built had nowhere to live, and would have vanished with the entry that moved. A verdict
-# being realizable and every route to it being realizable are different statements, and the second
-# is the one a reader of a corpus needs.
-_UNREALIZABLE_CAUSES: dict[str, str] = {
-    "subject_not_evidenced": (
-        "is `insufficient_evidence` reached by a claim that establishes a movement of money and "
-        "never what it bought — a bare payment confirmation or a bare statement. "
-        "`policy_engine.resolve_evidence` labels such a claim today and NOTHING CAN PLAN ONE: "
-        "`_select_documents` assembles both facts or refuses, `documentable_categories` reports a "
-        "category it cannot complete as not documentable, and `ClaimPlan.subject_document` raises "
-        "unless exactly one document states what was bought. Building it means planning "
-        "DELIBERATELY INCOMPLETE evidence, which is a change to the claim model rather than to a "
-        "template or a share — so config/policy.yaml declares no share for it, on the same "
-        "reasoning that leaves `rejected` without one in `verdict_mix`"
-    ),
-}
+# WHY A CAUSE OF A REALIZABLE VERDICT NEEDS ITS OWN TABLE, AND WHY THE TABLE IS EMPTY RATHER THAN
+# GONE. `_UNREALIZABLE_REASONS` below is keyed by VERDICT, so the reason a single ROUTE to a
+# realizable verdict could not be built had nowhere to live — a verdict being realizable and every
+# route to it being realizable are different statements, and the second is the one a reader of a
+# corpus needs.
+#
+# ⛔ NOTHING IS UNREALIZABLE HERE TODAY. The one entry this table ever held was
+# `subject_not_evidenced`, and it went when `EvidenceIntent.EVIDENCE_GAP` made a deliberately
+# incomplete claim plannable: `_select_documents` now builds a payment document with no subject
+# beside it when the intent says so, and `ClaimPlan.subject_document` refuses by NAMING that intent
+# instead of by counting carriers. The table stays because it is where the next such route belongs —
+# a cause of `partially_covered` or of `insufficient_evidence` that the engine returns and this
+# planner cannot aim at — and an empty table with its rule written down is what stops that reason
+# from being left in a commit message.
+_UNREALIZABLE_CAUSES: dict[str, str] = {}
 
 _UNREALIZABLE_REASONS: dict[Verdict, str] = {
     Verdict.NOT_PROOF_OF_PAYMENT: (
@@ -374,15 +402,21 @@ def draw_verdict(
 
 
 def draw_insufficient_evidence_cause(rng: random.Random) -> str:
-    """Which cross-check a claim's two documents fail, per `insufficient_evidence_causes`.
+    """Which fact a claim aimed at this verdict leaves unestablished, per
+    `insufficient_evidence_causes`.
 
     Drawn in the order policy.yaml declares the causes in, which is a file order rather than a set
     order, so the draw stays reproducible — the same rule as the `partially_covered` causes below.
 
-    🔴 THE MAP IS NOT THE CAUSE VOCABULARY. `subject_not_evidenced` also leads to this verdict and
-    carries no share, because nothing can plan a deliberately incomplete claim — see
-    `_UNREALIZABLE_CAUSES`. A consumer reading a corpus must not infer from the two causes present
-    that the third does not exist; `policy_engine` returns it and would label it correctly.
+    🔴 THE THREE ARE NOT THE SAME KIND OF DEFECT, AND THE PLANNER REALIZES THEM DIFFERENTLY. The two
+    cross-check causes need a claim whose two documents disagree; `subject_not_evidenced` needs a
+    claim with no subject document at all, which is `EvidenceIntent.EVIDENCE_GAP`. One draw decides
+    which, and `plan_claim` turns the answer into a shape.
+
+    ⚠️ THE MAP IS STILL THE DRAW AND NOT THE VOCABULARY, though the two coincide today: policy.yaml
+    declares a share per cause the generator BUILDS, and `policy_engine` may return a cause nothing
+    draws. A consumer must read the vocabulary from config/labelling-schema.yaml, which is the
+    contract, and never from the realized shares of one corpus.
     """
     causes = insufficient_evidence_causes()
     return rng.choices(list(causes), weights=list(causes.values()), k=1)[0]
@@ -439,6 +473,11 @@ class ClaimPlan:
     `policy_engine`, which may disagree — a basket meant to overrun an annual limit that
     turned out too small comes back `covered`. `ground_truth` takes the engine's answer
     and never the target, so the disagreement is reported rather than papered over.
+
+    `intent` says whether `documents` is meant to establish both facts. It is not derivable from
+    the list: a claim carrying one payment document and nothing else looks identical whether the
+    subject was omitted on purpose or was never found, and the two are different events — see
+    `EvidenceIntent`.
     """
 
     claim_id: str
@@ -448,6 +487,7 @@ class ClaimPlan:
     documents: tuple[DocumentPlan, ...]
     issued_at: datetime
     cause: str | None = None
+    intent: EvidenceIntent = EvidenceIntent.COMPLETE
     # Passed straight to `content_builder`. `None` means "the builder's own default".
     # CLAIM-LEVEL, not per document: a basket sized to overrun an annual balance is sized
     # against the claim, and `subject_document` below is what stops a second document from
@@ -467,7 +507,21 @@ class ClaimPlan:
         make a claim aimed at overrunning a 12000 balance overrun it twice, and the label
         would be right about a dataset that no longer contains the mechanism it was
         counted under.
+
+        🔴 A CLAIM PLANNED AS AN EVIDENCE GAP HAS NONE, AND IS REFUSED BY ITS INTENT RATHER THAN BY
+        ITS COUNT. Both refusals raise; only one of them says the plan is inconsistent. Keeping them
+        apart is the whole point of `EvidenceIntent`: a caller that reaches for the subject of a gap
+        claim has assumed every claim carries one, and telling it that zero documents were found
+        would send it looking for the missing document instead of at its own assumption.
         """
+        if self.intent is EvidenceIntent.EVIDENCE_GAP:
+            raise ValueError(
+                f"claim {self.claim_id} was planned as {EvidenceIntent.EVIDENCE_GAP.name}: it "
+                "carries a payment document and nothing that states what was bought, ON PURPOSE — "
+                "that is the claim `policy_engine` labels `insufficient_evidence` with the cause "
+                "`subject_not_evidenced`. Ask `intent` before asking for a subject document; "
+                "nothing is missing here."
+            )
         carriers = [d for d in self.documents if evidence_of(d.archetype).proves_subject]
         if len(carriers) != 1:
             raise ValueError(
@@ -575,6 +629,14 @@ def plannable_categories(
     gets one self-sufficient document — `_select_documents` prefers that shape — and one document
     cannot contradict itself, so such a category can never realize this verdict.
 
+    ⚠️ THE NARROWING IS BOUND BY THE STRICTEST CAUSE, NOT BY THE ONE THIS CLAIM WILL DRAW. The
+    third cause, `subject_not_evidenced`, needs no pair at all — a payment archetype alone realizes
+    it, which every category here has — so a receipt category could carry that one. It is filtered
+    out regardless because `plan_claim` chooses the CATEGORY BEFORE THE CAUSE, and a category
+    admitted for the cause that happens to be drawn would be a category the other two causes cannot
+    use. Widening this means drawing the cause first, which is a reordering of the seed stream and
+    a decision nobody has needed to take.
+
     WHY NOT NARROW GLOBALLY. Because `covered` and `partially_covered` are realizable in BOTH
     shapes: a receipt category is perfectly plannable for them, and dropping it from every claim
     would remove the only `fiscal_receipt` documents the corpus has, to satisfy a constraint that
@@ -646,6 +708,7 @@ def _select_documents(
     candidates: list[Archetype],
     issued_at: datetime,
     *,
+    intent: EvidenceIntent = EvidenceIntent.COMPLETE,
     payment_precedes_subject: bool = False,
 ) -> tuple[DocumentPlan, ...]:
     """The documents a claim needs to establish both facts a reimbursement rests on.
@@ -672,17 +735,41 @@ def _select_documents(
     distinguishable from an ordinary one by nothing except the thing being labelled. That is what
     makes it a usable negative: had the flag also changed the gap, a consumer could learn the gap.
 
+    🔴 `intent` IS THE THIRD SHAPE, AND IT IS THE ONE THAT IS NOT ABOUT WHICH ARCHETYPES EXIST.
+    `EvidenceIntent.EVIDENCE_GAP` asks for a PAYMENT DOCUMENT ALONE — the claim then states that
+    money moved and never what it bought, which `policy_engine` labels `insufficient_evidence` with
+    the cause `subject_not_evidenced`. It is a separate branch rather than a fallback for the same
+    reason it is a named value: the refusal below must go on meaning "this registry cannot document
+    this claim", and a gap that arrived by falling through it would be indistinguishable from that.
+    A payment-only archetype is required even so — the gap is in the SUBJECT, and a claim proving
+    neither fact is a different label nobody asked for.
+
+    ⛔ IT DOES NOT DRAW A SELF-CONTAINED DOCUMENT. A fiscal receipt proves the subject too, so a
+    claim carrying one has no gap to label; only the `proves_subject: false` payment classes can
+    realize this cause, and both registered ones do — a confirmation and a statement are equally
+    silent about what was bought.
+
     Where neither shape can be assembled the planner refuses. It does not build a claim
     out of whichever archetypes exist and leave the engine to discover that half the
-    evidence is missing: the verdict is chosen first here, and the two verdicts this
-    planner draws both need complete evidence.
+    evidence is missing: the verdict is chosen first here, and a claim short of a fact is
+    short of it because this function was asked for that, never because a template was absent.
     """
+    payments = [a for a in candidates if evidence_of(a) == Evidence(False, True)]
+    if intent is EvidenceIntent.EVIDENCE_GAP:
+        if not payments:
+            raise ValueError(
+                "an evidence gap is a claim proving the payment and not the subject, and no "
+                "registered archetype here proves the payment alone: "
+                f"{sorted(a.slug for a in candidates)}. A claim that establishes neither fact is "
+                "not this cause and is not what was asked for."
+            )
+        return (DocumentPlan(archetype=rng.choice(payments), issued_at=issued_at),)
+
     both = [a for a in candidates if all(evidence_of(a))]
     if both:
         return (DocumentPlan(archetype=rng.choice(both), issued_at=issued_at),)
 
     subjects = [a for a in candidates if evidence_of(a) == Evidence(True, False)]
-    payments = [a for a in candidates if evidence_of(a) == Evidence(False, True)]
     if subjects and payments:
         # Drawn before the archetypes so that adding a template does not shift the dates
         # of a run: the lead is a property of the claim, the templates are a property of
@@ -795,6 +882,7 @@ def plan_claim(
 
     coverage_target: Decimal | None = None
     item_count: int | None = None
+    intent = EvidenceIntent.COMPLETE
     if verdict is Verdict.PARTIALLY_COVERED:
         cause = cause or draw_partially_covered_cause(rng)
         if cause == "mixed_items":
@@ -808,16 +896,21 @@ def plan_claim(
             raise ValueError(f"policy.yaml declares no such partially_covered cause: {cause!r}")
     elif verdict is Verdict.INSUFFICIENT_EVIDENCE:
         # TWO VERDICTS CARRY A CAUSE NOW, which is why the guard below widened from "a cause
-        # belongs to a partially_covered claim". The cause decides which cross-check the claim's
-        # two documents fail; the engine decides whether they actually did, and nothing here
-        # assumes it.
+        # belongs to a partially_covered claim". The cause decides WHICH FACT the claim fails to
+        # establish; the engine decides whether it actually failed, and nothing here assumes it.
         cause = cause or draw_insufficient_evidence_cause(rng)
-        if cause not in (AMOUNT_MISMATCH, PAYMENT_PRECEDES_SUBJECT):
+        if cause not in (SUBJECT_NOT_EVIDENCED, AMOUNT_MISMATCH, PAYMENT_PRECEDES_SUBJECT):
             raise ValueError(
                 f"policy.yaml declares no such buildable insufficient_evidence cause: {cause!r}. "
                 f"{cause!r} may still be a cause the ENGINE returns — see "
-                "`claim_planner._UNREALIZABLE_CAUSES` for the one that is and cannot be planned."
+                "`claim_planner._UNREALIZABLE_CAUSES`, which records the routes to a realizable "
+                "verdict that this planner cannot aim at."
             )
+        if cause == SUBJECT_NOT_EVIDENCED:
+            # The one cause realized by the SHAPE of the evidence rather than by its content: no
+            # subject document is planned at all. Named rather than achieved by omission — see
+            # `EvidenceIntent`.
+            intent = EvidenceIntent.EVIDENCE_GAP
     elif cause is not None:
         raise ValueError(
             f"a cause belongs to a partially_covered or an insufficient_evidence claim, not to "
@@ -832,9 +925,11 @@ def plan_claim(
         cause=cause,
         documents=_select_documents(
             rng, candidates, issued_at,
+            intent=intent,
             payment_precedes_subject=cause == PAYMENT_PRECEDES_SUBJECT,
         ),
         issued_at=issued_at,
+        intent=intent,
         coverage_target=coverage_target,
         item_count=item_count,
     )

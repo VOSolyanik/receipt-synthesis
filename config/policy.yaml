@@ -466,29 +466,37 @@ partially_covered_causes:
 # distinction is not the file the number sits in; it is whether the number is a decision
 # about this dataset or a claim about the world. This one is a decision.
 #
-# 🔴 ONLY THE CAUSES THAT CAN BE BUILT CARRY A SHARE. `subject_not_evidenced` — a claim
-# whose documents establish that money moved and never what it bought — has none, for the
-# same reason `rejected` has none in `verdict_mix`: building it needs a claim planned with
-# DELIBERATELY INCOMPLETE evidence, which the planner refuses by construction today, and a
-# share written before a mechanism exists sizes a bucket nothing can fill. It is absent
-# from this map rather than present as `null`, because the two members below are the whole
-# of what is drawn and must sum to 1.0.
+# 🔴 ONLY THE CAUSES THAT CAN BE BUILT CARRY A SHARE, AND ALL THREE OF THEM NOW CAN.
+# `subject_not_evidenced` — a claim whose documents establish that money moved and never
+# what it bought — carried none while nothing could plan a deliberately incomplete claim.
+# The planner now can: it names the intent (`claim_planner.EvidenceIntent.EVIDENCE_GAP`)
+# and selects a payment document with no subject beside it, so the bucket this share sizes
+# is one the generator fills. A cause with a mechanism gets a share; that is the rule this
+# block has always followed, and the entry arrives by the rule rather than by exception.
 #
-# The two that are here are the CROSS-CHECK causes: both need a claim whose subject
-# document and whose payment document are different documents, so both became buildable
-# only when an archetype proving the subject alone was registered. They carry the same
-# `verdict_basis` — a reader of the two images can see either.
+# The other two are the CROSS-CHECK causes: both need a claim whose subject document and
+# whose payment document are different documents, so both became buildable only when an
+# archetype proving the subject alone was registered. All three carry the same
+# `verdict_basis` — a reader of the images can see each of them.
 #
 # 🔴 THE SHARES ARE EQUAL, AND EQUAL FOR A REASON RATHER THAN BY DEFAULT. An unequal split
 # would have to come from an observation — that claimants attach a payment for the wrong
-# amount more often than they attach one dated too early, or the reverse — and NO SUCH
-# OBSERVATION EXISTS. Nothing in this repository has measured either, and inventing a skew
-# would smuggle a claim about the world into a file whose whole point is that these numbers
-# are decisions about a dataset. So the realizable causes split evenly: two of them, half
-# each; three of them, thirds. `partially_covered_causes` above is NOT uniform, and the
-# difference is instructive — its 65/35 sizes the share of the dataset that exercises the
-# cumulative-limit mechanism, which is a decision about how much of a MECHANISM to test.
-# There is no such asymmetry between two cross-checks that cost the same to build.
+# amount more often than they attach one dated too early, or send a bare transfer more
+# often than either — and NO SUCH OBSERVATION EXISTS. Nothing in this repository has
+# measured any of them, and inventing a skew would smuggle a claim about the world into a
+# file whose whole point is that these numbers are decisions about a dataset. So the
+# realizable causes split evenly: two of them, half each; three of them, thirds.
+# `partially_covered_causes` above is NOT uniform, and the difference is instructive — its
+# 65/35 sizes the share of the dataset that exercises the cumulative-limit mechanism, which
+# is a decision about how much of a MECHANISM to test. There is no such asymmetry between
+# three causes that cost the same to build.
+#
+# ⚠️ THIRDS, TO THE NEAREST HUNDREDTH, AND ONE OF THEM CARRIES THE ODD ONE. Three equal
+# shares cannot be written exactly in two places while the block sums to 1.0, so the first
+# reads 0.34. Which one takes it is arbitrary and decides nothing measurable — a hundredth
+# of an eighth of the corpus — and writing 0.3333 instead would state a precision nobody
+# chose. The run-size guideline below is derived from the SMALLEST share, so the rounding
+# cannot make that number optimistic.
 #
 # WHAT IS REQUIRED IS OF THE RESULT, NOT OF THE SHARE: at or above the run size named by
 # `insufficient_evidence_causes_min_run_size` below, every cause here must be NON-ZERO in a
@@ -503,24 +511,30 @@ partially_covered_causes:
 # on the low side of a distribution, and the guideline below exists so a reader can tell the
 # two apart instead of every small corpus reading as broken.
 insufficient_evidence_causes:
-  amount_mismatch: 0.50           # the payment states a different amount from the subject
-  payment_precedes_subject: 0.50  # the payment is dated before what it settles
+  subject_not_evidenced: 0.34     # no document of the claim states what was bought
+  amount_mismatch: 0.33           # the payment states a different amount from the subject
+  payment_precedes_subject: 0.33  # the payment is dated before what it settles
 
 # THE RUN SIZE AT WHICH THE NON-ZERO REQUIREMENT ABOVE BINDS, derived from the actual draw
 # probabilities rather than picked. `verdict_mix` renormalizes over the realizable subset —
 # `covered` 0.50, `partially_covered` 0.20, `insufficient_evidence` 0.10 — so
 # `insufficient_evidence` is drawn on 0.10 / (0.50 + 0.20 + 0.10) = 12.5% of built claims (this
 # is the same renormalization the balance report prints as "target, of the realizable
-# subset"). `insufficient_evidence_causes` above then splits that 50/50, so a single built
-# claim lands on either cause with probability 0.125 * 0.50 = 0.0625.
+# subset"). `insufficient_evidence_causes` above then splits that three ways, so a single built
+# claim lands on the RAREST cause with probability 0.125 * 0.33 = 0.04125.
 #
 # For a run of N built claims, the probability that a cause drawn at rate p is realized at
-# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.0625)^N >= 0.95 for the smallest N gives
-# N >= ln(0.05) / ln(1 - 0.0625) ~= 46.4, i.e. 47 built claims — rounded up here to 50, a
-# number worth naming rather than a fraction of one. At 50 built claims or more, a zero count
-# for either cause is unlikely enough (<5%) to report as a defect rather than as sampling
+# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.04125)^N >= 0.95 for the smallest N gives
+# N >= ln(0.05) / ln(1 - 0.04125) ~= 71.1, i.e. 72 built claims — rounded up here to 75, a
+# number worth naming rather than a fraction of one. At 75 built claims or more, a zero count
+# for any cause is unlikely enough (<5%) to report as a defect rather than as sampling
 # noise; below it, a zero count is unremarkable and the balance report says so.
-insufficient_evidence_causes_min_run_size: 50
+#
+# ⚠️ IT MOVED FROM 50 WHEN THE THIRD CAUSE GAINED A SHARE, and the guideline got STRICTER
+# although nothing about the two cross-checks changed: the same 12.5% now feeds three buckets
+# instead of two, so each is rarer and a run has to be larger before an empty one means
+# anything. A figure quoted against the old guideline was correct for a two-cause draw.
+insufficient_evidence_causes_min_run_size: 75
 
 # What each document type proves. A claim is reimbursable only when BOTH facts
 # are established — what was bought, and that it was paid for — possibly across

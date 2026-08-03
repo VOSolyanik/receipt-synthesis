@@ -35,6 +35,7 @@ from receipt_synth.claim_planner import (
     archetypes_for,
     can_assemble_evidence,
     documentable_categories,
+    draw_insufficient_evidence_cause,
     draw_partially_covered_cause,
     draw_verdict,
     evidence_of,
@@ -57,6 +58,7 @@ from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
     PAYMENT_PRECEDES_SUBJECT,
+    SUBJECT_NOT_EVIDENCED,
     Evidence,
     Ledger,
     document_evidence,
@@ -294,10 +296,15 @@ def test_verdicts_no_archetype_can_carry_are_refused_not_faked(verdict):
 
 
 def test_the_planner_realizes_exactly_the_verdicts_the_engine_can_be_asked_for():
-    """`insufficient_evidence` MOVED SIDES when the cross-check causes became drawable. Two of its
-    three causes are planned; the third, `subject_not_evidenced`, needs a deliberately incomplete
-    claim and keeps its reason in `_UNREALIZABLE_CAUSES` rather than losing it with the entry that
-    left `_UNREALIZABLE_REASONS`."""
+    """`insufficient_evidence` MOVED SIDES when the cross-check causes became drawable, and ALL
+    THREE of its causes are planned now that `EvidenceIntent.EVIDENCE_GAP` builds a claim with no
+    subject document.
+
+    `_UNREALIZABLE_CAUSES` is therefore empty, and that is asserted rather than left implied: the
+    table is the place a route to a realizable verdict has to explain itself, so a cause that
+    becomes unbuildable again — or a new one the engine returns and the planner cannot aim at —
+    belongs in it, and an entry appearing here without a reason beside it is what this pins.
+    """
     assert set(REALIZABLE_VERDICTS) == {
         Verdict.COVERED,
         Verdict.PARTIALLY_COVERED,
@@ -308,9 +315,15 @@ def test_the_planner_realizes_exactly_the_verdicts_the_engine_can_be_asked_for()
         Verdict.PARTIALLY_PAID,
         Verdict.REJECTED,
     }
-    # A verdict that left the table must not leave its unbuildable half unexplained.
-    assert set(claim_planner._UNREALIZABLE_CAUSES) == {"subject_not_evidenced"}
-    assert len(claim_planner._UNREALIZABLE_CAUSES["subject_not_evidenced"]) > 60
+    assert claim_planner._UNREALIZABLE_CAUSES == {}, (
+        "a route to a realizable verdict is recorded as unbuildable; the planner's own tests below "
+        "assert every declared cause is drawn, so the two cannot both be right"
+    )
+    # And every cause policy.yaml declares a share for is a cause `plan_claim` accepts — the other
+    # direction of the same statement, and the one that would break silently: a share whose cause
+    # the planner rejects raises only when the draw happens to land on it.
+    for cause in insufficient_evidence_causes():
+        assert cause not in claim_planner._UNREALIZABLE_CAUSES, cause
 
 
 def test_a_drawn_verdict_is_always_one_that_can_be_built():
@@ -377,6 +390,30 @@ def test_the_partially_covered_cause_is_drawn_from_the_policy():
     draws = [draw_partially_covered_cause(rng) for _ in range(4000)]
     assert set(draws) == {"mixed_items", "limit_exhausted"}
     assert abs(draws.count("mixed_items") / len(draws) - 0.65) < 0.04
+
+
+def test_every_insufficient_evidence_cause_is_reachable_by_the_draw():
+    """insufficient_evidence_causes: subject_not_evidenced 0.34, amount_mismatch 0.33,
+    payment_precedes_subject 0.33 — thirds to the nearest hundredth, and policy.yaml says why
+    equality is the position rather than the default.
+
+    🔴 THE REACHABILITY IS THE ASSERTION, THE SHARES ARE THE CHECK ON IT. A cause the draw cannot
+    reach is a bucket of the corpus nothing fills, and it fails silently: every claim still gets a
+    label, the balance report still adds up, and one mechanism of three is simply never exercised.
+    So every declared cause must come out of the generator, and each within a wide window of its
+    share — wide because this asserts the weights are the policy's, not that a pseudo-random draw
+    hits a mean.
+    """
+    shares = insufficient_evidence_causes()
+    assert sum(shares.values()) == pytest.approx(1.0), shares
+
+    rng = random.Random(20260803)
+    draws = Counter(draw_insufficient_evidence_cause(rng) for _ in range(4000))
+    assert set(draws) == set(shares), (
+        f"{sorted(set(shares) - set(draws))} declared in policy.yaml and never drawn"
+    )
+    for cause, share in shares.items():
+        assert abs(draws[cause] / 4000 - share) < 0.04, (cause, draws[cause])
 
 
 def test_a_mixed_items_claim_is_planned_with_a_coverage_target_the_builder_can_use():
@@ -1062,19 +1099,24 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
           f"agree {dict(agree)} of readable {dict(readable)}")
 
 
-def test_both_cross_check_causes_occur_and_a_claim_carries_exactly_one(multi_claim_dataset):
+def test_every_declared_cause_occurs_and_a_claim_carries_exactly_one(multi_claim_dataset):
     """🔴 THE REQUIREMENT IS ON THE RESULT, NOT ON THE SHARE. config/policy.yaml splits
-    `insufficient_evidence` evenly between its two buildable causes and says why the split is even;
-    what has to hold is that BOTH are non-zero in a run, because a verdict's share says nothing
+    `insufficient_evidence` evenly between its buildable causes and says why the split is even;
+    what has to hold is that EACH is non-zero in a run, because a verdict's share says nothing
     about which mechanism realized it. Ten percent of the corpus arriving through one cause would
     leave the vocabulary promising three and the data holding one.
 
-    And exactly one per claim: the two are mutually exclusive by construction — the planner draws
-    one — so a claim carrying both would mean the builder had realized a cause nobody planned.
+    And exactly one per claim: the three are mutually exclusive by construction — the planner draws
+    one, and a claim with no subject document has no pair to cross-check — so a claim carrying two
+    would mean the builder had realized a cause nobody planned.
+
+    ⚠️ THE DENOMINATOR IS DERIVED FROM THE POLICY, not written here. The count of declared causes
+    moved from two to three when `subject_not_evidenced` gained a mechanism, and a test pinned to
+    the number would have had to be edited for a change it is meant to cover.
     """
     result, _ = multi_claim_dataset
     causes = set(insufficient_evidence_causes())
-    assert len(causes) == 2, f"the policy declares {len(causes)} buildable causes, not 2"
+    assert len(causes) > 1, "one declared cause makes 'exactly one per claim' a tautology"
 
     flagged = [
         claim for claim in result.claims
@@ -1129,6 +1171,46 @@ def test_a_claim_drawn_as_insufficient_evidence_is_labelled_as_one(multi_claim_d
         assert plan.cause in claim.imperfection, (
             f"{claim.claim_id} was drawn for {plan.cause!r} and carries {claim.imperfection}"
         )
+
+
+def test_a_claim_evidenced_by_a_payment_alone_reaches_the_corpus(multi_claim_dataset):
+    """🔴 THE CASE THE THESIS RESTS ON, MEASURED IN A RUN RATHER THAN ASSERTED IN THE PLANNER: a
+    claim carrying a bank document and nothing that says what was bought. No single document proves
+    both facts, and until `EvidenceIntent.EVIDENCE_GAP` the corpus could not show a system meeting
+    an ABSENT subject — only two documents contradicting each other.
+
+    What is checked is the claim as a CONSUMER receives it — the label file, not the plan: one
+    document, of a type policy.yaml says proves no subject, `insufficient_evidence` with the cause
+    `subject_not_evidenced`, nothing reimbursed, and no coverage fraction because there is no line
+    to compute one from. `linked` is false: one document is not a linked claim.
+    """
+    result, _ = multi_claim_dataset
+    by_id = {document.doc_id: document for document in result.documents}
+
+    gaps = [
+        claim for claim in result.claims
+        if not any(
+            document_evidence(by_id[doc_id].doc_type).proves_subject
+            for doc_id in claim.documents
+        )
+    ]
+    assert gaps, (
+        "no claim of this run is evidenced by a payment alone — the cause "
+        "`subject_not_evidenced` is in the vocabulary and not in the data"
+    )
+
+    for claim in gaps:
+        assert len(claim.documents) == 1, claim.claim_id
+        assert claim.verdict is Verdict.INSUFFICIENT_EVIDENCE, claim.claim_id
+        assert claim.imperfection == [SUBJECT_NOT_EVIDENCED], claim.claim_id
+        assert claim.reimbursable_amount == 0, claim.claim_id
+        assert claim.covered_fraction is None, claim.claim_id
+        assert claim.linked is False, claim.claim_id
+        document = by_id[claim.documents[0]]
+        assert document.line_items == [], (
+            f"{document.doc_id} proves no subject and yet lists items"
+        )
+        assert "no document states what was bought" in " ".join(claim.policy_trace)
 
 
 def test_an_insufficient_evidence_claim_pays_nothing_and_spends_no_balance(multi_claim_dataset):
@@ -1361,12 +1443,26 @@ def test_a_mixed_items_claim_occurs_and_says_it_depends_on_the_documents_alone(
 
 def test_the_per_line_covered_flags_agree_with_the_claim_fraction(multi_claim_dataset):
     """The end-to-end statement for the oracle: the claim label a consumer reads is
-    recomputable from the per-line labels in the same file."""
+    recomputable from the per-line labels in the same file.
+
+    🔴 AND A CLAIM WITH NO LINE AT ALL READS `null`, NEVER `0`. A claim planned as an evidence gap
+    carries a payment document and nothing that lists items, so there is no fraction to recompute —
+    and `0` would say the lines were read and none of them was covered, which is the label of a
+    `rejected` claim. The two are told apart here on the same corpus that produces both.
+    """
     result, _ = multi_claim_dataset
+    without_lines = 0
     for claim, documents in documents_of(result):
         # True for every claim, including the limit-bound ones: `covered_fraction` stays
         # a property of the line items, and the limit is recorded elsewhere in the label.
         lines = [line for document in documents for line in document.line_items]
+        if not lines:
+            without_lines += 1
+            assert claim.covered_fraction is None, (
+                f"{claim.claim_id} carries no line item and reports a coverage fraction of "
+                f"{claim.covered_fraction} — a fraction over nothing"
+            )
+            continue
         covered = sum(
             Decimal(str(item.qty)) * Decimal(str(item.price))
             for item in lines
@@ -1374,6 +1470,11 @@ def test_the_per_line_covered_flags_agree_with_the_claim_fraction(multi_claim_da
         )
         total = sum(Decimal(str(item.qty)) * Decimal(str(item.price)) for item in lines)
         assert abs(float(covered / total) - claim.covered_fraction) < 1e-6
+
+    assert without_lines, (
+        "no claim of this run is evidenced by a payment alone, so the null branch above was "
+        "never taken — see `claim_planner.EvidenceIntent.EVIDENCE_GAP`"
+    )
 
 
 def test_the_dataset_labels_are_reproducible_from_the_documents_alone(multi_claim_dataset):

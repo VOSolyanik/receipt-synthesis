@@ -1108,13 +1108,14 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     A second cause block rather than a generalization of the one above, because the two verdicts
     differ in the thing that matters here: `partially_covered`'s causes can occur together on one
     claim and are counted per claim for that reason, while these are mutually exclusive by
-    construction — a pair either disagrees about the amount or is dated backwards, and the planner
-    draws one.
+    construction — a claim either carries no subject document at all, or carries a pair that
+    disagrees about the amount, or one dated backwards, and the planner draws one of the three.
 
-    🔴 THE THIRD CAUSE IS NAMED THOUGH IT NEVER OCCURS. `subject_not_evidenced` reaches this verdict
-    too and carries no share in policy.yaml, because nothing can plan a deliberately incomplete
-    claim. A report listing only what happened would let a reader take two causes for the whole
-    vocabulary, which is the reading `known_limitations` KL-07 exists to prevent.
+    🔴 THE THIRD CAUSE IS NOW DRAWN LIKE THE OTHER TWO, so this block no longer prints it as an
+    absence. `subject_not_evidenced` carries a share in policy.yaml since the planner gained
+    `EvidenceIntent.EVIDENCE_GAP`, which means the loop below reports it — including the zero that
+    says the mechanism stopped working, a finding the hand-written line it replaced could not have
+    made.
 
     A cause realizing zero is flagged two different ways depending on run size, because the two
     readings are not the same finding — and, per the marker convention above the report, a
@@ -1137,8 +1138,8 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     min_run_size = insufficient_evidence_causes_min_run_size()
 
     lines = [
-        f"insufficient_evidence by cause — {total} claim(s); the two cross-check causes are "
-        "mutually exclusive"
+        f"insufficient_evidence by cause — {total} claim(s); the three causes are mutually "
+        "exclusive by construction"
     ]
     for cause, share in shares.items():
         count = counts[cause]
@@ -1156,13 +1157,6 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
             f"  {cause:<26} {counts[cause]:>4}  {_share(counts[cause], total):>6}"
             "   !! realized with no share declared for it in policy.yaml"
         )
-    lines.append(
-        f"  {'subject_not_evidenced':<26} {counts['subject_not_evidenced']:>4}"
-        "         NOT DRAWN — policy.yaml declares no share, because nothing can plan a"
-    )
-    lines.append(
-        "                                          deliberately incomplete claim. See KL-07."
-    )
     return lines
 
 

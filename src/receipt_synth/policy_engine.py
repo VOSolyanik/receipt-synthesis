@@ -222,17 +222,18 @@ def partially_covered_causes() -> dict[str, float]:
 def insufficient_evidence_causes() -> dict[str, float]:
     """How the `insufficient_evidence` bucket splits by cause, in declaration order.
 
-    🔴 OVER THE CAUSES THE GENERATOR CAN BUILD, WHICH IS NOT THE WHOLE VOCABULARY. Three causes
-    lead to this verdict — `SUBJECT_NOT_EVIDENCED`, `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT` —
-    and policy.yaml declares shares for the two CROSS-CHECK causes only. The third needs a claim
-    planned with deliberately incomplete evidence, which the planner refuses by construction, and
-    policy.yaml says at the block why a share written before a mechanism exists sizes a bucket
-    nothing can fill.
+    🔴 OVER THE CAUSES THE GENERATOR CAN BUILD, WHICH IS NOT THE SAME QUESTION AS THE VOCABULARY
+    EVEN WHERE THE TWO COINCIDE. Three causes lead to this verdict — `SUBJECT_NOT_EVIDENCED`,
+    `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT` — and policy.yaml now declares a share for each,
+    the third having gained a mechanism (`claim_planner.EvidenceIntent.EVIDENCE_GAP`) rather than
+    an exemption.
 
-    So a reader of this map must not take it for the cause vocabulary: `policy_engine` still
-    RETURNS `subject_not_evidenced`, and a claim carrying it is labelled correctly. What the map
-    describes is the DRAW, and the two are different questions — the same distinction `verdict_mix`
-    and `REALIZABLE_VERDICTS` have always had between them.
+    A reader of this map must still not take it for the cause vocabulary. This engine derives a
+    cause from a claim's documents and does not consult these shares at all, so it would go on
+    returning a cause whose share was removed, and a cause it can return is a label a consumer can
+    receive. The vocabulary is contracted in config/labelling-schema.yaml; what the map describes
+    is the DRAW — the same distinction `verdict_mix` and `REALIZABLE_VERDICTS` have always had
+    between them.
     """
     return {str(name): float(share) for name, share in
             load_policy()["insufficient_evidence_causes"].items()}
