@@ -734,5 +734,14 @@ Benefit categories are derived from a [public industry survey of benefits packag
 market](https://dou.ua/lenta/articles/benefits-package-2026/) (DOU). Limits, thresholds and the verdict mix
 are this project's own plausible values and describe no real employer's plan.
 
+**The fiscal QR does not point at the real tax authority.** A Ukrainian ПРРО/РРО receipt's QR encodes a URL a
+scanner resolves against the state's own cash-register verification service — that shape (query parameters
+for receipt number, date, time, fiscal device number, total) is a public fact about the document format and
+is worth reproducing. Encoding the *real* host on a synthetic receipt would not be: it would be a generated
+artifact carrying a link to a live government service for a transaction that never happened.
+`config/fiscal-rules.yaml`'s `qr.fiscal_payload` therefore targets `https://example.invalid/...` — a host
+reserved by RFC 2606 to never resolve — keeping every query parameter in place so the QR's shape and pixel
+weight stay realistic.
+
 Everything the tool produces is synthetic: documents that were never issued, for transactions that never
 happened, by people who do not exist.

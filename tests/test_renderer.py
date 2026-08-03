@@ -814,7 +814,7 @@ def test_the_stylesheet_falls_back_to_noto(renderer, slug):
 
 def test_qr_encoding_is_deterministic():
     """segno chooses its mask by evaluating the symbol rather than at random."""
-    payload = "https://cabinet.tax.gov.ua/cashregs/check?id=Kht4lxDyk0r"
+    payload = "https://example.invalid/cashregs/check?id=Kht4lxDyk0r"
     assert qr_svg(payload) == qr_svg(payload)
     assert qr_svg(payload) != qr_svg(payload + "x")
 

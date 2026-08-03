@@ -908,9 +908,10 @@ jurisdictions:
           - { prefix: "", pattern: "", serial_digits: 4 }
           - { prefix: "@", pattern: "[0-9]{1}[A-Z]{2}", serial_digits: 6 }
 
-    # Fiscal QR: the public receipt-verification URL of the tax authority.
+    # Fiscal QR: shaped like the tax authority's public receipt-verification URL, but the host is
+    # deliberately not that service. See "Provenance" in docs/architecture.md for why.
     qr:
-      fiscal_payload: "https://cabinet.tax.gov.ua/cashregs/check?id={receipt_number}&date={date:%Y%m%d}&time={time:%H%M%S}&fn={fiscal_device_number}&sm={total:.2f}"
+      fiscal_payload: "https://example.invalid/cashregs/check?id={receipt_number}&date={date:%Y%m%d}&time={time:%H%M%S}&fn={fiscal_device_number}&sm={total:.2f}"
       # Decorative / marketing QR used as a trap: a QR that is not fiscal at all.
       decorative_payloads:
         - "https://example.com/loyalty"

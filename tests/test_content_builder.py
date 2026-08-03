@@ -908,9 +908,11 @@ def test_the_skeleton_always_pays_by_card():
     assert receipt.payment_method == "БЕЗГОТІВКОВА"
 
 
-def test_qr_payload_is_the_tax_authority_verification_url():
+def test_qr_payload_is_shaped_like_the_tax_authority_verification_url():
+    """The host is deliberately not the real ДПС cabinet — see docs/architecture.md,
+    "Provenance" — but the query-parameter structure matches the real service's."""
     receipt = build(5)
-    assert receipt.qr_payload.startswith("https://cabinet.tax.gov.ua/")
+    assert receipt.qr_payload.startswith("https://example.invalid/")
     assert receipt.receipt_number in receipt.qr_payload
     assert receipt.fiscal_device_number in receipt.qr_payload
     assert f"{receipt.total:.2f}" in receipt.qr_payload
