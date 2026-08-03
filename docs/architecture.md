@@ -82,17 +82,16 @@ claim are not simultaneous: an invoice is issued and then settled. The planner k
 both facts a reimbursement rests on are established — what was bought, and that it was paid for — reading
 what each type proves from `document_evidence` in `config/policy.yaml`. Where a single archetype proves both,
 as a fiscal receipt does, the claim has one document; where none does, it takes a subject document and a
-payment document. The registry currently holds four archetypes of two classes: three Ukrainian fiscal receipts, each of which
-proves both facts, and one Ukrainian bank payment confirmation, which proves only that money moved. So every
-claim built today still has exactly one document, drawn from the three receipts — a property of the registry
-and not of a claim, and nothing downstream may depend on it.
+payment document — an invoice and the bank document that settles it. Which shape a category gets is a
+property of the registry and never of a claim, and nothing downstream may depend on either.
 
-**The fourth archetype is registered and no claim uses it, which is a structural fact rather than an
-oversight.** A claim needs both facts; a payment confirmation supplies one; the class that supplies the other
-on its own — an invoice — is not written. `documentable_categories` therefore reports no category as
-documentable through it, so the planner never draws it and no run contains one. It is registered because the
-template, the builder and the label fields are what pairs with an invoice when that archetype lands, and
-because an unregistered archetype is one nothing renders and no test reaches.
+**A claim may also be planned with its evidence deliberately short, and that is a named intent rather than a
+missing document.** `EvidenceIntent.EVIDENCE_GAP` asks for a payment document with nothing beside it, so the
+claim states that money moved and never what it bought; the policy engine reads the label off the document
+types as it does for every other claim and answers `insufficient_evidence`, cause `subject_not_evidenced`. The
+distinction the intent carries is the whole of why it exists: a claim short of a fact because a template was
+absent is a defect the planner still refuses to build, and the two are indistinguishable from the document
+list alone. Nothing here asserts the label — the planner builds the evidence, the engine derives the answer.
 
 It processes a persona's claims in date order and carries the remaining category balance, so that a claim can
 also become partially covered by exhausting an annual limit rather than by containing a non-covered item.

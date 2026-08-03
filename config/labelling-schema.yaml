@@ -60,6 +60,36 @@
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 25 by A CAUSE OF THE `imperfection` VOCABULARY ENTERING THE DATA FOR THE FIRST TIME.
+# NO LABEL RECORD GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHICH LABELS
+# A CONSUMER RECEIVES, and one of them is a shape no previous dataset contained. FOUR consequences.
+#
+#   🔴 `subject_not_evidenced` IS NOW REALIZED. A claim may carry ONE payment document and nothing
+#   that states what was bought — a bare transfer or a bare statement row — and it is labelled
+#   `insufficient_evidence` with that cause. Every earlier version of this dataset reached the
+#   verdict only through the two CROSS-CHECK causes, i.e. always with two documents present, so a
+#   consumer that had learned "this verdict means the pair disagrees" now meets the case where there
+#   is no pair. `known_limitations` KL-07 is rewritten accordingly and is no longer about this cause.
+#
+#   🔴 A CLAIM MAY NOW HAVE NO LINE ITEM AT ALL, so `covered_fraction` IS `null` ON REAL CLAIMS OF A
+#   RUN rather than only in principle. The field became nullable at version 5 and nothing produced
+#   one; a consumer that treated `null` as `0` — or that let a JSON reader coerce it — scores such a
+#   claim as fully non-covered, which is the label of a `rejected` claim and a different verdict.
+#   `null` says there was nothing to compute a fraction from.
+#
+#   `config/policy.yaml` GAINED A SHARE — `insufficient_evidence_causes.subject_not_evidenced`,
+#   thirds to the nearest hundredth — and its `insufficient_evidence_causes_min_run_size` MOVED FROM
+#   50 TO 75, because the same 12.5% of claims now feeds three buckets instead of two and a run must
+#   be larger before an empty bucket means anything. 🔴 THIS IS AN I-2 EVENT: the file is vendored
+#   under a sha lock, so a consumer holding an earlier copy is holding a different file. Its
+#   `version` stays at 1 under the standing rule — the sha IS its identity.
+#
+#   THE DRAW SHIFTED. A third cause in the same bucket changes what every seed produces from the
+#   first `insufficient_evidence` claim onward, so any figure measured on an earlier run — a
+#   per-class F1, a document-class mix — is a figure about a different corpus. The profiles in
+#   `run_profiles` are records of the runs they name and are left untouched; each carries the
+#   generator version it was measured at.
+#
 # Bumped to 24 by A RECORDED COMMAND BECOMING RUNNABLE AGAIN. NO LABEL RECORD GAINED OR LOST A KEY,
 # NO COMPARISON RULE CHANGED, NO COUNT IN ANY PROFILE MOVED, AND THE DRAW DID NOT MOVE: `src/` reads
 # nothing here, and what changed in `src/` is the ABSENCE of a default rather than a value.
@@ -737,7 +767,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 24
+version: 25
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -3890,10 +3920,13 @@ claim_label:
         limit_exhausted: the annual balance ran out — NOT VISIBLE IN THE IMAGE
         # Causes of `insufficient_evidence`, one per slot it owns: the WHAT-WAS-BOUGHT slot and
         # the ONE-TRANSACTION slot (see `verdict_notes.definitions_name_their_own_slot`).
-        # POLICY.YAML NAMES NONE OF THESE: it declares a cause vocabulary only where shares are
-        # being declared, and no share of a dataset is sized by them. The names are
-        # `policy_engine`'s, exported as module constants, and this file is where they are
-        # contracted.
+        # POLICY.YAML NAMES ALL THREE — under `insufficient_evidence_causes`, which exists to
+        # give them SHARES of that verdict's bucket, exactly as `partially_covered_causes` does
+        # above. That is a DRAW and not a vocabulary: `policy_engine` derives a cause from a
+        # claim's documents without consulting a share, so a cause whose share was removed would
+        # still be returned and still reach a label. The names are `policy_engine`'s, exported as
+        # module constants, and THIS FILE is where the vocabulary is contracted.
+        # ⛔ `outside_period` below has no share, and its verdict has none either — see KL-07.
         subject_not_evidenced: >
           The WHAT-WAS-BOUGHT slot: no document of the claim is of a type that states it — a
           bare transfer. That slot has no document at all.
@@ -4480,49 +4513,58 @@ known_limitations:
       is declared here rather than fixed alongside the archetype that exposed it.
 
   - id: KL-07
-    name: one cause of `insufficient_evidence` is in the vocabulary and never in the data
+    name: one cause of the `imperfection` vocabulary is in the vocabulary and never in the data
     predictor: none — a coverage gap in the cause vocabulary
     hurts: [evaluation]
     subset: >
-      🔴 `subject_not_evidenced` IS NEVER REALIZED. `imperfection` has a vocabulary of six causes
-      and this corpus now contains four. The two CROSS-CHECK causes became drawable when the
-      planner gained `insufficient_evidence` as a target — see `when_it_appeared` — and the third
-      route to that verdict did not: a claim that establishes a movement of money and never what it
-      bought needs DELIBERATELY INCOMPLETE evidence, which `_select_documents` refuses by
-      construction and `ClaimPlan.subject_document` raises on.
+      🔴 `outside_period` IS NEVER REALIZED. `imperfection` has a vocabulary of six causes and this
+      corpus contains five. The absent one is the cause of `rejected` — a claim whose PAYMENT falls
+      outside the benefit period — and it is absent because its VERDICT is: `rejected` carries no
+      share in `verdict_mix` and the planner draws inside the window, so no claim aims at it.
 
-      A consumer stratifying by VERDICT still cannot see this: `insufficient_evidence` is present in
-      the corpus now, so its share says nothing about which of its three mechanisms produced it.
-      `outside_period` is likewise absent, its verdict `rejected` having no share yet.
+      ⚠️ THIS ENTRY USED TO BE ABOUT `subject_not_evidenced`, WHICH IS NOW REALIZED, and the change
+      is worth reading rather than skipping: the corpus contains claims carrying ONE payment
+      document and nothing that says what was bought. The planner gained a named intent for
+      deliberately incomplete evidence (`claim_planner.EvidenceIntent.EVIDENCE_GAP`), the cause
+      gained a share in config/policy.yaml, and the gap this entry described closed. A profile
+      measured before that — every profile in `run_profiles` — counts it as zero, correctly for the
+      run it names.
+
+      A consumer stratifying by VERDICT cannot see the remaining gap from `insufficient_evidence`,
+      which is present and all three of whose causes now occur; it is visible only as the absence of
+      `rejected` itself.
     how_a_consumer_detects_it: >
-      `subject_not_evidenced` is in the `imperfection` vocabulary and can never be in the data: a
-      claim that establishes a movement of money and never what it bought needs DELIBERATELY
-      INCOMPLETE evidence, which `_select_documents` refuses and `ClaimPlan.subject_document` raises
-      on. Zero by construction rather than by outcome. A consumer stratifying by VERDICT cannot see
-      it, because `insufficient_evidence` IS present — its share says nothing about which of its
-      three mechanisms produced it. `outside_period` is likewise absent, its verdict carrying no
-      share yet. The counts per cause are in the profile.
+      `outside_period` is in the `imperfection` vocabulary and is in no corpus this generator has
+      produced: it is the cause of `rejected`, that verdict carries no share in `verdict_mix`, and
+      the planner draws every payment date inside the benefit period. Zero by construction rather
+      than by outcome — a consumer must not read a scorecard row for it as measured at any size, and
+      the same applies to `rejected` as a whole. The other five causes DO occur, including
+      `subject_not_evidenced`, which was itself zero by construction until the planner learned to
+      plan incomplete evidence. The counts per cause are in the profile; a profile older than that
+      change counts four.
     see_profile: run_profiles
     when_it_appeared: >
-      THE FIGURES MOVED FOR A MECHANISM, NOT FOR A SEED. On the 12-persona run all three causes of
-      this verdict were zero, and the reason was that the planner could not aim at the verdict at
-      all: `insufficient_evidence` was not in `REALIZABLE_VERDICTS`, the payment document was handed
-      the subject's amount, and the subject was always dated first. The commit that made the two
-      cross-checks drawable is what moved them off zero; nothing about the third changed, and its
-      figure is zero for the reason it has always been zero.
+      THE FIGURES MOVED FOR A MECHANISM, NOT FOR A SEED, TWICE. First when `insufficient_evidence`
+      entered `REALIZABLE_VERDICTS` and its two cross-check causes went off zero. Then when
+      `EvidenceIntent.EVIDENCE_GAP` made a claim with no subject document plannable, which took
+      `subject_not_evidenced` off zero and left this entry describing `outside_period` alone.
+      Nothing about `outside_period` has changed in either revision: it needs a payment dated
+      outside the window, which nothing draws.
     consequence: >
-      Evaluation of a system's ability to notice a MISSING SUBJECT DOCUMENT is unmeasured here. The
-      two cross-checks are measured. A consumer must not read the presence of `insufficient_evidence`
-      in the corpus as evidence that all three of its routes are exercised.
+      Evaluation of a system's ability to notice a payment made OUTSIDE THE BENEFIT PERIOD is
+      unmeasured here. A consumer must not read the presence of a rich `imperfection` vocabulary as
+      evidence that every route through it is exercised — and, symmetrically, must not carry a
+      figure taken before a cause became realizable into a run where it is.
     how_to_stratify: >
-      By `imperfection` membership, never by verdict — the four realized causes sit under two
-      verdicts, and one verdict carries two of them.
+      By `imperfection` membership, never by verdict — the five realized causes sit under two
+      verdicts, and one verdict carries three of them.
     fixed_by: >
-      A PLANNER THAT PLANS INCOMPLETE EVIDENCE. `_select_documents` would have to return a payment
-      document with no subject beside it, and `ClaimPlan.subject_document` would have to tolerate
-      zero carriers instead of raising. That is a change to the claim model rather than to a share
-      or a template, which is why config/policy.yaml declares no share for the cause — the same
-      reasoning that leaves `rejected` without one in `verdict_mix`.
+      A PLANNER THAT AIMS AT `rejected`. `claim_planner._draw_date_in_period` draws inside the
+      window by construction; `issued_at` is a public parameter with no period guard, so a caller
+      naming an out-of-window date already gets a plan the engine duly labels `rejected` with this
+      cause. What is missing is a share in `verdict_mix` and a draw that uses it — see
+      `claim_planner._UNREALIZABLE_REASONS[rejected]`, which states both routes to that verdict and
+      why the other one, a wholly non-covered basket, needs a change to `content_builder`.
 
   - id: KL-08
     name: the cross-check causes can never occur on a fiscal receipt
