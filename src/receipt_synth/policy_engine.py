@@ -238,6 +238,16 @@ def insufficient_evidence_causes() -> dict[str, float]:
             load_policy()["insufficient_evidence_causes"].items()}
 
 
+def insufficient_evidence_causes_min_run_size() -> int:
+    """The run size at which `insufficient_evidence_causes` binds "every cause non-zero".
+
+    Read from policy.yaml rather than hardcoded so the derivation comment beside the number
+    stays the single place it is justified — the balance report cites this value, it does
+    not compute or restate it.
+    """
+    return int(load_policy()["insufficient_evidence_causes_min_run_size"])
+
+
 # =============================================================================
 # Evidence: what a claim's documents establish between them
 # =============================================================================
