@@ -55,6 +55,7 @@ from receipt_synth.policy_engine import (
     Ledger,
     evaluate_claim,
     insufficient_evidence_causes,
+    insufficient_evidence_causes_min_run_size,
     partially_covered_causes,
     verdict_mix,
 )
@@ -1110,6 +1111,15 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     too and carries no share in policy.yaml, because nothing can plan a deliberately incomplete
     claim. A report listing only what happened would let a reader take two causes for the whole
     vocabulary, which is the reading `known_limitations` KL-07 exists to prevent.
+
+    A cause realizing zero is flagged two different ways depending on run size, because the two
+    readings are not the same finding — and, per the marker convention above the report, a
+    finding about the corpus is a plain-English word rather than `!!`, which is reserved for the
+    report contradicting itself. policy.yaml's `insufficient_evidence_causes_min_run_size` is the
+    run size at which a zero stops being ordinary sampling variance (see the derivation comment
+    beside it) — below that size a zero is unremarkable, at or above it a zero is worth
+    investigating as a defect. `run_size` is built claims, matching what the guideline was
+    derived against: the per-claim probability of drawing either cause at all.
     """
     shares = insufficient_evidence_causes()
     counts = Counter(
@@ -1119,6 +1129,8 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
         for cause in claim.imperfection
     )
     total = sum(counts.values())
+    run_size = len(dataset.claims)
+    min_run_size = insufficient_evidence_causes_min_run_size()
 
     lines = [
         f"insufficient_evidence by cause — {total} claim(s); the two cross-check causes are "
@@ -1126,9 +1138,15 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     ]
     for cause, share in shares.items():
         count = counts[cause]
-        lines.append(
-            f"  {cause:<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
-        )
+        row = f"  {cause:<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
+        if count == 0:
+            row += (
+                f"   RUN TOO SMALL — {run_size} built claim(s) < guideline {min_run_size}"
+                if run_size < min_run_size
+                else f"   LIKELY A DESIGN/MECHANISM DEFECT — {run_size} built claim(s), "
+                     f"at or above guideline {min_run_size}"
+            )
+        lines.append(row)
     for cause in sorted(set(counts) - set(shares)):
         lines.append(
             f"  {cause:<26} {counts[cause]:>4}  {_share(counts[cause], total):>6}"
