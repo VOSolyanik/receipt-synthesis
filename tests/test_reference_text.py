@@ -80,6 +80,20 @@ def test_every_archetype_carries_its_text(slug, rendered):
     assert "\n" in result.reference_text, "reading order is lost — the text is one line"
 
 
+def test_the_confirmations_amount_in_words_caption_reaches_the_reference_text(rendered):
+    """`test_renderer.make_confirmation`'s default seed (20260417) draws an amount-in-words line —
+    verified once at `content_builder.build_payment_confirmation` — so its caption, one of the two
+    `amount_in_words_captions` in config/fiscal-rules.yaml, must be legible IN THE REFERENCE TEXT
+    and not only as a labelled field. This is the same class of gap a stylesheet `content:`
+    pseudo-element opened: text a reader sees on the page but that `reference_text`, sourced from
+    the DOM's own `innerText`, would silently miss if the caption were ever painted from CSS
+    instead of printed as an element."""
+    text = rendered["ua_bank_payment_confirmation"].reference_text
+    assert "Сума словами: " in text or "Сума літерами: " in text, (
+        f"neither amount-in-words caption is in the confirmation's reference text: {text!r}"
+    )
+
+
 @pytest.mark.parametrize("slug", REGISTERED_SLUGS)
 def test_the_text_is_what_a_reader_sees_and_not_the_markup(slug, rendered):
     """🔴 `innerText`, NOT `textContent`, and the difference is measurable rather than stylistic.
