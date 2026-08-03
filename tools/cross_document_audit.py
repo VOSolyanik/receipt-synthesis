@@ -31,6 +31,14 @@ and the useful states are then:
 `docs/cross-document-fields.md` holds the derivation of which fields belong here at all.
 Nothing in `src/` imports this file: it is an instrument for auditing a run, not a stage.
 
+ONE MORE AXIS, PRINTED SEPARATELY, AND NOT ONE OF THE ROWS ABOVE. `FIELDS` is `{subject} ×
+{payment}` — the same field on the two documents of ONE claim — and a bank NAME its payer banks
+with has no subject-side counterpart to compare against: an invoice never states it, so that shape
+would report `readable == 0` forever, which is not a clean result but an instrument that has
+stopped reading. `bank_identity_audit` measures the different, corpus-wide invariant this
+repository actually needs — one printed name, one printed МФО, wherever either appears — and
+reports it in the same readable/agree shape underneath the per-claim tables.
+
 Exits 0 when the corpus was read, 2 on a usage error. It reports; it does not judge — the
 question of which state a row *should* be in is a design decision and lives in the doc.
 """
@@ -77,6 +85,18 @@ STATEMENT_HOLDER = re.compile(r"Клієнт (.+?), РНОКПП (\d{10})\b")
 # COVERAGE threefold, and coverage is the figure that says how much of a linking score is earned.
 # Describe the token you want; do not enumerate its neighbours.
 CITED_INVOICE = re.compile(r"рахунку № *([0-9A-Za-z/-]+)")
+
+# The ISSUER's own requisites — the bank that issued the confirmation, or that holds the
+# statement's account — printed as the first two lines of either header: the name, then the
+# caption and the МФО, and nothing else on that second line. Anchored at the start of the page
+# (`\A`) rather than searched for, because the SAME caption "Код банку" reappears later on a
+# confirmation's payee line — «Банк одержувача X, Код банку Y» — where it does not start a line,
+# so an unanchored search would sometimes read the payee's code as the issuer's.
+ISSUER_BANK = re.compile(r"\A(.+)\nКод банку (\d{6})\b")
+# A payment confirmation's payee — the SAME pair `INVOICE_PAYEE_BANK` and `CONFIRMATION_PARTY`
+# already read for `seller_bank_name`/`seller_bank_code`, matched again here on its own: the axis
+# below is over every PRINTED pair, not only the ones two documents of one claim share.
+CONFIRMATION_PAYEE_BANK = re.compile(r"Банк одержувача (.+?), Код банку (\d{6})\b")
 
 
 @dataclass(frozen=True)
@@ -208,6 +228,89 @@ def fields_of(document: dict) -> dict[str, str | None]:
     raise ValueError(f"no reader for document type {doc_type!r}")
 
 
+def bank_identity_pairs(doc_type: str, text: str) -> list[tuple[str, str]]:
+    """Every (bank name, МФО) pair a page prints TOGETHER.
+
+    🔴 NOT A subject-vs-payment ROW, AND DELIBERATELY SO. Every field in `FIELDS` above is one two
+    document CLASSES both print, so the shape `audit()` uses — read the subject, read the payment,
+    compare — has something on both sides. A payer's own bank has nothing to compare against: an
+    invoice never states who the PAYER banks with, so that shape would report `readable == 0` on
+    every claim, forever — and lessons.md already names a zero-readable axis as no evidence at
+    all, not as a clean result.
+
+    So this reads a DIFFERENT invariant, one that is corpus-wide rather than per-claim: a printed
+    bank NAME must carry one printed CODE everywhere it appears, whoever's bank it is and on
+    whichever document — the issuer of a confirmation, the issuer of a statement, that same
+    issuer's own service-charge row, or a confirmation's payee. `bank_identity_audit` below is
+    what turns a list of these pairs into a readable/agree count; this function only locates them.
+
+    Each reader is anchored to what makes it safe rather than to a caption alone:
+
+    * the ISSUER of a confirmation or a statement is the first two lines of the page — the name,
+      then a line that is nothing but the caption and six digits. `\\A` keeps this from ever
+      matching the SAME caption reappearing later on a confirmation's payee line, which is not at
+      the start of a line and would otherwise be a second, wrong match.
+    * a statement's SERVICE-CHARGE ROW is found by the shape of its own code rather than by
+      position: every ordinary row's counterparty code is a tax id, eight or ten digits, and the
+      one row whose code is exactly SIX digits, alone on its own line, is the row naming the
+      issuer — describing the token wanted, not the row it happens to sit in, for the reason
+      `CITED_INVOICE` above gives.
+    """
+    pairs: list[tuple[str, str]] = []
+    if doc_type in ("payment_confirmation", "bank_statement"):
+        issuer = ISSUER_BANK.match(text)
+        if issuer:
+            pairs.append((issuer.group(1), issuer.group(2)))
+    if doc_type == "payment_confirmation":
+        payee = CONFIRMATION_PAYEE_BANK.search(text)
+        if payee:
+            pairs.append((payee.group(1), payee.group(2)))
+    elif doc_type == "invoice":
+        payee = INVOICE_PAYEE_BANK.search(text)
+        if payee:
+            pairs.append((payee.group(1), payee.group(2)))
+    elif doc_type == "bank_statement":
+        for block in text.split("\n\n"):
+            code = re.search(r"\n(\d{6})\n", block)
+            if code is None:
+                continue
+            lines = [line for line in block.split("\n") if line.strip()]
+            if lines:
+                pairs.append((lines[-1].strip(), code.group(1)))
+    return pairs
+
+
+def bank_identity_audit(corpus: Path) -> dict:
+    """Whether the corpus keeps one promise: A PRINTED NAME CARRIES ONE CODE, EVERYWHERE.
+
+    Walks every document of the corpus once, in `ground_truth.json` order, and checks each
+    (name, code) pair `bank_identity_pairs` finds against the FIRST code that name was printed
+    with. The first occurrence sets the expectation rather than a value from `config/vendors.json`,
+    because — per the module docstring — this tool reads the OUTPUT and never the builder: a table
+    read from config could certify a corpus that agrees with nothing but itself if the table and
+    the generator ever drifted apart, which is exactly the failure mode this axis exists to catch.
+    """
+    ground_truth = json.loads((corpus / "ground_truth.json").read_text())
+    canonical: dict[str, str] = {}
+    readable = 0
+    agree = 0
+    examples: list[str] = []
+    for document in ground_truth["documents"]:
+        text = document.get("reference_text")
+        if not text:
+            continue
+        for name, code in bank_identity_pairs(document["doc_type"], text):
+            readable += 1
+            expected = canonical.setdefault(name, code)
+            if code == expected:
+                agree += 1
+            elif len(examples) < 3:
+                examples.append(
+                    f"{document['doc_id']}: {name!r} printed {code!r}, first seen as {expected!r}"
+                )
+    return {"readable": readable, "agree": agree, "examples": examples}
+
+
 def audit(corpus: Path) -> dict:
     ground_truth = json.loads((corpus / "ground_truth.json").read_text())
     by_claim: dict[str, list[dict]] = collections.defaultdict(list)
@@ -284,19 +387,29 @@ def main(argv: list[str] | None = None) -> int:
     shapes = audit(args.corpus)
     if not shapes:
         print(f"{args.corpus}: no claim carries a subject document and a payment document")
-        return 0
+    else:
+        for shape, report in sorted(shapes.items()):
+            pairs = report["pairs"]
+            print(f"\n{shape} — {pairs} pairs")
+            print(f"  {'field':<18}{'readable':>10}{'agree':>8}   state")
+            for key in FIELDS:
+                row = report["rows"][key]
+                state = state_of(row["readable"], row["agree"])
+                print(f"  {key:<18}{row['readable']:>10}{row['agree']:>8}   {state}")
+                if args.examples:
+                    for example in row["examples"]:
+                        print(f"      {example}")
 
-    for shape, report in sorted(shapes.items()):
-        pairs = report["pairs"]
-        print(f"\n{shape} — {pairs} pairs")
-        print(f"  {'field':<18}{'readable':>10}{'agree':>8}   state")
-        for key in FIELDS:
-            row = report["rows"][key]
-            state = state_of(row["readable"], row["agree"])
-            print(f"  {key:<18}{row['readable']:>10}{row['agree']:>8}   {state}")
-            if args.examples:
-                for example in row["examples"]:
-                    print(f"      {example}")
+    # 🔴 CORPUS-WIDE, NOT PER-CLAIM: printed regardless of whether any claim above had a subject
+    # and a payment document, because this axis is over every document that names a bank at all.
+    identity = bank_identity_audit(args.corpus)
+    print("\nbank identity — one printed name, one printed МФО, corpus-wide")
+    print(f"  {'field':<18}{'readable':>10}{'agree':>8}   state")
+    state = state_of(identity["readable"], identity["agree"])
+    print(f"  {'bank_code':<18}{identity['readable']:>10}{identity['agree']:>8}   {state}")
+    if args.examples:
+        for example in identity["examples"]:
+            print(f"      {example}")
     return 0
 
 
