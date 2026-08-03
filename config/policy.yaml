@@ -414,25 +414,47 @@ limits:
 # of this generator reads it. It belongs to the evaluation configuration of the
 # consumer, not to the specification of the dataset.
 verdict_mix:
-  covered: 0.50
+  covered: 0.40
   partially_covered: 0.20
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
   partially_paid: 0.10
-  # NO SHARE YET, AND DELIBERATELY SO. `rejected` — the policy plainly does not cover the
-  # claim, by what was bought or by when it was paid — belongs to the vocabulary because two
-  # rules above need a name for it: the `coverage` block, for a covered fraction of zero, and
-  # `period`, for a payment outside the window. What share of the dataset should carry it is a
-  # separate decision, taken together with whichever mechanism first builds such a claim —
-  # a wholly non-covered basket, or a payment dated outside the period. The generator DRAWS
-  # neither yet, so any number here would be a balance decision nobody has made.
+  # 🔴 A SHARE AT LAST, AND IT ARRIVES WITH THE MECHANISM RATHER THAN BEFORE IT. This entry
+  # read `null` while nothing could build such a claim, on the ground that a number set then
+  # would size a bucket nothing fills. One of the two routes to `rejected` is now drawn:
+  # `claim_planner` moves a claim's payment date OUT of `period` above, which the engine
+  # labels `rejected` with the cause `outside_period`. A verdict with a mechanism gets a
+  # share; that is the rule this file has always followed, and the number arrives by the rule.
   #
-  # `null`, not 0. A 0 share is itself a decision — "never draw this" — and it behaves like
-  # any other weight: it sums, it renormalizes, and nothing downstream could tell it from a
-  # share somebody chose. `null` is not a weight, so it cannot be summed or drawn with and
-  # every reader of this map has to say what it does with an undecided share. The five
-  # shares above therefore still sum to 1.0, and remain the whole of the declared mix.
-  rejected: null
+  # ⚠️ ONE ROUTE OF THE TWO, so every `rejected` claim in a corpus is out-of-period. The other
+  # — a basket drawn wholly from the category's `excluded_items`, i.e. a covered fraction of
+  # zero — needs `content_builder` to draw no covered line, and it always draws at least one.
+  # That route is recorded as unbuildable in `claim_planner._UNREALIZABLE_ROUTES` and declared
+  # to consumers as a known limitation in config/labelling-schema.yaml: a reader of this
+  # dataset must not learn "`rejected` means the date is outside the window", because here it
+  # does.
+  #
+  # 0.10, THE SAME AS THE OTHER THREE NEGATIVES, and equal for the reason
+  # `insufficient_evidence_causes` below splits evenly: a skew between them would have to come
+  # from an observation that a claimant files an out-of-window expense more or less often than
+  # a bare transfer, and NO SUCH OBSERVATION EXISTS. Nothing in this repository has measured
+  # one, and inventing a skew would smuggle a claim about the world into a file whose numbers
+  # are decisions about a dataset.
+  #
+  # TAKEN FROM `covered`, WHICH FALLS 0.50 -> 0.40. The mix has to sum to 1.0, so a new share
+  # is a share removed from somewhere, and `covered` is the member to take it from: the
+  # paragraph above says production would be dominated by that class and that this file
+  # deliberately over-represents the harder ones, so `covered` is the padding here while every
+  # other share sizes a mechanism under test.
+  #
+  # 🔴 AND THE REALIZABLE SUBSET STILL SUMS TO 0.80, which is what keeps the derivation under
+  # `insufficient_evidence_causes_min_run_size` below correct: `covered` 0.40 +
+  # `partially_covered` 0.20 + `insufficient_evidence` 0.10 + `rejected` 0.10 is the same total
+  # the three realizable members had before, so `insufficient_evidence` is still drawn on 12.5%
+  # of built claims and the guideline of 75 does not move. That is a consequence of taking
+  # exactly this share from exactly this member. An edit that moves either number has to redo
+  # that derivation rather than assume it survived.
+  rejected: 0.10
 
 # Why a claim ends up partially covered. Splits the `partially_covered` bucket
 # above by cause; must sum to 1.0.
@@ -517,11 +539,16 @@ insufficient_evidence_causes:
 
 # THE RUN SIZE AT WHICH THE NON-ZERO REQUIREMENT ABOVE BINDS, derived from the actual draw
 # probabilities rather than picked. `verdict_mix` renormalizes over the realizable subset —
-# `covered` 0.50, `partially_covered` 0.20, `insufficient_evidence` 0.10 — so
-# `insufficient_evidence` is drawn on 0.10 / (0.50 + 0.20 + 0.10) = 12.5% of built claims (this
-# is the same renormalization the balance report prints as "target, of the realizable
+# `covered` 0.40, `partially_covered` 0.20, `insufficient_evidence` 0.10, `rejected` 0.10 — so
+# `insufficient_evidence` is drawn on 0.10 / (0.40 + 0.20 + 0.10 + 0.10) = 12.5% of built claims
+# (this is the same renormalization the balance report prints as "target, of the realizable
 # subset"). `insufficient_evidence_causes` above then splits that three ways, so a single built
 # claim lands on the RAREST cause with probability 0.125 * 0.33 = 0.04125.
+#
+# ⚠️ THE MEMBERS OF THAT SUBSET CHANGED AND THE RATE DID NOT, which is the only reason this
+# number survived `rejected` becoming realizable: the 0.10 that verdict now carries was taken
+# from `covered`, so the subset sums to 0.80 as it did with three members. See the derivation
+# beside `rejected` in `verdict_mix` above.
 #
 # For a run of N built claims, the probability that a cause drawn at rate p is realized at
 # least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.04125)^N >= 0.95 for the smallest N gives

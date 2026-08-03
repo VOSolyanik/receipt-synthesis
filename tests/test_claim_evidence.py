@@ -56,6 +56,7 @@ from receipt_synth.policy_engine import (
     ClaimInput,
     Ledger,
     PolicyGapError,
+    active_period,
     document_evidence,
     evaluate_claim,
     evaluate_claims,
@@ -921,6 +922,48 @@ def test_a_subject_not_evidenced_claim_is_planned_as_a_payment_and_nothing_else(
     # Nothing was sized for a basket: there is no document to carry one.
     assert plan.coverage_target is None
     assert plan.item_count is None
+
+
+def test_a_rejected_plan_is_refused_by_the_engine_on_the_period_and_on_nothing_else():
+    """The loop closed: the planner's displaced date, read back by the oracle that labels it.
+
+    The two halves were tested apart — the engine's period check on hand-built documents further
+    up this file, the planner's draw in tests/test_pipeline.py — and each can be right while the
+    pair is wrong. A plan that displaced the SUBJECT document's date instead of the payment's, or
+    that displaced by a fortnight into a window edge, would satisfy both halves and produce a
+    `covered` claim under a `rejected` target.
+
+    🔴 EVERY LINE OF THE BASKET IS COVERED HERE, deliberately: `covered_fraction` comes back 1.0
+    and the verdict is still `rejected`, which is the whole of the distinction the two routes to
+    that verdict draw. Nothing about this claim is unestablished and nothing about it is
+    non-covered — the policy does not cover it because of WHEN the money moved.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claim_planner, "ARCHETYPES", PAIR_REGISTRY)
+        plan = claim_planner.plan_claim(
+            random.Random(3), persona=_persona(), claim_id="c1",
+            category="vitamins_nutrition", ledger=Ledger(), verdict=Verdict.REJECTED,
+        )
+
+    start, end = active_period()
+    assert plan.cause == OUTSIDE_PERIOD
+    assert not start <= plan.issued_at.date() <= end, plan.issued_at
+
+    subject, payment = plan.documents
+    assert plan.issued_at == payment.issued_at, "the claim is dated by its proof of payment"
+
+    result = evaluate([
+        doc("c1_d1", DocType.INVOICE, amount="600.00", when=subject.issued_at.date(),
+            items=[item("600.00")]),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="600.00",
+            when=payment.issued_at.date()),
+    ])
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == (OUTSIDE_PERIOD,)
+    assert result.covered_fraction == Decimal(1)
+    assert result.reimbursable == Decimal("0.00")
+    assert any("falls outside" in line for line in result.policy_trace)
 
 
 def test_a_gap_claim_refuses_its_subject_document_by_naming_the_intent():

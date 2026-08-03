@@ -17,8 +17,9 @@ It also decides whether a claim's evidence is COMPLETE — see `EvidenceIntent`.
 claim that establishes only one of the two facts is a thing this generator has to do, and
 it is done by naming the intent, never by letting a document quietly fail to turn up.
 
-Three of the six verdicts are still refused rather than faked — see
-`_UNREALIZABLE_REASONS`.
+Two of the six verdicts are still refused rather than faked — see `_UNREALIZABLE_REASONS`
+— and one ROUTE to a realizable one is, which is a different statement and has its own
+table, `_UNREALIZABLE_ROUTES`.
 """
 
 from __future__ import annotations
@@ -35,11 +36,13 @@ from receipt_synth.config import coverage_targets, load_policy
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
+    OUTSIDE_PERIOD,
     PAYMENT_PRECEDES_SUBJECT,
     SUBJECT_NOT_EVIDENCED,
     ClaimEvaluation,
     Evidence,
     Ledger,
+    active_period,
     document_evidence,
     insufficient_evidence_causes,
     partially_covered_causes,
@@ -270,23 +273,45 @@ REALIZABLE_VERDICTS: tuple[Verdict, ...] = (
     # its causes are drawn: the two cross-checks, and the missing subject, which `EvidenceIntent`
     # made plannable.
     Verdict.INSUFFICIENT_EVIDENCE,
+    # 🔴 THE FOURTH, AND THE FIRST WHOSE MECHANISM IS A DATE RATHER THAN A DOCUMENT. Everything
+    # above is realized by WHAT the claim carries; this one is realized by WHEN its money moved —
+    # `_payment_outside_period` puts the payment outside the window policy.yaml declares, and the
+    # engine answers `rejected` with the cause `outside_period` off the payment date alone. No
+    # archetype, no basket and no template had to change for it, which is why it was reachable long
+    # before it was drawn: `issued_at` has always been a public parameter with no guard on the
+    # period.
+    #
+    # ⚠️ ONE OF THE TWO ROUTES TO THIS VERDICT, and the other is still unbuildable — see
+    # `_UNREALIZABLE_ROUTES`. Every `rejected` claim this planner produces is therefore an
+    # out-of-period one, which is a property of the corpus a consumer has to be told rather than
+    # left to infer.
+    Verdict.REJECTED,
 )
 
-# WHY A CAUSE OF A REALIZABLE VERDICT NEEDS ITS OWN TABLE, AND WHY THE TABLE IS EMPTY RATHER THAN
-# GONE. `_UNREALIZABLE_REASONS` below is keyed by VERDICT, so the reason a single ROUTE to a
-# realizable verdict could not be built had nowhere to live — a verdict being realizable and every
-# route to it being realizable are different statements, and the second is the one a reader of a
-# corpus needs.
+# WHY A ROUTE TO A REALIZABLE VERDICT NEEDS ITS OWN TABLE. `_UNREALIZABLE_REASONS` below is keyed
+# by VERDICT, so the reason a single ROUTE to a realizable verdict could not be built has nowhere
+# to live there — a verdict being realizable and every route to it being realizable are different
+# statements, and the second is the one a reader of a corpus needs.
 #
-# ⛔ NOTHING IS UNREALIZABLE HERE TODAY. The one entry this table ever held was
-# `subject_not_evidenced`, and it went when `EvidenceIntent.EVIDENCE_GAP` made a deliberately
-# incomplete claim plannable: `_select_documents` now builds a payment document with no subject
-# beside it when the intent says so, and `ClaimPlan.subject_document` refuses by NAMING that intent
-# instead of by counting carriers. The table stays because it is where the next such route belongs —
-# a cause of `partially_covered` or of `insufficient_evidence` that the engine returns and this
-# planner cannot aim at — and an empty table with its rule written down is what stops that reason
-# from being left in a commit message.
-_UNREALIZABLE_CAUSES: dict[str, str] = {}
+# ⚠️ IT WAS `_UNREALIZABLE_CAUSES` AND IS KEYED BY ROUTE NOW, because its first non-empty entry is a
+# route with NO CAUSE. A `rejected` claim carries the cause `outside_period` or nothing at all —
+# policy.yaml gives the zero-coverage route no cause on purpose, the verdict being the whole of what
+# it says — so a table keyed by cause could not hold the one thing it exists to record. Where a
+# route does have a cause the cause IS its name, unprefixed, exactly as the old table keyed it —
+# which is how `plan_claim` can go on pointing a caller here when it refuses a cause it cannot aim
+# at.
+_UNREALIZABLE_ROUTES: dict[str, str] = {
+    "rejected/zero_coverage": (
+        "is `rejected` reached by WHAT WAS BOUGHT rather than by when it was paid: a basket drawn "
+        "wholly from the claimed category's `excluded_items`, so that the covered amount comes to "
+        "zero. `policy_engine.verdict_for` labels such a claim already and NOTHING CAN BUILD ONE — "
+        "`content_builder` always draws at least one covered line, and opening the route means "
+        "changing that builder rather than this planner. It is the reason every `rejected` claim "
+        "in a corpus is an out-of-period one, and it is declared to consumers as a known "
+        "limitation in config/labelling-schema.yaml: a reader of the labels must not learn that "
+        "`rejected` means the date is outside the window, because in this dataset it does."
+    ),
+}
 
 _UNREALIZABLE_REASONS: dict[Verdict, str] = {
     Verdict.NOT_PROOF_OF_PAYMENT: (
@@ -311,21 +336,12 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
         "not that field: it is a receipt's ДО СПЛАТИ, the basket total less a discount plus cash "
         "rounding, and it says nothing about how much of an obligation is still open"
     ),
-    Verdict.REJECTED: (
-        "is the policy not covering a claim whose evidence is complete, on either of two axes, "
-        "and the two are unreachable for DIFFERENT reasons — stated separately because one of "
-        "them is weaker than it looks. By WHAT was bought: a basket drawn wholly from the "
-        "`excluded_items` of the claimed category, so that the covered amount comes to zero. "
-        "`policy_engine.verdict_for` already labels such a claim and NOTHING CAN BUILD ONE — "
-        "`content_builder` always draws at least one covered line. By WHEN it was paid: a "
-        "payment dated outside the active period of policy.yaml, which `evaluate_claim` labels "
-        "with the cause `outside_period`. That one is merely NOT DRAWN, which is a weaker claim "
-        "than not buildable: `_draw_date_in_period` draws inside the window, but `issued_at` is "
-        "a public parameter with no guard on the period, so a caller naming an out-of-window "
-        "date gets a plan the engine duly labels `rejected`. Either way `verdict_mix` in "
-        "policy.yaml sets no share for this verdict yet, and a share invented before a "
-        "mechanism exists would size a bucket nothing can fill"
-    ),
+    # ⚠️ `REJECTED` LEFT THIS TABLE AND ONE OF ITS TWO ROUTES DID NOT. The verdict is realizable:
+    # `_payment_outside_period` dates a claim's payment outside policy.yaml's window and the engine
+    # labels it `rejected`, cause `outside_period`. The route by WHAT WAS BOUGHT — a wholly
+    # non-covered basket — is still unbuildable and is recorded in `_UNREALIZABLE_ROUTES` above,
+    # which is where a route to a REALIZABLE verdict explains itself. Neither statement implies the
+    # other, so the entry moved rather than being deleted with the verdict.
 }
 
 # Reason of last resort, so that a verdict added to the enum without a plan gets a clean
@@ -679,10 +695,11 @@ def realizable_verdicts_for(persona: Persona, ledger: Ledger) -> tuple[Verdict, 
 def _draw_date_in_period(rng: random.Random) -> datetime:
     """A timestamp inside the active benefit period.
 
-    Inside, because the planner realizes `covered` and `partially_covered`. A payment dated
+    Inside, because that is what every verdict except `rejected` needs. A payment dated
     outside the window is what drives the `rejected` branch on the period, and choosing it is
     a decision of the planner rather than an accident of the calendar — which is why the
-    period is read from policy.yaml and never from today's date.
+    period is read from policy.yaml and never from today's date. `_payment_outside_period`
+    below is the other half of that decision.
     """
     period = load_policy()["period"]
     start, end = date.fromisoformat(str(period["start"])), date.fromisoformat(str(period["end"]))
@@ -691,6 +708,41 @@ def _draw_date_in_period(rng: random.Random) -> datetime:
     # Trading hours, so a receipt is not timestamped at four in the morning.
     return datetime(day.year, day.month, day.day, rng.randint(9, 20), rng.randint(0, 59),
                     rng.randint(0, 59))
+
+
+def _payment_outside_period(rng: random.Random, issued_at: datetime) -> datetime:
+    """The same moment ONE BENEFIT PERIOD earlier or later, which is outside the active window.
+
+    The whole of what `rejected` needs: `policy_engine.evaluate_claim` checks the period against
+    the claim's payment date and against nothing else, so a claim is uncovered by WHEN it was paid
+    as soon as this date leaves the window. Nothing about the documents changes — the evidence of
+    such a claim is complete and flawless, which is exactly why the verdict is `rejected` and not
+    `insufficient_evidence`.
+
+    🔴 DISPLACED BY A WHOLE PERIOD RATHER THAN REDRAWN, and the arithmetic is what guarantees the
+    result instead of a range somebody has to check: for any date d in [start, end], d - span lands
+    at or before start - 1 and d + span at or after end + 1, where `span` is the window's length in
+    days. So the displacement puts the payment outside the window for ANY period this file
+    declares, and it lands in the ADJACENT benefit year — the same calendar position, one year
+    early or late, which is what an expense filed against the wrong period actually looks like. A
+    fresh draw would have needed a range chosen by hand and a test to keep it honest.
+
+    🔴 THE SIDE IS DRAWN, and that is not decoration. Displacing only forwards would make every
+    `rejected` claim in the corpus later than every other claim, and a consumer could then key the
+    verdict on "after the end of the window" rather than on "outside it" — a shortcut the dataset
+    would have taught. Both signs occur at the same rate for want of any observation that would
+    justify preferring one.
+
+    ⚠️ IT HONOURS A DATE THAT IS ALREADY OUTSIDE. A caller may name `issued_at` itself, and
+    displacing an out-of-window date by a period would move it back IN — realizing the opposite of
+    what was asked for. The check is on the window rather than on how the date arrived, because
+    that is the property the verdict rests on.
+    """
+    start, end = active_period()
+    if not start <= issued_at.date() <= end:
+        return issued_at
+    span = timedelta(days=(end - start).days + 1)
+    return issued_at + rng.choice((-1, 1)) * span
 
 
 def draw_claim_dates(rng: random.Random, count: int) -> list[datetime]:
@@ -905,7 +957,7 @@ def plan_claim(
             raise ValueError(
                 f"policy.yaml declares no such buildable insufficient_evidence cause: {cause!r}. "
                 f"{cause!r} may still be a cause the ENGINE returns — see "
-                "`claim_planner._UNREALIZABLE_CAUSES`, which records the routes to a realizable "
+                "`claim_planner._UNREALIZABLE_ROUTES`, which records the routes to a realizable "
                 "verdict that this planner cannot aim at."
             )
         if cause == SUBJECT_NOT_EVIDENCED:
@@ -913,10 +965,36 @@ def plan_claim(
             # subject document is planned at all. Named rather than achieved by omission — see
             # `EvidenceIntent`.
             intent = EvidenceIntent.EVIDENCE_GAP
+    elif verdict is Verdict.REJECTED:
+        # THREE VERDICTS CARRY A CAUSE NOW, and this one's is NOT DRAWN: `rejected` has two routes
+        # and only one of them is buildable, so there is nothing to draw between. policy.yaml
+        # accordingly declares no `rejected_causes` block — a share over a single realizable route
+        # would be the number 1.0 written down.
+        cause = cause or OUTSIDE_PERIOD
+        if cause != OUTSIDE_PERIOD:
+            raise ValueError(
+                f"the only route to `rejected` this planner builds is {OUTSIDE_PERIOD!r}, not "
+                f"{cause!r}. The other route — a basket the category covers none of — is recorded "
+                "in `claim_planner._UNREALIZABLE_ROUTES`, and it carries no cause at all: the "
+                "verdict says the whole of it."
+            )
+        # 🔴 THE DATE IS DISPLACED HERE, AFTER IT WAS DRAWN OR NAMED, and that ordering is what
+        # makes the branch cheap: every other verdict wants a payment inside the window, this one
+        # wants the same claim with its money moved outside it, and nothing else about the plan
+        # differs. The subject document keeps its lead from the payment, so a claim whose invoice
+        # falls INSIDE the period while its payment does not is an ordinary outcome here — that is
+        # the case a consumer checking the wrong document's date gets wrong, and the corpus has to
+        # contain it.
+        #
+        # ⚠️ IT BREAKS THE ASCENDING ORDER `plan_claims` DRAWS ITS DATES IN, and the ledger does not
+        # care: a `rejected` claim reimburses nothing (`policy_engine`'s `refused`), so it consumes
+        # no balance and cannot change what a later claim of the same persona has left. The order
+        # matters because cumulative limits bind in it; a claim outside the period binds nothing.
+        issued_at = _payment_outside_period(rng, issued_at)
     elif cause is not None:
         raise ValueError(
-            f"a cause belongs to a partially_covered or an insufficient_evidence claim, not to "
-            f"{verdict.value!r}"
+            f"a cause belongs to a partially_covered, an insufficient_evidence or a rejected "
+            f"claim, not to {verdict.value!r}"
         )
 
     return ClaimPlan(
@@ -953,6 +1031,12 @@ def plan_claims(
     records the reimbursement in `ledger` before asking for the next plan. Planning them
     all up front would size every `limit_exhausted` basket against a balance that no
     longer exists by the time it is built.
+
+    ⚠️ "IN DATE ORDER" IS ABOUT THE CLAIMS THAT SPEND, and one kind does not. A plan aimed at
+    `rejected` has its payment displaced out of the benefit period by `plan_claim`, so the dates
+    coming out of this generator are no longer ascending. What the order is FOR survives intact:
+    such a claim reimburses nothing and consumes no balance, so it cannot change what a later
+    claim of the same persona has left.
 
     Fewer than `count` plans come out when the persona runs out of categories with a
     balance — `count` is a ceiling, not a promise. Ask `why_no_claim` afterwards for the

@@ -146,25 +146,52 @@ def test_the_constants_this_file_was_written_against():
     assert EXCLUDED_KIND in spec["excluded_items"]
 
 
-def test_verdict_mix_names_every_verdict_and_leaves_rejected_without_a_share():
-    """policy.yaml puts `rejected` in the vocabulary before it decides its share, and
-    writes the undecided share as `null`, which comes back as `None`.
+def test_verdict_mix_names_every_verdict_and_every_one_now_carries_a_share():
+    """policy.yaml declares a share for all six, and the file's own rule is that the shares sum
+    to 1.0 — the arithmetic is hand-computed here rather than summed twice:
 
-    `None` rather than 0, and the difference is the whole point: a 0 share is a decision —
-    "this verdict is deliberately never drawn" — it sums like any other weight, it
-    renormalizes like any other weight, and nothing downstream could tell it apart from a
-    share somebody chose. `None` is not a weight at all, so every reader has to say what it
-    does with an undecided share.
+        0.40 + 0.20 + 0.10 + 0.10 + 0.10 + 0.10 = 1.00
 
-        0.50 + 0.20 + 0.10 + 0.10 + 0.10 = 1.00 over the five that carry one
+    ⚠️ `rejected` USED TO BE THE EXCEPTION, declared as `null` while nothing could build such a
+    claim. It gained 0.10 when the planner learned to date a payment outside the benefit period,
+    and `covered` gave up exactly that much — which is why the sum is unchanged and why the
+    realizable subset still totals 0.80. The undecided-share MECHANISM is untouched and still
+    tested, one test below: the next verdict declared before its mechanism exists arrives the
+    same way.
     """
     mix = verdict_mix()
     assert set(mix) == set(Verdict), "every verdict is named in the mix"
-    assert mix[Verdict.REJECTED] is None
+    assert all(share is not None for share in mix.values()), (
+        f"a verdict is declared with no share: {mix}"
+    )
+    assert mix[Verdict.COVERED] == pytest.approx(0.40)
+    assert mix[Verdict.REJECTED] == pytest.approx(0.10)
+    assert sum(mix.values()) == pytest.approx(1.0)
 
-    declared = [share for share in mix.values() if share is not None]
-    assert len(declared) == len(Verdict) - 1
-    assert sum(declared) == pytest.approx(1.0)
+
+def test_an_undecided_share_comes_back_as_none_and_never_as_zero():
+    """The loader branch that survives `rejected` gaining a share, asserted on a patched policy
+    because the file no longer contains a `null`.
+
+    `None` rather than 0, and the difference is the whole point: a 0 share is a decision — "this
+    verdict is deliberately never drawn" — it sums like any other weight, it renormalizes like any
+    other weight, and nothing downstream could tell it apart from a share somebody chose. `None`
+    is not a weight at all, so every reader has to say what it does with an undecided share. The
+    balance report and `claim_planner.draw_verdict` both do, and both are tested against a mix
+    patched the same way.
+    """
+    from receipt_synth import policy_engine
+
+    policy = dict(load_policy())
+    policy["verdict_mix"] = dict(policy["verdict_mix"], partially_paid=None)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(policy_engine, "load_policy", lambda: policy)
+        mix = verdict_mix()
+
+    assert mix[Verdict.PARTIALLY_PAID] is None
+    assert mix[Verdict.PARTIALLY_PAID] != 0
+    assert set(mix) == set(Verdict)
 
 
 # ------------------------------------------- coverage resolved from the policy --
