@@ -5065,8 +5065,12 @@ run_profiles:
           `config/policy.yaml` requires of the RESULT rather than of the share. ⚠️ THE MAJORITY
           CHANGED SIDES between RP-05 and this run — `amount_mismatch` led there at 46.2% and leads
           here at 54.1% — which is what a share near a half looks like under a different draw, and
-          not a change in the generator. `subject_not_evidenced` has no declared share and a
-          consumer must not expect it at any size. See KL-07.
+          not a change in the generator. ⚠️ `subject_not_evidenced` HAD NO DECLARED SHARE AT THE
+          GENERATOR VERSION THIS PROFILE NAMES, and nothing could plan the claim it needs, so its
+          zero here is by construction and correct for this corpus. IT IS NOT ADVICE ABOUT THE
+          GENERATOR: contract version 25 gave the cause a share and a mechanism, and a run made
+          after it contains such claims. See the version 25 entry at the head of this file, and
+          KL-07.
       imperfection_causes:
         limit_exhausted: 209
         mixed_items: 136
@@ -5256,8 +5260,11 @@ run_profiles:
           arrived through one cause would teach one mechanism while the vocabulary promised more.
           Both drawable causes occur and they are mutually exclusive, which is what
           `config/policy.yaml` requires of the RESULT rather than of the share.
-          `subject_not_evidenced` has no declared share — nothing can plan a deliberately incomplete
-          claim — so a consumer must not expect it at any size. See KL-07.
+          ⚠️ `subject_not_evidenced` HAD NO DECLARED SHARE AT THE GENERATOR VERSION THIS PROFILE
+          NAMES — nothing could then plan a deliberately incomplete claim — so its zero here is by
+          construction and correct for this corpus. IT IS NOT ADVICE ABOUT THE GENERATOR: contract
+          version 25 gave the cause a share and a mechanism. See the version 25 entry at the head
+          of this file, and KL-07.
       imperfection_causes:
         limit_exhausted: 107
         mixed_items: 61
