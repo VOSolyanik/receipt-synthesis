@@ -20,6 +20,8 @@ from functools import partial
 from pathlib import Path
 
 import cv2
+import numpy as np
+from PIL import Image, PngImagePlugin
 
 from receipt_synth import __version__
 from receipt_synth.claim_planner import (
@@ -84,6 +86,13 @@ UNATTRIBUTED = "not attributed — planning stopped for a reason claim_planner c
 # `data-field` name — those are printed-field names, and none begins that way — and the collision is
 # checked rather than assumed.
 _CONTENT_BBOX_KEY = "__content_extent__"
+
+# Stamped into a `tEXt` chunk of every shipped PNG (see `_write_png`), so that a viewer who
+# encounters one outside this repository — cropped into a slide, forwarded in a chat — can tell
+# by inspecting the file that it is not a real document. Metadata only: it never touches a pixel.
+SYNTHETIC_DATA_MARKER = (
+    "SYNTHETIC TEST DATA — NOT VALID PROOF OF PAYMENT — github.com/VOSolyanik/receipt-synthesis"
+)
 
 # HOW A DOCUMENT REACHED THE VERIFIER — drawn per document, UNIFORMLY over the three channels.
 #
@@ -327,6 +336,23 @@ _BUILDERS = {
 }
 
 
+def _write_png(path: Path, image: np.ndarray) -> None:
+    """Write a BGR image (OpenCV's convention) to `path`, stamped with `SYNTHETIC_DATA_MARKER`.
+
+    THE LAST SAVE POINT FOR A SHIPPED IMAGE, and the only one: `renderer.render` also writes a
+    PNG, but only to a temporary staging file that `_build_document` deletes before returning,
+    so nothing downstream ever sees it; `degrader.degrade` never touches disk — it hands back a
+    numpy array. This function is therefore the single place a PNG that lands in `out_dir/images`
+    is written, which is what makes stamping it here sufficient for 100% of the corpus.
+
+    PIL rather than `cv2.imwrite`: OpenCV's PNG writer has no `tEXt`-chunk support. The chunk is
+    metadata appended to the file; it does not touch a pixel, so the decoded image is unchanged.
+    """
+    info = PngImagePlugin.PngInfo()
+    info.add_text("Comment", SYNTHETIC_DATA_MARKER)
+    Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)).save(path, pnginfo=info)
+
+
 def _build_document(
     rng: random.Random,
     *,
@@ -481,7 +507,7 @@ def _build_document(
         height, width = moved.image.shape[:2]
         lost = clipped_edges(content_bbox, width, height)
         image_path.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(image_path), moved.image)
+        _write_png(image_path, moved.image)
 
     return (
         document.ground_truth(

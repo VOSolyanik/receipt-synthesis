@@ -290,6 +290,13 @@ These are the most valuable examples in the dataset.
 Every record carries `synthetic: true` and the generator version. This is not decoration — it is what makes
 the provenance of any individual file unambiguous once it leaves this repository.
 
+**The PNG itself carries the same guarantee, independent of its ground-truth record.** `assembler._write_png`
+stamps a `tEXt` chunk, key `Comment`, value `SYNTHETIC TEST DATA — NOT VALID PROOF OF PAYMENT —
+github.com/VOSolyanik/receipt-synthesis`, at the last point any image is written to disk — the one save site
+every shipped file passes through, after the renderer's clean screenshot and the degrader's in-memory
+transform. Metadata only, appended after the pixel data; a PNG cropped into a slide or forwarded on its own,
+with no JSON alongside it, still identifies itself as synthetic to anything that reads the chunk.
+
 `amount_due` is the receipt's `ДО СПЛАТИ` line: the total less any discount, plus cash rounding. It is
 **equal to `amount` in the current version**, because both adjustments are zero — so it discriminates nothing
 and its accuracy is not a meaningful metric yet. `config/labelling-schema.yaml` says so in the field's own
