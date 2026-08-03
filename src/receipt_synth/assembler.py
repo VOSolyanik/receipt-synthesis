@@ -732,16 +732,19 @@ def generate_dataset(
 def balance_report(dataset: Dataset) -> str:
     """The realized verdict distribution against `verdict_mix` — and what is missing from it.
 
-    Deliberately not a tidy table. Only two of the six verdicts in `verdict_mix` can be
-    built yet, so the draw is renormalized over those two and the realized shares are
-    conditional on that subset. A report that renormalized silently would print a
-    balanced-looking dataset while a third of the target mix was absent, which is worse
+    Deliberately not a tidy table. Not every verdict in `verdict_mix` can be built — the
+    count is `claim_planner.REALIZABLE_VERDICTS` rather than a number stated here, because it
+    has moved three times — so the draw is renormalized over those that can, and the realized
+    shares are conditional on that subset. A report that renormalized silently would print a
+    balanced-looking dataset while a fifth of the target mix was absent, which is worse
     than printing nothing: it answers the question nobody would then think to ask.
 
-    One of those six carries no share yet — `verdict_mix` may declare a member as `null`,
-    and `rejected` is one today. Such a member is named without a percentage and excluded
+    A member may also carry NO SHARE — `verdict_mix` may declare one as `null`, and every
+    member carries a number today. Such a member is named without a percentage and excluded
     from every sum, and the absent fraction is then reported as a lower bound: it is what
-    the share-carrying verdicts account for, not the whole of what is missing.
+    the share-carrying verdicts account for, not the whole of what is missing. The branch
+    stays because the next verdict declared before its mechanism exists arrives that way, and
+    it is exercised by a test against a patched mix.
 
     🔴 TWO MARKER VOCABULARIES, AND THEY MUST NOT MERGE. The report says two different kinds of
     thing and a reader has to be able to tell them apart at a glance:

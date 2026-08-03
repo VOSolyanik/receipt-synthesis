@@ -28,11 +28,11 @@ import math
 import random
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 
-from receipt_synth.config import coverage_targets, load_policy
+from receipt_synth.config import coverage_targets
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
@@ -699,10 +699,10 @@ def _draw_date_in_period(rng: random.Random) -> datetime:
     outside the window is what drives the `rejected` branch on the period, and choosing it is
     a decision of the planner rather than an accident of the calendar — which is why the
     period is read from policy.yaml and never from today's date. `_payment_outside_period`
-    below is the other half of that decision.
+    below is the other half of that decision, and it reads the window through the same
+    `active_period` — one function deciding what the window IS, two deciding what to do about it.
     """
-    period = load_policy()["period"]
-    start, end = date.fromisoformat(str(period["start"])), date.fromisoformat(str(period["end"]))
+    start, end = active_period()
 
     day = start + timedelta(days=rng.randint(0, (end - start).days))
     # Trading hours, so a receipt is not timestamped at four in the morning.

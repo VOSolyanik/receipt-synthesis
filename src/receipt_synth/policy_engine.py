@@ -121,13 +121,16 @@ LIMIT_EXHAUSTED = "limit_exhausted"
 # things about each. A document that is simply absent and two documents that contradict
 # each other are not the same problem.
 #
-# POLICY.YAML NAMES NONE OF THE FOUR. Its only cause vocabulary is
-# `partially_covered_causes`, which exists to declare SHARES of the partially_covered
-# bucket; none of these four has a share, because no share of a dataset is being sized by
-# them. So the names are this module's, they are exported for anyone comparing labels against
-# a vocabulary, and they are recorded in config/labelling-schema.yaml, which is the contract
-# a consumer reads. If policy.yaml ever grows a cause vocabulary of its own, these move
-# there and the constants read it — the same way MIXED_ITEMS reads its own key today.
+# POLICY.YAML NAMES THREE OF THE FOUR AND SIZES NOTHING BY THE FOURTH. Its cause vocabularies
+# exist to declare SHARES — `partially_covered_causes`, and `insufficient_evidence_causes` since
+# the planner learned to build all three of those — so a cause appears there exactly when a
+# bucket of the dataset is sized by it. `OUTSIDE_PERIOD` is not: `rejected` has two routes, one
+# of them buildable, and a share over a single route would be the number 1.0 written down.
+# THE NAMES ARE STILL THIS MODULE'S EITHER WAY, and a share is not a vocabulary: this engine
+# derives a cause from a claim's documents without consulting one, so a cause whose share was
+# removed would still be returned. They are exported for anyone comparing labels against a
+# vocabulary and recorded in config/labelling-schema.yaml, which is the contract a consumer
+# reads.
 
 # Causes of `insufficient_evidence`, which owns two of the three slots of `document_evidence`
 # (see the module docstring, rules 2 and 3): the WHAT-WAS-BOUGHT slot, unestablished when no
