@@ -88,12 +88,12 @@ limits:
   enforce_cumulative: true     # claims processed in date order, carrying the remaining balance
 
 verdict_mix:                   # target distribution; the balance report checks the realized one
-  covered: 0.50
+  covered: 0.40
   partially_covered: 0.20
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
   partially_paid: 0.10
-  rejected: null               # share decided together with the mechanism that builds one
+  rejected: 0.10               # 0.50 of `covered` paid for it when the mechanism landed
 
 partially_covered_causes:      # splits the bucket above by cause; must sum to 1.0
   mixed_items: 0.65

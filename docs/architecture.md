@@ -93,8 +93,18 @@ distinction the intent carries is the whole of why it exists: a claim short of a
 absent is a defect the planner still refuses to build, and the two are indistinguishable from the document
 list alone. Nothing here asserts the label — the planner builds the evidence, the engine derives the answer.
 
+**A claim may also be planned outside the benefit period, which is the one mechanism that is a date rather
+than a document.** The payment is displaced by a whole period, into the benefit year before or after the
+window — the side is drawn, so a corpus does not teach "late" where the rule says "outside" — and everything
+else about the claim stays ordinary: the evidence is complete, the basket is covered, and the policy engine
+answers `rejected`, cause `outside_period`, off the payment date alone. Only one of the two routes to that
+verdict is built this way; a claim whose basket the category covers *none* of needs a builder that draws no
+covered line, and `claim_planner._UNREALIZABLE_ROUTES` records that it does not.
+
 It processes a persona's claims in date order and carries the remaining category balance, so that a claim can
-also become partially covered by exhausting an annual limit rather than by containing a non-covered item.
+also become partially covered by exhausting an annual limit rather than by containing a non-covered item. A
+claim outside the period is outside that order too, and may be: it reimburses nothing, so it consumes no
+balance.
 
 The verdict itself is not computed here. The planner chooses what to build and what answer it is aiming at; a
 separate policy engine reads `config/policy.yaml` and derives the verdict, the covered fraction, the

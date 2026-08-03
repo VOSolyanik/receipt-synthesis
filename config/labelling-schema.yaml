@@ -60,6 +60,38 @@
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 26 by A VERDICT OF THE ENUM ENTERING THE DATA FOR THE FIRST TIME. NO LABEL RECORD
+# GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHICH LABELS A CONSUMER
+# RECEIVES, and one of them is a verdict every earlier dataset promised and none contained. FOUR
+# consequences.
+#
+#   🔴 `rejected` IS NOW EMITTED, THROUGH ONE OF ITS TWO ROUTES. A claim's PAYMENT may fall
+#   outside `period` in config/policy.yaml — in the benefit year before or after it, on either
+#   side — and it is labelled `rejected` with the cause `outside_period`. `imperfection` now has
+#   all six of its causes in the data. A consumer that treated `rejected` as a verdict it would
+#   never be scored on is now scored on it.
+#
+#   🔴 AND THE SHAPE OF SUCH A CLAIM CONTRADICTS THE OBVIOUS READING OF THE VERDICT: its evidence
+#   is complete, its basket is an ordinary covered basket, so `covered_fraction` is typically 1.0
+#   while `reimbursable_amount` is 0.00. A consumer that learned "rejected means nothing was
+#   covered" — the other route, which no dataset contains — has it backwards for every instance
+#   here. `known_limitations` KL-07 is rewritten around exactly this asymmetry: the verdict is
+#   fully predicted by a date comparison on this corpus, which is a shortcut the data teaches.
+#
+#   `config/policy.yaml` GAINED A SHARE — `verdict_mix.rejected: 0.10`, which read `null` — and
+#   `covered` FELL FROM 0.50 TO 0.40 to pay for it. The realizable subset still sums to 0.80, so
+#   every other verdict's conditional rate and `insufficient_evidence_causes_min_run_size` are
+#   unchanged. NO MEMBER OF THE MIX CARRIES `null` NOW; the rule for one is unchanged for the next
+#   verdict declared before its mechanism exists. 🔴 THIS IS AN I-2 EVENT: the file is vendored
+#   under a sha lock, so a consumer holding an earlier copy is holding a different file. Its
+#   `version` stays at 1 under the standing rule — the sha IS its identity.
+#
+#   THE DRAW SHIFTED. A fourth verdict in the draw changes what every seed produces from the first
+#   claim onward, so any figure measured on an earlier run — a per-class F1, a document-class mix —
+#   is a figure about a different corpus. The profiles in `run_profiles` are records of the runs
+#   they name and are left untouched; each carries the generator version it was measured at, and
+#   each counts `rejected` as zero, correctly for its own run.
+#
 # Bumped to 25 by A CAUSE OF THE `imperfection` VOCABULARY ENTERING THE DATA FOR THE FIRST TIME.
 # NO LABEL RECORD GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHICH LABELS
 # A CONSUMER RECEIVES, and one of them is a shape no previous dataset contained. FOUR consequences.
@@ -767,7 +799,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 25
+version: 26
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -3437,7 +3469,7 @@ verdicts:
       `document_types.invoice` and RC-07.
 
   rejected:
-    status: forward_contract
+    status: emitted
     means: >
       The documents establish everything they need to, and the policy plainly does not cover
       the claim. TWO MECHANISMS, answering the same question on different axes — by WHAT was
@@ -3499,23 +3531,33 @@ verdicts:
         The consumer's catch-all for a guard firing. A runtime outcome, not a label; see
         `verdict_decision_mapping`.
     emitted: >
-      NOT YET, BY EITHER MECHANISM. `policy_engine` labels both today and no dataset produced
-      so far contains this verdict: `content_builder` always draws at least one covered line,
-      and `claim_planner._draw_date_in_period` draws every date inside the window.
+      YES, BY ONE OF THE TWO MECHANISMS, AND THE OTHER STILL BY NEITHER. Every `rejected` claim
+      in a dataset is one whose PAYMENT FELL OUTSIDE THE BENEFIT PERIOD, carrying the cause
+      `outside_period`: `claim_planner` displaces such a claim's payment by a whole period, into
+      the adjacent benefit year, on either side of the window. Its documents are otherwise
+      ordinary and its basket is an ordinary covered basket, so `covered_fraction` on such a
+      claim is typically 1.0 and `reimbursable_amount` is 0.00 — a combination no other verdict
+      produces.
 
-      The scope of that is the DRAWN path, not every path. `plan_claim`'s `issued_at` is a
-      public parameter with no guard on the period, so a caller naming an out-of-window date
-      gets a plan the engine labels `rejected` — which is why the claim above is about what
-      the generator draws rather than about what it can be made to produce.
-      `claim_planner._UNREALIZABLE_REASONS` records what each mechanism waits for.
+      ⛔ THE OTHER ROUTE IS NOT IN THE DATA. `rejected` by WHAT WAS BOUGHT — a covered fraction
+      of zero — is labelled by `policy_engine` and built by nothing: `content_builder` always
+      draws at least one covered line. A consumer must therefore not learn "`rejected` means the
+      payment date is outside the window", true though it is of every claim here; see
+      `known_limitations` KL-07, and `claim_planner._UNREALIZABLE_ROUTES` for what the route
+      waits for.
     share: >
-      `verdict_mix` in policy.yaml declares this member with NO SHARE — `null`, which the
-      loader returns as `None` and never as 0. Acquiring a second mechanism did not change
-      that: the share is decided together with whichever mechanism first builds such a claim,
-      and a number set before then would size a bucket nothing can fill. A consumer reading
-      `verdict_mix` as weights must treat an undeclared share as absent rather than as zero,
-      and the assembler's balance report therefore reports the absent fraction of the mix as
-      a LOWER BOUND.
+      `verdict_mix` in policy.yaml declares 0.10 for this member since the revision that made it
+      buildable. It read `null` before — a share, unlike a weight of 0, that the loader returns
+      as `None` and that a consumer had to treat as absent rather than as zero. NO MEMBER OF THE
+      MIX CARRIES `null` TODAY, and the rule about one is unchanged for whichever verdict is next
+      declared before its mechanism exists: an undeclared share is absent, not zero, and the
+      balance report reports the absent fraction of the mix as a LOWER BOUND when one appears.
+
+      🔴 THE SHARE CAME OUT OF `covered`, WHICH FELL 0.50 TO 0.40, so the realizable subset still
+      sums to 0.80 and the conditional rate of every other realizable verdict is unchanged. A
+      consumer comparing a corpus generated before this revision with one generated after will
+      find `covered` down by about ten points of the whole and the rest of the table where it
+      was.
 
 # The two enums, side by side. Stated as a table because the alternative is a consumer
 # comparing verdict strings and scoring every correct decision as wrong — the exact failure
@@ -3926,7 +3968,9 @@ claim_label:
         # claim's documents without consulting a share, so a cause whose share was removed would
         # still be returned and still reach a label. The names are `policy_engine`'s, exported as
         # module constants, and THIS FILE is where the vocabulary is contracted.
-        # ⛔ `outside_period` below has no share, and its verdict has none either — see KL-07.
+        # ⛔ `outside_period` below has no share OF ITS OWN, and needs none: `rejected` has two
+        # routes and only one is buildable, so a per-route split would be the number 1.0 written
+        # down. The VERDICT carries a share since this revision — see `verdicts.rejected.share`.
         subject_not_evidenced: >
           The WHAT-WAS-BOUGHT slot: no document of the claim is of a type that states it — a
           bare transfer. That slot has no document at all.
@@ -4513,58 +4557,59 @@ known_limitations:
       is declared here rather than fixed alongside the archetype that exposed it.
 
   - id: KL-07
-    name: one cause of the `imperfection` vocabulary is in the vocabulary and never in the data
-    predictor: none — a coverage gap in the cause vocabulary
-    hurts: [evaluation]
+    name: one of the two routes to `rejected` is never realized, so the date predicts the verdict
+    predictor: >
+      the payment date — outside the benefit period on every `rejected` claim and on no other
+    hurts: [evaluation, training]
     subset: >
-      🔴 `outside_period` IS NEVER REALIZED. `imperfection` has a vocabulary of six causes and this
-      corpus contains five. The absent one is the cause of `rejected` — a claim whose PAYMENT falls
-      outside the benefit period — and it is absent because its VERDICT is: `rejected` carries no
-      share in `verdict_mix` and the planner draws inside the window, so no claim aims at it.
+      🔴 EVERY `rejected` CLAIM IS AN OUT-OF-PERIOD ONE. That verdict has two routes and the corpus
+      contains one: by WHEN it was paid, cause `outside_period`. The other — by WHAT WAS BOUGHT, a
+      basket the claimed category covers none of, carrying NO cause — is labelled by
+      `policy_engine` and built by nothing, because `content_builder` always draws at least one
+      covered line (`claim_planner._UNREALIZABLE_ROUTES`).
 
-      ⚠️ THIS ENTRY USED TO BE ABOUT `subject_not_evidenced`, WHICH IS NOW REALIZED, and the change
-      is worth reading rather than skipping: the corpus contains claims carrying ONE payment
-      document and nothing that says what was bought. The planner gained a named intent for
-      deliberately incomplete evidence (`claim_planner.EvidenceIntent.EVIDENCE_GAP`), the cause
-      gained a share in config/policy.yaml, and the gap this entry described closed. A profile
-      measured before that — every profile in `run_profiles` — counts it as zero, correctly for the
-      run it names.
+      So the verdict is FULLY PREDICTED BY A DATE COMPARISON on this corpus, and a system that
+      never reads a line item can score perfectly on it. That is a shortcut the data teaches, not
+      merely a gap in it, which is why this entry hurts training as well as evaluation.
 
-      A consumer stratifying by VERDICT cannot see the remaining gap from `insufficient_evidence`,
-      which is present and all three of whose causes now occur; it is visible only as the absence of
-      `rejected` itself.
+      ⚠️ THIS ENTRY USED TO BE ABOUT A MISSING CAUSE, and both of the gaps it described have since
+      closed: `subject_not_evidenced` when the planner gained
+      `claim_planner.EvidenceIntent.EVIDENCE_GAP`, and `outside_period` when it learned to displace
+      a claim's payment out of the benefit period. ALL SIX CAUSES OF `imperfection` NOW OCCUR. What
+      survives is one step narrower than a cause: a route that carries no cause at all, and is
+      therefore invisible to a consumer stratifying by `imperfection`.
     how_a_consumer_detects_it: >
-      `outside_period` is in the `imperfection` vocabulary and is in no corpus this generator has
-      produced: it is the cause of `rejected`, that verdict carries no share in `verdict_mix`, and
-      the planner draws every payment date inside the benefit period. Zero by construction rather
-      than by outcome — a consumer must not read a scorecard row for it as measured at any size, and
-      the same applies to `rejected` as a whole. The other five causes DO occur, including
-      `subject_not_evidenced`, which was itself zero by construction until the planner learned to
-      plan incomplete evidence. The counts per cause are in the profile; a profile older than that
-      change counts four.
+      Take every claim labelled `rejected` and compare its payment date against `period` in
+      config/policy.yaml: all of them fall outside it, and all of them carry `outside_period` in
+      `imperfection`. The complement — a `rejected` claim with an EMPTY `imperfection`, whose
+      `covered_fraction` is 0 and whose lines are all non-covered — does not occur at any run size,
+      because nothing builds it; a scorecard row for that case is unmeasured rather than perfect.
+      Reading the other way round is the trap: `covered_fraction` on a `rejected` claim of this
+      corpus is typically 1.0, so a consumer that learned "rejected means nothing was covered" from
+      the policy will find the data disagreeing with it in every instance.
     see_profile: run_profiles
     when_it_appeared: >
-      THE FIGURES MOVED FOR A MECHANISM, NOT FOR A SEED, TWICE. First when `insufficient_evidence`
-      entered `REALIZABLE_VERDICTS` and its two cross-check causes went off zero. Then when
-      `EvidenceIntent.EVIDENCE_GAP` made a claim with no subject document plannable, which took
-      `subject_not_evidenced` off zero and left this entry describing `outside_period` alone.
-      Nothing about `outside_period` has changed in either revision: it needs a payment dated
-      outside the window, which nothing draws.
+      WHEN THE PLANNER GAINED THE PERIOD ROUTE AND NOT THE COVERAGE ONE. Before that revision the
+      verdict itself was absent from every dataset and this entry described the absence of its
+      cause; a profile measured earlier — every profile in `run_profiles` — counts `rejected` as
+      zero and five causes rather than six, correctly for the run it names. The asymmetry recorded
+      here is what the revision created: a verdict that is now present through exactly one of its
+      two mechanisms.
     consequence: >
-      Evaluation of a system's ability to notice a payment made OUTSIDE THE BENEFIT PERIOD is
-      unmeasured here. A consumer must not read the presence of a rich `imperfection` vocabulary as
-      evidence that every route through it is exercised — and, symmetrically, must not carry a
-      figure taken before a cause became realizable into a run where it is.
+      A per-verdict figure for `rejected` measured on this corpus is a figure about the PERIOD
+      RULE and about nothing else. It does not evidence that a system can refuse a claim whose
+      basket the policy excludes, and it must not be quoted as one. A consumer building an
+      evaluation of category-coverage refusals has to source it elsewhere until the route is built.
     how_to_stratify: >
-      By `imperfection` membership, never by verdict — the five realized causes sit under two
-      verdicts, and one verdict carries three of them.
+      By `imperfection` membership within the verdict: `outside_period` present is the whole of the
+      `rejected` bucket here, and `rejected` with an empty `imperfection` is the empty stratum
+      whose denominator is zero by construction rather than by outcome.
     fixed_by: >
-      A PLANNER THAT AIMS AT `rejected`. `claim_planner._draw_date_in_period` draws inside the
-      window by construction; `issued_at` is a public parameter with no period guard, so a caller
-      naming an out-of-window date already gets a plan the engine duly labels `rejected` with this
-      cause. What is missing is a share in `verdict_mix` and a draw that uses it — see
-      `claim_planner._UNREALIZABLE_REASONS[rejected]`, which states both routes to that verdict and
-      why the other one, a wholly non-covered basket, needs a change to `content_builder`.
+      A BASKET BUILDER THAT CAN DRAW NO COVERED LINE. `content_builder` draws at least one covered
+      line for every claim, which is what makes a covered fraction of zero unreachable; opening the
+      route means changing that builder and giving the planner a way to ask for it, in the way
+      `EvidenceIntent` gave it a way to ask for missing evidence. The engine needs nothing: it has
+      labelled the case since `verdict_for` was written.
 
   - id: KL-08
     name: the cross-check causes can never occur on a fiscal receipt
