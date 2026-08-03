@@ -711,11 +711,13 @@ def _select_documents(
     intent: EvidenceIntent = EvidenceIntent.COMPLETE,
     payment_precedes_subject: bool = False,
 ) -> tuple[DocumentPlan, ...]:
-    """The documents a claim needs to establish both facts a reimbursement rests on.
+    """The documents a claim carries: both facts a reimbursement rests on, or the one
+    `intent` asks for.
 
     A reimbursement needs to know what was bought and that it was paid for
     (`document_evidence` in policy.yaml), and the two need not come from the same
-    document. Two shapes are built, in this order:
+    document. THREE SHAPES ARE BUILT. Two of them are decided by what the registry offers,
+    in this order:
 
     1. **One document that proves both** — a fiscal receipt. Preferred wherever one is
        registered, because it is the shape a real claim usually takes and because a claim
