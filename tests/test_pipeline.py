@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal
@@ -570,6 +571,27 @@ def test_the_planner_will_not_plan_without_a_ledger():
     A caller with no history passes `Ledger()` and says so."""
     with pytest.raises(TypeError):
         plan_claim(random.Random(1), persona=persona(), claim_id="c1")
+
+
+def test_plan_claim_names_the_cause_when_the_persona_can_realize_nothing():
+    """`why_no_claim` guards `plan_claims`, but a direct call to `plan_claim` reaches
+    `draw_verdict(rng, realizable_verdicts_for(...) or REALIZABLE_VERDICTS)` unguarded. The
+    `or` used to fall back to the full list and draw a verdict the persona cannot realize —
+    the resulting `ValueError` then named that arbitrary drawn verdict rather than the real
+    reason nothing is plannable, which is the anti-pattern this module's own docstrings warn
+    against three times: a failure landing a stage away from its cause. `plan_claim` must
+    raise on the empty list itself, naming the persona and the reason `why_no_claim` gives."""
+    subject = persona()
+    ledger = Ledger()
+    for category in documentable_categories(subject):
+        ledger.record(subject.persona_id, category, Decimal("100000"))
+    assert realizable_verdicts_for(subject, ledger) == ()
+    cause = why_no_claim(subject, ledger)
+    assert cause is not None
+
+    with pytest.raises(ValueError, match=re.escape(cause)) as excinfo:
+        plan_claim(random.Random(1), persona=subject, claim_id="c1", ledger=ledger)
+    assert subject.persona_id in str(excinfo.value)
 
 
 def test_every_verdict_is_either_realizable_or_named_unrealizable():

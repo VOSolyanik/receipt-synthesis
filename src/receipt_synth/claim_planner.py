@@ -742,7 +742,20 @@ def plan_claim(
     passes `Ledger()` and says so at the call site.
     """
     if verdict is None:
-        verdict = draw_verdict(rng, realizable_verdicts_for(persona, ledger) or REALIZABLE_VERDICTS)
+        realizable = realizable_verdicts_for(persona, ledger)
+        if not realizable:
+            # RAISE HERE, NOT A STAGE LATER. The `or REALIZABLE_VERDICTS` this replaced drew
+            # from the full list when nothing was realizable, and the resulting `ValueError`
+            # then named whichever verdict the draw happened to land on rather than the real
+            # reason — exactly the failure-lands-a-stage-from-its-cause anti-pattern this
+            # module's own docstrings call out (`plannable_categories`, `_select_documents`,
+            # `realizable_verdicts_for`). `why_no_claim` already knows the reason: no
+            # documentable category, or every one exhausted.
+            raise ValueError(
+                f"persona {persona.persona_id} can realize no verdict: "
+                f"{why_no_claim(persona, ledger)}"
+            )
+        verdict = draw_verdict(rng, realizable)
     if verdict not in REALIZABLE_VERDICTS:
         raise NotImplementedError(
             f"verdict {verdict.value!r} "

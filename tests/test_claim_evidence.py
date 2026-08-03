@@ -856,9 +856,15 @@ def test_a_plan_whose_documents_would_both_carry_a_basket_is_refused():
 
 
 def test_a_registry_that_cannot_establish_both_facts_is_refused():
-    """An invoice archetype and nothing that proves payment. The planner draws `covered`
-    and `partially_covered`, both of which need complete evidence, so building the claim
-    anyway would mean planning a claim whose label is decided by what is missing."""
+    """An invoice archetype and nothing that proves payment. `covered` and
+    `partially_covered` both need complete evidence, so building the claim anyway would
+    mean planning a claim whose label is decided by what is missing.
+
+    `verdict` is passed explicitly here, naming a verdict this planner draws, so the test
+    exercises `_select_documents`'s own refusal rather than `plan_claim`'s newer guard on an
+    empty `realizable_verdicts_for` — that guard fires first, and correctly so, once nothing
+    is documentable at all, which a registry this bare also triggers when `verdict` is left
+    to be drawn."""
     from receipt_synth import claim_planner
 
     with pytest.MonkeyPatch.context() as patch:
@@ -866,7 +872,7 @@ def test_a_registry_that_cannot_establish_both_facts_is_refused():
         with pytest.raises(ValueError, match="both what was bought"):
             claim_planner.plan_claim(
                 random.Random(3), persona=_persona(), claim_id="c1",
-                category="vitamins_nutrition", ledger=Ledger(),
+                category="vitamins_nutrition", ledger=Ledger(), verdict=Verdict.COVERED,
             )
 
 
