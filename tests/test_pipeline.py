@@ -753,9 +753,9 @@ def test_a_capture_channel_with_no_recipe_raises_rather_than_borrowing_one():
 def test_write_png_stamps_the_marker_as_a_text_chunk(tmp_path):
     """Pins the finding that sent `SYNTHETIC_DATA_MARKER` to ASCII hyphens: PIL's `PngInfo` encodes
     to Latin-1 and falls back to an `iTXt` chunk — silently — for anything that does not fit, so a
-    marker spelled with an em dash would never raise and would still land in the wrong chunk. `.text`
-    only surfaces what `tEXt`/`iTXt`/`zTXt` chunks PIL actually wrote, so reading it back is already
-    a check that a `tEXt` chunk exists, not merely that the string round-trips."""
+    marker spelled with an em dash would never raise and would still land in the wrong chunk.
+    `.text` only surfaces what `tEXt`/`iTXt`/`zTXt` chunks PIL actually wrote, so reading it back is
+    already a check that a `tEXt` chunk exists, not merely that the string round-trips."""
     image = np.zeros((4, 4, 3), dtype=np.uint8)
     path = tmp_path / "marker.png"
 

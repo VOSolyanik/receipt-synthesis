@@ -278,7 +278,9 @@ def test_every_template_declares_exactly_one_document_root(template_path):
 # A CSS `content:` declaration, matched on the PROPERTY rather than on the substring, so
 # `justify-content` / `align-content` — properties, not this one — cannot trip a false positive.
 # The value is captured whichever quote character wraps it.
-_CSS_CONTENT_DECLARATION = re.compile(r'(?<![\w-])content\s*:\s*(?P<quote>["\'])(?P<value>.*?)(?P=quote)')
+_CSS_CONTENT_DECLARATION = re.compile(
+    r'(?<![\w-])content\s*:\s*(?P<quote>["\'])(?P<value>.*?)(?P=quote)'
+)
 
 
 @pytest.mark.parametrize(
