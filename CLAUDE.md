@@ -138,6 +138,17 @@ a downstream consumer ever ships a modified library. Never relax this pin withou
   `vat_letter  # ПДВ-літера: fiscal VAT rate code printed on Ukrainian receipts (А = 20%, В = 7%)`.
 - Rendered document content is of course in the document's own language (uk / pl / de / es / en) — that is
   data, not code.
+- Comment emoji each mark a specific kind of claim, not decoration. Surveyed from actual usage:
+  - 🔴 — a load-bearing constraint: a design decision a later change could silently violate if it moved
+    this without moving what depends on it.
+  - 👁 — grounded in documents actually observed (the author's own receipts / reference examples), usually
+    phrased as a count, e.g. "8 of 8 observed confirmations".
+  - 📄 — cites the literal text of a published form or instruction (a line, a caption, a wording), not a
+    paraphrase of it.
+  - ⚠️ — a caveat about the current code's scope or a limitation the reader must not miss, e.g. "only the
+    first value is reachable today".
+  - ⛔ — an explicit negative: states plainly what does NOT happen, is NOT established, or is NOT passed —
+    a stated boundary, not an accidental omission.
 - Prefer composition over inheritance; explicit over clever. Match the surrounding code.
 - Small, reversible steps; one concern per commit; conventional commits (`type(scope): subject`).
 - Invariant validators live next to `content_builder` and are covered by tests: tax-id checksum, VAT letter ↔
