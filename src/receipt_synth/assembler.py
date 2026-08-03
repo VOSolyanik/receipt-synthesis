@@ -597,9 +597,9 @@ def generate_dataset(
     skipped: Counter[str] = Counter()
 
     with Renderer() as renderer:
-        for index in range(personas):
+        for persona_index in range(personas):
             rng = random.Random(root.getrandbits(64))
-            persona_id = f"p{index + 1:03d}"
+            persona_id = f"p{persona_index + 1:03d}"
 
             persona = _draw_documentable_persona(rng, persona_id, country)
             all_personas.append(persona)
@@ -641,7 +641,7 @@ def generate_dataset(
                 documents: list[DocGroundTruth] = []
                 settles: Decimal | None = None
                 cites: DocumentReference | None = None
-                for index, document_plan in enumerate(plan.documents, start=1):
+                for doc_index, document_plan in enumerate(plan.documents, start=1):
                     document, reference = _build_document(
                         rng,
                         persona=persona,
@@ -649,7 +649,7 @@ def generate_dataset(
                         document_plan=document_plan,
                         vendor=vendor,
                         identity=identity,
-                        doc_id=f"{plan.claim_id}_d{index}",
+                        doc_id=f"{plan.claim_id}_d{doc_index}",
                         renderer=renderer,
                         out_dir=out_dir,
                         settles=settles,
