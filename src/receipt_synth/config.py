@@ -16,6 +16,7 @@ import json
 from decimal import Decimal
 from functools import cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import yaml
@@ -305,7 +306,7 @@ def banks(country: str) -> tuple[str, ...]:
 
 
 @cache
-def bank_codes(country: str) -> dict[str, str]:
+def bank_codes(country: str) -> MappingProxyType[str, str]:
     """The stable name → МФО table: `bank_code` beside each entry `banks()` draws its name from.
 
     Exists because a name and a code used to be drawn INDEPENDENTLY wherever a party's bank was
@@ -320,11 +321,15 @@ def bank_codes(country: str) -> dict[str, str]:
     they are not drawn at all: this table is the whole of what decides a code, so it has to stay
     FIXED here rather than seeded, or a run could still print two codes for one name by changing
     the codes under a different seed.
+
+    Returned as a `MappingProxyType` rather than a plain `dict`, like `banks()` returns a tuple
+    and for the same reason: `functools.cache` hands every caller the SAME object, and a mutable
+    one would let an edit at one call site reach every other.
     """
     entries = load_vendors()["banks"].get(country)
     if not entries:
         raise KeyError(f"config/vendors.json lists no bank for {country!r}")
-    return {entry["printed_name"]: entry["bank_code"] for entry in entries}
+    return MappingProxyType({entry["printed_name"]: entry["bank_code"] for entry in entries})
 
 
 # --- generation.yaml: the payment-confirmation draw inputs ---------------------
