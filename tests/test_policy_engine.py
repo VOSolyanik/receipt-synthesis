@@ -15,10 +15,10 @@ The policy values these tests are derived from, as of policy.yaml version 1:
     categories[mental_health].annual_limit      25000
     period                                      2026-01-01 .. 2026-12-31
     reporting_currency                          UAH
-    verdict_mix                                 covered 0.50, partially_covered 0.20,
+    verdict_mix                                 covered 0.40, partially_covered 0.20,
                                                 not_proof_of_payment 0.10,
                                                 insufficient_evidence 0.10,
-                                                partially_paid 0.10, rejected null
+                                                partially_paid 0.10, rejected 0.10
 
 and, for the item-kind vocabulary:
 
@@ -132,6 +132,13 @@ def test_the_constants_this_file_was_written_against():
 
     If policy.yaml changes, this fails first and says so, instead of the rest of the file
     quietly asserting arithmetic that no longer follows from the policy.
+
+    🔴 `verdict_mix` IS PINNED WHOLE, AND IT WAS THE ONE CONSTANT OF THE HEADER THAT WAS NOT.
+    The module docstring lists the mix among the values this file is written against, and it
+    silently described another policy for the length of a change that moved two of its shares —
+    every test still passed, because nothing compared the block against the file. Pinned as a
+    MAPPING rather than share by share: a member added to the mix with a share of its own would
+    slip past a list of six assertions and is exactly the edit this has to catch.
     """
     assert full_threshold() == Decimal("0.9999")
     assert annual_limit("vitamins_nutrition") == Decimal("12000")
@@ -140,6 +147,14 @@ def test_the_constants_this_file_was_written_against():
     assert active_period() == (date(2026, 1, 1), date(2026, 12, 31))
     assert reporting_currency() == "UAH"
     assert load_policy()["limits"]["enforce_cumulative"] is True
+    assert verdict_mix() == {
+        Verdict.COVERED: 0.40,
+        Verdict.PARTIALLY_COVERED: 0.20,
+        Verdict.NOT_PROOF_OF_PAYMENT: 0.10,
+        Verdict.INSUFFICIENT_EVIDENCE: 0.10,
+        Verdict.PARTIALLY_PAID: 0.10,
+        Verdict.REJECTED: 0.10,
+    }
 
     spec = category("vitamins_nutrition")
     assert COVERED_KIND in spec["covered_items"]

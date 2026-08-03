@@ -62,8 +62,9 @@
 
 # Bumped to 26 by A VERDICT OF THE ENUM ENTERING THE DATA FOR THE FIRST TIME. NO LABEL RECORD
 # GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHICH LABELS A CONSUMER
-# RECEIVES, and one of them is a verdict every earlier dataset promised and none contained. FOUR
-# consequences.
+# RECEIVES, and one of them is a verdict every earlier dataset promised and none contained. FIVE
+# consequences, the last of them a CORRECTION to what an earlier version said rather than a change
+# to what this one does.
 #
 #   🔴 `rejected` IS NOW EMITTED, THROUGH ONE OF ITS TWO ROUTES. A claim's PAYMENT may fall
 #   outside `period` in config/policy.yaml — in the benefit year before or after it, on either
@@ -91,6 +92,16 @@
 #   is a figure about a different corpus. The profiles in `run_profiles` are records of the runs
 #   they name and are left untouched; each carries the generator version it was measured at, and
 #   each counts `rejected` as zero, correctly for its own run.
+#
+#   ⚠️ AND A CORRECTION CARRIED IN THE SAME REVISION: `verdicts.insufficient_evidence.status` read
+#   `forward_contract` — this file's word for NOT PRESENT IN THE DATASET — while that verdict has
+#   been emitted since version 13, through the cross-check causes, and through all three of its
+#   causes since version 25. The word is now `emitted` and the history is at the key. It rides
+#   this number rather than minting its own because the rule at `version` is about what a
+#   consumer diffing two vendored copies must be able to see: a copy of 26 states this correctly,
+#   and a consumer diffing 25 against 26 reads it here. A consumer that had already scored
+#   against `insufficient_evidence` was right to; one that skipped it on the strength of the
+#   status was under-prepared, and no label it received was ever described wrongly.
 #
 # Bumped to 25 by A CAUSE OF THE `imperfection` VOCABULARY ENTERING THE DATA FOR THE FIRST TIME.
 # NO LABEL RECORD GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHICH LABELS
@@ -3417,7 +3428,20 @@ verdicts:
       claim.
 
   insufficient_evidence:
-    status: forward_contract
+    status: emitted
+    emitted: >
+      YES, THROUGH ALL THREE OF ITS CAUSES, AND THE WORD IS A CORRECTION RATHER THAN NEWS. This
+      verdict has been in the data since the planner gained it as a target — first through the
+      two cross-check causes, then through `subject_not_evidenced` when
+      `claim_planner.EvidenceIntent.EVIDENCE_GAP` made a deliberately incomplete claim plannable
+      — and the status key was not moved with it. It read `forward_contract`, which this file
+      defines as NOT PRESENT IN THE DATASET, so the contract understated what a consumer receives
+      for two revisions.
+
+      A CONSUMER THAT BELIEVED IT WAS UNDER-PREPARED, NEVER MIS-PREPARED: no field, cause or
+      comparison rule was described wrongly, and every claim carrying this verdict was already
+      shaped as the keys below say. What the wrong word cost was the decision to score against
+      it. The counts per cause are in the run profiles.
     means: >
       THE SLOTS: that a PURCHASE WAS MADE, and that the payment and the purchase are ONE
       TRANSACTION. This verdict is what the claim gets when either of those two facts of

@@ -396,21 +396,24 @@ def test_a_realizable_verdict_with_no_share_cannot_be_drawn_from():
 
 
 def test_the_drawn_mix_is_the_target_mix_renormalized_over_the_realizable_subset():
-    """verdict_mix gives covered 0.50, partially_covered 0.20 and insufficient_evidence 0.10; of
-    the three that cannot be built, two carry 0.10 each and `rejected` carries no share at all.
-    Renormalized over the three that can:
+    """verdict_mix gives covered 0.40, partially_covered 0.20, insufficient_evidence 0.10 and
+    rejected 0.10 to the four that can be built; the two that cannot carry 0.10 each.
+    Renormalized over the four:
 
-        covered                0.50 / 0.80 = 0.625
+        covered                0.40 / 0.80 = 0.500
         partially_covered      0.20 / 0.80 = 0.250
         insufficient_evidence  0.10 / 0.80 = 0.125
+        rejected               0.10 / 0.80 = 0.125
 
-    A member with no share must not touch that arithmetic — the draw is over the
-    realizable subset, and `rejected` is not in it.
+    ⚠️ THE DENOMINATOR IS UNCHANGED AND ITS MEMBERS ARE NOT. `rejected` became realizable and was
+    paid for out of `covered`, so the subset still sums to 0.80 while the first row moved ten
+    points; a reader checking this table against an older corpus is checking two different
+    distributions with one total.
 
     Over 4000 draws each realized share should sit near its renormalized target. The window is
     wide (±0.04) on purpose: this asserts the weights are the policy's, not that a
-    pseudo-random draw hits a mean. ALL THREE are checked, because checking only `covered` would
-    have passed unchanged when a third member joined the denominator.
+    pseudo-random draw hits a mean. EVERY member of the subset is checked, because checking only
+    `covered` would pass unchanged when a member joins the denominator.
     """
     rng = random.Random(20260803)
     draws = [draw_verdict(rng) for _ in range(4000)]
