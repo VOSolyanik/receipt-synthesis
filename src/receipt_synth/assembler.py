@@ -91,8 +91,12 @@ _CONTENT_BBOX_KEY = "__content_extent__"
 # Stamped into a `tEXt` chunk of every shipped PNG (see `_write_png`), so that a viewer who
 # encounters one outside this repository — cropped into a slide, forwarded in a chat — can tell
 # by inspecting the file that it is not a real document. Metadata only: it never touches a pixel.
+#
+# ASCII HYPHENS, NOT EM DASHES. PIL's `PngInfo.add_text` encodes to Latin-1 and falls back to an
+# `iTXt` chunk — silently — for any character that does not fit, and U+2014 does not. A marker
+# meant to land in `tEXt` has to be spelled in characters `tEXt` can actually hold.
 SYNTHETIC_DATA_MARKER = (
-    "SYNTHETIC TEST DATA — NOT VALID PROOF OF PAYMENT — github.com/VOSolyanik/receipt-synthesis"
+    "SYNTHETIC TEST DATA - NOT VALID PROOF OF PAYMENT - github.com/VOSolyanik/receipt-synthesis"
 )
 
 # HOW A DOCUMENT REACHED THE VERIFIER — drawn per document, UNIFORMLY over the three channels.

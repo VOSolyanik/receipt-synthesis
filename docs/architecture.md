@@ -291,8 +291,9 @@ Every record carries `synthetic: true` and the generator version. This is not de
 the provenance of any individual file unambiguous once it leaves this repository.
 
 **The PNG itself carries the same guarantee, independent of its ground-truth record.** `assembler._write_png`
-stamps a `tEXt` chunk, key `Comment`, value `SYNTHETIC TEST DATA — NOT VALID PROOF OF PAYMENT —
-github.com/VOSolyanik/receipt-synthesis`, at the last point any image is written to disk — the one save site
+stamps a `tEXt` chunk, key `Comment`, value `SYNTHETIC TEST DATA - NOT VALID PROOF OF PAYMENT -
+github.com/VOSolyanik/receipt-synthesis` (ASCII hyphens: PIL's Latin-1 encoder falls back to `iTXt` for
+anything it cannot fit, silently), at the last point any image is written to disk — the one save site
 every shipped file passes through, after the renderer's clean screenshot and the degrader's in-memory
 transform. Metadata only, appended after the pixel data; a PNG cropped into a slide or forwarded on its own,
 with no JSON alongside it, still identifies itself as synthetic to anything that reads the chunk.
