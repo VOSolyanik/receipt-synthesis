@@ -76,9 +76,10 @@ def generate_persona(
 
     # Composed here rather than taken whole from `fake.name_*()`, because the surname comes
     # from `content_builder.personal_surname` — the same narrowed pool a printed sole trader
-    # is drawn from. A persona's name is not printed on any document today, but it is the
-    # payer on a payment confirmation, so it carries the same exposure and gets the same
-    # mechanism rather than a second one.
+    # is drawn from. The persona's own name IS printed — as the buyer on an invoice, as the
+    # payer on a payment confirmation, as the account holder on a bank statement — so it
+    # carries the same exposure as a sole trader's name and gets the same mechanism rather
+    # than a second one.
     #
     # Composing costs the locale's own name FORMAT, which for some locales is more than a
     # given name and one surname — a Spanish full name carries two. Whoever adds the first
