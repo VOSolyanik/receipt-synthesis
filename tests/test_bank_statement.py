@@ -705,7 +705,14 @@ def test_the_bank_charges_its_own_service_fee_on_every_statement():
     """👁 1/1 statements carry a bank service charge — the one row whose counterparty is the issuer
     itself. Generated on every statement rather than drawn: 📄 the charge for account servicing
     recurs monthly, so its presence within a period is expected, and ⛔ one document cannot give a
-    rate. It also gives the page a debit that is not a payment to a vendor."""
+    rate. It also gives the page a debit that is not a payment to a vendor.
+
+    🔴 THE CODE, NOT ONLY THE NAME. This row used to draw its own МФО instead of printing the
+    header's, so a delivered statement could name «АТ «Сенс Банк», код 686743» in the header and
+    the same bank with code 399161 two lines later — three requisites of one bank on one page, two
+    of them disagreeing. `counterparty_code` and the МФО inside `counterparty_account` (an IBAN
+    carries it at `[4:10]`) both have to equal the document's own `bank_code`.
+    """
     fee_purpose = statement_purposes("uk", "service_fee")[0]
     for seed in range(12):
         statement = make_statement(seed)
@@ -713,6 +720,14 @@ def test_the_bank_charges_its_own_service_fee_on_every_statement():
         assert len(fees) == 1
         assert fees[0].direction is Direction.DEBIT
         assert fees[0].counterparty_name == statement.bank_name
+        assert fees[0].counterparty_code == statement.bank_code, (
+            f"seed {seed}: the header names bank code {statement.bank_code!r}, the service-charge "
+            f"row prints {fees[0].counterparty_code!r} beside the same bank name"
+        )
+        assert fees[0].counterparty_account[4:10] == statement.bank_code, (
+            f"seed {seed}: the service-charge row's own IBAN carries "
+            f"{fees[0].counterparty_account[4:10]!r}, not the header's {statement.bank_code!r}"
+        )
 
 
 def test_a_statement_purpose_is_filled_only_from_a_document_reference():

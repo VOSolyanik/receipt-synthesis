@@ -218,10 +218,14 @@ def test_both_documents_of_a_claim_name_the_seller_by_the_same_requisite(
     read = 0
     for claim in claims[payment_class]:
         subject, payment = claim.read()
-        if field == "seller_bank_name" and payment[field] is None:
+        if field in ("seller_bank_name", "seller_bank_code") and payment[field] is None:
             # 👁 A confirmation's payee bank is sometimes a CAPTION WITH NOTHING UNDER IT, which is
-            # observed and deliberate. Skipped for that row and for no other — every other requisite
-            # is printed on every document of both classes, and a missing one is a defect.
+            # observed and deliberate. 🔴 BOTH FIELDS, NOT ONLY THE NAME: `payee.bank` is one
+            # optional string, "name, Код банку code" or nothing at all, so the name and the code
+            # are empty TOGETHER — a version of this guard naming only `seller_bank_name` skipped
+            # the right claim for the wrong field and failed `seller_bank_code` outright the first
+            # time a draw actually landed on the empty case for it. Every other requisite is
+            # printed on every document of both classes, and a missing one there is a defect.
             continue
         read += 1
 

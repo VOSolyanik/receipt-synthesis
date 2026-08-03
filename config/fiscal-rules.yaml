@@ -237,12 +237,19 @@ jurisdictions:
       # МФО — the six-digit code that identifies a BANK, 📄 assigned in the National Bank's
       # register of participants and carried inside every Ukrainian IBAN.
       #
-      # HERE RATHER THAN UNDER A DOCUMENT CLASS, because two classes print it — a payment
-      # confirmation names the issuer's and a statement names the account's — and the code is a
-      # fact about the jurisdiction, not about either document. NO `label`, deliberately: the
-      # caption travels with the position it is printed in and each class states its own, so a
-      # label here would be a second source of truth for the same string. The same reasoning is
-      # spelled out at `fiscal_device_number` above.
+      # HERE RATHER THAN UNDER A DOCUMENT CLASS, because three places print it — a payment
+      # confirmation names the issuer's and its own payee's, a statement names the account's and
+      # its service-charge row's — and the code is a fact about the jurisdiction, not about any
+      # one document. NO `label`, deliberately: the caption travels with the position it is
+      # printed in and each class states its own, so a label here would be a second source of
+      # truth for the same string. The same reasoning is spelled out at `fiscal_device_number`
+      # above.
+      #
+      # `pattern` is the SHAPE a МФО has and nothing draws from it any more: a code used to be
+      # drawn afresh at every one of those places, which let one real bank name carry two
+      # different codes within a claim. `banks.<country>[].bank_code` in config/vendors.json is
+      # now the only source of a code — a fixed, invented table, one code per name — and this
+      # pattern exists to check that table's entries are shaped like a real one.
       bank_code: { pattern: "[0-9]{6}" }
 
     receipt:
