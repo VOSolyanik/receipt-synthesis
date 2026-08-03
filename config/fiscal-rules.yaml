@@ -237,12 +237,19 @@ jurisdictions:
       # МФО — the six-digit code that identifies a BANK, 📄 assigned in the National Bank's
       # register of participants and carried inside every Ukrainian IBAN.
       #
-      # HERE RATHER THAN UNDER A DOCUMENT CLASS, because two classes print it — a payment
-      # confirmation names the issuer's and a statement names the account's — and the code is a
-      # fact about the jurisdiction, not about either document. NO `label`, deliberately: the
-      # caption travels with the position it is printed in and each class states its own, so a
-      # label here would be a second source of truth for the same string. The same reasoning is
-      # spelled out at `fiscal_device_number` above.
+      # HERE RATHER THAN UNDER A DOCUMENT CLASS, because three places print it — a payment
+      # confirmation names the issuer's and its own payee's, a statement names the account's and
+      # its service-charge row's — and the code is a fact about the jurisdiction, not about any
+      # one document. NO `label`, deliberately: the caption travels with the position it is
+      # printed in and each class states its own, so a label here would be a second source of
+      # truth for the same string. The same reasoning is spelled out at `fiscal_device_number`
+      # above.
+      #
+      # `pattern` is the SHAPE a МФО has and nothing draws from it any more: a code used to be
+      # drawn afresh at every one of those places, which let one real bank name carry two
+      # different codes within a claim. `banks.<country>[].bank_code` in config/vendors.json is
+      # now the only source of a code — a fixed, invented table, one code per name — and this
+      # pattern exists to check that table's entries are shaped like a real one.
       bank_code: { pattern: "[0-9]{6}" }
 
     receipt:
@@ -901,9 +908,10 @@ jurisdictions:
           - { prefix: "", pattern: "", serial_digits: 4 }
           - { prefix: "@", pattern: "[0-9]{1}[A-Z]{2}", serial_digits: 6 }
 
-    # Fiscal QR: the public receipt-verification URL of the tax authority.
+    # Fiscal QR: shaped like the tax authority's public receipt-verification URL, but the host is
+    # deliberately not that service. See "Provenance" in docs/architecture.md for why.
     qr:
-      fiscal_payload: "https://cabinet.tax.gov.ua/cashregs/check?id={receipt_number}&date={date:%Y%m%d}&time={time:%H%M%S}&fn={fiscal_device_number}&sm={total:.2f}"
+      fiscal_payload: "https://example.invalid/cashregs/check?id={receipt_number}&date={date:%Y%m%d}&time={time:%H%M%S}&fn={fiscal_device_number}&sm={total:.2f}"
       # Decorative / marketing QR used as a trap: a QR that is not fiscal at all.
       decorative_payloads:
         - "https://example.com/loyalty"

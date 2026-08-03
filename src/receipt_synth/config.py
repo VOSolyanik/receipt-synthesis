@@ -16,6 +16,7 @@ import json
 from decimal import Decimal
 from functools import cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import yaml
@@ -302,6 +303,33 @@ def banks(country: str) -> tuple[str, ...]:
     if not entries:
         raise KeyError(f"config/vendors.json lists no bank for {country!r}")
     return tuple(entry["printed_name"] for entry in entries)
+
+
+@cache
+def bank_codes(country: str) -> MappingProxyType[str, str]:
+    """The stable name → МФО table: `bank_code` beside each entry `banks()` draws its name from.
+
+    Exists because a name and a code used to be drawn INDEPENDENTLY wherever a party's bank was
+    needed — once in `draw_party_identity`, again in `build_payment_confirmation`, again in a
+    bank statement's own header — so the same real bank name could carry two different six-digit
+    codes on two documents of one claim, or on one document's own header and its service-charge
+    row. A name now resolves to a code by LOOKUP, never by a fresh draw, which is what makes
+    "same name, same code" true by construction rather than by coincidence.
+
+    The codes are INVENTED — chosen to be shaped like a real МФО (six digits, in the range real
+    ones are allocated from) without equalling any real bank's actual one — and, unlike the name,
+    they are not drawn at all: this table is the whole of what decides a code, so it has to stay
+    FIXED here rather than seeded, or a run could still print two codes for one name by changing
+    the codes under a different seed.
+
+    Returned as a `MappingProxyType` rather than a plain `dict`, like `banks()` returns a tuple
+    and for the same reason: `functools.cache` hands every caller the SAME object, and a mutable
+    one would let an edit at one call site reach every other.
+    """
+    entries = load_vendors()["banks"].get(country)
+    if not entries:
+        raise KeyError(f"config/vendors.json lists no bank for {country!r}")
+    return MappingProxyType({entry["printed_name"]: entry["bank_code"] for entry in entries})
 
 
 # --- generation.yaml: the payment-confirmation draw inputs ---------------------

@@ -856,6 +856,27 @@ def test_the_trace_does_not_round_a_partial_verdict_up_to_a_hundred_percent():
     assert result.policy_trace[-1] == "coverage 99.999% (1 of 2 line items not covered)"
 
 
+def test_percent_still_formats_a_normal_fraction():
+    """The formatting rule itself, exercised directly: one decimal place unless that would
+    round a partial fraction up to 100% or a positive one down to 0%."""
+    from receipt_synth import policy_engine
+
+    assert policy_engine._percent(Decimal("0.5")) == "50%"
+    assert policy_engine._percent(Decimal("0.999")) == "99.9%"
+    assert policy_engine._percent(Decimal("0.999999")) == "99.9999%"
+
+
+def test_percent_refuses_a_fraction_beyond_its_precision_bound():
+    """`_percent` tries at most 9 decimal places before giving up. A fraction needing more
+    than that to be told apart from 0%/100% used to fall through silently printing the
+    wrong extreme — see the docstring. It must now fail loudly instead, and no basket this
+    generator draws produces a fraction anywhere near this precise."""
+    from receipt_synth import policy_engine
+
+    with pytest.raises(AssertionError):
+        policy_engine._percent(Decimal("0.999999999999"))
+
+
 def test_the_trace_justifies_a_rejected_verdict_with_the_coverage_line():
     """The trace states what the verdict rested on, and for `rejected` that is coverage and
     nothing else — the period passed, and the limit was never asked anything."""

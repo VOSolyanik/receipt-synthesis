@@ -26,6 +26,7 @@ from receipt_synth.assembler import (
     assign_splits,
     balance_report,
 )
+from receipt_synth.policy_engine import insufficient_evidence_causes_min_run_size
 from receipt_synth.schemas import (
     Capture,
     ClaimGroundTruth,
@@ -428,3 +429,63 @@ def test_every_dimension_of_an_empty_corpus_reports_absence_rather_than_a_distri
     assert "Document classes — 0 document(s)" in report
     assert "Capture channels — 0 document(s)" in report
     assert "Train / validation split — NOT COMPUTED" in report
+
+
+# --------------------------------- report: insufficient_evidence run-size guideline --
+
+
+def a_run_realizing_one_cause(size, *, realized_cause="payment_precedes_subject"):
+    """`size` built claims: one `insufficient_evidence` claim carrying only `realized_cause`, so
+    the other declared cause is realized zero times, and `size - 1` ordinary `covered` filler
+    claims so the run reaches the requested total. Documents are irrelevant to the cause block
+    and left empty, as `test_every_dimension_of_an_empty_corpus...` already established is safe."""
+    claims = [
+        ClaimGroundTruth(
+            claim_id="c001", persona_id="p001", category="vitamins_nutrition",
+            documents=[], verdict=Verdict.INSUFFICIENT_EVIDENCE, imperfection=[realized_cause],
+        )
+    ]
+    claims += [
+        a_claim(f"c{index:03d}", f"p{index:03d}", [], verdict=Verdict.COVERED)
+        for index in range(2, size + 1)
+    ]
+    return Dataset(seed=1, personas=[], claims=claims, documents=[])
+
+
+def test_an_unrealized_cause_below_the_guideline_reads_as_run_too_small():
+    """The brief's own example: a 36-claim run with zero `amount_mismatch` must not read as this
+    policy violated. `payment_precedes_subject` is the one drawn, so `amount_mismatch` alone sits
+    at zero — below the guideline, that is expected sampling variance, not a defect."""
+    guideline = insufficient_evidence_causes_min_run_size()
+    report = balance_report(a_run_realizing_one_cause(guideline - 1))
+    line = next(ln for ln in report.splitlines() if ln.strip().startswith("amount_mismatch"))
+
+    assert f"RUN TOO SMALL — {guideline - 1} built claim(s) < guideline {guideline}" in line
+    assert "DESIGN/MECHANISM DEFECT" not in line
+
+
+def test_an_unrealized_cause_at_the_guideline_reads_as_a_likely_defect():
+    """At or above the guideline the same zero count is worth investigating, and the report says
+    so in different words — the two readings must never share a sentence."""
+    guideline = insufficient_evidence_causes_min_run_size()
+    report = balance_report(a_run_realizing_one_cause(guideline))
+    line = next(ln for ln in report.splitlines() if ln.strip().startswith("amount_mismatch"))
+
+    assert (
+        f"LIKELY A DESIGN/MECHANISM DEFECT — {guideline} built claim(s), "
+        f"at or above guideline {guideline}"
+    ) in line
+    assert "RUN TOO SMALL" not in line
+
+
+def test_a_realized_cause_carries_no_run_size_finding():
+    """The guideline only speaks about a cause that realized zero. The cause that DID occur must
+    not carry either finding, however small the run."""
+    guideline = insufficient_evidence_causes_min_run_size()
+    report = balance_report(a_run_realizing_one_cause(guideline - 1))
+    line = next(
+        ln for ln in report.splitlines() if ln.strip().startswith("payment_precedes_subject")
+    )
+
+    assert "RUN TOO SMALL" not in line
+    assert "DESIGN/MECHANISM DEFECT" not in line

@@ -238,6 +238,16 @@ def insufficient_evidence_causes() -> dict[str, float]:
             load_policy()["insufficient_evidence_causes"].items()}
 
 
+def insufficient_evidence_causes_min_run_size() -> int:
+    """The run size at which `insufficient_evidence_causes` binds "every cause non-zero".
+
+    Read from policy.yaml rather than hardcoded so the derivation comment beside the number
+    stays the single place it is justified — the balance report cites this value, it does
+    not compute or restate it.
+    """
+    return int(load_policy()["insufficient_evidence_causes_min_run_size"])
+
+
 # =============================================================================
 # Evidence: what a claim's documents establish between them
 # =============================================================================
@@ -671,6 +681,17 @@ def _percent(fraction: Decimal) -> str:
         rounded = Decimal(text)
         if (rounded != 100 or percentage == 100) and (rounded != 0 or percentage == 0):
             break
+    else:
+        # The loop above is bounded, not unbounded: it never resolves a fraction whose
+        # distance from 0% or 100% needs more than 9 decimal places to show. No basket this
+        # generator draws carries that many line items, so `fraction` never has that much
+        # precision — but an oracle that silently printed "100%" for a claim it knows is not
+        # fully covered would be exactly the bug this function exists to avoid. Fail loudly
+        # instead of falling through with the last (wrong) `text` from the loop above.
+        raise AssertionError(
+            f"coverage fraction {fraction} needs more than 9 decimal places to be told "
+            "apart from 0% or 100% — outside what this generator's baskets can produce"
+        )
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return f"{text}%"

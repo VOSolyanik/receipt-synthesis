@@ -218,10 +218,14 @@ def test_both_documents_of_a_claim_name_the_seller_by_the_same_requisite(
     read = 0
     for claim in claims[payment_class]:
         subject, payment = claim.read()
-        if field == "seller_bank_name" and payment[field] is None:
+        if field in ("seller_bank_name", "seller_bank_code") and payment[field] is None:
             # 👁 A confirmation's payee bank is sometimes a CAPTION WITH NOTHING UNDER IT, which is
-            # observed and deliberate. Skipped for that row and for no other — every other requisite
-            # is printed on every document of both classes, and a missing one is a defect.
+            # observed and deliberate. 🔴 BOTH FIELDS, NOT ONLY THE NAME: `payee.bank` is one
+            # optional string, "name, Код банку code" or nothing at all, so the name and the code
+            # are empty TOGETHER — a version of this guard naming only `seller_bank_name` skipped
+            # the right claim for the wrong field and failed `seller_bank_code` outright the first
+            # time a draw actually landed on the empty case for it. Every other requisite is
+            # printed on every document of both classes, and a missing one there is a defect.
             continue
         read += 1
 
@@ -281,6 +285,44 @@ def test_the_printed_bank_code_is_the_one_inside_the_printed_account(claims):
             f"{account[4 : 4 + len(code)]!r}"
         )
     assert checked, "no confirmation printed a payee bank code — nothing was asserted"
+
+
+def test_the_bank_identity_reader_agrees_with_what_the_document_was_built_with(claims):
+    """`cross_document_audit.bank_identity_pairs` is the reader the new corpus-wide "one name, one
+    code" axis (see that module) is built on — if IT misread the page, the axis could report a
+    false disagreement across the whole corpus, or worse, a false agreement. Checked here against
+    the KNOWN ANSWER, each document's own `bank_name`/`bank_code`, on the RENDERED page rather than
+    the object the builder returned — the same discipline every other row of this module follows.
+
+    On a bank statement this is also what proves the reader finds BOTH occurrences the new axis
+    needs — the header AND the service-charge row — since `test_the_bank_charges_its_own_service
+    _fee_on_every_statement` in test_bank_statement.py already covers their agreement at the
+    builder level and this file exists to cover it on the page.
+    """
+    from cross_document_audit import bank_identity_pairs
+
+    checked = 0
+    for payment_class in PAYMENT_CLASSES:
+        for claim in claims[payment_class]:
+            pairs = bank_identity_pairs(payment_class, claim.payment_text)
+            names = {name for name, _ in pairs}
+            assert claim.payment.bank_name in names, (
+                f"{payment_class}: no pair was read for the issuer {claim.payment.bank_name!r}, "
+                f"read {pairs!r}"
+            )
+            if payment_class == "bank_statement":
+                assert len(pairs) == 2, (
+                    f"a statement names its issuer twice — the header and the service-charge "
+                    f"row — read {pairs!r}"
+                )
+            for name, code in pairs:
+                checked += 1
+                if name == claim.payment.bank_name:
+                    assert code == claim.payment.bank_code, (
+                        f"{payment_class}: the page pairs {name!r} with {code!r}, the document's "
+                        f"own bank_code is {claim.payment.bank_code!r}"
+                    )
+    assert checked, "no bank-identity pair was read off any rendered payment document"
 
 
 # -------------------------------------------------- the claimant is one person --

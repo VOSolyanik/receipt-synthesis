@@ -36,6 +36,7 @@ from faker import Faker
 
 from receipt_synth.config import (
     acquirers,
+    bank_codes,
     bank_statement_count_range,
     bank_statement_money_range,
     bank_statement_share,
@@ -924,6 +925,21 @@ class PartyIdentity:
     account: str
 
 
+def _draw_bank(rng: random.Random, country: str) -> tuple[str, str]:
+    """A bank name and its code, together — the one draw plus the one lookup, in one place.
+
+    Third occurrence of `rng.choice(banks(country)); bank_codes(country)[bank_name]`: once here for
+    `draw_party_identity`, once for the payment confirmation's own issuer, once for a statement
+    row's account. Extracted so a name can no longer be drawn without its code beside it — the same
+    reason `bank_codes` exists at all, one call site short of covering every draw.
+
+    THE DRAW ITSELF IS UNCHANGED: one `rng.choice` over `banks(country)`, same as before this
+    existed, so a seeded run's output does not move.
+    """
+    bank_name = rng.choice(banks(country))
+    return bank_name, bank_codes(country)[bank_name]
+
+
 def draw_party_identity(
     rng: random.Random, vendor: dict, country: str = "UA"
 ) -> PartyIdentity:
@@ -941,7 +957,10 @@ def draw_party_identity(
     """
     is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
     tax_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
-    bank_code = _draw_bank_code(rng, country)
+    # The NAME is drawn; the CODE is looked up. See `_draw_bank` — a fresh draw here is exactly
+    # the defect this function used to carry: the same real bank name coming back with a
+    # different МФО on the next identity drawn for it.
+    bank_name, bank_code = _draw_bank(rng, country)
     return PartyIdentity(
         tax_code=tax_code,
         vat_number=(
@@ -949,7 +968,7 @@ def draw_party_identity(
             if vendor_is_vat_payer(vendor)
             else None
         ),
-        bank_name=rng.choice(banks(country)),
+        bank_name=bank_name,
         bank_code=bank_code,
         account=generate_iban(rng, bank_code, country),
     )
@@ -1941,16 +1960,6 @@ def _draw_card(rng: random.Random, block: dict) -> str:
     return shown
 
 
-def _draw_bank_code(rng: random.Random, country: str) -> str:
-    """A МФО — the six-digit code identifying a bank in this jurisdiction.
-
-    Read from `identifiers.bank_code` in config/fiscal-rules.yaml, which is where it lives because
-    TWO document classes print it: a confirmation names the issuer's and a statement names the
-    account's. One shape, one place.
-    """
-    return _draw_from_pattern(rng, jurisdiction(country)["identifiers"]["bank_code"]["pattern"])
-
-
 def _draw_signature_path(rng: random.Random) -> str:
     """An SVG path for a handwritten signature — 👁 present beside the stamp on 7 of 8.
 
@@ -2089,8 +2098,7 @@ def build_payment_confirmation(
     # -- the two parties. The PAYER's bank is this document's own — the confirmation is issued by
     # the bank that moved the money — while the PAYEE's comes from the claim's identity, because
     # the account printed for the payee is the claim's and an IBAN carries its bank's code.
-    bank_name = rng.choice(banks(country))
-    bank_code = _draw_bank_code(rng, country)
+    bank_name, bank_code = _draw_bank(rng, country)
 
     # 👁 The SECOND form of emptiness — a caption with nothing under it — observed on the
     # recipient's bank among three such fields on one document. ⛔ The same form was observed on
@@ -2587,8 +2595,7 @@ def build_bank_statement(
         raise ValueError(f"a statement row states a positive amount, got {amount}")
 
     # -- the account and its holder
-    bank_name = rng.choice(banks(country))
-    bank_code = _draw_bank_code(rng, country)
+    bank_name, bank_code = _draw_bank(rng, country)
     account = generate_iban(rng, bank_code, country)
 
     # -- the period. Derived from where the operations fall rather than declared: ⛔ nothing
@@ -2712,8 +2719,13 @@ def build_bank_statement(
             # elsewhere on the page. ⚠️ That is the confirmation's finding about caption plus
             # length appearing again on a second class, and it is why a rule reading the KIND of
             # code off its caption alone is wrong.
+            #
+            # 🔴 THE ISSUER'S OWN CODE, NOT A FRESH DRAW: this row names the same bank the header
+            # does, so it prints the header's `bank_code` rather than drawing one of its own — a
+            # second draw here is exactly what let this row disagree with the header AND with the
+            # МФО inside its own IBAN, on the same line, on a delivered document.
             counterparty_name=bank_name,
-            counterparty_code=_draw_bank_code(rng, country),
+            counterparty_code=bank_code,
             counterparty_account=generate_iban(rng, bank_code, country),
             counterparty_bank=bank_name,
         )

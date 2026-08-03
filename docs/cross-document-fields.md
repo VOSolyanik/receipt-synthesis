@@ -286,7 +286,11 @@ Named here rather than left for a reader to notice:
   to what the documents *say*, not to how identifiers are drawn. It is not in this change.
 * **the amount is still ① as a linking key**, for the reason given above.
 * **the claimant's account and bank cannot co-occur** while a claim has exactly one payment
-  document. Nothing is drawn wrongly; there is simply nothing to compare.
+  document. Nothing is drawn wrongly; there is simply nothing to compare — not in the
+  `{subject} × {payment}` shape this page is about. The name still has to carry one code
+  EVERYWHERE it is printed, though, corpus-wide rather than per claim, which is not this page's
+  question: it is measured as its own axis in `tools/cross_document_audit.py`
+  (`bank_identity_audit`), against the fixed name → code table in `config/vendors.json`.
 * **the reference points one way only.** The payment document cites the invoice; the invoice
   carries no pointer to the payment, and no real invoice would — it is issued first.
 * **the 54 self-transfer purposes above.** Measured and recorded, deliberately not repaired here,

@@ -290,6 +290,14 @@ These are the most valuable examples in the dataset.
 Every record carries `synthetic: true` and the generator version. This is not decoration — it is what makes
 the provenance of any individual file unambiguous once it leaves this repository.
 
+**The PNG itself carries the same guarantee, independent of its ground-truth record.** `assembler._write_png`
+stamps a `tEXt` chunk, key `Comment`, value `SYNTHETIC TEST DATA - NOT VALID PROOF OF PAYMENT -
+github.com/VOSolyanik/receipt-synthesis` (ASCII hyphens: PIL's Latin-1 encoder falls back to `iTXt` for
+anything it cannot fit, silently), at the last point any image is written to disk — the one save site
+every shipped file passes through, after the renderer's clean screenshot and the degrader's in-memory
+transform. Metadata only, appended after the pixel data; a PNG cropped into a slide or forwarded on its own,
+with no JSON alongside it, still identifies itself as synthetic to anything that reads the chunk.
+
 `amount_due` is the receipt's `ДО СПЛАТИ` line: the total less any discount, plus cash rounding. It is
 **equal to `amount` in the current version**, because both adjustments are zero — so it discriminates nothing
 and its accuracy is not a meaningful metric yet. `config/labelling-schema.yaml` says so in the field's own
@@ -726,6 +734,23 @@ receipts. No real document belonging to any third party is used as a source anyw
 Benefit categories are derived from a [public industry survey of benefits packages in the Ukrainian IT
 market](https://dou.ua/lenta/articles/benefits-package-2026/) (DOU). Limits, thresholds and the verdict mix
 are this project's own plausible values and describe no real employer's plan.
+
+**The fiscal QR does not point at the real tax authority.** A Ukrainian ПРРО/РРО receipt's QR encodes a URL a
+scanner resolves against the state's own cash-register verification service — that shape (query parameters
+for receipt number, date, time, fiscal device number, total) is a public fact about the document format and
+is worth reproducing. Encoding the *real* host on a synthetic receipt would not be: it would be a generated
+artifact carrying a link to a live government service for a transaction that never happened.
+`config/fiscal-rules.yaml`'s `qr.fiscal_payload` therefore targets `https://example.invalid/...` — a host
+reserved by RFC 2606 to never resolve — keeping every query parameter in place so the QR's shape and pixel
+weight stay realistic.
+
+**Two of the state's real hostnames stay in the corpus as printed prose, and that is not the same swap.**
+`config/fiscal-rules.yaml` prints `check.gov.ua` in a bank confirmation's verification footer and
+`ca.diia.gov.ua/verify` in its electronic-signature note — both observed, both public, and neither
+machine-resolvable from the page: a QR encodes a payload a scanner *acts on automatically*, while these are
+instructions a human would have to *read and retype* into a browser. Genuinely reaching either service still
+takes a person choosing to do so outside the document, the same as it would from the paper original — the
+document's contribution is the layout fact that such a line is printed there at all, not a working link to it.
 
 Everything the tool produces is synthetic: documents that were never issued, for transactions that never
 happened, by people who do not exist.

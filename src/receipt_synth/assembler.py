@@ -20,6 +20,8 @@ from functools import partial
 from pathlib import Path
 
 import cv2
+import numpy as np
+from PIL import Image, PngImagePlugin
 
 from receipt_synth import __version__
 from receipt_synth.claim_planner import (
@@ -53,6 +55,7 @@ from receipt_synth.policy_engine import (
     Ledger,
     evaluate_claim,
     insufficient_evidence_causes,
+    insufficient_evidence_causes_min_run_size,
     partially_covered_causes,
     verdict_mix,
 )
@@ -84,6 +87,17 @@ UNATTRIBUTED = "not attributed — planning stopped for a reason claim_planner c
 # `data-field` name — those are printed-field names, and none begins that way — and the collision is
 # checked rather than assumed.
 _CONTENT_BBOX_KEY = "__content_extent__"
+
+# Stamped into a `tEXt` chunk of every shipped PNG (see `_write_png`), so that a viewer who
+# encounters one outside this repository — cropped into a slide, forwarded in a chat — can tell
+# by inspecting the file that it is not a real document. Metadata only: it never touches a pixel.
+#
+# ASCII HYPHENS, NOT EM DASHES. PIL's `PngInfo.add_text` encodes to Latin-1 and falls back to an
+# `iTXt` chunk — silently — for any character that does not fit, and U+2014 does not. A marker
+# meant to land in `tEXt` has to be spelled in characters `tEXt` can actually hold.
+SYNTHETIC_DATA_MARKER = (
+    "SYNTHETIC TEST DATA - NOT VALID PROOF OF PAYMENT - github.com/VOSolyanik/receipt-synthesis"
+)
 
 # HOW A DOCUMENT REACHED THE VERIFIER — drawn per document, UNIFORMLY over the three channels.
 #
@@ -327,6 +341,23 @@ _BUILDERS = {
 }
 
 
+def _write_png(path: Path, image: np.ndarray) -> None:
+    """Write a BGR image (OpenCV's convention) to `path`, stamped with `SYNTHETIC_DATA_MARKER`.
+
+    THE LAST SAVE POINT FOR A SHIPPED IMAGE, and the only one: `renderer.render` also writes a
+    PNG, but only to a temporary staging file that `_build_document` deletes before returning,
+    so nothing downstream ever sees it; `degrader.degrade` never touches disk — it hands back a
+    numpy array. This function is therefore the single place a PNG that lands in `out_dir/images`
+    is written, which is what makes stamping it here sufficient for 100% of the corpus.
+
+    PIL rather than `cv2.imwrite`: OpenCV's PNG writer has no `tEXt`-chunk support. The chunk is
+    metadata appended to the file; it does not touch a pixel, so the decoded image is unchanged.
+    """
+    info = PngImagePlugin.PngInfo()
+    info.add_text("Comment", SYNTHETIC_DATA_MARKER)
+    Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)).save(path, pnginfo=info)
+
+
 def _build_document(
     rng: random.Random,
     *,
@@ -481,7 +512,7 @@ def _build_document(
         height, width = moved.image.shape[:2]
         lost = clipped_edges(content_bbox, width, height)
         image_path.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(image_path), moved.image)
+        _write_png(image_path, moved.image)
 
     return (
         document.ground_truth(
@@ -571,9 +602,9 @@ def generate_dataset(
     skipped: Counter[str] = Counter()
 
     with Renderer() as renderer:
-        for index in range(personas):
+        for persona_index in range(personas):
             rng = random.Random(root.getrandbits(64))
-            persona_id = f"p{index + 1:03d}"
+            persona_id = f"p{persona_index + 1:03d}"
 
             persona = _draw_documentable_persona(rng, persona_id, country)
             all_personas.append(persona)
@@ -615,7 +646,7 @@ def generate_dataset(
                 documents: list[DocGroundTruth] = []
                 settles: Decimal | None = None
                 cites: DocumentReference | None = None
-                for index, document_plan in enumerate(plan.documents, start=1):
+                for doc_index, document_plan in enumerate(plan.documents, start=1):
                     document, reference = _build_document(
                         rng,
                         persona=persona,
@@ -623,7 +654,7 @@ def generate_dataset(
                         document_plan=document_plan,
                         vendor=vendor,
                         identity=identity,
-                        doc_id=f"{plan.claim_id}_d{index}",
+                        doc_id=f"{plan.claim_id}_d{doc_index}",
                         renderer=renderer,
                         out_dir=out_dir,
                         settles=settles,
@@ -1084,6 +1115,15 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     too and carries no share in policy.yaml, because nothing can plan a deliberately incomplete
     claim. A report listing only what happened would let a reader take two causes for the whole
     vocabulary, which is the reading `known_limitations` KL-07 exists to prevent.
+
+    A cause realizing zero is flagged two different ways depending on run size, because the two
+    readings are not the same finding — and, per the marker convention above the report, a
+    finding about the corpus is a plain-English word rather than `!!`, which is reserved for the
+    report contradicting itself. policy.yaml's `insufficient_evidence_causes_min_run_size` is the
+    run size at which a zero stops being ordinary sampling variance (see the derivation comment
+    beside it) — below that size a zero is unremarkable, at or above it a zero is worth
+    investigating as a defect. `run_size` is built claims, matching what the guideline was
+    derived against: the per-claim probability of drawing either cause at all.
     """
     shares = insufficient_evidence_causes()
     counts = Counter(
@@ -1093,6 +1133,8 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
         for cause in claim.imperfection
     )
     total = sum(counts.values())
+    run_size = len(dataset.claims)
+    min_run_size = insufficient_evidence_causes_min_run_size()
 
     lines = [
         f"insufficient_evidence by cause — {total} claim(s); the two cross-check causes are "
@@ -1100,9 +1142,15 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     ]
     for cause, share in shares.items():
         count = counts[cause]
-        lines.append(
-            f"  {cause:<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
-        )
+        row = f"  {cause:<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
+        if count == 0:
+            row += (
+                f"   RUN TOO SMALL — {run_size} built claim(s) < guideline {min_run_size}"
+                if run_size < min_run_size
+                else f"   LIKELY A DESIGN/MECHANISM DEFECT — {run_size} built claim(s), "
+                     f"at or above guideline {min_run_size}"
+            )
+        lines.append(row)
     for cause in sorted(set(counts) - set(shares)):
         lines.append(
             f"  {cause:<26} {counts[cause]:>4}  {_share(counts[cause], total):>6}"

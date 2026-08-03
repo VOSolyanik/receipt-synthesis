@@ -9,15 +9,20 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 
+import cv2
 import numpy as np
 import pytest
+from PIL import Image
 
 from receipt_synth import claim_planner
 from receipt_synth.assembler import (
+    SYNTHETIC_DATA_MARKER,
+    _write_png,
     balance_report,
     generate_dataset,
 )
@@ -572,6 +577,27 @@ def test_the_planner_will_not_plan_without_a_ledger():
         plan_claim(random.Random(1), persona=persona(), claim_id="c1")
 
 
+def test_plan_claim_names_the_cause_when_the_persona_can_realize_nothing():
+    """`why_no_claim` guards `plan_claims`, but a direct call to `plan_claim` reaches
+    `draw_verdict(rng, realizable_verdicts_for(...) or REALIZABLE_VERDICTS)` unguarded. The
+    `or` used to fall back to the full list and draw a verdict the persona cannot realize —
+    the resulting `ValueError` then named that arbitrary drawn verdict rather than the real
+    reason nothing is plannable, which is the anti-pattern this module's own docstrings warn
+    against three times: a failure landing a stage away from its cause. `plan_claim` must
+    raise on the empty list itself, naming the persona and the reason `why_no_claim` gives."""
+    subject = persona()
+    ledger = Ledger()
+    for category in documentable_categories(subject):
+        ledger.record(subject.persona_id, category, Decimal("100000"))
+    assert realizable_verdicts_for(subject, ledger) == ()
+    cause = why_no_claim(subject, ledger)
+    assert cause is not None
+
+    with pytest.raises(ValueError, match=re.escape(cause)) as excinfo:
+        plan_claim(random.Random(1), persona=subject, claim_id="c1", ledger=ledger)
+    assert subject.persona_id in str(excinfo.value)
+
+
 def test_every_verdict_is_either_realizable_or_named_unrealizable():
     """The enum hole. `unrealizable_verdicts` used to iterate `verdict_mix`, so a verdict
     added to `Verdict` but absent from the mix belonged to neither list: no test would
@@ -719,6 +745,38 @@ def test_a_capture_channel_with_no_recipe_raises_rather_than_borrowing_one():
         _paper_pipeline("fax", 7)  # type: ignore[arg-type]
     with pytest.raises(NotImplementedError, match="has no recipe"):
         _geometry("fax")  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------------- the shipped PNG marker --
+
+
+def test_write_png_stamps_the_marker_as_a_text_chunk(tmp_path):
+    """Pins the finding that sent `SYNTHETIC_DATA_MARKER` to ASCII hyphens: PIL's `PngInfo` encodes
+    to Latin-1 and falls back to an `iTXt` chunk — silently — for anything that does not fit, so a
+    marker spelled with an em dash would never raise and would still land in the wrong chunk.
+    `.text` only surfaces what `tEXt`/`iTXt`/`zTXt` chunks PIL actually wrote, so reading it back is
+    already a check that a `tEXt` chunk exists, not merely that the string round-trips."""
+    image = np.zeros((4, 4, 3), dtype=np.uint8)
+    path = tmp_path / "marker.png"
+
+    _write_png(path, image)
+
+    with Image.open(path) as written:
+        assert written.text["Comment"] == SYNTHETIC_DATA_MARKER
+
+
+def test_write_png_does_not_touch_a_pixel(tmp_path):
+    """The marker is metadata appended after the pixel data; writing it must not alter a single
+    value of the image `degrader.degrade` produced. Compared through `cv2.imread`, which is how
+    every degraded array reaches disk in the real pipeline — see `_build_document`."""
+    image = np.arange(4 * 4 * 3, dtype=np.uint8).reshape(4, 4, 3)
+    path = tmp_path / "pixels.png"
+
+    _write_png(path, image)
+
+    # `_write_png` takes BGR (OpenCV's convention) and converts to RGB before saving with PIL;
+    # `cv2.imread` reads it back as BGR, so round-tripping through it is the honest comparison.
+    assert np.array_equal(cv2.imread(str(path)), image)
 
 
 # ------------------------------------------------------------- the whole run --

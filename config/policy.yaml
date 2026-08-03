@@ -490,15 +490,37 @@ partially_covered_causes:
 # cumulative-limit mechanism, which is a decision about how much of a MECHANISM to test.
 # There is no such asymmetry between two cross-checks that cost the same to build.
 #
-# WHAT IS REQUIRED IS OF THE RESULT, NOT OF THE SHARE: every cause here must be NON-ZERO in
-# a generated run. A verdict's share is not a mechanism's share — `verdict_mix` declares
+# WHAT IS REQUIRED IS OF THE RESULT, NOT OF THE SHARE: at or above the run size named by
+# `insufficient_evidence_causes_min_run_size` below, every cause here must be NON-ZERO in a
+# generated run. A verdict's share is not a mechanism's share — `verdict_mix` declares
 # `insufficient_evidence: 0.10` and says nothing about which cause realizes it, so ten
 # percent of the corpus arriving through one cause would leave the label vocabulary
 # promising three causes while the data held one. The realized distribution is measured and
 # recorded per run in `known_limitations` in config/labelling-schema.yaml.
+#
+# BELOW THAT SIZE A ZERO COUNT IS EXPECTED BEHAVIOUR, NOT A DEFECT. A run of 36 claims that
+# realized zero `amount_mismatch` is not this policy violated — it is a small sample landing
+# on the low side of a distribution, and the guideline below exists so a reader can tell the
+# two apart instead of every small corpus reading as broken.
 insufficient_evidence_causes:
   amount_mismatch: 0.50           # the payment states a different amount from the subject
   payment_precedes_subject: 0.50  # the payment is dated before what it settles
+
+# THE RUN SIZE AT WHICH THE NON-ZERO REQUIREMENT ABOVE BINDS, derived from the actual draw
+# probabilities rather than picked. `verdict_mix` renormalizes over the realizable subset —
+# `covered` 0.50, `partially_covered` 0.20, `insufficient_evidence` 0.10 — so
+# `insufficient_evidence` is drawn on 0.10 / (0.50 + 0.20 + 0.10) = 12.5% of built claims (this
+# is the same renormalization the balance report prints as "target, of the realizable
+# subset"). `insufficient_evidence_causes` above then splits that 50/50, so a single built
+# claim lands on either cause with probability 0.125 * 0.50 = 0.0625.
+#
+# For a run of N built claims, the probability that a cause drawn at rate p is realized at
+# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.0625)^N >= 0.95 for the smallest N gives
+# N >= ln(0.05) / ln(1 - 0.0625) ~= 46.4, i.e. 47 built claims — rounded up here to 50, a
+# number worth naming rather than a fraction of one. At 50 built claims or more, a zero count
+# for either cause is unlikely enough (<5%) to report as a defect rather than as sampling
+# noise; below it, a zero count is unremarkable and the balance report says so.
+insufficient_evidence_causes_min_run_size: 50
 
 # What each document type proves. A claim is reimbursable only when BOTH facts
 # are established — what was bought, and that it was paid for — possibly across

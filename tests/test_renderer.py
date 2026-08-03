@@ -275,6 +275,34 @@ def test_every_template_declares_exactly_one_document_root(template_path):
     )
 
 
+# A CSS `content:` declaration, matched on the PROPERTY rather than on the substring, so
+# `justify-content` / `align-content` — properties, not this one — cannot trip a false positive.
+# The value is captured whichever quote character wraps it.
+_CSS_CONTENT_DECLARATION = re.compile(
+    r'(?<![\w-])content\s*:\s*(?P<quote>["\'])(?P<value>.*?)(?P=quote)'
+)
+
+
+@pytest.mark.parametrize(
+    "css_path", sorted(TEMPLATES_DIR.glob("*.css")), ids=lambda path: path.stem
+)
+def test_no_stylesheet_prints_text_through_a_pseudo_element(css_path):
+    """A non-empty CSS `content:` paints TEXT that exists nowhere in the markup — no `data-field`
+    can mark it and `renderer`'s `reference_text` (sourced from the rendered DOM, not the
+    stylesheet) cannot record it either — so a rule like `.foo::after { content: "тис."; }` would
+    print a character on every image of its class that no ground-truth field or reference text
+    accounts for. `content: "";`, used to give a pseudo-element a box for a border or spacing
+    trick without painting anything, stays permitted — only a NON-EMPTY string is a regression.
+    """
+    stylesheet = css_path.read_text(encoding="utf-8")
+    offending = [
+        match["value"]
+        for match in _CSS_CONTENT_DECLARATION.finditer(stylesheet)
+        if match["value"]
+    ]
+    assert not offending, f"{css_path.name} declares non-empty CSS content: {offending}"
+
+
 # The class each document class names its page root. `.receipt` for a till roll and `.page` for
 # an A4 sheet — a distinction worth keeping in the markup, since the two are not the same object
 # and a rule written for one must not reach the other through a shared name.
@@ -814,7 +842,7 @@ def test_the_stylesheet_falls_back_to_noto(renderer, slug):
 
 def test_qr_encoding_is_deterministic():
     """segno chooses its mask by evaluating the symbol rather than at random."""
-    payload = "https://cabinet.tax.gov.ua/cashregs/check?id=Kht4lxDyk0r"
+    payload = "https://example.invalid/cashregs/check?id=Kht4lxDyk0r"
     assert qr_svg(payload) == qr_svg(payload)
     assert qr_svg(payload) != qr_svg(payload + "x")
 

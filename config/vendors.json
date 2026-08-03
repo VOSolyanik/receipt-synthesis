@@ -3,12 +3,12 @@
   "version": 2,
 
   "banks": {
-    "$note": "The issuer of a payment confirmation. `printed_name` is what appears in the document header and is the only field the generator prints; `display_name` names the mark in Latin for a reader of this file. ONE TEMPLATE FOR ALL FOUR UA ISSUERS, and the repetition is the point: three real banks were observed and their layouts differ, but only the FIELD SET is evidenced well enough to model, so `template` names one archetype for every issuer and the layout diversity between banks is a declared gap in config/labelling-schema.yaml rather than four templates guessed at. The key is kept — an issuer whose layout IS eventually evidenced gets its own value here without a change of shape.",
+    "$note": "The issuer of a payment confirmation. `printed_name` is what appears in the document header and is the only field the generator prints; `display_name` names the mark in Latin for a reader of this file. ONE TEMPLATE FOR ALL FOUR UA ISSUERS, and the repetition is the point: three real banks were observed and their layouts differ, but only the FIELD SET is evidenced well enough to model, so `template` names one archetype for every issuer and the layout diversity between banks is a declared gap in config/labelling-schema.yaml rather than four templates guessed at. The key is kept — an issuer whose layout IS eventually evidenced gets its own value here without a change of shape. `bank_code` is the МФО printed beside this name wherever a document names this bank — an INVENTED six-digit code, shaped like a real one (see config/fiscal-rules.yaml `identifiers.bank_code`) but equal to none, and FIXED here rather than drawn: `config.bank_codes` looks a name up in this table instead of drawing a code afresh, which is what keeps one name from ever carrying two codes.",
     "UA": [
-      { "slug": "privatbank",  "display_name": "PrivatBank",  "printed_name": "АТ КБ «ПриватБанк»",   "template": "ua_bank_payment_confirmation" },
-      { "slug": "monobank",    "display_name": "monobank",    "printed_name": "monobank",             "template": "ua_bank_payment_confirmation" },
-      { "slug": "sense",       "display_name": "Sense Bank",  "printed_name": "АТ «Сенс Банк»",       "template": "ua_bank_payment_confirmation" },
-      { "slug": "raiffeisen",  "display_name": "Raiffeisen",  "printed_name": "АТ «Райффайзен Банк»", "template": "ua_bank_payment_confirmation" }
+      { "slug": "privatbank",  "display_name": "PrivatBank",  "printed_name": "АТ КБ «ПриватБанк»",   "template": "ua_bank_payment_confirmation", "bank_code": "390017" },
+      { "slug": "monobank",    "display_name": "monobank",    "printed_name": "monobank",             "template": "ua_bank_payment_confirmation", "bank_code": "390028" },
+      { "slug": "sense",       "display_name": "Sense Bank",  "printed_name": "АТ «Сенс Банк»",       "template": "ua_bank_payment_confirmation", "bank_code": "390035" },
+      { "slug": "raiffeisen",  "display_name": "Raiffeisen",  "printed_name": "АТ «Райффайзен Банк»", "template": "ua_bank_payment_confirmation", "bank_code": "390046" }
     ],
     "PL": [
       { "slug": "mbank", "display_name": "mBank", "template": "pl_transfer_confirmation" },

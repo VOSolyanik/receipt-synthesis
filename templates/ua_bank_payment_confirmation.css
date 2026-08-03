@@ -180,10 +180,6 @@ body {
   font-size: 12px;
 }
 
-.words .caption::after {
-  content: ": ";
-}
-
 /* -- purpose and the conditional operation block --------------------------- */
 
 .purpose {
@@ -288,10 +284,6 @@ body {
 .note {
   margin-bottom: 6px;
   overflow-wrap: anywhere;
-}
-
-.note .caption::after {
-  content: ": ";
 }
 
 .promo {
