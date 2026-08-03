@@ -744,5 +744,13 @@ artifact carrying a link to a live government service for a transaction that nev
 reserved by RFC 2606 to never resolve — keeping every query parameter in place so the QR's shape and pixel
 weight stay realistic.
 
+**Two of the state's real hostnames stay in the corpus as printed prose, and that is not the same swap.**
+`config/fiscal-rules.yaml` prints `check.gov.ua` in a bank confirmation's verification footer and
+`ca.diia.gov.ua/verify` in its electronic-signature note — both observed, both public, and neither
+machine-resolvable from the page: a QR encodes a payload a scanner *acts on automatically*, while these are
+instructions a human would have to *read and retype* into a browser. Genuinely reaching either service still
+takes a person choosing to do so outside the document, the same as it would from the paper original — the
+document's contribution is the layout fact that such a line is printed there at all, not a working link to it.
+
 Everything the tool produces is synthetic: documents that were never issued, for transactions that never
 happened, by people who do not exist.
