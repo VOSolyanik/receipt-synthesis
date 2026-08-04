@@ -72,11 +72,18 @@
 #   engine performs, and one added there is a label a consumer starts receiving. 🔴 AN I-2 EVENT
 #   for the same reason every policy edit is: the file is vendored downstream under a sha256 lock.
 #
-#   🔴 AND THE THIRD AXIS IS A NEW `imperfection` CAUSE: `counterparty_mismatch` — an invoice
-#   issued by one party beside a payment made to another. A CONSUMER CANNOT DERIVE IT FROM THE
-#   AMOUNTS OR THE DATES, which agree exactly on such a claim; the only field that differs is
-#   `counterparty`. A scorecard whose cause vocabulary is closed meets a value it does not know.
+#   🔴 AND THE THIRD AXIS IS A NEW `imperfection` CAUSE, DRAWN AND BUILT: `counterparty_mismatch` —
+#   an invoice issued by one party beside a payment made to another. A CONSUMER CANNOT DERIVE IT
+#   FROM THE AMOUNTS OR THE DATES, which agree exactly on such a claim; the only field that differs
+#   is `counterparty`. A scorecard whose cause vocabulary is closed meets a value it does not know.
 #   See `claim_evidence.cross_checks.counterparty` and the vocabulary under `imperfection`.
+#
+#   ⚠️ AND IT COST THE OTHER THREE CAUSES A THIRD OF THEIR SHARE EACH. `insufficient_evidence_causes`
+#   splits evenly over the causes that can be built, so four of them read 0.25 where three read
+#   0.34/0.33/0.33, and `insufficient_evidence_causes_min_run_size` MOVED FROM 90 TO 119 — the first
+#   time that number has moved for a reason inside this verdict rather than because another verdict
+#   became realizable. A per-cause count measured on a corpus generated before this revision is
+#   conditional on a three-way split and does not compare with one taken after it.
 #
 #   🔴 ONE NEW LABEL FIELD, `instalment_amount`, AND IT IS SCOREABLE — unlike `amount_due`, which
 #   the entry beside it still refuses to have scored. It is what one PART of a document's amount
@@ -3652,11 +3659,12 @@ verdicts:
       shaped as the keys below say. What the wrong word cost was the decision to score against
       it. The counts per cause are in the run profiles.
 
-      ⚠️ A FOURTH CAUSE IS NOW REACHABLE AND IS NOT YET BUILT. `counterparty_mismatch` is returned
-      by the engine for a pair naming two parties, and no generated corpus contains such a claim at
-      this revision — the planner does not aim at it and config/policy.yaml declares it no share.
-      A consumer may receive it and must not expect to find it; the word for the VERDICT stays
-      `emitted` because three of its causes are.
+      🔴 A FOURTH CAUSE IS NOW DRAWN AND BUILT. `counterparty_mismatch` — an invoice issued by one
+      seller beside a payment made to another — carries a share in `insufficient_evidence_causes`
+      and is realized by `assembler`, which draws the SECOND party the payment names. All four
+      causes are therefore emitted, and the shares of the other three fell from a third each to a
+      quarter each: a corpus generated before this revision contains none of the fourth, and its
+      per-cause counts are conditional on a three-way split.
     means: >
       THE SLOTS: that a PURCHASE WAS MADE, and that the payment and the purchase are ONE
       TRANSACTION. This verdict is what the claim gets when either of those two facts of

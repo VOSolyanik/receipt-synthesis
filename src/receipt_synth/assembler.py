@@ -54,6 +54,7 @@ from receipt_synth.degrader import clipped_edges, degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
+    COUNTERPARTY_MISMATCH,
     Ledger,
     evaluate_claim,
     insufficient_evidence_causes,
@@ -280,7 +281,7 @@ def _draw_documentable_persona(
 
 def _pick_vendor(
     rng: random.Random, country: Country, category: str, *, mixed: bool,
-    vat_payer: bool | None = None,
+    vat_payer: bool | None = None, excluding_name: str | None = None,
 ) -> dict:
     """A vendor that can issue the receipt this plan needs.
 
@@ -295,6 +296,16 @@ def _pick_vendor(
     non-payer and `content_builder.build_non_fiscal_receipt` refuses any other. `None` means the
     plan does not care, which is every other claim, and the draw is then exactly what it was.
 
+    🔴 `excluding_name` IS THE THIRD, AND IT IS THE ONLY ONE ABOUT A SELLER'S IDENTITY RATHER THAN
+    ITS TRADE. It exists for one caller — `_payee_the_payment_names`, which needs a party the
+    claim's own vendor is NOT — and it is a filter on the pool rather than a redraw, so the number
+    of values taken from `rng` does not depend on which vendor came out first.
+
+    ⚠️ IT MATCHES ON THE STORED NAME, so it removes every entry that TRADES UNDER THAT MARK and
+    cannot remove a sole trader whose name has not been drawn yet: an entry with no `name` is a
+    person whose name `resolve_vendor` draws below. The caller compares the resolved names and
+    draws again on the collision, which is what closes that gap.
+
     Returns a RESOLVED vendor: a sole trader's name is drawn here, once, and the same
     instance is then carried to every document of the claim. Called from the claim loop and
     never from `_build_document`, because a per-document call would redraw the name and put
@@ -307,6 +318,8 @@ def _pick_vendor(
     candidates = [v for v in vendors if vendor_can_carry(v, category, mixed=mixed)]
     if vat_payer is not None:
         candidates = [v for v in candidates if bool(v["vat_payer"]) is vat_payer]
+    if excluding_name is not None:
+        candidates = [v for v in candidates if v.get("name") != excluding_name]
     if not candidates:
         raise ValueError(
             f"no vendor for {category!r} in {country.value} sells what a "
@@ -315,6 +328,11 @@ def _pick_vendor(
                 ""
                 if vat_payer is None
                 else f", among the sellers whose `vat_payer` is {vat_payer}"
+            )
+            + (
+                ""
+                if excluding_name is None
+                else f", other than {excluding_name!r}"
             )
             + " — check the profiles in config/vendors.json against the item buckets of "
             "config/policy.yaml"
@@ -421,12 +439,17 @@ def _build_document(
     to the payment class and ignored by the subject class, which cites nothing — an invoice is
     issued before there is a payment to point at.
 
-    `vendor` is passed in rather than chosen here. It is the claim's vendor instance, and
-    every document of the claim has to name the same seller — while a sole trader's name
-    was a stored constant that held by the nature of the type, and a drawn name can differ,
-    so it is now a constraint somebody has to keep.
+    `vendor` is passed in rather than chosen here. It is the party THIS DOCUMENT names, and on
+    every claim but one it is the claim's single vendor instance: the documents of one purchase
+    name one seller — while a sole trader's name was a stored constant that held by the nature of
+    the type, and a drawn name can differ, so it is now a constraint somebody has to keep.
 
-    `identity` is that seller's code, account and bank, drawn once for the claim beside the vendor.
+    ⚠️ THE ONE EXCEPTION IS A CLAIM PLANNED AS `counterparty_mismatch`, whose payment document is
+    handed a SECOND party on purpose (`_payee_the_payment_names`). That is the negative itself, and
+    it is decided in the claim loop rather than here: this function is told whom to print, and a
+    document that chose its own party would make the defect a property of the builder.
+
+    `identity` is that party's code, account and bank, drawn once beside the vendor it belongs to.
     The `vendor` constraint was solved for the NAME alone, and every other identifier of one seller
     went on being drawn per document — 587 pairs of the delivered corpus, 587 disagreements. See
     `content_builder.PartyIdentity` and docs/cross-document-fields.md.
@@ -583,6 +606,59 @@ def _build_document(
     )
 
 
+# How many times `_payee_the_payment_names` may draw before it gives up. The filter inside
+# `_pick_vendor` already removes every STORED name, so a redraw is only ever needed when a sole
+# trader's drawn personal name collides with the claim's own — Faker's uk_UA name space makes that
+# a one-in-many-thousands event, and eight draws put the residual beyond anything a corpus reaches.
+# Bounded rather than a `while True`: a pool that cannot satisfy the plan has to fail with a
+# sentence, not spin.
+_PAYEE_DRAW_ATTEMPTS = 8
+
+
+def _payee_the_payment_names(
+    rng: random.Random, plan: ClaimPlan, vendor: dict, country: Country
+) -> dict:
+    """Which party the PAYMENT document of this claim names.
+
+    THE CLAIM'S OWN VENDOR ON AN ORDINARY CLAIM, which is what makes a pair one transaction: an
+    invoice and the payment settling it name one seller, and every identifier of that seller is
+    drawn once for the claim (see `_build_document` and `content_builder.PartyIdentity`).
+
+    🔴 A DIFFERENT PARTY WHEN THE PLAN ASKED FOR ONE — the sibling of `_amount_the_payment_states`
+    below, on the other axis of `cross_document_agreement`. A claim planned as
+    `insufficient_evidence` with the cause `counterparty_mismatch` is realized here and nowhere
+    else: the label was chosen first and the documents are built to make it true. Nothing else
+    about such a claim differs — the amounts agree to the kopiyka, the dates are in order, the
+    basket is ordinary — because a consumer that could tell the claim apart by anything but the
+    party would be learning something other than the defect.
+
+    🔴 DRAWN FROM THE SAME CATEGORY, and that is a decision rather than convenience. A payment to
+    some unrelated business would be discriminable by the KIND of party as well as by its name — a
+    gym invoice settled by a payment to a pharmacy — and the negative would then be easier than the
+    one it stands for. The realistic case is a claimant paying the wrong provider OF THE SAME KIND,
+    and it is also the harder one.
+
+    The engine still decides. Nothing here asserts the label: if the two names ever came out equal
+    the pair would agree, the claim would come back `covered`, and `_drift_lines` would report the
+    target and the label disagreeing — which is why the equality is checked in the draw rather than
+    assumed after it.
+    """
+    if plan.cause != COUNTERPARTY_MISMATCH:
+        return vendor
+    for _ in range(_PAYEE_DRAW_ATTEMPTS):
+        other = _pick_vendor(
+            rng, country, plan.category, mixed=False, excluding_name=vendor["name"]
+        )
+        if other["name"] != vendor["name"]:
+            return other
+    raise ValueError(
+        f"claim {plan.claim_id} is planned as {COUNTERPARTY_MISMATCH!r} and no second seller for "
+        f"{plan.category!r} in {country.value} could be drawn in {_PAYEE_DRAW_ATTEMPTS} attempts: "
+        "the payment has to name a party the subject document does not, so the category needs at "
+        "least two sellers in config/vendors.json"
+    )
+
+
 def _amount_the_payment_states(
     rng: random.Random, plan: ClaimPlan, subject: DocGroundTruth
 ) -> Decimal:
@@ -718,6 +794,18 @@ def generate_dataset(
                 # — on every pair of the delivered corpus. The constraint was known; it had been
                 # applied to one field.
                 identity = draw_party_identity(rng, vendor, persona.location.country.value)
+                # WHOM THE PAYMENT DOCUMENT NAMES, which is the same seller on every claim but
+                # one. A claim planned as `counterparty_mismatch` names a SECOND party here — the
+                # invoice was issued by one seller and the money went to another — and that party
+                # gets its own identity, because a payee is one party on paper: a second name
+                # beside the first one's account and tax code would be a document nothing
+                # describes. Drawn from the same generator, so the run stays determined by `--seed`.
+                payee = _payee_the_payment_names(rng, plan, vendor, persona.location.country)
+                payee_identity = (
+                    identity
+                    if payee is vendor
+                    else draw_party_identity(rng, payee, persona.location.country.value)
+                )
                 # A claim is a list of documents, and since the invoice archetype landed it may
                 # genuinely hold two. A LOOP RATHER THAN A COMPREHENSION, because the documents are
                 # no longer independent: the subject document fixes the claim's amount and the
@@ -732,20 +820,25 @@ def generate_dataset(
                 settles: Decimal | None = None
                 cites: DocumentReference | None = None
                 for doc_index, document_plan in enumerate(plan.documents, start=1):
+                    # WHICH PARTY THIS DOCUMENT NAMES, decided by what it establishes and read from
+                    # policy.yaml like every other role in this loop. The two are the same object
+                    # on every claim but a `counterparty_mismatch` one, so this dispatch changes
+                    # nothing about the rest of the corpus.
+                    states_subject = evidence_of(document_plan.archetype).proves_subject
                     document, reference = _build_document(
                         rng,
                         persona=persona,
                         plan=plan,
                         document_plan=document_plan,
-                        vendor=vendor,
-                        identity=identity,
+                        vendor=vendor if states_subject else payee,
+                        identity=identity if states_subject else payee_identity,
                         doc_id=f"{plan.claim_id}_d{doc_index}",
                         renderer=renderer,
                         out_dir=out_dir,
                         settles=settles,
                         cites=cites,
                     )
-                    if evidence_of(document_plan.archetype).proves_subject:
+                    if states_subject:
                         settles = _amount_the_payment_states(rng, plan, document)
                         # What the payment document will cite. It travels beside `settles` because
                         # it is the same kind of fact — a property of the claim that the subject
@@ -1271,8 +1364,8 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     min_run_size = insufficient_evidence_causes_min_run_size()
 
     lines = [
-        f"insufficient_evidence by cause — {total} claim(s); the three causes are mutually "
-        "exclusive by construction"
+        f"insufficient_evidence by cause — {total} claim(s); the {len(shares)} causes are "
+        "mutually exclusive by construction"
     ]
     for cause, share in shares.items():
         count = counts[cause]

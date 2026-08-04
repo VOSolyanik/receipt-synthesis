@@ -64,6 +64,7 @@ from receipt_synth.degrader import degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
+    COUNTERPARTY_MISMATCH,
     OUTSIDE_PERIOD,
     PAYMENT_PRECEDES_SUBJECT,
     SUBJECT_NOT_EVIDENCED,
@@ -1502,11 +1503,12 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
     every field they share. It is checked here, on a run, rather than per class, because no single
     class can be wrong about it alone.
 
-    THE TWO DELIBERATE DISAGREEMENTS ARE EXCLUDED BY THE CLAIM'S OWN CAUSE, never by a tolerance:
-    a claim planned as `amount_mismatch` must disagree about the amount and about nothing else, and
-    one planned as `payment_precedes_subject` about the order and about nothing else. Their
-    exclusion is therefore itself an assertion — the label says which disagreement is intended, and
-    everything else must still agree.
+    THE THREE DELIBERATE DISAGREEMENTS ARE EXCLUDED BY THE CLAIM'S OWN CAUSE, never by a tolerance:
+    a claim planned as `amount_mismatch` must disagree about the amount and about nothing else, one
+    planned as `payment_precedes_subject` about the order and about nothing else, and one planned
+    as `counterparty_mismatch` about the party and about nothing else. Their exclusion is therefore
+    itself an assertion — the label says which disagreement is intended, and everything else must
+    still agree. The three are the axes `cross_document_agreement` declares in config/policy.yaml.
     """
     result, _ = multi_claim_dataset
     by_id = {document.doc_id: document for document in result.documents}
@@ -1521,8 +1523,10 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
         if len(documents) < 2:
             continue
 
-        # Fields that must agree on the RAW value, whatever the claim's cause.
-        for field in ("currency", "language", "counterparty", "synthetic"):
+        # Fields that must agree on the RAW value, whatever the claim's cause. `counterparty` left
+        # this list when it became an axis a claim can be built to fail — it is checked below,
+        # against the claim's own cause, exactly as the amount and the order are.
+        for field in ("currency", "language", "synthetic"):
             values = {getattr(document, field) for document in documents}
             assert len(values) == 1, f"{claim.claim_id} disagrees about {field}: {values}"
             checked[field] += 1
@@ -1572,6 +1576,19 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
             assert payment.date >= subject.date, claim.claim_id
         checked["date_order"] += 1
 
+        # The party, on the same principle. 🔴 THE ONLY FIELD THAT DIFFERS ON SUCH A CLAIM, which
+        # is what makes the negative worth building: an invoice from one seller beside a payment to
+        # another agrees about everything else, so a consumer cannot reach the label by any route
+        # but the names.
+        if COUNTERPARTY_MISMATCH in claim.imperfection:
+            assert subject.counterparty != payment.counterparty, claim.claim_id
+            assert subject.amount == payment.amount, (
+                f"{claim.claim_id} is a party mismatch and must disagree about nothing else"
+            )
+        else:
+            assert subject.counterparty == payment.counterparty, claim.claim_id
+        checked["counterparty"] += 1
+
     assert checked["amount"] == len(multi), (
         f"{checked['amount']} of {len(multi)} multi-document claims were checked"
     )
@@ -1607,13 +1624,27 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
         documents = [by_id[doc_id] for doc_id in claim.documents]
         if len(documents) < 2:
             continue
-        pairs += 1
         subject, payment = (
             fields_of(d.model_dump(mode="json"))
             for d in sorted(
                 documents, key=lambda d: not document_evidence(d.doc_type).proves_subject
             )
         )
+        # 🔴 THE ONE CLAIM WHOSE PAGES NAME TWO SELLERS ON PURPOSE, and it leaves this sweep with an
+        # ASSERTION rather than with a skip: a claim planned as `counterparty_mismatch` was built
+        # so that the payment went to another party, so its seller rows MUST disagree, and one that
+        # agreed would be the negative silently not built. It is excluded from the denominator
+        # afterwards because the rows below measure the opposite property — that a claim describing
+        # ONE purchase names one seller by one set of numbers.
+        if COUNTERPARTY_MISMATCH in claim.imperfection:
+            assert subject["seller_name"] and payment["seller_name"], (
+                f"{claim.claim_id}: a seller's name was not readable on both pages, so the "
+                "disagreement below would assert nothing"
+            )
+            assert subject["seller_name"] != payment["seller_name"], claim.claim_id
+            readable["seller_name_disagrees_on_purpose"] += 1
+            continue
+        pairs += 1
         for field in ("seller_name", "seller_tax_code", "seller_account", "seller_bank_name"):
             if subject[field] is None or payment[field] is None:
                 continue
@@ -1653,12 +1684,12 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
 
 
 def test_a_built_claim_carries_exactly_one_insufficient_evidence_cause(multi_claim_dataset):
-    """The three causes are mutually exclusive by construction — the planner draws one, and a claim
-    with no subject document has no pair to cross-check — so a claim carrying two would mean the
-    builder had realized a cause nobody planned. That holds claim by claim and needs no run size.
+    """The declared causes are mutually exclusive by construction — the planner draws one, and a
+    claim with no subject document has no pair to cross-check — so a claim carrying two would mean
+    the builder had realized a cause nobody planned. That holds claim by claim, at any run size.
 
-    ⚠️ WHETHER EVERY CAUSE OCCURS IS ASKED ELSEWHERE, AND THAT IS NOT A WEAKENING. The rarest cause
-    lands on about one built claim in twenty-four, so at this fixture's size a zero is ordinary
+    ⚠️ WHETHER EVERY CAUSE OCCURS IS ASKED ELSEWHERE, AND THAT IS NOT A WEAKENING. Each cause
+    lands on about one built claim in forty, so at this fixture's size a zero is ordinary
     sampling — config/policy.yaml says so and names the run size at which it stops being
     (`insufficient_evidence_causes_min_run_size`). Enforcing existence here would make the suite go
     red on the next change to the seed stream, for no defect;
@@ -2156,6 +2187,73 @@ def test_a_plan_settled_in_parts_whose_subject_printed_no_term_is_refused():
         _amount_the_payment_states(
             random.Random(1), _plan_for_schedule("quarterly"), _subject("1000.00")
         )
+
+
+def _plan_for_cause(cause: str | None) -> ClaimPlan:
+    """A minimal `insufficient_evidence` plan, for the party rule below. Hand-built for the reason
+    `_plan_for_schedule` is: what is under test is what the assembler does with a plan's CAUSE, and
+    a drawn plan would make the case depend on a seed landing on it."""
+    from receipt_synth.claim_planner import ARCHETYPES, DocumentPlan
+
+    return ClaimPlan(
+        claim_id="p001_c1", persona_id="p001", category="sport",
+        verdict=Verdict.INSUFFICIENT_EVIDENCE if cause else Verdict.COVERED,
+        documents=(
+            DocumentPlan(archetype=ARCHETYPES["ua_invoice"], issued_at=WHEN),
+            DocumentPlan(archetype=ARCHETYPES["ua_bank_payment_confirmation"], issued_at=WHEN),
+        ),
+        issued_at=WHEN, cause=cause,
+    )
+
+
+def test_the_payment_of_a_mismatched_party_claim_names_a_seller_the_invoice_does_not():
+    """🔴 THE HALF OF THIS MECHANISM THAT LIVES IN THE ASSEMBLER, tested where it is rather than
+    through a rendered run — the lesson `partially_paid` left behind. A payment handed the claim's
+    OWN vendor is not a broken document and not an exception: it is a pair that agrees, so the
+    engine labels it `covered`, the corpus silently contains ZERO claims of this cause, and the
+    only trace is a drift line in the balance report nobody diffs.
+
+    SWEPT OVER SEEDS, NOT PINNED TO ONE. `sport` is served by five sellers in config/vendors.json,
+    so a step that returned the claim's own vendor would still differ from it four times in five by
+    luck at a single seed; the sweep is what makes the assertion about the code. The second half —
+    that an ordinary claim gets the SAME OBJECT back — is the one that would take the whole corpus
+    with it, since every other claim's two documents must name one seller.
+    """
+    from receipt_synth.assembler import _payee_the_payment_names, _pick_vendor
+
+    mismatched = _plan_for_cause(COUNTERPARTY_MISMATCH)
+    ordinary = _plan_for_cause(None)
+    for seed in range(12):
+        rng = random.Random(seed)
+        vendor = _pick_vendor(rng, Country.UA, mismatched.category, mixed=False)
+
+        other = _payee_the_payment_names(rng, mismatched, vendor, Country.UA)
+        assert other["name"] != vendor["name"], (seed, vendor["name"])
+
+        assert _payee_the_payment_names(rng, ordinary, vendor, Country.UA) is vendor, (
+            f"seed {seed}: an ordinary claim's payment must name the claim's own seller"
+        )
+
+
+def test_a_party_mismatch_cannot_be_planned_where_the_category_has_one_seller():
+    """The failure lands where its cause is. Such a claim needs a category with at least two
+    sellers, and `claim_planner` does not model vendors at all — so the refusal is here, naming the
+    cause and the category, rather than surfacing as a pair that agrees and a label that drifted.
+
+    ⚠️ UNREACHABLE AGAINST config/vendors.json, where every Ukrainian category carries five sellers
+    or more, and driven by a patched vendor file for that reason."""
+    from receipt_synth import assembler
+
+    plan = _plan_for_cause(COUNTERPARTY_MISMATCH)
+    only_one = {"vendors": {"UA": {plan.category: [
+        {"name": "Sport Life", "legal_form": "TOV", "profile": "gym", "vat_payer": True},
+    ]}}}
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(assembler, "load_vendors", lambda: only_one)
+        vendor = assembler._pick_vendor(random.Random(1), Country.UA, plan.category, mixed=False)
+        with pytest.raises(ValueError, match="two sellers|no vendor"):
+            assembler._payee_the_payment_names(random.Random(1), plan, vendor, Country.UA)
 
 
 def test_a_partly_settled_claim_carries_its_term_on_the_rendered_page(multi_claim_dataset):

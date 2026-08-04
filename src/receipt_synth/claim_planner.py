@@ -36,6 +36,7 @@ from receipt_synth.config import coverage_targets, partial_payment_schedules
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
+    COUNTERPARTY_MISMATCH,
     OUTSIDE_PERIOD,
     PAYMENT_PRECEDES_SUBJECT,
     SUBJECT_NOT_EVIDENCED,
@@ -390,11 +391,12 @@ REALIZABLE_VERDICTS: tuple[Verdict, ...] = (
     Verdict.COVERED,
     Verdict.PARTIALLY_COVERED,
     # 🔴 THE THIRD, AND IT ARRIVED WITH A MECHANISM RATHER THAN WITH A TEMPLATE. A claim can now be
-    # planned whose subject document and whose payment document DISAGREE — about the amount, or
-    # about which came first — which is what `policy_engine._cross_checks` has always labelled and
-    # what nothing could build until an archetype proving the subject alone existed. ALL THREE of
-    # its causes are drawn: the two cross-checks, and the missing subject, which `EvidenceIntent`
-    # made plannable.
+    # planned whose subject document and whose payment document DISAGREE — about the amount, about
+    # which came first, or about WHO the other party is — which is what `policy_engine`'s
+    # cross-check branch has always labelled and what nothing could build until an archetype
+    # proving the subject alone existed. ALL FOUR of its causes are drawn: the three axes
+    # `cross_document_agreement` declares, and the missing subject, which `EvidenceIntent` made
+    # plannable.
     Verdict.INSUFFICIENT_EVIDENCE,
     # 🔴 THE FOURTH, AND THE FIRST WHOSE MECHANISM IS A DATE RATHER THAN A DOCUMENT. Everything
     # above is realized by WHAT the claim carries; this one is realized by WHEN its money moved —
@@ -572,10 +574,16 @@ def draw_insufficient_evidence_cause(rng: random.Random) -> str:
     Drawn in the order policy.yaml declares the causes in, which is a file order rather than a set
     order, so the draw stays reproducible — the same rule as the `partially_covered` causes below.
 
-    🔴 THE THREE ARE NOT THE SAME KIND OF DEFECT, AND THE PLANNER REALIZES THEM DIFFERENTLY. The two
-    cross-check causes need a claim whose two documents disagree; `subject_not_evidenced` needs a
-    claim with no subject document at all, which is `EvidenceIntent.EVIDENCE_GAP`. One draw decides
-    which, and `plan_claim` turns the answer into a shape.
+    🔴 THE FOUR ARE NOT THE SAME KIND OF DEFECT, AND THE PLANNER REALIZES THEM DIFFERENTLY. The
+    three cross-check causes need a claim whose two documents disagree — about the amount, about
+    the order, or about the party; `subject_not_evidenced` needs a claim with no subject document at
+    all, which is `EvidenceIntent.EVIDENCE_GAP`. One draw decides which, and `plan_claim` turns the
+    answer into a shape.
+
+    ⚠️ AND WHICH CAUSES EXIST AT ALL IS `cross_document_agreement`'s, NOT THIS BLOCK'S. Each
+    cross-check cause is the `cause` of one declared axis, so withdrawing an axis there withdraws a
+    cause the engine can return — while a share here would go on sizing a bucket nothing could
+    fill. The two blocks are edited together; policy.yaml says so at both of them.
 
     ⚠️ THE MAP IS STILL THE DRAW AND NOT THE VOCABULARY, though the two coincide today: policy.yaml
     declares a share per cause the generator BUILDS, and `policy_engine` may return a cause nothing
@@ -823,13 +831,21 @@ def plannable_categories(
     gets one self-sufficient document — `_select_documents` prefers that shape — and one document
     cannot contradict itself, so such a category can never realize this verdict.
 
-    ⚠️ THE NARROWING IS BOUND BY THE STRICTEST CAUSE, NOT BY THE ONE THIS CLAIM WILL DRAW. The
-    third cause, `subject_not_evidenced`, needs no pair at all — a payment archetype alone realizes
+    ⚠️ THE NARROWING IS BOUND BY THE STRICTEST CAUSE, NOT BY THE ONE THIS CLAIM WILL DRAW. One
+    cause, `subject_not_evidenced`, needs no pair at all — a payment archetype alone realizes
     it, which every category here has — so a receipt category could carry that one. It is filtered
     out regardless because `plan_claim` chooses the CATEGORY BEFORE THE CAUSE, and a category
-    admitted for the cause that happens to be drawn would be a category the other two causes cannot
-    use. Widening this means drawing the cause first, which is a reordering of the seed stream and
-    a decision nobody has needed to take.
+    admitted for the cause that happens to be drawn would be a category the other three causes
+    cannot use. Widening this means drawing the cause first, which is a reordering of the seed
+    stream and a decision nobody has needed to take.
+
+    ⛔ AND ONE CONSTRAINT IS NOT ENFORCED HERE AT ALL: `counterparty_mismatch` needs a category with
+    at least TWO sellers, since the payment has to name a party the invoice does not. This module
+    does not model vendors — config/vendors.json is `assembler`'s — and importing it to filter here
+    would put a fact about the vendor file into the planner, where nothing else about a vendor
+    lives. `assembler._payee_the_payment_names` refuses instead, naming the cause and the category,
+    which is a refusal a reader can act on. Every Ukrainian category carries five sellers or more,
+    so the refusal is unreachable today.
 
     `partially_paid` NARROWS THE SAME WAY AND THEN ONCE MORE. It also needs a pair — a payment
     settles PART of an obligation some other document states — and it additionally needs that
@@ -1222,7 +1238,20 @@ def plan_claim(
         # belongs to a partially_covered claim". The cause decides WHICH FACT the claim fails to
         # establish; the engine decides whether it actually failed, and nothing here assumes it.
         cause = cause or draw_insufficient_evidence_cause(rng)
-        if cause not in (SUBJECT_NOT_EVIDENCED, AMOUNT_MISMATCH, PAYMENT_PRECEDES_SUBJECT):
+        # 🔴 FOUR BUILDABLE CAUSES, REALIZED IN THREE DIFFERENT PLACES, and the list is here because
+        # THIS is where a cause is aimed at. `SUBJECT_NOT_EVIDENCED` is a SHAPE and is realized
+        # below by naming an intent; `PAYMENT_PRECEDES_SUBJECT` is an ORDER and is realized in
+        # `_select_documents`; `AMOUNT_MISMATCH` and `COUNTERPARTY_MISMATCH` are CONTENT — what the
+        # payment document states and whom it names — and are realized by `assembler`, which reads
+        # `plan.cause` when it sizes the payment (`_amount_the_payment_states`) and when it draws
+        # the party the payment names (`_payee_the_payment_names`). A plan is the whole of the
+        # intent in every case; nothing downstream infers a defect from a document.
+        if cause not in (
+            SUBJECT_NOT_EVIDENCED,
+            AMOUNT_MISMATCH,
+            PAYMENT_PRECEDES_SUBJECT,
+            COUNTERPARTY_MISMATCH,
+        ):
             raise ValueError(
                 f"policy.yaml declares no such buildable insufficient_evidence cause: {cause!r}. "
                 f"{cause!r} may still be a cause the ENGINE returns — see "
