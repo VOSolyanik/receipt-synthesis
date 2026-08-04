@@ -895,6 +895,47 @@ bank_statement:
 
 
 # =============================================================================
+# File composition — how many documents one submitted FILE holds
+# =============================================================================
+#
+# 🔴 THE SAME SPLIT AS `mismatch` AND `partial_payment` ABOVE, ON A QUESTION ABOUT FILES. A share
+# that sizes a LABELLED BUCKET belongs beside `verdict_mix` in config/policy.yaml; this one sizes
+# none. Bundling changes no verdict, no cause, no amount, no date and no party — the same claim,
+# the same two documents, the same labels, carried in one file instead of two. What it changes is
+# where a consumer has to look for them, which makes it a composition knob of exactly the kind
+# `bank_statement.two_page_share` is, and this file is where those live.
+#
+# ⛔ THE PATTERN IS DOCUMENTS OF **ONE CLAIM** IN ONE FILE, AND ONLY THAT. Documents of DIFFERENT
+# claims in one file is a shape this generator deliberately does not produce; the boundary and its
+# reason are stated at the bundling site in `assembler.documents_share_one_file`.
+file_composition:
+  # HOW OFTEN THE DOCUMENTS OF ONE CLAIM ARRIVE AS ONE FILE, drawn per eligible claim — a claim
+  # carrying a single document has nothing to bundle and is never eligible.
+  #
+  # 👁 ZERO OF THE AUTHOR'S OWN 87 FILES HOLDS MORE THAN ONE DOCUMENT, so the value is not measured
+  # from them and the honest reading of that set is that it contains no instance of the case.
+  # ⚠️ IT IS A JUDGEMENT, and the argument for it not being zero is about the SUBMISSION rather
+  # than about the document: a channel that takes one file per claim, while a claim needs both a
+  # subject document and a payment document, makes stitching the two the ordinary way to file it —
+  # and a submission rule that admits a file of a dozen documents is stating that such files
+  # arrive. A verifier meets them; a corpus in which every file holds exactly one document cannot
+  # ask a file-splitting step to refuse a single cut, so it measures the construction of the data
+  # rather than the step. See templates/ua_claim_bundle.html.
+  #
+  # 0.25 IS CHOSEN FROM TWO BOUNDS RATHER THAN PICKED, and the arithmetic is worth stating because
+  # the eligible claims are not a small minority: at the current archetype registry ≈4 claims in 5
+  # carry two documents (measured over 2,400 planned claims, no rendering involved). So 0.25 of
+  # eligible puts roughly one claim in five, and about one FILE in eight, into the multi-document
+  # case. Below that, a run of a few hundred claims holds too few boundaries for a segmentation
+  # figure to mean anything. Above it, the single-document file stops being the overwhelming
+  # majority — and every classification and extraction number this corpus has produced was
+  # measured on files holding one document, so a share that changed the mix would change what
+  # those numbers describe without anybody editing them. Asserted from both sides in
+  # tests/test_multidocument_files.py.
+  bundle_share: 0.25
+
+
+# =============================================================================
 # Personal names
 # =============================================================================
 #

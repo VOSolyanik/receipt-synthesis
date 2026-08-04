@@ -584,3 +584,29 @@ def statement_purposes(language: str, kind: str) -> tuple[str, ...]:
         )
     entry = pools[kind]
     return (entry,) if isinstance(entry, str) else tuple(entry)
+
+
+# --- generation.yaml: how the run's documents are carried ----------------------
+#
+# NOT A PER-CLASS GROUP, which is why it is its own. Everything above answers a question about
+# one document class; this answers one about a FILE, which may hold documents of more than one
+# class. Sharing the accessor family of a class block would have put a file-level knob under a
+# document-level key.
+
+
+@cache
+def file_composition_share(name: str) -> float:
+    """The rate at which a way of composing a submitted file is chosen.
+
+    `bundle` is the only one today: how often the documents of ONE claim arrive as a single file
+    rather than as one file each. ⛔ It says nothing about documents of different claims sharing a
+    file — see `assembler.documents_share_one_file` for why that shape is not produced at all.
+    """
+    block = load_generation()["file_composition"]
+    key = f"{name}_share"
+    if key not in block:
+        raise KeyError(
+            f"config/generation.yaml declares no `file_composition.{key}`; it has "
+            f"{sorted(k for k in block if k.endswith('_share'))}"
+        )
+    return float(block[key])
