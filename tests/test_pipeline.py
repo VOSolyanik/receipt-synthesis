@@ -50,6 +50,7 @@ from receipt_synth.claim_planner import (
 )
 from receipt_synth.cli import main
 from receipt_synth.config import (
+    archetype_draw_weights,
     high_frequency_surnames,
     jurisdiction,
     load_policy,
@@ -1062,24 +1063,49 @@ def test_a_category_documented_by_a_receipt_alone_cannot_realize_not_proof_of_pa
 def test_a_subject_mismatch_plan_carries_a_payment_that_can_print_the_citation():
     """🔴 THE SHAPE HALF OF THE `subject_mismatch` MECHANISM: the cause needs a page with a
     purpose line, and the app-transaction screen has none — a plan that drew it would build a
-    claim whose builder refuses `must_cite`, a stage away from the choice that broke it. Swept
-    over drawn plans rather than pinned to one call, because the draw is where the filter lives.
-    """
-    share = insufficient_evidence_causes()[SUBJECT_MISMATCH]
-    size = _run_size_for(_drawn_at(Verdict.INSUFFICIENT_EVIDENCE) * share)
-    plans = _plans_from_many_personas(size)
+    claim whose builder refuses `must_cite`, a stage away from the choice that broke it.
 
-    aimed = [plan for plan in plans if plan.cause == SUBJECT_MISMATCH]
-    assert aimed, f"no plan aimed at `subject_mismatch` in {len(plans)} planned claims"
-    for plan in aimed:
-        payments = [
-            d for d in plan.documents if not evidence_of(d.archetype).proves_subject
-        ]
-        assert len(payments) == 1, plan.claim_id
-        assert payments[0].archetype.slug in claim_planner._CITES_THE_SETTLED_DOCUMENT, (
-            f"{plan.claim_id}: {payments[0].archetype.slug} cannot print the citation the "
-            "cause is realized by"
-        )
+    DIRECT CALLS, SIZED AGAINST THE MUTATION RATHER THAN THE DRAW. A planner that dropped the
+    narrowing hands the cause to the citation-less archetype only at that archetype's own draw
+    weight — 8% today — so a sweep sized merely to CONTAIN the cause once passes such a mutation
+    more often than not (measured: it did). The seed count is derived from that weight the way
+    `_run_size_for` derives everything else: absence of a violation across it clears the
+    once-in-a-thousand bar, from the weight as configured rather than as remembered.
+    """
+    pool = {
+        slug: archetype
+        for slug, archetype in ARCHETYPES.items()
+        if evidence_of(archetype) == Evidence(False, True)
+        or archetype.doc_type in claim_planner._SETTLED_BY_A_PAYMENT
+    }
+    uncitable = [
+        slug for slug in pool
+        if evidence_of(pool[slug]) == Evidence(False, True)
+        and slug not in claim_planner._CITES_THE_SETTLED_DOCUMENT
+    ]
+    assert uncitable, (
+        "every registered payment archetype can print a citation, so this test cannot "
+        "distinguish the narrowing from its absence"
+    )
+    weights = archetype_draw_weights()
+    seeds = _run_size_for(min(weights[slug] for slug in uncitable))
+
+    holder = generate_persona(random.Random(3), persona_id="pX", country=Country.UA)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claim_planner, "ARCHETYPES", pool)
+        for seed in range(seeds):
+            plan = plan_claim(
+                random.Random(seed), persona=holder, claim_id=f"c{seed}", ledger=Ledger(),
+                verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=SUBJECT_MISMATCH,
+            )
+            payments = [
+                d for d in plan.documents if not evidence_of(d.archetype).proves_subject
+            ]
+            assert len(payments) == 1, plan.claim_id
+            assert payments[0].archetype.slug in claim_planner._CITES_THE_SETTLED_DOCUMENT, (
+                f"seed {seed}: {payments[0].archetype.slug} cannot print the citation the "
+                "cause is realized by"
+            )
 
 
 def test_a_rejected_route_the_policy_does_not_declare_is_refused_by_name():
