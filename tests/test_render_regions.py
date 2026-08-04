@@ -37,12 +37,22 @@ body { margin: 0; font-family: sans-serif; font-size: 14px; }
 [data-region] { display: block; width: 200px; }
 """
 
-# The same shape, except both documents claim the same region key — the case `_region_bboxes`
+# The same shape, except both documents claim the same region key — the case `_unique_boxes`
 # must refuse rather than resolve by keeping whichever element it saw last.
 _DUPLICATE_REGION_HTML = """
 <div data-document>
   <div data-region="dup"><div data-field="x">1</div></div>
   <div data-region="dup"><div data-field="y">2</div></div>
+</div>
+"""
+
+# Two elements claiming ONE field name, which is the same defect one level down and is the one a
+# template reaches by accident: a per-sheet counter on a paginated document names its rows from 1
+# on every sheet, and the second sheet's boxes would then quietly replace the first's.
+_DUPLICATE_FIELD_HTML = """
+<div data-document>
+  <div data-region="doc_a"><div data-field="dup">1</div></div>
+  <div data-region="doc_b"><div data-field="dup">2</div></div>
 </div>
 """
 
@@ -56,6 +66,8 @@ def fixture_templates_dir(tmp_path_factory):
         _DUPLICATE_REGION_HTML, encoding="utf-8"
     )
     (directory / "fixture_duplicate_region.css").write_text(_REGIONS_CSS, encoding="utf-8")
+    (directory / "fixture_duplicate_field.html").write_text(_DUPLICATE_FIELD_HTML, encoding="utf-8")
+    (directory / "fixture_duplicate_field.css").write_text(_REGIONS_CSS, encoding="utf-8")
     return directory
 
 
@@ -107,3 +119,8 @@ def test_a_duplicate_data_region_value_fails_loudly_rather_than_last_write_wins(
 ):
     with pytest.raises(ValueError, match="dup"):
         renderer.render("fixture_duplicate_region", region_context(), tmp_path / "dup.png")
+
+
+def test_a_duplicate_data_field_value_fails_loudly_rather_than_last_write_wins(renderer, tmp_path):
+    with pytest.raises(ValueError, match="dup"):
+        renderer.render("fixture_duplicate_field", region_context(), tmp_path / "dup_field.png")

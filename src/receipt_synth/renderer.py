@@ -151,10 +151,12 @@ _COLLECT_TEXT = """
 # fractional pixel index means nothing to a consumer.
 #
 # ONE PASS COLLECTS BOTH `[data-field]` AND `[data-region]` BOXES, rather than a second page
-# evaluation for the region markers — the same layout, read once. Regions come back as a LIST OF
-# PAIRS rather than an object: `Object.fromEntries` on a duplicate key keeps only the last write
-# silently, and a duplicate `data-region` value has to fail loudly instead (`Renderer.render`
-# checks the list for repeats before turning it into the dict `region_bboxes` holds).
+# evaluation for the region markers — the same layout, read once.
+#
+# 🔴 BOTH COME BACK AS A LIST OF PAIRS RATHER THAN AN OBJECT, and for both the reason is the same:
+# `Object.fromEntries` on a duplicate key keeps only the last write, silently, leaving a label
+# whose box points at another element's ink. A repeat has to survive the crossing to be refused on
+# the Python side (`_unique_boxes`), which it cannot do once an object has collapsed it.
 _COLLECT_BBOXES = """
 () => {
   const box = (el) => {
@@ -162,8 +164,8 @@ _COLLECT_BBOXES = """
     return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
   };
   return {
-    fields: Object.fromEntries(
-      [...document.querySelectorAll('[data-field]')].map(el => [el.dataset.field, box(el)])
+    fields: [...document.querySelectorAll('[data-field]')].map(
+      el => [el.dataset.field, box(el)]
     ),
     regions: [...document.querySelectorAll('[data-region]')].map(
       el => [el.dataset.region, box(el)]
@@ -245,8 +247,8 @@ class Renderer:
                 page.goto(page_path.as_uri())
                 width, height = _fit_viewport_to_content(page)
                 collected = page.evaluate(_COLLECT_BBOXES)
-                bboxes = {name: tuple(box) for name, box in collected["fields"].items()}
-                region_bboxes = _region_bboxes(collected["regions"])
+                bboxes = _unique_boxes(collected["fields"], attribute="data-field")
+                region_bboxes = _unique_boxes(collected["regions"], attribute="data-region")
                 # Read BEFORE the screenshot, from the same page state. The order matters only in
                 # that nothing may change between them; there is no scrolling or animation here, so
                 # both describe one layout.
@@ -266,19 +268,29 @@ class Renderer:
         )
 
 
-def _region_bboxes(pairs: list[list]) -> dict[str, BBox]:
-    """`[data-region]` boxes, keyed by attribute value — refusing a duplicate key rather than
-    letting one silently overwrite another.
+def _unique_boxes(pairs: list[list], *, attribute: str) -> dict[str, BBox]:
+    """Marked boxes keyed by attribute value — refusing a duplicate key rather than letting one
+    silently overwrite another.
 
     Takes the pairs as JavaScript returned them (a list, not an object) precisely so a repeat
     survives to be checked here: an `Object.fromEntries` on the JavaScript side would already
     have collapsed it to whichever element came last, with nothing left to detect.
+
+    🔴 ONE FUNCTION FOR `data-field` AND `data-region` BECAUSE IT IS ONE RULE. A name is what a
+    label points with, at either level, and the failure a repeat produces is identical: a box that
+    belongs to one element filed under a name another element also answers to. The attribute is a
+    parameter so the sentence names the marker the template author actually wrote.
+
+    ⚠️ THE SCOPE IS ONE RENDER AND NOT THE CORPUS. Two documents of one file may of course print
+    the same field name — both an invoice and its payment carry `amount` — but they are rendered
+    separately and merged under per-document prefixes (`assembler._IN_DOCUMENT_KEY`), so no such
+    pair ever reaches this function.
     """
     names = [name for name, _ in pairs]
     duplicates = sorted({name for name in names if names.count(name) > 1})
     if duplicates:
         raise ValueError(
-            f"duplicate data-region value(s): {duplicates} — every data-region must be unique "
+            f"duplicate {attribute} value(s): {duplicates} — every {attribute} must be unique "
             "within one render"
         )
     return {name: tuple(box) for name, box in pairs}
