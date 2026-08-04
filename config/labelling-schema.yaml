@@ -916,6 +916,18 @@ sources:
     `status: emitted` STATEMENT TURNS ON THE FRACTION'S VALUE: `split` declares the vocabulary
     `[train, validation]` and nothing here asserts a count or a side. A half is what the flag
     defaulted to while these statements were last re-checked.
+
+    🔴 TWO STATEMENTS OF VERSION 27 WERE VERIFIED AGAINST A LARGER RUN, AND HAD TO BE. That run
+    builds eight claims, and both `verdicts.not_proof_of_payment` and
+    `document_types.non_fiscal_receipt` describe a bucket drawn at about one claim in nine — so a
+    run of eight contains neither more often than not, and this one contains neither. Verifying an
+    `emitted` status against a run that cannot be expected to hold an instance would be recording a
+    check that did not happen. Both were verified against
+    `generate-dataset --seed 20260803 --personas 12 --claims-per-persona 3 --split 0.5`, which
+    built 36 claims, 7 of them `not_proof_of_payment` and 4 of those evidenced by a
+    `non_fiscal_receipt`; the label of one such document was read field by field against its
+    rendered image. The handle above stays the file's default because every other `emitted`
+    statement is about a shape that occurs on every run.
   consumer: >
     The neighbouring product requirements document — its extraction fields per document
     type and its entity model, its classifier classes and metric, its extraction

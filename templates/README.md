@@ -147,10 +147,17 @@ once the archetype is connected.
 
 ### Why they are not connected
 
-The production run measures four document classes. Adding layout variety **before** that
+The first production run measured four document classes. Adding layout variety **before** that
 measurement would change what the measurement means: macro-F1 would move, and nobody could say
 whether the classifier or the corpus had changed. Measure, then add, then measure again — and the
 difference becomes a result about robustness to layout rather than a confound.
+
+⚠️ **`ua_non_fiscal_receipt` was connected after that measurement and deliberately**, because it
+is not layout variety: it is the only document that makes a RULE testable — a negative fiscality
+signal overriding positive ones — and the rule has no test case without it. The reasoning above is
+unchanged and still governs the five templates left here; a figure measured before the class
+existed is a figure about a corpus of four classes, which is what every profile in
+`config/labelling-schema.yaml` says of itself.
 
 ---
 
