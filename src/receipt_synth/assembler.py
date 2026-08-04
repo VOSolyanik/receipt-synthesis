@@ -431,10 +431,11 @@ def _write_png(path: Path, image: np.ndarray) -> None:
     """Write a BGR image (OpenCV's convention) to `path`, stamped with `SYNTHETIC_DATA_MARKER`.
 
     THE LAST SAVE POINT FOR A SHIPPED IMAGE, and the only one: `renderer.render` also writes a
-    PNG, but only to a temporary staging file that `_build_document` deletes before returning,
-    so nothing downstream ever sees it; `degrader.degrade` never touches disk — it hands back a
-    numpy array. This function is therefore the single place a PNG that lands in `out_dir/images`
-    is written, which is what makes stamping it here sufficient for 100% of the corpus.
+    PNG — a document's clean render, and the composed file of a bundle — but only into a staging
+    directory whose owner discards it, so nothing downstream ever sees one; `degrader.degrade`
+    never touches disk, it hands back a numpy array. This function is therefore the single place a
+    PNG that lands in `out_dir/images` is written, whether that PNG holds one document or the two
+    of a claim, which is what makes stamping it here sufficient for 100% of the corpus.
 
     PIL rather than `cv2.imwrite`: OpenCV's PNG writer has no `tEXt`-chunk support. The chunk is
     metadata appended to the file; it does not touch a pixel, so the decoded image is unchanged.

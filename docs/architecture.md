@@ -310,6 +310,21 @@ These are the most valuable examples in the dataset.
 }
 ```
 
+**A file usually holds one document, and sometimes holds a claim's two.** `source_file` is the image this
+record describes; where it is the only document in it, `file_region` is `null` and every box is in the image's
+own coordinates. At the share `file_composition.bundle_share` declares in `config/generation.yaml`, the
+documents of one claim arrive stitched into a single file instead — the way a claimant staples them before
+submitting — and then both records name that one file, `file_region` says where each document sits in it, and
+`field_bboxes`, `content_bbox` and `page_regions` are in the file's coordinates. Nothing on such a file says
+that its sheets are two different documents, which is what makes splitting it a real problem: the only mark
+the stitching leaves is the gap between the sheets. ⛔ **Documents of *different* claims never share a file.**
+A claim is the unit a verdict is reached on, so a file spanning two claims would be evidence for two answers
+at once, and no relation in the schema could say which part of the image belongs to which claim's label.
+
+`page_count` and `page_regions` are the independent relation — how many sheets *this document* runs to, and
+where each of them is. The two combine: a two-sheet statement bundled with the invoice it settles carries
+both.
+
 Every record carries `synthetic: true` and the generator version. This is not decoration — it is what makes
 the provenance of any individual file unambiguous once it leaves this repository.
 
