@@ -1190,6 +1190,42 @@ def _cause_lines(dataset: Dataset) -> list[str]:
     return lines
 
 
+def _absence_probability(cause_share: float, run_size: int) -> float:
+    """P(a cause declared at `cause_share` of its verdict is realized ZERO times in `run_size`
+    built claims), under the declared shares.
+
+    🔴 THE SAME ARITHMETIC policy.yaml DERIVES `insufficient_evidence_causes_min_run_size` BY, and
+    that is the whole reason it exists here rather than a sentence someone wrote once: a cause is
+    drawn at `verdict_mix[insufficient_evidence]` renormalized over the realizable subset, times
+    its own share of that bucket, and is absent from N independent draws with probability
+    (1 − p)^N. The guideline is the smallest N putting that below 5%. Computing it per row means
+    the report's finding and the file's threshold can never disagree — a run at the guideline says
+    "a 5% event", and one at twice it says so too, with the right number.
+
+    ⚠️ IT IS THE DECLARED RATE AND NOT THE REALIZED ONE, deliberately and like the guideline. The
+    draw is narrowed per persona (`claim_planner.realizable_verdicts_for`), so the rate a
+    particular run actually drew at is lower and unknown to this function. A figure computed from
+    what a run realized would answer "was this run unlucky given what it did", which is the
+    question the count itself already answers.
+
+    A verdict declared with NO share contributes nothing to the denominator — the same treatment
+    `balance_report` gives it — and a rate of zero returns 1.0 rather than dividing by it: a cause
+    nothing can draw is absent with certainty, which is a true statement and not an error.
+    """
+    mix = verdict_mix()
+    declared = [share for share in mix.values() if share is not None]
+    subset = sum(
+        share
+        for verdict, share in mix.items()
+        if verdict in REALIZABLE_VERDICTS and share is not None
+    )
+    verdict_share = mix.get(Verdict.INSUFFICIENT_EVIDENCE)
+    if not declared or not subset or verdict_share is None:
+        return 1.0
+    rate = (verdict_share / subset) * cause_share
+    return (1 - rate) ** run_size if 0 < rate < 1 else 1.0
+
+
 def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     """`insufficient_evidence` by cause, and WHAT THE CORPUS DOES NOT CONTAIN.
 
@@ -1213,6 +1249,15 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     beside it) — below that size a zero is unremarkable, at or above it a zero is worth
     investigating as a defect. `run_size` is built claims, matching what the guideline was
     derived against: the per-claim probability of drawing either cause at all.
+
+    🔴 EACH FINDING PRINTS THE PROBABILITY IT RESTS ON, AND THE ONE ABOVE THE GUIDELINE USED TO
+    OVERSTATE ITS CASE. It read "LIKELY A DESIGN/MECHANISM DEFECT", which asserts better than even
+    odds — while the guideline is derived at the 95% level, so a zero AT the guideline is a ~5%
+    event and "likely" is off by an order of magnitude in the direction that costs an investigation.
+    The number is now computed per row from the declared shares, by the same arithmetic the
+    guideline itself is derived by, and printed beside the finding: a reader calibrates against a
+    figure instead of against an adjective, and the two can no longer drift apart, one living in
+    policy.yaml and the other in an f-string here.
     """
     shares = insufficient_evidence_causes()
     counts = Counter(
@@ -1233,11 +1278,14 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
         count = counts[cause]
         row = f"  {cause:<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
         if count == 0:
+            odds = _absence_probability(share, run_size)
             row += (
-                f"   RUN TOO SMALL — {run_size} built claim(s) < guideline {min_run_size}"
+                f"   RUN TOO SMALL — {run_size} built claim(s) < guideline {min_run_size}; "
+                f"a zero is a {odds:.0%} event here, which the sample explains"
                 if run_size < min_run_size
-                else f"   LIKELY A DESIGN/MECHANISM DEFECT — {run_size} built claim(s), "
-                     f"at or above guideline {min_run_size}"
+                else f"   INVESTIGATE THE MECHANISM — {run_size} built claim(s), at or above "
+                     f"guideline {min_run_size}; a zero is a {odds:.1%} event under the declared "
+                     "shares, so the sample no longer explains it"
             )
         lines.append(row)
     for cause in sorted(set(counts) - set(shares)):
