@@ -442,8 +442,8 @@ receipt listing nothing but medicines is `rejected`, and is not, on any reading,
 **`insufficient_evidence` owns the other two slots.** *What was bought* is unestablished when no document of
 the claim is of a type that states it — a bare transfer, cause `subject_not_evidenced`. *One transaction* is
 unestablished when a subject document and its payment both exist and fail a cross-check, causes
-`amount_mismatch` and `payment_precedes_subject` (see [Evidence](#evidence)). Those two slots are the whole of
-the verdict, and which one failed is read off the claim's own documents.
+`amount_mismatch`, `payment_precedes_subject` and `counterparty_mismatch` (see [Evidence](#evidence)). Those
+two slots are the whole of the verdict, and which one failed is read off the claim's own documents.
 
 ---
 
@@ -504,19 +504,26 @@ it `covered`.
 
 ### Documents that disagree
 
-The two documents of a split pair have to describe *one* transaction. Two cross-checks say whether they do,
-and each is its own defect with its own name:
+The two documents of a split pair have to describe *one* transaction. **On which axes they are compared is a
+policy parameter**, not a list in the engine: `config/policy.yaml` declares them under
+`cross_document_agreement`, each with the verdict and the cause a failure earns, and `policy_engine` reads that
+block. A consumer builds its own engine from the same declaration; an axis withdrawn there is a check neither
+engine performs, and adding a field two documents must agree on is an edit to that block rather than to any
+code. Three are declared today, and each is its own defect with its own name:
 
 - **`amount_mismatch`** — the subject document and its payment state different amounts;
 - **`payment_precedes_subject`** — the payment is dated before the document it settles. Strictly before:
-  paying an invoice on the day it is issued is ordinary.
+  paying an invoice on the day it is issued is ordinary;
+- **`counterparty_mismatch`** — the invoice was issued by one party and the payment was made to another. Both
+  pages may be flawless and the amounts and dates may agree exactly; the money still settled some other
+  obligation. Compared on the `counterparty` field, which carries the bare trading name on every class.
 
-Either makes the claim `insufficient_evidence`. This is the third slot: both other facts are established
+Any of them makes the claim `insufficient_evidence`. This is the third slot: both other facts are established
 separately, and the claim still does not establish that *this* payment paid for *this* subject — a linkage a
 claim has to prove. It is a verdict and not a flag beside a coverage verdict, because a flag would let a claim
 whose documents contradict each other come out `covered`.
 
-These two causes are the linkage slot; the missing **subject** document is the other slot `insufficient_evidence`
+These causes are the linkage slot; the missing **subject** document is the other slot `insufficient_evidence`
 owns. Together they are why the verdict still exists after the period case moved to `rejected`: in all three
 something genuinely *is* unestablished.
 

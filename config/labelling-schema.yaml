@@ -64,6 +64,20 @@
 # dataset's six labels are all emitted for the first time. FIVE consequences, and the first two
 # would otherwise be read as defects.
 #
+#   🔴 RIDING THIS VERSION, AND STATED APART BECAUSE IT IS A DIFFERENT CHANGE: THE CROSS-CHECKS
+#   BECAME A DECLARED LIST, AND THERE ARE THREE OF THEM. `config/policy.yaml` gained
+#   `cross_document_agreement` — the axes on which a claim's documents must agree, each with the
+#   VERDICT and the CAUSE a failure earns — and `policy_engine` reads it instead of holding its own
+#   list. A consumer's engine is built from that block; an axis withdrawn there is a check neither
+#   engine performs, and one added there is a label a consumer starts receiving. 🔴 AN I-2 EVENT
+#   for the same reason every policy edit is: the file is vendored downstream under a sha256 lock.
+#
+#   🔴 AND THE THIRD AXIS IS A NEW `imperfection` CAUSE: `counterparty_mismatch` — an invoice
+#   issued by one party beside a payment made to another. A CONSUMER CANNOT DERIVE IT FROM THE
+#   AMOUNTS OR THE DATES, which agree exactly on such a claim; the only field that differs is
+#   `counterparty`. A scorecard whose cause vocabulary is closed meets a value it does not know.
+#   See `claim_evidence.cross_checks.counterparty` and the vocabulary under `imperfection`.
+#
 #   🔴 ONE NEW LABEL FIELD, `instalment_amount`, AND IT IS SCOREABLE — unlike `amount_due`, which
 #   the entry beside it still refuses to have scored. It is what one PART of a document's amount
 #   comes to where the document says the obligation is settled in parts, `null` everywhere else,
@@ -3637,18 +3651,31 @@ verdicts:
       comparison rule was described wrongly, and every claim carrying this verdict was already
       shaped as the keys below say. What the wrong word cost was the decision to score against
       it. The counts per cause are in the run profiles.
+
+      ⚠️ A FOURTH CAUSE IS NOW REACHABLE AND IS NOT YET BUILT. `counterparty_mismatch` is returned
+      by the engine for a pair naming two parties, and no generated corpus contains such a claim at
+      this revision — the planner does not aim at it and config/policy.yaml declares it no share.
+      A consumer may receive it and must not expect to find it; the word for the VERDICT stays
+      `emitted` because three of its causes are.
     means: >
       THE SLOTS: that a PURCHASE WAS MADE, and that the payment and the purchase are ONE
       TRANSACTION. This verdict is what the claim gets when either of those two facts of
-      `document_evidence` is not established, and `imperfection` says which — THREE CAUSES over
+      `document_evidence` is not established, and `imperfection` says which — FOUR CAUSES over
       two slots:
 
         WHAT WAS BOUGHT is not established — no document of the claim is of a type that states
         it, so that slot has no document at all. Cause `subject_not_evidenced`. A bare transfer.
 
         ONE TRANSACTION is not established — a subject document and its payment both exist and
-        fail a cross-check: the amounts differ (`amount_mismatch`), or the payment is dated
-        before the document it settles (`payment_precedes_subject`).
+        fail a cross-check: the amounts differ (`amount_mismatch`), the payment is dated
+        before the document it settles (`payment_precedes_subject`), or the two name different
+        parties (`counterparty_mismatch`).
+
+      🔴 THE SECOND LIST IS AS LONG AS config/policy.yaml MAKES IT. `cross_document_agreement`
+      there declares which axes a pair is compared on and what a failure earns; a cause of this
+      slot is the `cause` of one axis, so withdrawing an axis withdraws a cause a consumer can
+      receive and adding one adds it. The vocabulary under `imperfection` is where each is
+      defined; that block is where the set is decided.
 
       Those two slots are the whole of this verdict. Which slot is unestablished is read off the
       claim's own documents; no comparison with any other verdict is involved in reaching it.
@@ -4039,15 +4066,34 @@ claim_evidence:
     status: emitted
     note: >
       Applied to a split pair only; a self-contained document cannot disagree with itself
-      about which payment settled it. Failing either is `insufficient_evidence` with the
+      about which payment settled it. Failing one is `insufficient_evidence` with the
       cause in `imperfection` — NOT a flag on a coverage-determined verdict, which would
       let a claim whose documents contradict each other come out `covered`.
+
+      🔴 WHICH CHECKS ARE APPLIED IS DECLARED IN config/policy.yaml, under
+      `cross_document_agreement`, and is no longer a list inside the engine. Each entry names the
+      AXIS and the OUTCOME — the verdict and the cause a failure earns — so a consumer building its
+      own engine reads both from the same file the labels were derived from, and an axis withdrawn
+      there is a check neither engine performs. The three below are what that block declares today;
+      the block is the authority and this section describes it.
     amount: >
       The subject document and its payment state the same amount, compared to two decimal
-      places. Cause `amount_mismatch`.
+      places. Cause `amount_mismatch`. Axis `amount`.
     order: >
       The payment is not dated BEFORE the document it settles. Strictly before: paying an
-      invoice on the day it is issued is ordinary. Cause `payment_precedes_subject`.
+      invoice on the day it is issued is ordinary. Cause `payment_precedes_subject`. Axis
+      `date_order`.
+    counterparty: >
+      The subject document and its payment name THE SAME PARTY — an invoice issued by one seller
+      beside a payment made to another does not establish that this money settled that obligation,
+      however well the amounts and the dates agree. Cause `counterparty_mismatch`. Axis
+      `counterparty`.
+
+      COMPARED ON THE `counterparty` LABEL FIELD, raw, which carries the BARE trading name on every
+      class (`normalization.party_name` makes that form authoritative, so the comparison needs no
+      normalization of its own). ⛔ THE COUNTERPARTY'S TAX NUMBER IS NOT COMPARED, and cannot be:
+      no label field of any class carries it. That is the consumer cross-check named in
+      `claim_label.linked` and it stays unperformed for want of a field, not for want of a rule.
     not_checked_here: >
       Whether a document's own stated `amount` equals the sum of its own line items. That
       is a DOCUMENT invariant, owned by `content_builder.validate_line_item_sum`,
@@ -4205,11 +4251,13 @@ claim_label:
         information at TYPE level in policy.yaml's `document_evidence` and records nothing
         per document. See RC-15.
       partly_closed: >
-        TWO of the consumer's cross-checks are now PERFORMED, though still not recorded per
-        document: amount agreement and date order between a subject document and the payment
-        that settles it. A claim failing either is `insufficient_evidence` with the cause in
-        `imperfection` — see `claim_evidence.cross_checks`. Counterparty tax number, payment
-        form and contract party against payee are not performed, because no generator field
+        THREE of the consumer's cross-checks are now PERFORMED, though still not recorded per
+        document: amount agreement, date order, and THE PARTY — an invoice issued by one seller
+        beside a payment made to another — between a subject document and the payment that settles
+        it. A claim failing one is `insufficient_evidence` with the cause in `imperfection` — see
+        `claim_evidence.cross_checks`. ⚠️ THE PARTY CHECK IS ON THE NAME AND NOT ON THE TAX NUMBER,
+        which is a different cell of the requirement's table: the counterparty's tax number,
+        the payment form and the contract party are still not compared, because no generator field
         carries any of them (see `document_types.payment_confirmation`).
 
     - name: imperfection
@@ -4248,6 +4296,17 @@ claim_label:
           The ONE-TRANSACTION slot again: the payment is dated before the document it settles,
           an impossible order. Checked between the two documents of a pair, not against the
           benefit period, which is a different rule with a different verdict.
+        counterparty_mismatch: >
+          The ONE-TRANSACTION slot a third time, and the first cause of it that is not about a
+          number: the subject document was issued by one party and the payment was made to
+          another, so the money that left the account settled some other obligation. Both
+          documents may be flawless and the amounts and dates may agree exactly.
+
+          🔴 A CONSUMER CANNOT DERIVE IT FROM THE AMOUNTS OR THE DATES — the only field that
+          differs is `counterparty`, and comparing it across a claim's documents is the whole of
+          the check. See `claim_evidence.cross_checks.counterparty`, and
+          `cross_document_agreement` in policy.yaml, which is where the axis and this cause are
+          declared together.
         # The one cause of `rejected`, and the only one that verdict needs: its other
         # mechanism, a basket the category covers none of, is the whole of what the verdict
         # already says.
@@ -4882,14 +4941,14 @@ known_limitations:
     predictor: doc_type — a document class fully determines that two causes are absent from it
     hurts: [evaluation]
     subset: >
-      🔴 EVERY `fiscal_receipt` IN THE CORPUS IS THE WHOLE OF ITS CLAIM, so neither cross-check
+      🔴 EVERY `fiscal_receipt` IN THE CORPUS IS THE WHOLE OF ITS CLAIM, so no cross-check
       cause can ever be observed on one. A cross-check compares a claim's SUBJECT document with its
       PAYMENT document, and a receipt is both — a self-sufficient document has nothing to disagree
       with. The planner makes this exact: `_select_documents` prefers a single document proving both
       facts wherever one is registered, and the three fiscal receipts are registered for the one
       category that has them.
     how_a_consumer_detects_it: >
-      EVERY `fiscal_receipt` is the whole of its claim, so neither cross-check cause can occur on
+      EVERY `fiscal_receipt` is the whole of its claim, so no cross-check cause can occur on
       one: a cross-check compares a claim's subject document with its payment document, and a
       self-sufficient document has nothing to disagree with. `_select_documents` prefers a single
       both-proving document wherever one is registered, which makes this exact rather than likely.
@@ -6340,10 +6399,10 @@ required_changes:
       labels has to re-derive the pairing the same way, since `documents` is a flat list of
       ids.
 
-      The requirement's `DocumentLink` also expects the result of named cross-checks. Two of
-      them — amount agreement and date order — are now performed and reported as
-      `imperfection` causes on the claim; the rest need fields that do not exist. See
-      `claim_label.linked.partly_closed`.
+      The requirement's `DocumentLink` also expects the result of named cross-checks. Three of
+      them — amount agreement, date order and the party by NAME — are now performed and reported
+      as `imperfection` causes on the claim; the rest, including the party by TAX NUMBER, need
+      fields that do not exist. See `claim_label.linked.partly_closed`.
     blocked_on: decision
 
   - id: RC-16

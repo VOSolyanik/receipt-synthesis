@@ -595,6 +595,76 @@ insufficient_evidence_causes:
 # causes, which is the first time that has been true.
 insufficient_evidence_causes_min_run_size: 90
 
+# ON WHICH AXES THE DOCUMENTS OF ONE CLAIM MUST AGREE, AND WHAT IT COSTS THEM NOT TO.
+#
+# 🔴 THE LIST IS A PARAMETER OF THIS POLICY AND NOT A PROPERTY OF AN ENGINE. It used to be neither:
+# the two comparisons below lived only in `policy_engine`, which meant an axis existed exactly
+# where somebody had written an `if`. A consumer building its own engine from this file could not
+# know which fields it was supposed to compare, and a negative on a new axis cost a code change in
+# both engines rather than a line here. So the axes are DECLARED, in the order they are applied,
+# and the engine reads them: adding a field two documents must agree on is an edit to this block.
+#
+# WHAT AN AXIS IS ABOUT — the LINKAGE slot of `document_evidence` below, which is the third fact a
+# reimbursement rests on and the one no single document can carry. The other two slots ask whether
+# a fact is stated at all; this one asks whether the two documents that state them describe ONE
+# TRANSACTION. An axis is a way for them not to.
+#
+# 🔴 SO THE OUTCOME IS DECLARED PER AXIS RATHER THAN ASSUMED, and today all three declare the same
+# one. `insufficient_evidence` with a named cause is what a broken linkage IS — the claim does not
+# establish that THIS payment paid for THIS subject — and the cause is what tells a consumer WHICH
+# way it broke. The outcome is a parameter all the same, because "which label a disagreement gets"
+# is exactly the kind of question two faithful engines answer differently when a file leaves it
+# unsaid; a `verdict` here must be one of the six of `verdict_mix` above, and an engine reading a
+# seventh is reading a label nothing in this dataset can carry.
+#
+# ⛔ AN AXIS IS NOT A TOLERANCE. Each comparison below is exact — two decimal places on money, a
+# strict inequality on dates, the raw string on a name. A claim whose documents differ at all on a
+# declared axis fails it; there is no near-agreement anywhere in this policy.
+#
+# ⚠️ AND AN AXIS IS ONLY EVER CHECKED ON A SPLIT PAIR. A self-contained document — a fiscal receipt
+# — is its own subject and its own payment, and cannot disagree with itself about which payment
+# settled it. A corpus whose claims are single receipts realizes none of these causes; that is a
+# property of the corpus and not of this block.
+#
+# WHAT A CONSUMER'S OWN ENGINE HAS TO IMPLEMENT, stated so that it can be implemented from this
+# file alone:
+#
+#   for a transaction whose subject and payment are DIFFERENT documents,
+#   for each axis below IN THE ORDER DECLARED:
+#     amount        -> subject.amount != payment.amount, EXCEPT where the pair settles one
+#                      instalment (see `partial_payment` below, which is that exemption)
+#     date_order    -> payment.date < subject.date       (strictly before)
+#     counterparty  -> subject.counterparty != payment.counterparty
+#   every axis that fails contributes its `cause`; the verdict is the `verdict` they declare.
+#
+# 🔴 `counterparty` IS THE AXIS THIS BLOCK WAS WRITTEN FOR, and it is the one a generated corpus
+# could not previously contain: an invoice issued by one party beside a payment made to another.
+# Both documents may be flawless, the amounts may agree to the kopiyka and the dates may be in
+# order — and the claim still does not show that the money that left the account paid THIS
+# obligation, because it went somewhere else. The name is compared as the label carries it: the
+# BARE trading name, which config/labelling-schema.yaml makes authoritative under
+# `normalization.party_name`, so the comparison needs no normalization of its own.
+#
+# ⚠️ THE NAME IS THE WHOLE OF THE COMPARISON, and the tax code beside it is not compared, because
+# no label field carries the counterparty's code on any document class. That is a limitation of the
+# LABEL SHAPE rather than of this rule — declared in config/labelling-schema.yaml — and an axis
+# naming a field the labels do not carry would be a rule no engine could apply.
+#
+# ⛔ WHAT IS NOT AN AXIS: the SUBJECT of the expense. A payment document states no basket at all
+# (`proves_subject: false` below), so there is nothing on it for a subject axis to compare against
+# the document beside it. A claim that leaves what was bought unstated fails a different slot and
+# is `insufficient_evidence` with the cause `subject_not_evidenced`.
+cross_document_agreement:
+  - axis: amount
+    verdict: insufficient_evidence
+    cause: amount_mismatch
+  - axis: date_order
+    verdict: insufficient_evidence
+    cause: payment_precedes_subject
+  - axis: counterparty
+    verdict: insufficient_evidence
+    cause: counterparty_mismatch
+
 # WHEN A PAYMENT SMALLER THAN ITS SUBJECT DOCUMENT IS A PART RATHER THAN A MISMATCH.
 #
 # 🔴 TWO CLAIMS WITH THE SAME PAIR OF NUMBERS AND DIFFERENT VERDICTS, which is why this block

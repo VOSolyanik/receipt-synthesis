@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pytest
 
-from receipt_synth import claim_planner
+from receipt_synth import claim_planner, policy_engine
 from receipt_synth.claim_planner import (
     Archetype,
     ClaimPlan,
@@ -46,18 +46,22 @@ from receipt_synth.claim_planner import (
     evidence_of,
     plan_claim,
 )
+from receipt_synth.config import load_policy
 from receipt_synth.content_builder import PartyIdentity
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
+    COUNTERPARTY_MISMATCH,
     OUTSIDE_PERIOD,
     PARTIAL_PAYMENT_MARKER_FIELDS,
     PAYMENT_PRECEDES_SUBJECT,
     SUBJECT_NOT_EVIDENCED,
+    AgreementAxis,
     ClaimInput,
     Ledger,
     PolicyGapError,
     active_period,
+    cross_document_agreement,
     document_evidence,
     evaluate_claim,
     evaluate_claims,
@@ -105,6 +109,7 @@ def doc(
     currency: str = "UAH",
     direction: Direction | None = None,
     instalment_amount: str | None = None,
+    counterparty: str = "Vendor",
 ) -> DocGroundTruth:
     """One document label.
 
@@ -115,6 +120,11 @@ def doc(
     `instalment_amount` is the printed marker of a partial settlement — what one part of this
     document's obligation comes to, where the document says it is settled in parts. `None` on
     every ordinary document, which is what makes the mismatch cases below still mismatch.
+
+    `counterparty` DEFAULTS TO ONE VALUE FOR EVERY DOCUMENT, which is what an honest claim looks
+    like: the invoice and the payment name one seller. The parameter exists so a pair can be built
+    that does not — see the counterparty section below — and every other test in this file inherits
+    the agreement rather than restating it.
     """
     return DocGroundTruth(
         doc_id=doc_id,
@@ -125,7 +135,7 @@ def doc(
         amount=Decimal(amount),
         instalment_amount=None if instalment_amount is None else Decimal(instalment_amount),
         date=when,
-        counterparty="Vendor",
+        counterparty=counterparty,
         direction=direction,
         line_items=items or [],
         has_qr=True,
@@ -738,6 +748,177 @@ def test_an_engine_reading_a_marker_the_policy_does_not_declare_refuses_to_label
         )
         with pytest.raises(PolicyGapError, match="amount_due"):
             evaluate([invoice, payment])
+
+
+# ------------------------------- the axes are a policy parameter, not a list in the code --
+#
+# 🔴 WHAT THESE TESTS ARE ABOUT, and it is not the counterparty. `cross_document_agreement` in
+# policy.yaml declares WHICH fields the two documents of a claim must agree on and WHAT it costs
+# them not to; the engine reads that block. So the assertions below come in pairs — the axis
+# declared and the same claim labelled, the axis withdrawn and the same claim passing — because a
+# check that fires whatever the file says would be a check the file does not control.
+#
+# ⚠️ THE VARIANTS ARE BUILT HERE AND HANDED TO THE ENGINE. config/policy.yaml is never edited to
+# make one of these pass: it is the file the rest of this suite reads its expectations from, and a
+# test that moved it would be proving a property of its own edit. `policy_variant` patches the one
+# function the engine reads the file through, so the accessor's own parsing and guards run on the
+# variant exactly as they run on the file.
+
+
+def policy_variant(patch, axes: list[dict]) -> None:
+    """Hand `policy_engine` a policy identical to the shipped one but for its axis list."""
+    variant = {**load_policy(), "cross_document_agreement": axes}
+    patch.setattr(policy_engine, "load_policy", lambda: variant)
+
+
+AMOUNT_AXIS = {"axis": "amount", "verdict": "insufficient_evidence", "cause": AMOUNT_MISMATCH}
+COUNTERPARTY_AXIS = {
+    "axis": "counterparty",
+    "verdict": "insufficient_evidence",
+    "cause": COUNTERPARTY_MISMATCH,
+}
+
+
+def a_pair_naming_two_parties() -> list[DocGroundTruth]:
+    """An invoice from one party beside a payment to another, and ORDINARY IN EVERY OTHER RESPECT:
+    the amounts agree to the kopiyka, both dates are inside the period and in order, and every line
+    of the basket is covered. So a claim built from it is `covered` on every axis but this one,
+    which is what makes it usable as the input to both directions below."""
+    return [
+        doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+            counterparty="Аптека АНЦ"),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00", counterparty="Подорожник"),
+    ]
+
+
+def test_a_payment_made_to_another_party_is_insufficient_evidence():
+    """🔴 THE LINKAGE SLOT BROKEN BY WHO RATHER THAN BY HOW MUCH. Both documents are flawless and
+    they agree about the money and the dates; the invoice was issued by one seller and the money
+    went to another, so nothing establishes that THIS payment paid for THIS obligation.
+
+    `covered_fraction` is still 1.0 — every line of the invoice is covered, which is a fact about
+    the lines and is true whatever the payment names — and nothing is reimbursed.
+    """
+    result = evaluate(a_pair_naming_two_parties())
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.imperfection == (COUNTERPARTY_MISMATCH,)
+    assert result.covered_fraction == Decimal(1)
+    assert result.reimbursable == Decimal("0.00")
+    assert result.verdict_basis == (VerdictBasis.DOCUMENTS,), "both names are on the images"
+    assert result.policy_trace[-1] == (
+        "documents disagree: c1_d1 (invoice) names 'Аптека АНЦ', "
+        "payment c1_d2 names 'Подорожник'"
+    )
+
+
+def test_the_same_pair_passes_when_the_policy_declares_no_counterparty_axis():
+    """THE OTHER DIRECTION, AND THE ONE THAT MAKES THE FIRST MEAN SOMETHING. The identical
+    documents, evaluated against a policy whose axis list is amount alone: nothing compares the two
+    names, so the claim is an ordinary covered one.
+
+    It fails if the comparison is reached by any route but the declared list — a leftover `if`, a
+    predicate applied because it exists — which is exactly the state this block was lifted out of.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [AMOUNT_AXIS])
+        result = evaluate(a_pair_naming_two_parties())
+
+    assert result.verdict is Verdict.COVERED
+    assert result.imperfection == ()
+    assert not any("names" in line for line in result.policy_trace), result.policy_trace
+
+
+def test_the_verdict_a_disagreement_earns_is_read_from_the_policy():
+    """The OUTCOME is a parameter too, not only the axis. The same pair, against a policy that
+    declares the same axis with a different label, comes back carrying that label.
+
+    ⚠️ NOBODY WOULD WRITE THIS POLICY, and it is not offered as one: a broken linkage is
+    `insufficient_evidence` for the reason `cross_document_agreement` gives, and the shipped file
+    says so. What this asserts is only that the engine takes the label FROM THE FILE — an engine
+    that returned a constant would pass every other test in this section and fail this one.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [{**COUNTERPARTY_AXIS, "verdict": "rejected"}])
+        result = evaluate(a_pair_naming_two_parties())
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == (COUNTERPARTY_MISMATCH,)
+
+
+def test_an_axis_the_engine_cannot_compare_is_refused_rather_than_ignored():
+    """The asymmetry `cross_document_agreement` is built on. A declared axis nothing performs would
+    let every claim that fails it be labelled as though its documents agreed — a silently wrong
+    ground truth — so it raises where the file is read, naming what the engine can compare."""
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(
+            patch,
+            [{"axis": "payment_form", "verdict": "insufficient_evidence", "cause": "whatever"}],
+        )
+        with pytest.raises(PolicyGapError, match="payment_form"):
+            evaluate(a_pair_naming_two_parties())
+
+
+def test_an_axis_declared_twice_is_refused():
+    """A duplicate would put one cause into `imperfection` twice, and — if the two entries named
+    different verdicts — make the label depend on which was read first."""
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [COUNTERPARTY_AXIS, COUNTERPARTY_AXIS])
+        with pytest.raises(PolicyGapError, match="twice"):
+            evaluate(a_pair_naming_two_parties())
+
+
+def test_two_failed_axes_declaring_different_verdicts_are_refused():
+    """A claim may fail several axes at once, and policy.yaml states no precedence between the
+    labels they declare. Picking either would be the engine deciding a policy question, and a
+    consumer's engine picking the other would label the same claim differently.
+
+    ⚠️ UNREACHABLE AGAINST THE SHIPPED FILE, where every axis declares `insufficient_evidence`, and
+    asserted against a variant for that reason.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  counterparty="Аптека АНЦ")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1000.00",
+                  counterparty="Подорожник")
+
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [AMOUNT_AXIS, {**COUNTERPARTY_AXIS, "verdict": "rejected"}])
+        with pytest.raises(PolicyGapError, match="no precedence|different verdicts"):
+            evaluate([invoice, payment])
+
+
+def test_the_axes_are_applied_in_the_order_the_policy_declares_them():
+    """`imperfection` follows the file, not the order the predicates happen to be written in. A
+    claim failing two axes is reported the same way every run, and the way is the policy's.
+
+    Asserted on a REVERSED variant rather than on the shipped order alone: against the file's own
+    order the two are indistinguishable from a hardcoded sequence.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  counterparty="Аптека АНЦ")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1000.00",
+                  counterparty="Подорожник")
+
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [AMOUNT_AXIS, COUNTERPARTY_AXIS])
+        forwards = evaluate([invoice, payment])
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [COUNTERPARTY_AXIS, AMOUNT_AXIS])
+        backwards = evaluate([invoice, payment])
+
+    assert forwards.imperfection == (AMOUNT_MISMATCH, COUNTERPARTY_MISMATCH)
+    assert backwards.imperfection == (COUNTERPARTY_MISMATCH, AMOUNT_MISMATCH)
+
+
+def test_the_shipped_policy_declares_the_axes_this_suite_was_written_against():
+    """Pin `cross_document_agreement` as the tests above read it, the way this file pins
+    `document_evidence` at its head: a change to the block has to fail here rather than quietly
+    making a section assert something that no longer follows from the policy."""
+    assert cross_document_agreement() == (
+        AgreementAxis("amount", Verdict.INSUFFICIENT_EVIDENCE, AMOUNT_MISMATCH),
+        AgreementAxis("date_order", Verdict.INSUFFICIENT_EVIDENCE, PAYMENT_PRECEDES_SUBJECT),
+        AgreementAxis("counterparty", Verdict.INSUFFICIENT_EVIDENCE, COUNTERPARTY_MISMATCH),
+    )
 
 
 def test_a_disagreement_is_not_a_flag_on_a_coverage_verdict():
