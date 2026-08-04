@@ -50,6 +50,7 @@ from receipt_synth.content_builder import (
     build_invoice,
     build_non_fiscal_receipt,
     build_payment_confirmation,
+    build_platform_receipt,
     build_prro_receipt,
     draw_party_identity,
     draw_statement_pages,
@@ -315,7 +316,7 @@ def _draw_documentable_persona(
 
 
 def _pick_vendor(
-    rng: random.Random, country: Country, category: str, *, mixed: bool,
+    rng: random.Random, pool: Country | str, category: str, *, mixed: bool,
     vat_payer: bool | None = None, excluding_name: str | None = None,
 ) -> dict:
     """A vendor that can issue the receipt this plan needs.
@@ -346,9 +347,14 @@ def _pick_vendor(
     never from `_build_document`, because a per-document call would redraw the name and put
     two different sellers on two documents of one purchase.
     """
-    vendors = load_vendors()["vendors"][country.value].get(category, [])
+    # `pool` is a config/vendors.json block key. A `Country` still works — every domestic
+    # archetype's pool IS its claimant's jurisdiction — and a plain key is what a
+    # cross-border archetype passes: `EU` is a pool of sellers, not a fifth jurisdiction.
+    # See `claim_planner.Archetype.vendor_pool`.
+    pool_key = pool.value if isinstance(pool, Country) else pool
+    vendors = load_vendors()["vendors"].get(pool_key, {}).get(category, [])
     if not vendors:
-        raise ValueError(f"config/vendors.json lists no vendor for {category!r} in {country.value}")
+        raise ValueError(f"config/vendors.json lists no vendor for {category!r} in {pool_key}")
 
     candidates = [v for v in vendors if vendor_can_carry(v, category, mixed=mixed)]
     if vat_payer is not None:
@@ -357,7 +363,7 @@ def _pick_vendor(
         candidates = [v for v in candidates if v.get("name") != excluding_name]
     if not candidates:
         raise ValueError(
-            f"no vendor for {category!r} in {country.value} sells what a "
+            f"no vendor for {category!r} in {pool_key} sells what a "
             f"{'mixed' if mixed else 'fully covered'} basket needs"
             + (
                 ""
@@ -372,7 +378,7 @@ def _pick_vendor(
             + " — check the profiles in config/vendors.json against the item buckets of "
             "config/policy.yaml"
         )
-    return resolve_vendor(rng, rng.choice(candidates), country.value)
+    return resolve_vendor(rng, rng.choice(candidates), pool_key)
 
 
 # Which builder produces which archetype. A table rather than a call, because a claim is
@@ -412,6 +418,7 @@ _BUILDERS = {
     "ua_bank_statement": build_bank_statement,
     "ua_invoice": build_invoice,
     "ua_non_fiscal_receipt": build_non_fiscal_receipt,
+    "eu_platform_receipt": build_platform_receipt,
 }
 
 # WHICH CLASSES NAME THE CLAIMANT ON THE PAGE, and it is keyed by document class because the
@@ -424,7 +431,21 @@ _BUILDERS = {
 # at the counter. Handing the builder a buyer would print a line no source puts on the document,
 # and inventing a requisite is the one thing this repository never does with a form it has not
 # observed.
-_NAMES_THE_BUYER: frozenset[DocType] = frozenset({DocType.INVOICE})
+#
+# 🔴 THE PLATFORM RECEIPT IS THE CASE THAT BREAKS THE OLD PREDICATE THE OTHER WAY: it proves the
+# payment AND names the buyer — 👁 a "Billed to" block with a name and a country is what the class
+# prints — so "proves the subject and not the payment" would have denied it the very field its
+# form carries. Keying by class is what lets both exceptions coexist.
+_NAMES_THE_BUYER: frozenset[DocType] = frozenset({DocType.INVOICE, DocType.PLATFORM_RECEIPT})
+
+# WHICH CLASSES ARE HANDED THE CAPTURE CHANNEL AT BUILD TIME. Keyed by class for the reason
+# `_NAMES_THE_BUYER` is: the question is whether the FORM prints a requisite that varies with the
+# medium, and that is a property of the class, not of its evidence row. 👁 The fiscal receipt's VAT
+# summary row takes one form on paper and either of two electronically — the observation the
+# predicate exists for — and no other class has an observed analogue. The platform receipt proves
+# payment and takes no channel: nothing on it varies with the medium, and the old predicate
+# ("proves the payment") would have handed its builder an argument it has no requisite to spend.
+_CAPTURE_SHAPES_A_REQUISITE: frozenset[DocType] = frozenset({DocType.FISCAL_RECEIPT})
 
 
 def _write_png(path: Path, image: np.ndarray) -> None:
@@ -712,13 +733,13 @@ def _render_document(
             # evidence — see `_NAMES_THE_BUYER`, which is where the change of predicate is
             # explained.
             basket |= {"buyer_name": persona.full_name, "buyer_tax_id": persona.tax_id}
-        if evidence.proves_payment:
+        if archetype.doc_type in _CAPTURE_SHAPES_A_REQUISITE:
             # 🔴 THE CAPTURE CHANNEL REACHES THE BUILDER, not only the degrader. 👁 The VAT summary
             # row of a fiscal receipt takes one form on paper and either of two electronically, so
             # the MEDIUM a document will be captured on decides a requisite that is printed while
             # the document is built. Passed to the class that has the observed variation and to no
-            # other: nothing analogous has been observed on the invoice, and a non-payer's slip
-            # has no VAT row to vary at all.
+            # other — see `_CAPTURE_SHAPES_A_REQUISITE`, which replaced "proves the payment" the
+            # day a payment-proving class with no medium-varying requisite was registered.
             basket |= {"capture": capture}
         document = _BUILDERS[slug](rng, **basket)
     else:
@@ -1392,9 +1413,24 @@ def generate_dataset(
                 # trader's name is drawn rather than stored, so calling `_pick_vendor` per
                 # document would put two different sellers on two documents of one
                 # purchase. That constraint used to hold by the nature of the type.
+                # WHICH POOL THE SELLER COMES FROM follows the archetypes of the plan, not
+                # the persona: a cross-border archetype names its own (`vendor_pool`),
+                # every domestic one defaults to the claimant's jurisdiction. One pool per
+                # claim — the vendor is one party on every document — so two documents
+                # declaring different pools is a plan nothing can build.
+                pools = {
+                    document.archetype.vendor_pool or persona.location.country.value
+                    for document in plan.documents
+                }
+                if len(pools) > 1:
+                    raise ValueError(
+                        f"claim {plan.claim_id} plans documents whose archetypes draw "
+                        f"sellers from different vendor pools {sorted(pools)}; the vendor "
+                        "is chosen once per claim, so there is no one pool to choose from"
+                    )
                 vendor = _pick_vendor(
                     rng,
-                    persona.location.country,
+                    pools.pop(),
                     plan.category,
                     mixed=plan.coverage_target is not None,
                     # 🔴 ONE ARCHETYPE CONSTRAINS WHO CAN HAVE SOLD THE GOODS, and the constraint

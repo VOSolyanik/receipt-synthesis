@@ -6,9 +6,11 @@
   and `ua_platform_receipt` (Ukrainian, UAH). Each including template brings its own stylesheet
   on top of `platform_receipt.css`.
 
-  ⚠️ MOCK-UPS, on the same terms as the other four in this directory: not registered in
-  `ARCHETYPES`, no builder, no run, and NO `data-field` attributes anywhere — so the renderer
-  collects no bounding box and nothing here becomes a label. See templates/README.md.
+  ⚠️ ONE INCLUDER IS SHIPPED AND ONE IS STILL A MOCK-UP. `eu_platform_receipt` is registered,
+  built by `content_builder.build_platform_receipt` and labelled — the `data-field` attributes
+  below are its extraction contract. `ua_platform_receipt` still renders only from
+  `tools/render_mockups.py`; the fields cost it nothing, and they are already correct for the
+  day it is connected, because the two variants print the same field set by construction.
 
   🔴 WHY THIS CLASS EXISTS: THE CORPUS HAS ONE CURRENCY AND ONE LANGUAGE. The contract's own
   reference profile records it as a finding rather than a footnote — `single_valued_dimensions`,
@@ -72,15 +74,15 @@
      itself not to be one. The Ukrainian variant DOES print both, because its seller is a
      domestic company for which they are ordinary requisites. #}
   <header class="head">
-    <div class="brand">{{ seller.name }}</div>
+    <div class="brand" data-field="seller_name">{{ seller.name }}</div>
     {% if seller.address %}
-    <div class="muted">{{ seller.address }}</div>
+    <div class="muted" data-field="seller_address">{{ seller.address }}</div>
     {% endif %}
     {% if seller.tax_code %}
-    <div class="muted">{{ seller.tax_code_label }} {{ seller.tax_code }}</div>
+    <div class="muted">{{ seller.tax_code_label }} <span data-field="seller_tax_code">{{ seller.tax_code }}</span></div>
     {% endif %}
     {% if seller.vat_number %}
-    <div class="muted">{{ seller.vat_number_label }} {{ seller.vat_number }}</div>
+    <div class="muted">{{ seller.vat_number_label }} <span data-field="seller_vat_number">{{ seller.vat_number }}</span></div>
     {% endif %}
   </header>
 
@@ -89,9 +91,13 @@
      which is 👁 what such a receipt leads with — the fact that money moved, before any detail
      of what it was for. #}
   <section class="title-block">
-    <h1 class="title">{{ labels.title }}</h1>
+    <h1 class="title" data-field="title">{{ labels.title }}</h1>
     <div class="paid">
-      <div class="paid-amount">{{ total }}&nbsp;{{ currency }}</div>
+      {# The number and the code are two spans on purpose: `paid_amount` normalizes as
+         money and must carry no currency symbol inside its box, while the code beside it
+         is the page's one `currency` field — the corpus prints no code beside a number
+         anywhere else, because with one currency there was nothing to distinguish. #}
+      <div class="paid-amount"><span data-field="paid_amount">{{ total }}</span>&nbsp;<span data-field="currency">{{ currency }}</span></div>
       <div class="muted">{{ labels.paid_caption }}</div>
     </div>
   </section>
@@ -99,15 +105,15 @@
   <section class="meta">
     <div class="meta-item">
       <div class="caption">{{ labels.receipt_number }}</div>
-      <div class="mono">{{ receipt_number }}</div>
+      <div class="mono" data-field="receipt_number">{{ receipt_number }}</div>
     </div>
     <div class="meta-item">
       <div class="caption">{{ labels.date_paid }}</div>
-      <div class="mono">{{ date }}</div>
+      <div class="mono" data-field="date">{{ date }}</div>
     </div>
     <div class="meta-item">
       <div class="caption">{{ labels.payment_method }}</div>
-      <div class="mono">{{ card_masked }}</div>
+      <div class="mono" data-field="card_masked">{{ card_masked }}</div>
     </div>
   </section>
 
@@ -117,8 +123,8 @@
      to carry. #}
   <section class="party">
     <div class="caption">{{ labels.billed_to }}</div>
-    <div class="party-name">{{ buyer.name }}</div>
-    <div class="muted">{{ buyer.country }}</div>
+    <div class="party-name" data-field="buyer_name">{{ buyer.name }}</div>
+    <div class="muted" data-field="buyer_country">{{ buyer.country }}</div>
   </section>
 
   {# The lines. 📄 The quantity and nature of the service is an invoice particular AND 👁 the one
@@ -140,11 +146,11 @@
       {% for line in lines %}
       <tr>
         <td class="col-desc">
-          <div>{{ line.name }}</div>
+          <div data-field="item_{{ loop.index }}_name">{{ line.name }}</div>
           {% if line.period %}<div class="muted small">{{ line.period }}</div>{% endif %}
         </td>
-        <td class="col-qty mono">{{ line.qty }}</td>
-        <td class="col-amount mono">{{ line.amount }}</td>
+        <td class="col-qty mono" data-field="item_{{ loop.index }}_qty">{{ line.qty }}</td>
+        <td class="col-amount mono" data-field="item_{{ loop.index }}_sum">{{ line.amount }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -157,7 +163,7 @@
   <section class="totals">
     <div class="row">
       <span class="caption">{{ labels.subtotal }}</span>
-      <span class="mono">{{ subtotal }}&nbsp;{{ currency }}</span>
+      <span class="mono"><span data-field="subtotal">{{ subtotal }}</span>&nbsp;{{ currency }}</span>
     </div>
 
     {# 📄 Present only where the supplier charges the tax. A Ukrainian company registered for ПДВ
@@ -166,13 +172,13 @@
     {% if vat %}
     <div class="row">
       <span class="caption">{{ vat.label }}</span>
-      <span class="mono">{{ vat.amount }}&nbsp;{{ currency }}</span>
+      <span class="mono"><span data-field="vat_amount">{{ vat.amount }}</span>&nbsp;{{ currency }}</span>
     </div>
     {% endif %}
 
     <div class="row grand">
       <span>{{ labels.total }}</span>
-      <span class="mono">{{ total }}&nbsp;{{ currency }}</span>
+      <span class="mono"><span data-field="total">{{ total }}</span>&nbsp;{{ currency }}</span>
     </div>
   </section>
 
@@ -190,7 +196,7 @@
        together are therefore an argument about the SHAPE of that field rather than about one
        document — see templates/README.md. #}
     {% if not_a_tax_invoice_note %}
-    <div class="notice">{{ not_a_tax_invoice_note }}</div>
+    <div class="notice" data-field="not_a_tax_invoice_note">{{ not_a_tax_invoice_note }}</div>
     {% endif %}
     {% if support_note %}
     <div class="muted small">{{ support_note }}</div>

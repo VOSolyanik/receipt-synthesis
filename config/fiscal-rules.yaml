@@ -1223,3 +1223,47 @@ jurisdictions:
       title_suffixes: [""]
       footer: ""
       non_fiscal_marker: "NOT A FISCAL DOCUMENT"
+
+    # The platform receipt's captions — moved here from `tools/render_mockups.py` when the
+    # archetype was connected, exactly as the товарний чек's strings were when it was.
+    # These are the words printed on the page, so they are layout constants of the class,
+    # which is this file's subject; the shares and vocabularies that DRAW anything live in
+    # config/generation.yaml.
+    #
+    # 🔴 THE NEGATIVE MARKER IS A STRING WITH A POSITION — the other half of the argument
+    # the Ukrainian slip made by an ABSENCE. 👁 Four independent commentators describe this
+    # wording as printed on real platform receipts, and 📄 Article 226 of Directive
+    # 2006/112/EC is the list of particulars a document that declares itself not a VAT
+    # invoice may lack — the supplier's address, the supplier's and the customer's VAT
+    # identification numbers, the rate and the amount of tax. The template omits exactly
+    # those, and this sentence is what licenses the omission.
+    platform_receipt:
+      labels:
+        title: "Receipt"
+        paid_caption: "Amount paid"
+        receipt_number: "Receipt number"
+        date_paid: "Date paid"
+        payment_method: "Payment method"
+        billed_to: "Billed to"
+        description: "Description"
+        quantity: "Qty"
+        amount: "Amount"
+        subtotal: "Subtotal"
+        total: "Total"
+      not_a_tax_invoice_note: "This is not a VAT invoice."
+      # 👁 A platform receipt shows the card as its last digits behind bullets; the exact
+      # bullet count varies by platform and four is the drawn convention here.
+      card_mask_format: "•••• {tail}"
+      # Two numeric groups joined by a dash, as platform order/receipt numbers commonly
+      # render. Invented form — no platform's real numbering scheme is reproduced. Groups
+      # rather than one pattern because `content_builder._draw_from_pattern` handles
+      # character classes only, and a literal separator belongs to the form, not the draw.
+      receipt_number:
+        group_pattern: "[0-9]{4}"
+        groups: 2
+        separator: "-"
+      # What the `billed_to` block prints under the buyer's name, per the buyer's own
+      # country. The value is the English exonym, because the page is English — the
+      # persona's country code is the lookup key.
+      buyer_country_names:
+        UA: "Ukraine"

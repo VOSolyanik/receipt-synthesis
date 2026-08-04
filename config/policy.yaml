@@ -777,7 +777,11 @@ partial_payment:
 # plus an account statement) and where the traps come from (an invoice on its own
 # proves nothing was paid).
 #
-# A fiscal receipt is the only common document that establishes both at once.
+# A fiscal receipt is the commonest document that establishes both at once. A
+# platform receipt is the second class that does: an online platform's own receipt
+# for a paid order is itemized like a receipt and marked paid like one, while
+# being fiscal like neither — the pairing of both facts with no fiscal identity is
+# exactly what the class exists to put in the data.
 #
 # These are type-level defaults. A specific archetype may override them: a bank
 # payment confirmation whose payment purpose spells out what was bought does
@@ -791,3 +795,4 @@ document_evidence:
   act:                  { proves_subject: true,  proves_payment: false }
   order_screenshot:     { proves_subject: true,  proves_payment: false }
   non_fiscal_receipt:   { proves_subject: true,  proves_payment: false }
+  platform_receipt:     { proves_subject: true,  proves_payment: true  }

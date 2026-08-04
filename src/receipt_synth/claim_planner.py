@@ -89,6 +89,12 @@ class Archetype:
     # print a gym membership. As templates land this widens until every category has at
     # least one archetype in every jurisdiction.
     categories: tuple[str, ...]
+    # 🔴 `country` IS THE CLAIMANT'S JURISDICTION — the key `archetypes_for` selects by,
+    # which is the persona's — and the SELLER need not share it: a Ukrainian employee
+    # buys a course from a foreign platform and submits its receipt. `vendor_pool` names
+    # the config/vendors.json block that seller draws from where the two differ; `None`
+    # means the claimant's own, which is every domestic archetype.
+    vendor_pool: str | None = None
 
 
 def evidence_of(archetype: Archetype) -> Evidence:
@@ -268,6 +274,35 @@ ARCHETYPES: dict[str, Archetype] = {
             "vitamins_nutrition",
             "hobby",
         ),
+    ),
+    # 🔴 THE SIXTH DOCUMENT CLASS, AND THE SECOND THAT PROVES BOTH FACTS — the first that
+    # does so without being fiscal, and the corpus's first document in a second language
+    # and a second currency. `country=UA` because that field is the CLAIMANT'S
+    # jurisdiction: a Ukrainian employee buys a course from a foreign platform, pays by
+    # card in euros and submits the platform's receipt; the seller draws from the `EU`
+    # vendor pool instead (`vendor_pool`), which is what the field exists for.
+    #
+    # ONE CATEGORY, AND THE CHOICE IS THE BLAST RADIUS. `_select_documents` PREFERS a
+    # single document proving both facts wherever one is registered — the rule that gives
+    # `vitamins_nutrition` its receipts — so every category listed here loses its
+    # invoice-plus-payment pair for single-document verdicts and drops out of the
+    # pair-realized ones (`plannable_categories`). `professional_development` is the
+    # class's natural home — the `online_learning_platform` vendor profile already lives
+    # there — and confining the archetype to it keeps the split pair exercised in five
+    # categories rather than four. Wider registration is a distribution decision, not a
+    # template property, and it is not taken here.
+    #
+    # ⚠️ THE ORACLE CONVERTS THIS ARCHETYPE'S CLAIMS. Every amount on the document is in
+    # EUR; limits are in UAH; `policy_engine` converts at the vendored rate of
+    # config/fx-rates.yaml and records it in the claim's `fx_rates` — the decision that
+    # unblocked this registration, and the reason it could not land before it.
+    "eu_platform_receipt": Archetype(
+        slug="eu_platform_receipt",
+        doc_type=DocType.PLATFORM_RECEIPT,
+        country=Country.UA,
+        language="en",
+        categories=("professional_development",),
+        vendor_pool="EU",
     ),
 }
 

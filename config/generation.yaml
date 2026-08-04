@@ -508,6 +508,51 @@ price_ranges:
 
 
 # =============================================================================
+# Euro price ranges — the per-jurisdiction block the header above promised
+# =============================================================================
+#
+# The `price_ranges` header says: "Per jurisdiction ranges arrive with the first non-UA
+# archetype". This is that arrival — `eu_platform_receipt` prices its lines from here.
+#
+# ONLY THE KINDS A EURO-PRICED ARCHETYPE CAN SELL, AND DELIBERATELY NO DEFAULT. The UAH
+# block's default exists because every Ukrainian category draws from it; a euro default
+# would let a kind nobody priced in euros fall through to a number that merely looks like
+# a price. `config.price_range` refuses a missing kind here instead. The five kinds below
+# are the union of the two EU vendor profiles (`online_learning_platform`,
+# `general_retailer`) intersected with what `professional_development` names.
+#
+# 🔴 EACH RANGE NESTS INSIDE ITS UAH SIBLING AT THE VENDORED RATE, AND THAT IS ARITHMETIC
+# THE PLANNER LEANS ON, not a stylistic echo. `claim_planner` sizes a limit-exhausting
+# basket with `content_builder.estimated_line_value`, which reads the UAH ranges — it runs
+# before a vendor or an archetype is chosen, so it cannot know the claim will price in
+# euros. The sizing stays conservative exactly as long as a euro line is worth at least
+# its UAH sibling's lower bound: eur_low × 45.00 ≥ uah_low, and eur_high × 45.00 ≤
+# uah_high keeps the basket inside the same plausibility band the category was tuned to.
+# Per kind, at the vendored 45.00 (config/fx-rates.yaml):
+#
+#   online_course       23.00–200.00  → 1 035.00–9 000.00 against [1 000, 9 000]
+#   certification_exam  89.00–266.00  → 4 005.00–11 970.00 against [4 000, 12 000]
+#   professional_book   10.00–33.00   →   450.00–1 485.00 against [450, 1 500]
+#   entertainment_book   5.60–13.00   →   252.00–585.00   against [250, 600]
+#   hardware           334.00–1333.00 → 15 030.00–59 985.00 against [15 000, 60 000]
+#
+# The nesting is pinned by a test (tests/test_platform_receipt.py), so an edit to either
+# side that breaks it goes red instead of quietly making exhausted-limit plans miss.
+#
+# Prices draw in ten-cent steps, as the UAH draw does in ten-kopiyka steps — one grid,
+# two currencies. The .99 retail convention is therefore absent from euro prices; a
+# narrowness of the corpus, accepted for one draw mechanism rather than two.
+price_ranges_eur:
+  currency: EUR
+  ranges:
+    online_course:      ["23.00", "200.00"]
+    certification_exam: ["89.00", "266.00"]
+    professional_book:  ["10.00", "33.00"]
+    entertainment_book: ["5.60", "13.00"]
+    hardware:           ["334.00", "1333.00"]
+
+
+# =============================================================================
 # Basket shape
 # =============================================================================
 

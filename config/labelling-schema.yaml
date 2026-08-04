@@ -1016,7 +1016,14 @@
 # both sides load. KL-17 records the external-validity gap this opens: the corpus converts
 # at STATIC vendored rates, a production system converts at a live rate for the transaction
 # date, and no figure measured here transfers across that difference unexamined.
-version: 30
+#
+# Version 31 is the DOCUMENT CLASS the conversion exists for: `platform_receipt`, with its
+# one archetype `eu_platform_receipt` — English, EUR, both facts of `document_evidence`
+# established by a page carrying no fiscal identity. `DocType` gained the member,
+# policy.yaml's `document_evidence` gained the row, and the `document_types` section below
+# gained the block. `classifier_role` is `undecided`, exactly as for `non_fiscal_receipt`,
+# so the four target classes and the classifier metric's denominator are unchanged.
+version: 31
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -2083,6 +2090,54 @@ document_types:
       receipt. Being reasoned about specifically and being routed
       to manual review as an unrecognized type are different outcomes, and no source names a
       class for this one. Left open.
+
+  platform_receipt:
+    classifier_role: undecided
+    status: emitted
+    emitted_since: >
+      VERSION 31, TOGETHER WITH THE CURRENCY CONVERSION IT EXISTS TO EXERCISE — the first
+      document of this corpus in a second language and a second currency, and the second
+      class after `fiscal_receipt` whose type establishes BOTH facts of policy.yaml's
+      `document_evidence`. An online platform's own receipt for a paid order: the lines
+      say what was bought, the paid caption and the masked card say money moved, and no
+      fiscal identity of any jurisdiction appears anywhere on the page.
+
+      ONE ARCHETYPE, `eu_platform_receipt` — English, EUR, seller drawn from the EU pool
+      of config/vendors.json, registered for `professional_development` only (the
+      registry entry carries the blast-radius reasoning). Its claims are single-document
+      and the oracle CONVERTS their amounts at the vendored rate of config/fx-rates.yaml,
+      recording what it applied in the claim's `fx_rates` field.
+
+      WHAT ITS LABEL RECORD CARRIES: `doc_type: platform_receipt`, `language: en`,
+      `currency: EUR`, a basket in `line_items` (every amount in the document's own
+      currency — nothing on the record is converted), `counterparty` the platform's bare
+      mark, `payer` the buyer the page names, `date`, and the three fiscality flags all
+      `false`. `vat_letter` is `null` on every line and no tax row is printed: 📄 the page
+      declares «This is not a VAT invoice.», and Article 226 of Directive 2006/112/EC is
+      the list of particulars that declaration licenses it to omit — the supplier's
+      address, both parties' VAT identification numbers, the rate and the amount of tax.
+
+      🔴 THE NEGATIVE MARKER IS A STRING WITH A POSITION — `not_a_tax_invoice_note` in
+      `field_bboxes` — which is the other half of RC-08's argument: the Ukrainian slip's
+      marker was an ABSENCE, this one is text with a box, and a field shaped "marker text
+      plus position" fits exactly one of the two.
+    printed_fields:
+      note: >
+        The box vocabulary of the one archetype: `title`, `seller_name`, `paid_amount`,
+        `currency` (the code beside the paid figure — the corpus prints a currency code
+        beside a number on no other class, one currency having nothing to distinguish),
+        `receipt_number`, `date`, `card_masked`, `buyer_name`, `buyer_country`,
+        `item_<i>_name` / `item_<i>_qty` / `item_<i>_sum` (no per-line price: the page
+        prints quantity and line total only), `subtotal`, `total`,
+        `not_a_tax_invoice_note`. `paid_amount` and `total` are one figure printed twice,
+        as `amount` and `amount_due` are on the receipt classes.
+    undecided: >
+      For the reason the slip's role is: the consumer's `other` absorbs it mechanically
+      and routes the claim to `in_review`, while this class — unlike anything in `other`
+      today — establishes both facts and can carry a fully derivable verdict. Whether the
+      consumer classifies it specifically or reviews it manually is a decision about the
+      consumer's class vocabulary, and no source has taken it. Left open, exactly as for
+      `non_fiscal_receipt`; the four target classes and their denominator are unchanged.
 
 # The consumer's classification metric, stated here because a consumer that computes a
 # different metric than the one being reported has no way to discover the difference from
@@ -5817,6 +5872,7 @@ known_limitations:
       Compare `fx_rates[].rate` across documents of different dates: on this corpus they are
       equal for equal currencies, which is the signature of the static table. Any evaluation
       of date-sensitive conversion needs data this corpus deliberately does not contain.
+    see_profile: run_profiles
     fixed_by: >
       NOTHING THAT SHOULD BE DONE BY WIDENING THE POOL, and the decision is the author's: 👁 the
       observed purpose lines name a delivery note as well as an invoice, and a corpus in which

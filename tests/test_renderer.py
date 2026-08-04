@@ -31,6 +31,7 @@ from receipt_synth.content_builder import (
     build_invoice,
     build_non_fiscal_receipt,
     build_payment_confirmation,
+    build_platform_receipt,
     build_prro_receipt,
     draw_party_identity,
     resolve_vendor,
@@ -223,6 +224,29 @@ def make_non_fiscal_receipt(seed: int = 20260615, vendor: dict = NON_PAYER):
     )
 
 
+def make_platform_receipt(seed: int = 20260615, vendor: dict | None = None):
+    """One platform receipt, for the whole-registry tests below.
+
+    THE VENDOR DEFAULT IS AN EU PLATFORM, not `PAYER`: the class's seller draws from the
+    `EU` pool (`claim_planner.Archetype.vendor_pool`) and prints the bare mark alone. The
+    class's own tests are in test_platform_receipt.py; this exists so that every sweep of
+    the registry sweeps this archetype too.
+    """
+    platform = vendor or {
+        "name": "Coursera", "legal_form": "INC",
+        "profile": "online_learning_platform", "vat_payer": False,
+    }
+    return build_platform_receipt(
+        random.Random(seed),
+        category_id="professional_development",
+        issued_at=datetime(2026, 6, 15, 17, 41, 9),
+        vendor=platform,
+        identity=identity_for(platform),
+        buyer_name="Ковальчук Олена Петрівна",
+        buyer_tax_id="2345678901",
+    )
+
+
 def context_for(slug: str) -> dict:
     """A render context for any registered archetype, built by its document class.
 
@@ -243,6 +267,8 @@ def context_for(slug: str) -> dict:
         return make_invoice().render_context()
     if doc_type is DocType.NON_FISCAL_RECEIPT:
         return make_non_fiscal_receipt().render_context()
+    if doc_type is DocType.PLATFORM_RECEIPT:
+        return make_platform_receipt().render_context()
     raise AssertionError(
         f"{slug} is a {doc_type.value}, and this module has no context for that class — a "
         "registered archetype nothing here can render is one no test below covers"

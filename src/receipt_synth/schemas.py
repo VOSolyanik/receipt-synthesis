@@ -51,6 +51,12 @@ class DocType(StrEnum):
     ACT = "act"
     ORDER_SCREENSHOT = "order_screenshot"
     NON_FISCAL_RECEIPT = "non_fiscal_receipt"
+    # An online platform's own receipt for a paid order: itemized like a receipt, marked
+    # paid like one, fiscal like neither — it is the first class that establishes both
+    # facts of `document_evidence` without being a fiscal document. Not one of the four
+    # classifier target classes; the contract records its role as undecided, exactly as it
+    # does for the non-fiscal slip.
+    PLATFORM_RECEIPT = "platform_receipt"
 
 
 class Direction(StrEnum):

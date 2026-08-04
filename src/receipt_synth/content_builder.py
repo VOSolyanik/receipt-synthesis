@@ -1025,11 +1025,21 @@ def _minor(amount: Decimal) -> int:
 
 
 def _build_line_item(
-    item_kind: str, templates: list[str], rng: random.Random, *, covered: bool, vat_payer: bool
+    item_kind: str,
+    templates: list[str],
+    rng: random.Random,
+    *,
+    covered: bool,
+    vat_payer: bool,
+    language: str = "uk",
+    currency: str = "UAH",
 ) -> LineItem:
-    names = [_fill_placeholders(template, item_kind, rng) for template in templates]
+    names = [
+        _fill_placeholders(template, item_kind, rng, language=language)
+        for template in templates
+    ]
 
-    low, high = price_range(item_kind)
+    low, high = price_range(item_kind, currency)
     return LineItem(
         name=rng.choice(names),
         item_kind=item_kind,
@@ -1037,7 +1047,9 @@ def _build_line_item(
         # Drawn in whole ten-kopiyka steps: retail prices do not end in arbitrary
         # kopiykas, and an exact integer keeps the sum exact. `randrange` is half-open, so
         # the configured `high` is the one price this draw cannot produce — see
-        # `config.price_range`, which says where the bound IS inclusive.
+        # `config.price_range`, which says where the bound IS inclusive. The same
+        # ten-minor-unit grid serves the euro draw — one mechanism, two currencies, as the
+        # `price_ranges_eur` comment declares.
         price=Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100,
         covered=covered,
         # A seller with no ПДВ registration has assigned no rate group to anything, so the
@@ -1061,6 +1073,8 @@ def _draw_distinct_items(
     *,
     covered: bool,
     vat_payer: bool,
+    language: str = "uk",
+    currency: str = "UAH",
 ) -> list[LineItem]:
     """Line items with distinct printed names.
 
@@ -1068,6 +1082,10 @@ def _draw_distinct_items(
     one receipt at two different prices is not something a cash register produces. Kinds
     are still drawn with replacement — a pharmacy basket really can hold two different
     vitamins — it is the printed name that has to be unique.
+
+    `language` selects which template list of the catalogue a name is drawn from —
+    policy.yaml carries `uk` and `en` for every kind — and `currency` selects the price
+    block, per `config.price_range`. Defaults keep every existing caller a Ukrainian one.
     """
     items: list[LineItem] = []
     seen: set[str] = set()
@@ -1081,7 +1099,13 @@ def _draw_distinct_items(
             break
         kind = rng.choice(kinds)
         item = _build_line_item(
-            kind, catalogue[kind]["uk"], rng, covered=covered, vat_payer=vat_payer
+            kind,
+            catalogue[kind][language],
+            rng,
+            covered=covered,
+            vat_payer=vat_payer,
+            language=language,
+            currency=currency,
         )
         if item.name not in seen:
             seen.add(item.name)
@@ -1114,31 +1138,39 @@ def estimated_line_value(category_id: str) -> Decimal:
     return (mean_price * mean_qty).quantize(KOPIYKA)
 
 
-def _repriced(item: LineItem, line_total: Decimal) -> LineItem:
+def _repriced(item: LineItem, line_total: Decimal, currency: str = "UAH") -> LineItem:
     """The same line, priced so it comes to about ``line_total``.
 
-    Clamped into the item kind's own range and rounded to ten kopiykas, so that hitting a
-    coverage target cannot print a 4 UAH blood-pressure monitor. The clamp is why the
-    realized coverage only approaches the target — which is enough, because the target
-    only has to land the claim on the right side of `full_threshold`.
+    Clamped into the item kind's own range — in the basket's own currency — and rounded to
+    ten minor units, so that hitting a coverage target cannot print a 4 UAH
+    blood-pressure monitor. The clamp is why the realized coverage only approaches the
+    target — which is enough, because the target only has to land the claim on the right
+    side of `full_threshold`.
     """
-    low, high = price_range(item.item_kind)
+    low, high = price_range(item.item_kind, currency)
     kopiykas = int((line_total / item.qty * 100).to_integral_value(rounding=ROUND_HALF_UP))
     kopiykas = min(max(kopiykas - kopiykas % 10, _minor(low)), _minor(high))
     return item.model_copy(update={"price": Decimal(kopiykas) / 100})
 
 
-def _excluded_ceiling(kinds: list[str]) -> Decimal:
+def _excluded_ceiling(kinds: list[str], currency: str = "UAH") -> Decimal:
     """The most one non-covered line may cost, over the kinds available.
 
     The sizing bound for the loop below: at qty 1 no non-covered line can be repriced
     above this without leaving the range its item kind is plausible in.
     """
-    return max(price_range(kind)[1] for kind in kinds)
+    return max(price_range(kind, currency)[1] for kind in kinds)
 
 
 def _build_mixed_basket(
-    rng: random.Random, *, category_id: str, vendor: dict, count: int, coverage_target: Decimal
+    rng: random.Random,
+    *,
+    category_id: str,
+    vendor: dict,
+    count: int,
+    coverage_target: Decimal,
+    language: str = "uk",
+    currency: str = "UAH",
 ) -> list[LineItem]:
     """A basket drawn from both the covered and the excluded bucket of a category.
 
@@ -1163,6 +1195,8 @@ def _build_mixed_basket(
         count,
         covered=True,
         vat_payer=vat_payer,
+        language=language,
+        currency=currency,
     )
     if not covered:
         raise ValueError(f"category {category_id!r} produced no covered line")
@@ -1179,11 +1213,12 @@ def _build_mixed_basket(
     def budget(items: list[LineItem]) -> Decimal:
         return line_items_total(items) * (1 - coverage_target) / coverage_target
 
-    ceiling = _excluded_ceiling(excluded_kinds)
+    ceiling = _excluded_ceiling(excluded_kinds, currency)
     wanted = max(rng.choice(excluded_line_counts()), math.ceil(budget(covered) / ceiling))
     excluded = _draw_distinct_items(
         rng, excluded_kinds, excluded_catalogue,
         min(wanted, MAX_LINE_ITEMS - len(covered)), covered=False, vat_payer=vat_payer,
+        language=language, currency=currency,
     )
     if not excluded:
         raise ValueError(f"category {category_id!r} produced no non-covered line")
@@ -1197,7 +1232,9 @@ def _build_mixed_basket(
     while len(covered) > 1 and budget(covered) > ceiling * len(excluded):
         covered.pop()
 
-    excluded = [_repriced(item, budget(covered) / len(excluded)) for item in excluded]
+    excluded = [
+        _repriced(item, budget(covered) / len(excluded), currency) for item in excluded
+    ]
 
     items = covered + excluded
     # Otherwise every non-covered line is the last one on every mixed receipt, which is a
@@ -1216,6 +1253,8 @@ def _draw_basket(
     covered_only: bool,
     coverage_target: Decimal | None,
     item_count: int | None,
+    language: str = "uk",
+    currency: str = "UAH",
 ) -> list[LineItem]:
     """What a document lists, drawn from the category's own buckets.
 
@@ -1238,6 +1277,10 @@ def _draw_basket(
     ⚠️ THE ORDER OF THE DRAWS IS PART OF THE SEED'S MEANING. The line count is taken from `rng`
     before anything else here, exactly as it was in each copy; moving it would change every
     document of every existing corpus for a refactor that is meant to change nothing.
+
+    `language` and `currency` are the platform receipt's two axes and neither is a draw:
+    they select the template list and the price block, and their defaults keep every
+    Ukrainian caller — and every existing seed — exactly where it was.
     """
     count = item_count if item_count is not None else rng.randint(2, 4)
     if not 1 <= count <= MAX_LINE_ITEMS:
@@ -1257,7 +1300,8 @@ def _draw_basket(
                 f"category {category_id!r} covers"
             )
         return _draw_distinct_items(
-            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
+            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer,
+            language=language, currency=currency,
         )
 
     if coverage_target is None:
@@ -1275,6 +1319,8 @@ def _draw_basket(
         vendor=vendor,
         count=count,
         coverage_target=coverage_target,
+        language=language,
+        currency=currency,
     )
 
 
@@ -3680,6 +3726,221 @@ def build_non_fiscal_receipt(
         ),
         footer=receipt_rules["footer"],
         decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
+    )
+
+
+@dataclass(frozen=True)
+class PlatformReceipt:
+    """One platform receipt — an online platform's own page for a paid order.
+
+    THE FIRST CLASS IN TWO DIMENSIONS AT ONCE: the corpus's first English document and its
+    first euro one, which is the reason the archetype exists — the contract's reference
+    profile records `currency_UAH` and `language_uk` at 100% of documents and names the
+    single-valued dimensions a finding.
+
+    🔴 WHAT IT LACKS IS ITSELF EVIDENCED, by the method the non-fiscal slip used on the
+    Ukrainian fiscal form. 📄 Article 226 of Directive 2006/112/EC lists the particulars a
+    VAT invoice must carry — the supplier's address, the supplier's and the customer's VAT
+    identification numbers, the rate and the amount of tax — and this document declares
+    itself not to be one («This is not a VAT invoice.», 👁 four independent commentators
+    describe the wording on real platform receipts) and carries none of them. So the
+    seller block is one line, the mark; there is no `Seller` here at all, because every
+    other field of that class is a requisite this page is licensed to omit.
+
+    ⛔ NO QR, NO FISCAL IDENTITY, NO AMOUNT IN WORDS, NO TAX BLOCK — absences, not gaps.
+    The class establishes both facts of `document_evidence` (the lines say what was
+    bought, the paid caption and the card say money moved) while being fiscal like
+    neither receipt class: that pairing is what the archetype puts into the data.
+    """
+
+    seller_name: str
+    buyer_name: str
+    buyer_country: str
+    issued_at: datetime
+    receipt_number: str
+    # The last digits of the paying card behind bullets, as the class prints it. The
+    # digits identify nothing: four digits are a tail every issued range shares.
+    card_masked: str
+    line_items: list[LineItem]
+    total: Decimal
+
+    # -- rendering ------------------------------------------------------------
+
+    def _amount(self, value: Decimal) -> str:
+        rules = jurisdiction("EU")["number_format"]
+        whole, _, fraction = f"{value:.2f}".partition(".")
+        grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
+        # The EU block declares one decimal separator, so there is nothing to draw.
+        return f"{grouped}{rules['decimal_separator_variants'][0]}{fraction}"
+
+    def render_context(self) -> dict:
+        """Everything the template prints, already formatted.
+
+        The captions come from `platform_receipt.labels` in config/fiscal-rules.yaml —
+        moved there from the mock-up script when the archetype was connected, the same
+        migration the товарний чек's strings made. The body is
+        templates/platform_receipt.jinja, shared with the Ukrainian variant of the class;
+        what makes this document English and EUR is this context, not the markup.
+        """
+        rules = jurisdiction("EU")
+        block = rules["platform_receipt"]
+        return {
+            "language": rules["language"],
+            "labels": block["labels"],
+            "currency": rules["currency"],
+            # The seller block is the mark and nothing beside it — see the class
+            # docstring. The keys exist because the shared body asks conditionally.
+            "seller": {
+                "name": self.seller_name,
+                "address": None,
+                "tax_code": None,
+                "tax_code_label": None,
+                "vat_number": None,
+                "vat_number_label": None,
+            },
+            "buyer": {"name": self.buyer_name, "country": self.buyer_country},
+            "receipt_number": self.receipt_number,
+            "date": self.issued_at.strftime(rules["date_format"]),
+            "card_masked": self.card_masked,
+            "lines": [
+                {
+                    "name": item.name,
+                    # ⛔ No period sub-line: the drawn name carries everything the label
+                    # knows, and a second printed string absent from the label would be
+                    # text `reference_text` carries and nothing accounts for.
+                    "period": None,
+                    "qty": f"{item.qty:g}",
+                    "amount": self._amount((item.qty * item.price).quantize(KOPIYKA)),
+                }
+                for item in self.line_items
+            ],
+            "subtotal": self._amount(self.total),
+            # 📄 Present only where the supplier charges the tax; this page declares it
+            # charges none, and a zero row would assert a treatment rather than omit one.
+            "vat": None,
+            "total": self._amount(self.total),
+            "not_a_tax_invoice_note": block["not_a_tax_invoice_note"],
+            "support_note": None,
+            "qr_payload": None,
+        }
+
+    # -- labels ---------------------------------------------------------------
+
+    def ground_truth(
+        self,
+        *,
+        doc_id: str,
+        source_file: str,
+        capture: Capture,
+        field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
+    ) -> DocGroundTruth:
+        """The label record for this receipt.
+
+        `currency` is the record's load-bearing field: every amount on it is in EUR, and
+        the oracle converts at the vendored rate — recording what it applied in the
+        claim's `fx_rates` — rather than refusing, which is the decision that let this
+        archetype into the corpus at all. `payer` carries the buyer the page names; the
+        three fiscality flags are false, as on the slip, and for the same reason: a
+        consumer classifying on a fiscal marker must find none here.
+        """
+        return DocGroundTruth(
+            doc_id=doc_id,
+            source_file=source_file,
+            doc_type=DocType.PLATFORM_RECEIPT,
+            language=jurisdiction("EU")["language"],
+            currency=jurisdiction("EU")["currency"],
+            amount=self.total,
+            date=self.issued_at.date(),
+            counterparty=self.seller_name,
+            payer=self.buyer_name,
+            line_items=self.line_items,
+            has_qr=False,
+            qr_is_fiscal=False,
+            has_fiscal_number=False,
+            capture=capture,
+            field_bboxes=field_bboxes,
+            reference_text=reference_text,
+            content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
+        )
+
+
+def build_platform_receipt(
+    rng: random.Random,
+    *,
+    category_id: str,
+    issued_at: datetime,
+    vendor: dict,
+    identity: PartyIdentity,
+    buyer_name: str,
+    buyer_tax_id: str,
+    address: str = "",
+    covered_only: bool = True,
+    coverage_target: Decimal | None = None,
+    item_count: int | None = None,
+) -> PlatformReceipt:
+    """Build one platform receipt, in English and EUR.
+
+    THE BASKET IS THE RECEIPT'S AND THE INVOICE'S — `_draw_basket`, same knobs, same
+    meaning — with the two axes that make this class what it is: `language="en"` selects
+    the English template list policy.yaml carries for every kind, and `currency="EUR"`
+    selects `price_ranges_eur`, whose comment states the arithmetic tying it to the UAH
+    ranges the planner sizes baskets by.
+
+    THREE PARAMETERS ARE ACCEPTED AND DELIBERATELY NOT PRINTED, because the assembler
+    hands them to every archetype of their kind and a page must not grow a requisite to
+    use them up:
+
+    * `identity` — the seller's drawn identity. 📄 A supplier's identification numbers are
+      invoice particulars, and this page declares itself not an invoice; the parameter
+      stays so that ONE mechanism decides who a seller is, whichever archetype a claim
+      turns out to use.
+    * `buyer_tax_id` — 📄 the customer's VAT identification number is on the same Article
+      226 list. 👁 A platform account has a name and a country, not a tax number.
+    * `address` — the claimant's city, which nothing on this page names.
+    """
+    del identity, buyer_tax_id, address  # accepted, not printed — see the docstring
+
+    rules = jurisdiction("EU")
+    block = rules["platform_receipt"]
+
+    items = _draw_basket(
+        rng,
+        document="a platform receipt",
+        category_id=category_id,
+        vendor=vendor,
+        # No VAT letter on any line: the page prints no tax requisite of any kind, which
+        # is the treatment its own footer declares. The vendor's flag is not consulted —
+        # config/vendors.json states it false for every EU entry, and the page's law is
+        # the declaration, not the flag.
+        vat_payer=False,
+        covered_only=covered_only,
+        coverage_target=coverage_target,
+        item_count=item_count,
+        language=rules["language"],
+        currency=rules["currency"],
+    )
+
+    number_rules = block["receipt_number"]
+    receipt_number = number_rules["separator"].join(
+        _draw_from_pattern(rng, number_rules["group_pattern"])
+        for _ in range(int(number_rules["groups"]))
+    )
+
+    return PlatformReceipt(
+        # The bare mark, which is also what `counterparty` carries: an EU platform's
+        # entry states a name and trades under it, and the page prints nothing else.
+        seller_name=vendor["name"],
+        buyer_name=buyer_name,
+        buyer_country=block["buyer_country_names"]["UA"],
+        issued_at=issued_at,
+        receipt_number=receipt_number,
+        card_masked=block["card_mask_format"].format(tail=f"{rng.randint(0, 9999):04d}"),
+        line_items=items,
+        total=line_items_total(items),
     )
 
 
