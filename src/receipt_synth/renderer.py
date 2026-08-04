@@ -170,6 +170,12 @@ _COLLECT_BBOXES = """
     regions: [...document.querySelectorAll('[data-region]')].map(
       el => [el.dataset.region, box(el)]
     ),
+    // THE BASENAME ONLY, NEVER THE PATH — `el.src` is an absolute file:// URL, and what
+    // crosses into Python is the file's name so that an exception can say which picture is
+    // missing without printing where this machine keeps it.
+    broken_images: [...document.querySelectorAll('img')]
+      .filter(el => !(el.complete && el.naturalWidth > 0))
+      .map(el => el.src.split('?')[0].split('/').pop()),
   };
 }
 """
@@ -247,6 +253,7 @@ class Renderer:
                 page.goto(page_path.as_uri())
                 width, height = _fit_viewport_to_content(page)
                 collected = page.evaluate(_COLLECT_BBOXES)
+                _refuse_unloaded_images(collected["broken_images"])
                 bboxes = _unique_boxes(collected["fields"], attribute="data-field")
                 region_bboxes = _unique_boxes(collected["regions"], attribute="data-region")
                 # Read BEFORE the screenshot, from the same page state. The order matters only in
@@ -265,6 +272,34 @@ class Renderer:
             region_bboxes=region_bboxes,
             reference_text=content["text"],
             content_bbox=tuple(content["bbox"]),
+        )
+
+
+def _refuse_unloaded_images(basenames: list[str]) -> None:
+    """Stop the render when a picture the page asked for is not in it.
+
+    🔴 THE ONE FAILURE THAT LOOKS LIKE A SUCCESS. Only a composition template embeds an image
+    (`ua_claim_bundle`), and its `alt` is empty on purpose, so an image that does not load paints
+    nothing at all: the sheet comes out blank, every box around it is collected as usual, and the
+    label goes on asserting a document that is not in the pixels. Nothing downstream can notice —
+    the geometry is plausible, the region is where it was meant to be, and the run finishes. A
+    corpus can therefore be corrupted wholesale by one unreadable path, which is why this is a
+    refusal at the source rather than a check somebody remembers to run afterwards.
+
+    `complete && naturalWidth > 0` IS THE TEST BECAUSE `complete` ALONE IS NOT: it is true for a
+    finished attempt whether the attempt succeeded or failed, and a failed decode reports a natural
+    width of zero. Read after `_fit_viewport_to_content`, which waits for the network to go idle,
+    so an image still in flight is not mistaken for one that failed.
+
+    ⛔ THE MESSAGE CARRIES BASENAMES AND NO PATH. What it names has to be enough to find the file
+    and not enough to describe the machine; an absolute path in an exception is an absolute path in
+    whatever log catches it, and this repository's redaction gate holds for what it prints too.
+    """
+    if basenames:
+        raise ValueError(
+            f"image(s) that did not load: {sorted(set(basenames))} — the page rendered a blank "
+            "where each of them should be, and its label would describe a document the picture "
+            "does not hold"
         )
 
 

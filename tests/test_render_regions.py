@@ -1,4 +1,5 @@
-"""`[data-region]` collection: the geometry a later multi-document file needs.
+"""The renderer's collection pass: `[data-region]` and `[data-field]` boxes, and the images the
+page had to have loaded for either of them to describe the picture.
 
 A SEPARATE MODULE FROM `test_renderer.py`, and deliberately so: this file needs its own
 `Renderer`, pointed at a fixture template directory rather than `templates/`, and
@@ -56,6 +57,14 @@ _DUPLICATE_FIELD_HTML = """
 </div>
 """
 
+# A page whose image never loads. `alt` is empty exactly as in `ua_claim_bundle`, so nothing is
+# painted where the picture should be and the render comes out a plausible blank.
+_BROKEN_IMAGE_HTML = """
+<div data-document>
+  <div data-region="doc_a"><div data-field="a_name">Alpha</div></div>
+  <img data-region="doc_b" src="no_such_sheet.png" alt="" width="120" height="80">
+</div>
+"""
 
 @pytest.fixture(scope="module")
 def fixture_templates_dir(tmp_path_factory):
@@ -68,6 +77,8 @@ def fixture_templates_dir(tmp_path_factory):
     (directory / "fixture_duplicate_region.css").write_text(_REGIONS_CSS, encoding="utf-8")
     (directory / "fixture_duplicate_field.html").write_text(_DUPLICATE_FIELD_HTML, encoding="utf-8")
     (directory / "fixture_duplicate_field.css").write_text(_REGIONS_CSS, encoding="utf-8")
+    (directory / "fixture_broken_image.html").write_text(_BROKEN_IMAGE_HTML, encoding="utf-8")
+    (directory / "fixture_broken_image.css").write_text(_REGIONS_CSS, encoding="utf-8")
     return directory
 
 
@@ -124,3 +135,19 @@ def test_a_duplicate_data_region_value_fails_loudly_rather_than_last_write_wins(
 def test_a_duplicate_data_field_value_fails_loudly_rather_than_last_write_wins(renderer, tmp_path):
     with pytest.raises(ValueError, match="dup"):
         renderer.render("fixture_duplicate_field", region_context(), tmp_path / "dup_field.png")
+
+
+def test_an_image_that_did_not_load_is_refused_by_the_basename_it_was_asked_for(
+    renderer, tmp_path, fixture_templates_dir
+):
+    """A failed `<img>` leaves a blank where a document should be, and every box collected around
+    it is still perfectly plausible — so the render has to stop rather than be labelled."""
+    with pytest.raises(ValueError, match="no_such_sheet.png") as raised:
+        renderer.render("fixture_broken_image", region_context(), tmp_path / "broken.png")
+
+    # ⛔ THE MESSAGE NAMES THE FILE AND NOT WHERE IT LIVES: a local path in an exception is a path
+    # in a log, and the redaction gate holds for what this repository prints as much as for what it
+    # commits. No separator anywhere in the sentence is the cheapest statement of that.
+    message = str(raised.value)
+    assert str(fixture_templates_dir) not in message
+    assert "/" not in message.replace("no_such_sheet.png", "")
