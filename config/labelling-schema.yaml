@@ -108,11 +108,12 @@
 #   ⚠️ A REGION IS AN AXIS-ALIGNED HULL AFTER DEGRADATION, AND IS NOT A CUT LINE. It carries the
 #   caveat `field_bboxes` and `content_bbox` already carry, because it is carried by the same
 #   transform in the same call: under `photo` or `scan`, which rotate, each rectangle is rebuilt as
-#   the smallest axis-aligned box containing its four moved corners. So a region is a little larger
-#   than the document it covers, TWO ADJACENT `file_region`s MAY OVERLAP BY A FEW PIXELS, and a
-#   region may extend past the frame with a negative coordinate. A segmentation step scored pixel
-#   for pixel against these is being scored against an annotation convention as much as against
-#   itself.
+#   the smallest axis-aligned box containing its four moved corners. So a region is larger than the
+#   document it covers, TWO ADJACENT `file_region`s MAY OVERLAP — on the `photo` channel two thirds
+#   of them do, by 17 px typically and 85 px at the worst on the run measured at the field's own
+#   entry, while `screenshot` and `scan` stay at nothing and at a few pixels — and a region may
+#   extend past the frame with a negative coordinate. A segmentation step scored pixel for pixel
+#   against these is being scored against an annotation convention as much as against itself.
 #
 #   RC-12 IS CLOSED, AND ONE HALF OF IT IS CLOSED BY A DECISION RATHER THAN BY CODE. The generator
 #   models multi-document files and is the source of ground truth for their boundaries, which is
@@ -3422,12 +3423,33 @@ document_label:
     # `field_bboxes` and `content_bbox` already carry and is inherited for the reason it is
     # inherited: `degrader.carry_boxes` moves every rectangle of one file in ONE call, as four
     # keypoints each, and rebuilds each box as the smallest axis-aligned rectangle containing its
-    # four moved corners. Under `photo` and `scan`, which rotate, a region is therefore a little
-    # larger than what it covers — SO TWO ADJACENT `file_region`s MAY OVERLAP BY A FEW PIXELS, and a
-    # region may extend past the frame with a negative coordinate or a far edge beyond it, exactly
-    # as a field box may. A region says where a document is. It is not a cut line, and a splitter
-    # scored pixel for pixel against one is being scored against an annotation convention as much as
-    # against itself.
+    # four moved corners. Under `photo` and `scan`, which rotate, a region is therefore larger than
+    # what it covers — SO TWO ADJACENT `file_region`s MAY OVERLAP, and a region may extend past the
+    # frame with a negative coordinate or a far edge beyond it, exactly as a field box may. A region
+    # says where a document is. It is not a cut line, and a splitter scored pixel for pixel against
+    # one is being scored against an annotation convention as much as against itself.
+    #
+    # 🔴 HOW MUCH THEY OVERLAP IS A PROPERTY OF THE CAPTURE CHANNEL, AND ON `photo` IT IS NOT A FEW
+    # PIXELS. Measured on ONE run — `generate-dataset --seed 20260803 --personas 40
+    # --claims-per-persona 3 --split 0.5`, 107 bundled files — and quoted as a measurement of that
+    # run rather than as an invariant: nothing in the generator bounds these numbers, and a
+    # different seed, profile or degradation parameter moves them.
+    #
+    #   * `screenshot` — 0 of 32 adjacent pairs overlap. Nothing rotates, so the sheets keep the
+    #     ≈16 px gap the composition leaves between them.
+    #   * `scan` — 11 of 36 pairs overlap, by at most 6 px. "A few pixels" describes this channel,
+    #     and it is the only channel it describes.
+    #   * `photo` — 27 of 39 pairs overlap: median 17 px, 39 px at the 90th percentile, 85 px at the
+    #     worst. That is consistent with the few degrees of rotation this channel applies to a file
+    #     over a thousand pixels wide, and it is two thirds of the adjacent pairs rather than an
+    #     outlier.
+    #
+    # Between the two `page_regions` OF ONE PAGINATED DOCUMENT the same run measured 0 of 13 on
+    # `screenshot`, 6 of 6 on `scan` (median 11 px, max 24 px) and 6 of 7 on `photo` (median 33 px,
+    # max 60 px). ⚠️ A CONSUMER SIZING A TOLERANCE SHOULD SIZE IT FROM THE PHOTO FIGURES. One that
+    # asserts disjoint regions, or that cuts a file along a region edge and expects the pieces to
+    # partition it, will find the halves of a photographed file claiming some of the same pixels —
+    # which is the convention above and not a defect in the label.
     # ------------------------------------------------------------------------
 
     - name: file_region
@@ -5660,7 +5682,7 @@ known_limitations:
       ⚠️ THAT INFERENCE IS NOT SUPPORTED ON THE CLAIMS THIS ENTRY IS ABOUT, AND SAYING SO IS THE
       USEFUL PART. Among claims that HAVE a pair, the formula is drawn from the same pool on a
       planned negative as on an ordinary claim, and the negative's own realization touches the PARTY
-      and nothing else — so there citation fidelity is drawn INDEPENDENTLY OF THE LABEL and no
+      and nothing else — so citation fidelity is drawn INDEPENDENTLY OF THE LABEL and no
       correlation exists in either direction. What was seen at that size was a coincidence of the
       draw. The limitation is the independence itself: the cue looks like a linkage key, and a system
       that treats a matching citation as evidence of a link is right by accident and wrong by
