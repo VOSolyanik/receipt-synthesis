@@ -8,10 +8,12 @@ Most of this directory is the shipped corpus. The rest are **mock-ups**, and thi
 them, because a reader who cannot tell the two apart will read a mock-up as a claim about the
 dataset.
 
-## The four mock-ups at a glance
+## The gallery at a glance — one mock-up left, and where the others went
 
-**Four archetypes across five renderable templates.** Render them all with one command; every
-image lands in the directory given, outside this repository:
+⚠️ **Five of the six entries below describe templates that have since SHIPPED.** The entries are
+kept whole because their «look for» guidance is still what an eye review checks on generated
+documents; each carries a note saying it is connected. The command below now renders only the
+one remaining mock-up, the insurance contract:
 
 ```sh
 uv run python tools/render_mockups.py --out <a directory outside this repository>
@@ -23,6 +25,7 @@ purpose — move with the seed; the fixed ones are marked.
 ---
 
 **1 · `ua_bank_app_transaction`** — one operation as a banking application shows it.
+⚠️ **Since connected** — registered as a `payment_confirmation`-class archetype; see Shipped.
 * **File:** `ua_bank_app_transaction.png` · 1170 × 2532 px, a phone screen at 3×.
 * **Makes measurable:** the **strongest negative example for the payment class** — it looks like
   proof of payment and carries none of the requisites by which proof of payment is recognized.
@@ -32,6 +35,8 @@ purpose — move with the seed; the fixed ones are marked.
   there.** The category chip also disagrees with what was bought, on purpose.
 
 **2 · `ua_bank_receipt_in_app`** — the same payment confirmation, captured inside the app.
+⚠️ **Since connected** — the confirmation's body is now a shared fragment both carriers include,
+and the label is the A4's own, verbatim; see Shipped.
 * **Files:** `ua_bank_receipt_in_app.png` · 1170 × 2532 px, **beside** `ua_bank_payment_confirmation.png`
   · 794 × 1123 px — the A4 twin. **The pair is the artifact; look at both.**
 * **Makes measurable:** that **the medium does not change the ground truth.** One document, two
@@ -41,9 +46,9 @@ purpose — move with the seed; the fixed ones are marked.
   «Платіжна інструкція» — same number, two wordings, and not staged.
 
 **3 · `eu_platform_receipt`** and **4 · `ua_platform_receipt`** — a platform receipt, in English
-and EUR, and the same class in Ukrainian and UAH. ⚠️ **The English one has since been
-connected** — it is in the Shipped table below, and the pair's argument is unchanged: the two
-variants still share one body, and the comparison they exist for still needs both.
+and EUR, and the same class in Ukrainian and UAH. ⚠️ **Both have since been
+connected** — one shared body, one builder, `jurisdiction_code` the whole difference; the
+controlled comparison the pair exists for is now generated rather than mocked. See Shipped.
 * **Files:** `eu_platform_receipt.png` and `ua_platform_receipt.png` · both 794 × 1123 px, fixed.
 * **Makes measurable:** the **currency and language dimensions**, which the corpus does not
   exercise at all — the contract's own reference profile records `currency_UAH: 1315` and
@@ -76,16 +81,16 @@ demonstrated as a mock-up is kept whole below, including the cross-document defe
 
 ---
 
-### What this branch deliberately does not contain
+### What the mock-up branch deliberately did not contain
 
-**No labels and no bounding boxes** — not one `data-field` attribute in any of the five
-templates, so `field_bboxes` comes back empty by construction and no JSON is written beside any
-image. **No connection to the dataset** — nothing is registered in `ARCHETYPES`, no builder exists
-in `_BUILDERS`, and no run of any size contains one of these documents.
+**No labels and no bounding boxes, and no connection to the dataset** — when these templates
+were drawn, not one carried a `data-field` attribute, nothing was registered in `ARCHETYPES`,
+and no run of any size contained one of these documents. That boundary was the mock-up branch's
+whole contract, and it is why each connection below is written up as its own decision.
 
-⚠️ **THAT WAS TRUE OF SEVEN TEMPLATES, THEN OF SIX, THEN OF FIVE, AND IS TRUE OF FOUR.** Three
-have been **connected**, on different terms, and each is written up below with what it
-demonstrated kept whole.
+⚠️ **THAT WAS TRUE OF SEVEN TEMPLATES AND IS NOW TRUE OF ONE.** Six have been **connected**, on
+different terms, and each is written up below with what it demonstrated kept whole. What remains
+a mock-up is `ua_insurance_contract` alone — blocked on RC-14, the author's open decision.
 
 `ua_non_fiscal_receipt` is registered, has a builder, carries `data-field` attributes, moved its
 Ukrainian strings into `config/fiscal-rules.yaml`, and reaches a run wherever a claim was planned
@@ -101,12 +106,24 @@ documents at the share `file_composition.bundle_share` declares, and each docume
 offset into the file's coordinates. A marker here would add a second, empty box under a name a
 document already uses.
 
-`eu_platform_receipt` is registered, built by `content_builder.build_platform_receipt`, and
-carries `data-field` attributes in the shared body it renders through — which its still-mocked
-Ukrainian twin therefore also carries, at no cost and correctly in advance. Its connection is
-the one the long section below said could not happen before the currency decision: the author
-took it (04.08, variant 1 — the oracle converts at the vendored rate and records it in the
-label), and the section is kept as written with the resolution noted where it was argued.
+`eu_platform_receipt` and `ua_platform_receipt` are registered, built by
+`content_builder.build_platform_receipt` (one builder, `jurisdiction_code` the whole difference),
+and carry `data-field` attributes in the one body they share. The English one's connection is the
+one the long section below said could not happen before the currency decision: the author took it
+(04.08, variant 1 — the oracle converts at the vendored rate and records it in the label), and
+the section is kept as written with the resolution noted where it was argued. The Ukrainian one
+is the domestic control of the pair: same body, ordinary requisites, a contained-VAT row, UAH.
+
+`ua_bank_app_transaction` and `ua_bank_receipt_in_app` are registered as two more renderings of
+the `payment_confirmation` class — the phone. The transaction screen is built by
+`content_builder.build_app_transaction` and keeps its argument whole: none of the requisites
+proof of payment is recognized by, a processor descriptor for a counterparty, the bank's own
+category chip. The framed receipt is built by `build_bank_receipt_in_app`, which builds the
+inner confirmation WITH THE A4 ARCHETYPE'S OWN BUILDER and delegates the label to it verbatim —
+the medium does not change the ground truth, by construction. Its connection took the route this
+file always named as the cheaper one: the confirmation's body was extracted into
+`ua_bank_payment_confirmation.jinja`, included by both carriers, and the app strings moved to
+`bank_app` in config/fiscal-rules.yaml.
 
 ## Shipped
 
@@ -117,8 +134,12 @@ label), and the section is kept as written with the resolution noted where it wa
 | `ua_bank_statement` | `bank_statement` |
 | `ua_invoice` | `invoice` |
 | `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
-| `eu_platform_receipt` | `platform_receipt` — English, EUR; the shared body is `platform_receipt.jinja` |
+| `eu_platform_receipt`, `ua_platform_receipt` | `platform_receipt` — one shared body, two jurisdictions |
+| `ua_bank_app_transaction`, `ua_bank_receipt_in_app` | `payment_confirmation` — the phone's two carriers |
 | `ua_fiscal_receipt.jinja` + `.css` | the body and the till-roll rules the three receipts share |
+| `ua_bank_payment_confirmation.jinja` | the A4 confirmation's body, shared with its in-app carrier |
+| `platform_receipt.jinja` + `.css` | the body and the page rules the two platform receipts share |
+| `ua_phone_chrome.jinja` + `.css` | the status bar, tab bar and back arrow the two phone screens share |
 | `ua_claim_bundle` + `.css` | **not a class** — the FILE two documents of one claim are carried in |
 
 Each of the archetypes is registered in `claim_planner.ARCHETYPES`, has a builder in
@@ -131,10 +152,6 @@ renders of documents that have all three. See its own section below.
 
 | Template | What it is |
 |---|---|
-| `ua_bank_app_transaction` | one operation as a banking application shows it |
-| `ua_bank_receipt_in_app` | `ua_bank_payment_confirmation`, captured inside that application |
-| `ua_phone_chrome.jinja` + `.css` | the status bar, tab bar and back arrow those two share |
-| `ua_platform_receipt` | the platform-receipt class in Ukrainian and UAH — its English twin is shipped |
 | `ua_insurance_contract` | a three-page insurance contract — one document, several pages |
 
 Render them with:

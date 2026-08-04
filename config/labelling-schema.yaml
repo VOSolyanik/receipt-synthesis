@@ -1023,7 +1023,19 @@
 # policy.yaml's `document_evidence` gained the row, and the `document_types` section below
 # gained the block. `classifier_role` is `undecided`, exactly as for `non_fiscal_receipt`,
 # so the four target classes and the classifier metric's denominator are unchanged.
-version: 31
+#
+# Version 32 is THREE MORE RENDERINGS AND NO NEW TYPE: `ua_platform_receipt` joins its
+# English twin under `platform_receipt` (Ukrainian, UAH, a domestic seller whose requisites
+# and contained-VAT row are ordinary where the EU page disclaims them — one shared body, so
+# the pair is a controlled comparison of the language and currency axes), and the two phone
+# carriers `ua_bank_receipt_in_app` and `ua_bank_app_transaction` join
+# `payment_confirmation` — the framed A4 sheet, labelled by the A4's own ground_truth, and
+# the transaction screen, the class's strongest negative example by lack of requisites.
+# Which rendering a claim draws is `archetype_shares` in config/generation.yaml. The four
+# target classes and the metric's denominator are unchanged; what changed is that a
+# per-class figure now averages over renderings, and the per-archetype notes in
+# `document_types` say how to slice them apart.
+version: 32
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -1303,6 +1315,42 @@ document_types:
         # checks the tuple against policy.yaml so a category added there cannot drop out.
         categories: all
         paper: A4 — 210 × 297 mm, unlike the till rolls the fiscal class is printed on
+      # 🔴 TWO MORE RENDERINGS OF THE SAME CLASS SINCE VERSION 32 — THE PHONE. Neither is a
+      # new document type; both are what the same payment looks like inside the banking
+      # application, and their shares of the payment draw are `archetype_shares` in
+      # config/generation.yaml. A consumer's per-class figures now average over three
+      # renderings, and per-archetype slices need `source_file` names or the box
+      # vocabularies below to tell them apart.
+      - slug: ua_bank_receipt_in_app
+        jurisdiction: UA
+        language: uk
+        categories: all
+        paper: >
+          a phone screen, 1170 × 2532 px — the A4 sheet itself framed inside it. The inner
+          document is built by the SAME builder and labelled by the SAME ground_truth as
+          the A4 archetype (the medium does not change the ground truth, by construction),
+          so every field box of the class is present, in the screen's coordinates, plus
+          the chrome's own `screen_title` — the app's wording for the document, repeating
+          its number over a page whose own heading reads differently. 👁 Observed, not
+          staged.
+      - slug: ua_bank_app_transaction
+        jurisdiction: UA
+        language: uk
+        categories: all
+        paper: >
+          a phone screen, 1170 × 2532 px — the transaction screen, and the strongest
+          negative example for this class by LACK of requisites: ⛔ no document number, no
+          authorization code, no RRN, no stamp, no signature, no amount in words, no
+          payment purpose — every one of them printed by the A4 archetype. Its label
+          fields are accordingly null (`payment_purpose`, `auth_code`, `fee`, `payer`),
+          `direction` is debit (the printed minus), and its box vocabulary is its own:
+          `merchant_descriptor` (the counterparty as the card network carries it —
+          `PREFIX*NAME`, matching no party block of any document beside it, while the
+          label's `counterparty` still carries the bare trade name), `category_chip` (the
+          BANK's category, drawn without reference to the claim and free to disagree with
+          what was bought), `date` (👁 written in words with a time — «2 лютого 2026,
+          13:46» — a form no printed document of this corpus uses), `amount` (signed),
+          `balance`, `payment_method`.
     narrower_than_observed: >
       FOUR WAYS THIS CLASS IS NARROWER THAN WHAT WAS OBSERVED.
 
@@ -2102,11 +2150,20 @@ document_types:
       say what was bought, the paid caption and the masked card say money moved, and no
       fiscal identity of any jurisdiction appears anywhere on the page.
 
-      ONE ARCHETYPE, `eu_platform_receipt` — English, EUR, seller drawn from the EU pool
-      of config/vendors.json, registered for `professional_development` only (the
-      registry entry carries the blast-radius reasoning). Its claims are single-document
-      and the oracle CONVERTS their amounts at the vendored rate of config/fx-rates.yaml,
-      recording what it applied in the claim's `fx_rates` field.
+      TWO ARCHETYPES SINCE VERSION 32, ONE SHARED BODY. `eu_platform_receipt` — English,
+      EUR, seller drawn from the EU pool of config/vendors.json — and
+      `ua_platform_receipt` — Ukrainian, UAH, a domestic company (its legal name,
+      address, identification code, ПН and the contained-VAT row «У т.ч. ПДВ 20%» are
+      ordinary requisites, each the exact particular the English page's footer licenses
+      ITSELF to omit; ⛔ it prints no not-a-tax-invoice note, no Ukrainian equivalent of
+      the wording having been found in any public source). Both are registered for
+      `professional_development` only (the registry entry carries the blast-radius
+      reasoning), drawn against each other at `archetype_shares` in
+      config/generation.yaml. Claims are single-document either way; the oracle CONVERTS
+      the EUR variant's amounts at the vendored rate of config/fx-rates.yaml, recording
+      what it applied in the claim's `fx_rates` field, and the UAH variant needs no
+      conversion — which is exactly the controlled pair the class exists for: language,
+      currency and tax treatment vary, the layout does not.
 
       WHAT ITS LABEL RECORD CARRIES: `doc_type: platform_receipt`, `language: en`,
       `currency: EUR`, a basket in `line_items` (every amount in the document's own
@@ -2123,7 +2180,10 @@ document_types:
       plus position" fits exactly one of the two.
     printed_fields:
       note: >
-        The box vocabulary of the one archetype: `title`, `seller_name`, `paid_amount`,
+        The box vocabulary of the class — the shared body means one list serves both
+        archetypes, the Ukrainian one adding `seller_address`, `seller_tax_code`,
+        `seller_vat_number` and `vat_amount` and dropping `not_a_tax_invoice_note`
+        (pinned by a field-set test): `title`, `seller_name`, `paid_amount`,
         `currency` (the code beside the paid figure — the corpus prints a currency code
         beside a number on no other class, one currency having nothing to distinguish),
         `receipt_number`, `date`, `card_masked`, `buyer_name`, `buyer_country`,

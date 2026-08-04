@@ -619,16 +619,23 @@ Twenty-four rows below, sixteen Ukrainian and eight European. Layouts follow the
 conventions of each document class and jurisdiction.
 
 **Rows are not templates one for one.** Row 8 is realized by two templates, one per paper width, so the
-twenty-four rows are twenty-five templates. **Eight exist today**, across six document classes:
+twenty-four rows are twenty-five templates. **Eleven exist today**, across six document classes:
 
 | Template | Class |
 |---|---|
 | `ua_prro_receipt`, `ua_prro_receipt_58mm`, `ua_rro_receipt` | `fiscal_receipt` — the whole class for Ukraine |
-| `ua_bank_payment_confirmation` | `payment_confirmation` |
+| `ua_bank_payment_confirmation` | `payment_confirmation` — the A4 sheet |
+| `ua_bank_receipt_in_app` | `payment_confirmation` — the same sheet inside the banking app's frame, same label by construction |
+| `ua_bank_app_transaction` | `payment_confirmation` — the app's transaction screen: the class's strongest negative example by lack of requisites |
 | `ua_bank_statement` | `bank_statement` |
 | `ua_invoice` | `invoice` |
 | `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
 | `eu_platform_receipt` | `platform_receipt` — English, EUR; a cross-border platform's receipt a Ukrainian claimant submits |
+| `ua_platform_receipt` | `platform_receipt` — the domestic control of that pair: one shared body, ordinary requisites, UAH |
+
+Which rendering a claim's document takes, where a class has several, is a declared parameter —
+`archetype_shares` in `config/generation.yaml` — so retuning the mix is a config edit, not a code
+change, and the shares move no label: the claim's shape is fixed before the rendering is drawn.
 
 The three receipts share one body, `templates/ua_fiscal_receipt.jinja`, and differ in the paper width and in
 the fiscal identity the register prints. That is deliberate and it is also a limit: real registers differ in
