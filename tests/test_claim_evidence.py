@@ -1108,11 +1108,14 @@ def test_the_limit_binds_on_the_money_that_moved_once():
     )
 
 
-def test_the_currency_check_still_sees_every_document():
-    """`_check_currency` iterated every document before this step and has to keep doing
-    so: the payment document is the one carrying the amount a limit is compared against,
-    and it is the one with no line items to give it away."""
-    with pytest.raises(ValueError, match="EUR"):
+def test_a_claim_whose_documents_disagree_on_currency_is_refused():
+    """The engine converts a foreign-currency claim, but a claim stated in TWO currencies
+    is still refused: coverage pools line items across subject documents and every
+    cross-document axis compares amounts between documents, and policy.yaml states no
+    rule for doing either across two currencies. The refusal has to see EVERY document —
+    the payment document is the one with no line items to give it away, and before the
+    conversion landed this same case was what `_check_currency` iterated for."""
+    with pytest.raises(PolicyGapError, match="EUR"):
         evaluate([
             doc("c1_d1", DocType.INVOICE, amount="600.00", items=[item("600.00")]),
             doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="600.00", currency="EUR"),

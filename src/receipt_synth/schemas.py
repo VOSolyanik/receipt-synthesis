@@ -510,6 +510,34 @@ class DocGroundTruth(BaseModel):
         return self
 
 
+class FxRateApplied(BaseModel):
+    """One conversion the oracle applied to this claim — the rate itself, not only its result.
+
+    A converted amount is provable exactly when the label carries the applied rate beside
+    the original amount, currency and date, which the document's own record already holds:
+    amount × rate, quantized at the point config/fx-rates.yaml declares, is then
+    reproducible by anyone holding the same vendored table. Without the rate the
+    conversion is asserted rather than derived — and a rates file can be edited, so a
+    label carrying only the converted figure becomes silently unreproducible the moment
+    it is.
+
+    ``on`` repeats the document's date so the record stands alone: it is the date the
+    rate was taken at, and the lookup key a consumer uses against a table that varies by
+    date. The vendored table is date-invariant today; the field is the contract, not a
+    description of the table.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    doc_id: str
+    # The document's own currency — what the rate converts FROM. The target is always
+    # policy.yaml's `reporting_currency`.
+    currency: str
+    # Reporting-currency units per 1 unit of `currency`, verbatim from config/fx-rates.yaml.
+    rate: Money
+    on: date
+
+
 class ClaimGroundTruth(BaseModel):
     """The label record of a claim, which may span several documents.
 
@@ -565,6 +593,11 @@ class ClaimGroundTruth(BaseModel):
     imperfection: list[str] = Field(default_factory=list)
     verdict_basis: list[VerdictBasis] = Field(default_factory=list)
     policy_trace: list[str] = Field(default_factory=list)
+    # One entry per document of this claim that is not stated in the reporting currency —
+    # see `FxRateApplied`. Empty for an all-reporting-currency claim: nothing was
+    # converted, and the empty list says so rather than a `None` that could also mean
+    # "not computed".
+    fx_rates: list[FxRateApplied] = Field(default_factory=list)
     # The side of the partition this claim and ALL OF ITS DOCUMENTS are on — see `Split`. A claim
     # and its documents can never disagree, because the unit of the partition is the persona, which
     # is one level above both. `None` means no partition was computed.

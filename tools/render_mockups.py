@@ -770,14 +770,16 @@ def ua_platform_receipt_context(rng: random.Random) -> dict:
 
 
 def _report_conversion(eur_total: Decimal) -> None:
-    """State the conversion the corpus cannot show, and say where the rate came from.
+    """State the conversion the page cannot show, and say where the rate came from.
 
-    ⛔ `config.load_fx_rates` HAS NO CALLER IN `src/`. The file exists, its header explains that
-    the rates are static so that conversion stays deterministic, and no code converts anything —
-    `policy_engine._check_currency` raises on a foreign-currency document instead, deliberately,
-    because a converted amount would be a number in the ground truth that nothing in the dataset
-    can prove. This line is the first call in the repository, and it prints to the console rather
-    than onto the page for exactly that reason: the figure has no document behind it.
+    This used to be the only call of `config.load_fx_rates` in the repository, while
+    `policy_engine` refused a foreign-currency document outright. The refusal fell with
+    the decision to convert in the oracle: `policy_engine.fx_rate` now reads the same
+    table, converts at the point fx-rates.yaml declares, and records the applied rate in
+    the claim's label. What is still true, and still the reason this prints to the
+    console rather than onto the page: 👁 no public source shows such a receipt STATING a
+    rate or an equivalent, so the conversion appears on no document — it appears in the
+    label, which is where the proof lives.
     """
     fx = load_fx_rates()
     rate = Decimal(str(fx["rates"]["EUR"]))
@@ -786,7 +788,7 @@ def _report_conversion(eur_total: Decimal) -> None:
     print(
         f"  note: the EUR receipt totals {eur_total} EUR = {converted} {base} at "
         f"{rate} {base}/EUR (config/fx-rates.yaml). NOT PRINTED ON ANY DOCUMENT — no public "
-        "source shows such a receipt stating a rate, and no code in src/ converts."
+        "source shows such a receipt stating a rate; the applied rate lives in the label."
     )
 
 

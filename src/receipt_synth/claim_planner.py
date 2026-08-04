@@ -55,6 +55,7 @@ from receipt_synth.schemas import (
     ClaimGroundTruth,
     Country,
     DocType,
+    FxRateApplied,
     Persona,
     Verdict,
 )
@@ -747,6 +748,15 @@ class ClaimPlan:
             imperfection=list(evaluation.imperfection),
             verdict_basis=list(evaluation.verdict_basis),
             policy_trace=list(evaluation.policy_trace),
+            fx_rates=[
+                FxRateApplied(
+                    doc_id=applied.doc_id,
+                    currency=applied.currency,
+                    rate=applied.rate,
+                    on=applied.on,
+                )
+                for applied in evaluation.fx
+            ],
         )
 
 
