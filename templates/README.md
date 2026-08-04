@@ -41,7 +41,9 @@ purpose — move with the seed; the fixed ones are marked.
   «Платіжна інструкція» — same number, two wordings, and not staged.
 
 **3 · `eu_platform_receipt`** and **4 · `ua_platform_receipt`** — a platform receipt, in English
-and EUR, and the same class in Ukrainian and UAH.
+and EUR, and the same class in Ukrainian and UAH. ⚠️ **The English one has since been
+connected** — it is in the Shipped table below, and the pair's argument is unchanged: the two
+variants still share one body, and the comparison they exist for still needs both.
 * **Files:** `eu_platform_receipt.png` and `ua_platform_receipt.png` · both 794 × 1123 px, fixed.
 * **Makes measurable:** the **currency and language dimensions**, which the corpus does not
   exercise at all — the contract's own reference profile records `currency_UAH: 1315` and
@@ -81,9 +83,9 @@ templates, so `field_bboxes` comes back empty by construction and no JSON is wri
 image. **No connection to the dataset** — nothing is registered in `ARCHETYPES`, no builder exists
 in `_BUILDERS`, and no run of any size contains one of these documents.
 
-⚠️ **THAT WAS TRUE OF SEVEN TEMPLATES, THEN OF SIX, AND IS TRUE OF FIVE.** Two have been
-**connected**, on different terms, and both are written up below with what they demonstrated kept
-whole.
+⚠️ **THAT WAS TRUE OF SEVEN TEMPLATES, THEN OF SIX, THEN OF FIVE, AND IS TRUE OF FOUR.** Three
+have been **connected**, on different terms, and each is written up below with what it
+demonstrated kept whole.
 
 `ua_non_fiscal_receipt` is registered, has a builder, carries `data-field` attributes, moved its
 Ukrainian strings into `config/fiscal-rules.yaml`, and reaches a run wherever a claim was planned
@@ -99,6 +101,13 @@ documents at the share `file_composition.bundle_share` declares, and each docume
 offset into the file's coordinates. A marker here would add a second, empty box under a name a
 document already uses.
 
+`eu_platform_receipt` is registered, built by `content_builder.build_platform_receipt`, and
+carries `data-field` attributes in the shared body it renders through — which its still-mocked
+Ukrainian twin therefore also carries, at no cost and correctly in advance. Its connection is
+the one the long section below said could not happen before the currency decision: the author
+took it (04.08, variant 1 — the oracle converts at the vendored rate and records it in the
+label), and the section is kept as written with the resolution noted where it was argued.
+
 ## Shipped
 
 | Template | Class |
@@ -108,6 +117,7 @@ document already uses.
 | `ua_bank_statement` | `bank_statement` |
 | `ua_invoice` | `invoice` |
 | `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
+| `eu_platform_receipt` | `platform_receipt` — English, EUR; the shared body is `platform_receipt.jinja` |
 | `ua_fiscal_receipt.jinja` + `.css` | the body and the till-roll rules the three receipts share |
 | `ua_claim_bundle` + `.css` | **not a class** — the FILE two documents of one claim are carried in |
 
@@ -124,9 +134,7 @@ renders of documents that have all three. See its own section below.
 | `ua_bank_app_transaction` | one operation as a banking application shows it |
 | `ua_bank_receipt_in_app` | `ua_bank_payment_confirmation`, captured inside that application |
 | `ua_phone_chrome.jinja` + `.css` | the status bar, tab bar and back arrow those two share |
-| `eu_platform_receipt` | a platform receipt in English and EUR |
-| `ua_platform_receipt` | the same class in Ukrainian and UAH |
-| `platform_receipt.jinja` + `.css` | the body and the page rules the last two share |
+| `ua_platform_receipt` | the platform-receipt class in Ukrainian and UAH — its English twin is shipped |
 | `ua_insurance_contract` | a three-page insurance contract — one document, several pages |
 
 Render them with:
@@ -463,6 +471,15 @@ block caused. The three:
 ---
 
 ## 🔴 A decision this branch surfaced and must not make: foreign currency in the oracle
+
+> ✅ **RESOLVED BY THE AUTHOR, 04.08 — Resolution A, with every condition it names.** The oracle
+> converts at the vendored rate for the document's date; the applied rate is recorded in the
+> claim's `fx_rates` beside the original amount, currency and date; the quantization point is
+> declared in `config/fx-rates.yaml` (`conversion`) and checked by the engine on every
+> conversion; `jitter` stays disabled and the engine refuses to convert while it is enabled;
+> the static-rates-versus-live-source gap is KL-17 in the contract. `eu_platform_receipt` is
+> connected on the strength of it. The section is kept as written below, because the argument
+> is why the conditions exist.
 
 **Recorded here rather than implemented, and rather than filed anywhere else.** The change it
 describes lands in `policy_engine.py`, which is the oracle — connecting an archetype and editing

@@ -619,7 +619,7 @@ Twenty-four rows below, sixteen Ukrainian and eight European. Layouts follow the
 conventions of each document class and jurisdiction.
 
 **Rows are not templates one for one.** Row 8 is realized by two templates, one per paper width, so the
-twenty-four rows are twenty-five templates. **Seven exist today**, across five document classes:
+twenty-four rows are twenty-five templates. **Eight exist today**, across six document classes:
 
 | Template | Class |
 |---|---|
@@ -628,6 +628,7 @@ twenty-four rows are twenty-five templates. **Seven exist today**, across five d
 | `ua_bank_statement` | `bank_statement` |
 | `ua_invoice` | `invoice` |
 | `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
+| `eu_platform_receipt` | `platform_receipt` — English, EUR; a cross-border platform's receipt a Ukrainian claimant submits |
 
 The three receipts share one body, `templates/ua_fiscal_receipt.jinja`, and differ in the paper width and in
 the fiscal identity the register prints. That is deliberate and it is also a limit: real registers differ in
@@ -649,11 +650,15 @@ submits believing it is proof of payment, and the policy saying it is not. Its s
 VAT, a registered payer being obliged to use a cash register, so no line carries a VAT letter and the page has
 no tax block.
 
-**All five classes reach a dataset.** The invoice is what changed that: it states what was bought and proves
+**All six classes reach a dataset.** The invoice is what changed that: it states what was bought and proves
 no payment, the exact inverse of the two bank classes, so a claim's evidence can be **split across two
-documents** for the first time. Six of the seven Ukrainian categories are documented by such a pair; the
-seventh, `vitamins_nutrition`, still produces a single fiscal receipt, because the planner prefers one
-document that proves both facts wherever one is registered.
+documents** for the first time. Five of the seven Ukrainian categories are documented by such a pair; the
+other two produce a single document that proves both facts, because the planner prefers that shape wherever
+one is registered — `vitamins_nutrition` a fiscal receipt, and `professional_development` a platform
+receipt, the corpus's first English and first euro document. A platform-receipt claim's amounts stay in
+the document's own currency on its labels; the oracle converts them at the static vendored rate of
+`config/fx-rates.yaml` for the limit arithmetic and records the applied rate in the claim's `fx_rates`,
+so the conversion is derivable from the published inputs rather than asserted.
 
 A pair is **one transaction, counted once**. The invoice and the payment that settles it describe the same
 movement of money, so a claim's amount is one document's and never the sum — see *Both facts, or no
