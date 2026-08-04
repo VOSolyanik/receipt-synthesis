@@ -1,21 +1,22 @@
 /*
- * One file, two documents — an invoice and the confirmation that settled it, stacked.
+ * One file, several documents of one claim — stacked, at their own size.
  *
  * DELIBERATELY ALMOST EMPTY, and the emptiness is the archetype. A stylesheet is where a
  * multi-page document gets its running heads, its page numbers and its unifying frame; this file
- * has none of those to give, because STITCHING TWO PDFS ADDS NOTHING. What is here is a grey
- * field, a white sheet per page and the gap between them — the same treatment
- * `ua_insurance_contract` uses, so that the difference between the two archetypes is visible in
- * the content rather than manufactured by the styling.
+ * has none of those to give, because STITCHING TWO DOCUMENTS TOGETHER ADDS NOTHING. What is here
+ * is a grey field, a white sheet per document and the gap between them.
  *
- * THE SHEETS ARE SIZED BY THEIR CONTENT, not by a constant. The contract's sheets are a fixed A4
- * rectangle because a page of one document is; here each sheet is exactly as tall as the document
- * inside it, measured by the render script from that document's own render. A fixed height would
- * either clip a long invoice or pad a short confirmation, and both would be this file asserting a
- * page geometry that the documents it contains did not have.
+ * THE SHEETS ARE SIZED BY THEIR CONTENT, not by a constant: each embedded document is drawn at
+ * the pixel size of its own render (the `width` and `height` attributes the template writes), and
+ * 🔴 NOTHING HERE MAY GIVE `.doc` A SIZE. Every coordinate of every bundled label is a
+ * per-document coordinate plus its region's origin, so a rule that scaled the image would
+ * multiply every one of them by a factor nothing in the label records. `_compose_bundle` refuses
+ * a sheet that did not come out at natural size, which is what keeps this a checked constraint
+ * rather than a comment.
  *
- * No font stack and no type rules: every glyph on the page is drawn inside a frame by the
- * stylesheet of the document in it. This file styles the paper, and nothing else.
+ * No font stack and no type rules: every glyph in this file is inside an embedded image, drawn
+ * there by the stylesheet of the document it belongs to. This file styles the paper, and nothing
+ * else.
  */
 
 html,
@@ -27,21 +28,25 @@ body {
 }
 
 .file {
-  width: 794px;
+  /* AS WIDE AS THE WIDEST DOCUMENT IN IT, rather than a fixed page width. The renderer frames the
+     image on this element, so a fixed width narrower than a document would CUT that document out
+     of the file — and which classes a claim's documents are drawn from is the planner's business,
+     not this file's. */
+  width: max-content;
   background: #d8dce2;
 }
 
 .sheet {
-  /* `line-height: 0` so the inline frame leaves no descender gap under itself — the strip of grey
-     that would otherwise appear at the foot of every page and read as part of the paper. */
+  /* `line-height: 0` so the inline image leaves no descender gap under itself — the strip of grey
+     that would otherwise appear at the foot of every sheet and read as part of the paper. */
   line-height: 0;
   background: #ffffff;
 }
 
-/* The gap that makes two pages two pages, and 🔴 THE ONLY MARK THE STITCHING LEAVES. Between the
+/* The gap that makes two sheets two sheets, and 🔴 THE ONLY MARK THE STITCHING LEAVES. Between the
    sheets only: a margin above the first would frame the file in grey and change what the image
    is of. Worth stating plainly — this rule is the entire visual difference between this file and
-   the two documents in it, which is why segmenting it is a real problem rather than a formality. */
+   the documents in it, which is why segmenting it is a real problem rather than a formality. */
 .sheet + .sheet {
   margin-top: 16px;
 }
