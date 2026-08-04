@@ -684,8 +684,13 @@ three pages. This breaks it in the other. A file-splitting step measured on a co
 the first is **still scoring against a guarantee** — every cut it needs to make is a cut it never
 has to refuse. Both directions, or the measurement is not a measurement.
 
-👁 **And it is an observed pattern rather than a hypothesis.** Claimants really do staple the
-documents of one claim into a single PDF before submitting them.
+⚠️ **And the shape is a judgement rather than an observation.** 👁 Zero of the author's own 87
+files holds more than one document, so this template realizes a case the observed set does not
+contain. The argument for it is about the *submission* rather than about the document: a channel
+that takes one file per claim, while a claim needs both a subject document and a payment document,
+makes stitching the two the ordinary way to file it. The practitioner observation counted below is
+that rationale and not an observed artifact. The honest number sits beside the share in
+`config/generation.yaml`, and `config/labelling-schema.yaml` says the same at `file_region`.
 
 ### Sources, counted honestly
 
