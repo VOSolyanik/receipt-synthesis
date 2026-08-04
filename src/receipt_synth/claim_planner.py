@@ -45,6 +45,7 @@ from receipt_synth.policy_engine import (
     COUNTERPARTY_MISMATCH,
     OUTSIDE_PERIOD,
     PAYMENT_PRECEDES_SUBJECT,
+    SUBJECT_MISMATCH,
     SUBJECT_NOT_EVIDENCED,
     ClaimEvaluation,
     Evidence,
@@ -403,6 +404,23 @@ ARCHETYPES: dict[str, Archetype] = {
 # nothing can build would be a decision nothing exercises.
 _SETTLED_BY_A_PAYMENT: frozenset[DocType] = frozenset({DocType.INVOICE})
 
+# 🔴 WHICH PAYMENT ARCHETYPES CAN PRINT THE РАХУНОК THEY SETTLE — and therefore which ones can be
+# the payment half of a `subject_mismatch` claim, whose whole defect is a citation naming the
+# wrong one. BY SLUG AND NOT BY TYPE, because the app-transaction screen shares
+# `DocType.PAYMENT_CONFIRMATION` with two archetypes that do print a purpose line: what decides
+# membership is the PAGE, not the label class.
+#
+# ⛔ `ua_bank_app_transaction` IS ABSENT because 👁 the observed screen prints no purpose line at
+# all — its builder refuses `must_cite` for the same reason, and the two refusals meeting would
+# mean this set and the builder have come apart. The A4 confirmation and the in-app receipt print
+# one on the purpose-printing initiation modes, which `must_cite` selects among; the statement's
+# labelled row always carries one.
+_CITES_THE_SETTLED_DOCUMENT: frozenset[str] = frozenset({
+    "ua_bank_payment_confirmation",
+    "ua_bank_receipt_in_app",
+    "ua_bank_statement",
+})
+
 # 🔴 WHICH SUBJECT CLASSES CAN STATE THAT THEIR OBLIGATION IS SETTLED IN PARTS, and therefore
 # which ones can be the subject half of a `partially_paid` claim. PUBLIC, unlike the set above,
 # because `assembler` reads it too: it is what decides whether a plan's schedule may be handed to
@@ -701,11 +719,11 @@ def draw_insufficient_evidence_cause(rng: random.Random) -> str:
     Drawn in the order policy.yaml declares the causes in, which is a file order rather than a set
     order, so the draw stays reproducible — the same rule as the `partially_covered` causes below.
 
-    🔴 THE FOUR ARE NOT THE SAME KIND OF DEFECT, AND THE PLANNER REALIZES THEM DIFFERENTLY. The
-    three cross-check causes need a claim whose two documents disagree — about the amount, about
-    the order, or about the party; `subject_not_evidenced` needs a claim with no subject document at
-    all, which is `EvidenceIntent.EVIDENCE_GAP`. One draw decides which, and `plan_claim` turns the
-    answer into a shape.
+    🔴 THE FIVE ARE NOT THE SAME KIND OF DEFECT, AND THE PLANNER REALIZES THEM DIFFERENTLY. The
+    four cross-check causes need a claim whose two documents disagree — about the amount, about
+    the order, about the party, or about which рахунок the payment settles; `subject_not_evidenced`
+    needs a claim with no subject document at all, which is `EvidenceIntent.EVIDENCE_GAP`. One draw
+    decides which, and `plan_claim` turns the answer into a shape.
 
     ⚠️ AND WHICH CAUSES EXIST AT ALL IS `cross_document_agreement`'s, NOT THIS BLOCK'S. Each
     cross-check cause is the `cause` of one declared axis, so withdrawing an axis there withdraws a
@@ -1182,6 +1200,7 @@ def _select_documents(
     intent: EvidenceIntent = EvidenceIntent.COMPLETE,
     payment_precedes_subject: bool = False,
     subject_states_instalments: bool = False,
+    payment_must_cite: bool = False,
 ) -> tuple[DocumentPlan, ...]:
     """The documents a claim carries: both facts a reimbursement rests on, or the one
     `intent` asks for.
@@ -1220,6 +1239,12 @@ def _select_documents(
     ordinary one is a line on the invoice and the size of the payment beside it, and the payment's
     size is `assembler`'s to apply.
 
+    🔴 `payment_must_cite` NARROWS THE PAYMENT SIDE THE SAME WAY, and it is what `subject_mismatch`
+    needs: the payment has to be an archetype whose page can PRINT the рахунок it settles
+    (`_CITES_THE_SETTLED_DOCUMENT`), because the defect is the citation and a class with no
+    purpose line has nowhere to carry one. It changes no date and no amount either — the wrong
+    reference is `assembler`'s to draw.
+
     🔴 `intent` IS THE THIRD AND FOURTH SHAPES, AND THEY ARE THE ONES THAT ARE NOT ABOUT WHICH
     ARCHETYPES EXIST.
     `EvidenceIntent.EVIDENCE_GAP` asks for a PAYMENT DOCUMENT ALONE — the claim then states that
@@ -1245,6 +1270,15 @@ def _select_documents(
     short of it because this function was asked for that, never because a template was absent.
     """
     payments = [a for a in candidates if evidence_of(a) == Evidence(False, True)]
+    if payment_must_cite:
+        payments = [a for a in payments if a.slug in _CITES_THE_SETTLED_DOCUMENT]
+        if not payments:
+            raise ValueError(
+                "a subject-mismatch claim is a payment citing the wrong рахунок on its own "
+                "purpose line, and no registered payment archetype here can print one: "
+                f"{sorted(a.slug for a in candidates)}. See "
+                "`claim_planner._CITES_THE_SETTLED_DOCUMENT`."
+            )
     if intent is EvidenceIntent.EVIDENCE_GAP:
         if not payments:
             raise ValueError(
@@ -1421,19 +1455,24 @@ def plan_claim(
         # belongs to a partially_covered claim". The cause decides WHICH FACT the claim fails to
         # establish; the engine decides whether it actually failed, and nothing here assumes it.
         cause = cause or draw_insufficient_evidence_cause(rng)
-        # 🔴 FOUR BUILDABLE CAUSES, REALIZED IN THREE DIFFERENT PLACES, and the list is here because
+        # 🔴 FIVE BUILDABLE CAUSES, REALIZED IN THREE DIFFERENT PLACES, and the list is here because
         # THIS is where a cause is aimed at. `SUBJECT_NOT_EVIDENCED` is a SHAPE and is realized
         # below by naming an intent; `PAYMENT_PRECEDES_SUBJECT` is an ORDER and is realized in
-        # `_select_documents`; `AMOUNT_MISMATCH` and `COUNTERPARTY_MISMATCH` are CONTENT — what the
-        # payment document states and whom it names — and are realized by `assembler`, which reads
-        # `plan.cause` when it sizes the payment (`_amount_the_payment_states`) and when it draws
-        # the party the payment names (`_payee_the_payment_names`). A plan is the whole of the
-        # intent in every case; nothing downstream infers a defect from a document.
+        # `_select_documents`; `AMOUNT_MISMATCH`, `COUNTERPARTY_MISMATCH` and `SUBJECT_MISMATCH`
+        # are CONTENT — what the payment document states, whom it names and which рахунок it
+        # cites — and are realized by `assembler`, which reads `plan.cause` when it sizes the
+        # payment (`_amount_the_payment_states`), when it draws the party the payment names
+        # (`_payee_the_payment_names`) and when it draws the reference the payment cites
+        # (`_reference_the_payment_cites`). `SUBJECT_MISMATCH` additionally narrows the payment
+        # archetype in `_select_documents` — the page has to be one that can PRINT a citation. A
+        # plan is the whole of the intent in every case; nothing downstream infers a defect from
+        # a document.
         if cause not in (
             SUBJECT_NOT_EVIDENCED,
             AMOUNT_MISMATCH,
             PAYMENT_PRECEDES_SUBJECT,
             COUNTERPARTY_MISMATCH,
+            SUBJECT_MISMATCH,
         ):
             raise ValueError(
                 f"policy.yaml declares no such buildable insufficient_evidence cause: {cause!r}. "
@@ -1530,6 +1569,7 @@ def plan_claim(
             intent=intent,
             payment_precedes_subject=cause == PAYMENT_PRECEDES_SUBJECT,
             subject_states_instalments=schedule is not None,
+            payment_must_cite=cause == SUBJECT_MISMATCH,
         ),
         issued_at=issued_at,
         intent=intent,

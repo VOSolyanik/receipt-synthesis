@@ -68,7 +68,7 @@ WHEN = datetime(2026, 4, 17, 11, 3, 9)
 
 
 def make(seed: int = 20260417, vendor: dict = COMPANY, initiation: str | None = None,
-         transfer: Decimal | None = None):
+         transfer: Decimal | None = None, **kwargs):
     return build_payment_confirmation(
         random.Random(seed),
         issued_at=WHEN,
@@ -82,6 +82,7 @@ def make(seed: int = 20260417, vendor: dict = COMPANY, initiation: str | None = 
         # archetype the plan chose. The dataclass FIELD is still `transfer` — the distinction
         # between the amount of the operation and the total charged is the point of this class.
         amount=transfer,
+        **kwargs,
     )
 
 
@@ -545,6 +546,63 @@ def test_no_purpose_asserts_a_transfer_between_the_payers_own_accounts():
             f"{confirmation.purpose!r} asserts a self-transfer on a page whose payee "
             f"block names {confirmation.payee.name!r}"
         )
+
+
+# ------------------------------------------------- the citation, structured ----
+
+
+def test_the_cited_number_in_the_label_is_the_one_the_purpose_prints():
+    """`cites_document_no` is a structured copy of the page, never an extra fact: set exactly when
+    the printed purpose names a рахунок, equal to the number it names, and a substring of the
+    line a reader of the image finds it in."""
+    from receipt_synth.content_builder import DocumentReference
+
+    cited = DocumentReference(number="7411", issued_at=WHEN)
+    seen_citing = seen_uncited = False
+    for seed in range(40):
+        page = make(seed, cites=cited)
+        if page.cites_document_no is None:
+            seen_uncited = True
+            if page.purpose is not None:
+                assert "7411" not in page.purpose, (
+                    "the purpose names the рахунок and the label says it names none"
+                )
+            continue
+        seen_citing = True
+        assert page.cites_document_no == "7411"
+        assert "7411" in page.purpose
+    assert seen_citing and seen_uncited, (
+        "the sweep no longer exercises both forms; widen the seed range"
+    )
+
+
+def test_must_cite_forces_the_citation_onto_the_page_at_every_seed():
+    """The label-first knob of the `subject` axis: under `must_cite` no seed may draw an
+    acquiring mode or a non-citing formula — a subject-mismatch claim whose page cites nothing
+    would be the cause silently unrealized, which is the drift the knob exists to prevent."""
+    from receipt_synth.content_builder import DocumentReference
+
+    cited = DocumentReference(number="7411", issued_at=WHEN)
+    for seed in range(30):
+        page = make(seed, cites=cited, must_cite=True)
+        assert page.purpose is not None, f"seed {seed} drew a mode with no purpose line"
+        assert page.cites_document_no == "7411", f"seed {seed} drew a non-citing formula"
+        assert "7411" in page.purpose
+
+
+def test_must_cite_without_a_reference_is_refused():
+    with pytest.raises(ValueError, match="must_cite"):
+        make(1, must_cite=True)
+
+
+def test_must_cite_against_a_named_purposeless_mode_is_refused():
+    """The two knobs can contradict each other only if a caller names them both; the builder
+    refuses rather than printing a citation the mode has no line for."""
+    from receipt_synth.content_builder import DocumentReference
+
+    with pytest.raises(ValueError, match="prints no purpose"):
+        make(1, initiation="acquiring",
+             cites=DocumentReference(number="7411", issued_at=WHEN), must_cite=True)
 
 
 # ============================================================ determinism ==

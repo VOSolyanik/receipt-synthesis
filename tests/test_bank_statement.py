@@ -72,7 +72,8 @@ HOLDER_CODE = generate_rnokpp(random.Random(3))
 WHEN = datetime(2026, 5, 12, 14, 33)
 
 
-def make_statement(seed: int = 20260512, vendor: dict = PAYER, amount: str | None = None):
+def make_statement(seed: int = 20260512, vendor: dict = PAYER, amount: str | None = None,
+                   **kwargs):
     """One statement. `amount` pins the labelled transaction where a test needs to know it."""
     rng = random.Random(seed)
     resolved = resolve_vendor(rng, vendor, "UA")
@@ -84,6 +85,7 @@ def make_statement(seed: int = 20260512, vendor: dict = PAYER, amount: str | Non
         payer_name=HOLDER_NAME,
         payer_tax_id=HOLDER_CODE,
         amount=Decimal(amount) if amount else None,
+        **kwargs,
     )
 
 
@@ -444,6 +446,50 @@ def test_every_identifier_printed_on_a_statement_passes_its_own_checksum(seed):
             assert is_valid_rnokpp(code)
         elif len(code) == 8:
             assert is_valid_edrpou(code)
+
+
+# ------------------------------------------------- the citation, structured ----
+
+
+def test_the_labelled_rows_citation_is_structured_and_the_other_rows_are_not():
+    """`cites_document_no` mirrors the labelled row's printed purpose — set exactly when it names
+    a рахунок, equal to that number — and stays `None` on every ordinary row, whose citations
+    point outside the claim by construction and reach no label."""
+    from receipt_synth.content_builder import DocumentReference
+
+    cited = DocumentReference(number="7411", issued_at=WHEN)
+    seen_citing = seen_uncited = False
+    for seed in range(40):
+        statement = make_statement(seed, cites=cited)
+        row = statement.relevant
+        for other in statement.rows:
+            if other is not row:
+                assert other.cites_document_no is None
+        if row.cites_document_no is None:
+            seen_uncited = True
+            assert "7411" not in row.purpose
+            continue
+        seen_citing = True
+        assert row.cites_document_no == "7411"
+        assert "7411" in row.purpose
+    assert seen_citing and seen_uncited, (
+        "the sweep no longer exercises both forms; widen the seed range"
+    )
+
+
+def test_must_cite_forces_the_labelled_row_to_name_the_invoice_at_every_seed():
+    from receipt_synth.content_builder import DocumentReference
+
+    cited = DocumentReference(number="7411", issued_at=WHEN)
+    for seed in range(30):
+        row = make_statement(seed, cites=cited, must_cite=True).relevant
+        assert row.cites_document_no == "7411", f"seed {seed} drew a non-citing formula"
+        assert "7411" in row.purpose
+
+
+def test_must_cite_without_a_reference_is_refused():
+    with pytest.raises(ValueError, match="must_cite"):
+        make_statement(1, must_cite=True)
 
 
 # ------------------------------------- the invariant: only a debit proves payment --

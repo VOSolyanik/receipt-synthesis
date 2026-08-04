@@ -68,6 +68,7 @@ from receipt_synth.policy_engine import (
     COUNTERPARTY_MISMATCH,
     OUTSIDE_PERIOD,
     PAYMENT_PRECEDES_SUBJECT,
+    SUBJECT_MISMATCH,
     SUBJECT_NOT_EVIDENCED,
     Evidence,
     Ledger,
@@ -1056,6 +1057,29 @@ def test_a_category_documented_by_a_receipt_alone_cannot_realize_not_proof_of_pa
                 datetime(2026, 6, 15, 12, 0),
                 intent=claim_planner.EvidenceIntent.PAYMENT_GAP,
             )
+
+
+def test_a_subject_mismatch_plan_carries_a_payment_that_can_print_the_citation():
+    """🔴 THE SHAPE HALF OF THE `subject_mismatch` MECHANISM: the cause needs a page with a
+    purpose line, and the app-transaction screen has none — a plan that drew it would build a
+    claim whose builder refuses `must_cite`, a stage away from the choice that broke it. Swept
+    over drawn plans rather than pinned to one call, because the draw is where the filter lives.
+    """
+    share = insufficient_evidence_causes()[SUBJECT_MISMATCH]
+    size = _run_size_for(_drawn_at(Verdict.INSUFFICIENT_EVIDENCE) * share)
+    plans = _plans_from_many_personas(size)
+
+    aimed = [plan for plan in plans if plan.cause == SUBJECT_MISMATCH]
+    assert aimed, f"no plan aimed at `subject_mismatch` in {len(plans)} planned claims"
+    for plan in aimed:
+        payments = [
+            d for d in plan.documents if not evidence_of(d.archetype).proves_subject
+        ]
+        assert len(payments) == 1, plan.claim_id
+        assert payments[0].archetype.slug in claim_planner._CITES_THE_SETTLED_DOCUMENT, (
+            f"{plan.claim_id}: {payments[0].archetype.slug} cannot print the citation the "
+            "cause is realized by"
+        )
 
 
 def test_a_rejected_route_the_policy_does_not_declare_is_refused_by_name():
@@ -2306,6 +2330,76 @@ def test_the_payment_of_a_mismatched_party_claim_names_a_seller_the_invoice_does
         assert _payee_the_payment_names(rng, ordinary, vendor, Country.UA) is vendor, (
             f"seed {seed}: an ordinary claim's payment must name the claim's own seller"
         )
+
+
+def test_the_payment_of_a_subject_mismatch_claim_cites_an_invoice_the_claim_does_not_hold():
+    """🔴 THE HALF OF THE `subject_mismatch` MECHANISM THAT LIVES IN THE ASSEMBLER, tested where
+    it is — the sibling of the payee sweep above, on the transaction's last dimension. A step
+    that returned the claim's own reference would leave the pair agreeing, the engine answering
+    `covered`, and the corpus with ZERO claims of the cause — the `partially_paid` lesson.
+
+    SWEPT OVER SEEDS for the collision half — the drawn number must differ from the subject's own
+    at every seed — and the ordinary half asserts the SAME OBJECT comes back, since every honest
+    claim's citation must stay resolvable.
+    """
+    from receipt_synth.assembler import _reference_the_payment_cites
+    from receipt_synth.content_builder import DocumentReference
+
+    mismatched = _plan_for_cause(SUBJECT_MISMATCH)
+    ordinary = _plan_for_cause(None)
+    own = DocumentReference(number="1234", issued_at=WHEN)
+    for seed in range(12):
+        rng = random.Random(seed)
+        other = _reference_the_payment_cites(rng, mismatched, own)
+        assert other is not own
+        assert other.number != own.number, (seed, other.number)
+
+        assert _reference_the_payment_cites(rng, ordinary, own) is own, (
+            f"seed {seed}: an ordinary claim's payment must cite the claim's own invoice"
+        )
+
+
+def test_a_forced_subject_mismatch_plan_comes_back_with_the_citation_on_the_page(tmp_path):
+    """🔴 THE PLAN → LABEL LOOP FOR THE SUBJECT AXIS, through the real assembler, builders and
+    renderer. Three things have to conspire — the wrong reference drawn, the purpose formula
+    forced to CITE, and the engine reading both label ends — and a failure of any one leaves the
+    claim `covered` here while every unit test above stays green.
+    """
+    from receipt_synth import assembler
+
+    plan = ClaimPlan(
+        claim_id="p001_c1", persona_id="p001", category="sport",
+        verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=SUBJECT_MISMATCH,
+        documents=(
+            DocumentPlan(archetype=ARCHETYPES["ua_invoice"], issued_at=WHEN),
+            DocumentPlan(archetype=ARCHETYPES["ua_bank_payment_confirmation"], issued_at=WHEN),
+        ),
+        issued_at=WHEN,
+    )
+
+    def one_plan(rng, **kwargs):
+        return iter([plan])
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(assembler, "plan_claims", one_plan)
+        result = generate_dataset(
+            seed=SEED, out_dir=tmp_path, train_fraction=0.5, personas=1, claims_per_persona=1
+        )
+
+    claim = result.claims[0]
+    assert claim.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert claim.imperfection == [SUBJECT_MISMATCH]
+
+    by_id = {document.doc_id: document for document in result.documents}
+    subject = next(d for d in (by_id[i] for i in claim.documents) if d.line_items)
+    payment = next(d for d in (by_id[i] for i in claim.documents) if not d.line_items)
+
+    assert subject.document_code, "the invoice's own № is the axis's right-hand side"
+    assert payment.cites_document_no, "the forced citation never reached the label"
+    assert payment.cites_document_no != subject.document_code
+    # The label is a structured copy of the page, not an extra fact: the cited number is printed
+    # in the purpose line, where a reader of the image finds it.
+    assert payment.cites_document_no in payment.payment_purpose
 
 
 def test_the_party_a_document_names_follows_what_that_document_ESTABLISHES(tmp_path):

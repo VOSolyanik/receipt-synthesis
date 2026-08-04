@@ -206,6 +206,15 @@ PAYMENT_PRECEDES_SUBJECT = "payment_precedes_subject"
 # either of the others. See `cross_document_agreement` in policy.yaml, which declares the axis, and
 # the structural table in config/labelling-schema.yaml, which is where the vocabulary is contracted.
 COUNTERPARTY_MISMATCH = "counterparty_mismatch"
+# 🔴 THE FOURTH CAUSE OF THE LINKAGE SLOT, and the axis that closes the transaction's last
+# dimension: the amount says HOW MUCH, the counterparty says TO WHOM, the order says WHEN — and
+# this one says FOR WHAT. A payment document never lists what was bought (👁 0 of 7 observed
+# purposes name it, which is `proves_subject: false`); its one statement about the subject is the
+# рахунок its purpose cites by number, so the axis compares that citation against the subject
+# document's own № — `cites_document_no` against `document_code` — and only where a citation is
+# printed at all. A payment quoting the right amount to the right party in the right order, for a
+# DIFFERENT invoice, is what this catches; no other axis can see it.
+SUBJECT_MISMATCH = "subject_mismatch"
 
 # The one cause of `rejected`, and the only one it needs. `rejected` has two mechanisms —
 # a basket the category covers none of, and a payment outside the benefit period — and only
@@ -376,11 +385,12 @@ def insufficient_evidence_causes() -> dict[str, float]:
     """How the `insufficient_evidence` bucket splits by cause, in declaration order.
 
     🔴 OVER THE CAUSES THE GENERATOR CAN BUILD, WHICH IS NOT THE SAME QUESTION AS THE VOCABULARY
-    EVEN WHERE THE TWO COINCIDE. Four causes lead to this verdict — `SUBJECT_NOT_EVIDENCED`,
-    `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT`, `COUNTERPARTY_MISMATCH` — and policy.yaml now
-    declares a share for each, the first having gained a mechanism
-    (`claim_planner.EvidenceIntent.EVIDENCE_GAP`) and the last a second party on the payment
-    (`assembler._payee_the_payment_names`), rather than an exemption.
+    EVEN WHERE THE TWO COINCIDE. Five causes lead to this verdict — `SUBJECT_NOT_EVIDENCED`,
+    `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT`, `COUNTERPARTY_MISMATCH`, `SUBJECT_MISMATCH` —
+    and policy.yaml now declares a share for each: the first gained a mechanism
+    (`claim_planner.EvidenceIntent.EVIDENCE_GAP`), the fourth a second party on the payment
+    (`assembler._payee_the_payment_names`), and the fifth a wrong reference on its purpose line
+    (`assembler._reference_the_payment_cites`), rather than an exemption.
 
     A reader of this map must still not take it for the cause vocabulary. This engine derives a
     cause from a claim's documents and does not consult these shares at all, so it would go on
@@ -1114,6 +1124,34 @@ def _counterparty_disagreement(transaction: Transaction) -> str | None:
     )
 
 
+def _subject_disagreement(transaction: Transaction) -> str | None:
+    """The `subject` axis: where the payment names the document it settles, it names this one.
+
+    🔴 THE AXIS THAT RUNS ONLY WHERE THERE IS SOMETHING TO READ. A payment document states no
+    basket (`proves_subject: false`), so the comparison is NOT between two subjects — it is
+    between the subject document's own printed № (`document_code`) and the рахунок the payment's
+    purpose cites by number (`cites_document_no`). Both sides `None`-guard: a purpose citing a ВН,
+    a generic formula, an unprinted purpose line, and a subject class with no printed № all leave
+    nothing to compare, and NOTHING here treats absence as disagreement — an uncited payment
+    establishes no subject, which `subject_not_evidenced` and this axis divide between them
+    exactly as policy.yaml's preamble states.
+
+    What survives every guard is the one defect no other axis can see: amounts equal to the
+    kopiyka, dates in order, one party on both pages — and the payment declares, on its own face,
+    that it settles a different purchase.
+    """
+    subject, payment = transaction.subject, transaction.payment
+    cited = payment.cites_document_no
+    if cited is None or subject.document_code is None:
+        return None
+    if cited == subject.document_code:
+        return None
+    return (
+        f"documents disagree: payment {payment.doc_id} settles document no. {cited}, "
+        f"{subject.doc_id} ({subject.doc_type.value}) is no. {subject.document_code}"
+    )
+
+
 # WHAT THIS ENGINE CAN COMPARE, keyed by the axis name policy.yaml declares. The FILE decides which
 # of these are applied and in which order (`cross_document_agreement`); this table decides only what
 # each one means. A key here that the file does not name is simply not checked — see
@@ -1123,6 +1161,7 @@ _AXIS_DISAGREEMENTS: dict[str, Callable[[Transaction], str | None]] = {
     "amount": _amount_disagreement,
     "date_order": _date_order_disagreement,
     "counterparty": _counterparty_disagreement,
+    "subject": _subject_disagreement,
 }
 
 

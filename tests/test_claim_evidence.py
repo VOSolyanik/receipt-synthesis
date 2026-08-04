@@ -55,6 +55,7 @@ from receipt_synth.policy_engine import (
     OUTSIDE_PERIOD,
     PARTIAL_PAYMENT_MARKER_FIELDS,
     PAYMENT_PRECEDES_SUBJECT,
+    SUBJECT_MISMATCH,
     SUBJECT_NOT_EVIDENCED,
     AgreementAxis,
     ClaimInput,
@@ -110,8 +111,15 @@ def doc(
     direction: Direction | None = None,
     instalment_amount: str | None = None,
     counterparty: str = "Vendor",
+    document_code: str | None = None,
+    cites_document_no: str | None = None,
 ) -> DocGroundTruth:
     """One document label.
+
+    `document_code` is a subject document's own printed №, `cites_document_no` the рахунок a
+    payment's purpose names — the two ends of the `subject` axis. Both default to `None`, which
+    is what every document before that axis existed looked like, so every other test in this
+    file inherits "nothing to compare" rather than restating it.
 
     `amount` is stated independently of `items` on purpose: a payment confirmation carries
     an amount and no lines, and the disagreement cases below need the two to be settable
@@ -137,6 +145,8 @@ def doc(
         date=when,
         counterparty=counterparty,
         direction=direction,
+        document_code=document_code,
+        cites_document_no=cites_document_no,
         line_items=items or [],
         has_qr=True,
         qr_is_fiscal=True,
@@ -918,7 +928,97 @@ def test_the_shipped_policy_declares_the_axes_this_suite_was_written_against():
         AgreementAxis("amount", Verdict.INSUFFICIENT_EVIDENCE, AMOUNT_MISMATCH),
         AgreementAxis("date_order", Verdict.INSUFFICIENT_EVIDENCE, PAYMENT_PRECEDES_SUBJECT),
         AgreementAxis("counterparty", Verdict.INSUFFICIENT_EVIDENCE, COUNTERPARTY_MISMATCH),
+        AgreementAxis("subject", Verdict.INSUFFICIENT_EVIDENCE, SUBJECT_MISMATCH),
     )
+
+
+# --------------------------------------------------- the subject axis ----
+
+
+def a_pair_citing_another_invoice() -> list[DocGroundTruth]:
+    """An invoice numbered one way beside a payment whose purpose cites a DIFFERENT рахунок, and
+    ORDINARY IN EVERY OTHER RESPECT: the amounts agree to the kopiyka, both dates are inside the
+    period and in order, one party on both pages, every line covered. So the pair fails on the one
+    dimension no other axis reads — which document the money settled."""
+    return [
+        doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+            document_code="2847"),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00",
+            cites_document_no="7411"),
+    ]
+
+
+def test_a_payment_citing_another_invoice_is_insufficient_evidence():
+    """🔴 THE LINKAGE SLOT BROKEN BY WHAT WAS SETTLED, rather than by how much, when, or to whom.
+    Both documents are flawless and agree on every other dimension; the payment declares on its
+    own purpose line that it settles a different purchase, so nothing establishes that THIS money
+    paid THIS obligation."""
+    result = evaluate(a_pair_citing_another_invoice())
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.imperfection == (SUBJECT_MISMATCH,)
+    assert result.covered_fraction == Decimal(1)
+    assert result.reimbursable == Decimal("0.00")
+    assert result.verdict_basis == (VerdictBasis.DOCUMENTS,), "both numbers are on the images"
+    assert result.policy_trace[-1] == (
+        "documents disagree: payment c1_d2 settles document no. 7411, "
+        "c1_d1 (invoice) is no. 2847"
+    )
+
+
+def test_the_same_pair_passes_when_the_policy_declares_no_subject_axis():
+    """The config-sensitivity direction, exactly as for the counterparty axis above: the identical
+    documents against a policy whose list is amount alone come back `covered` — the comparison is
+    reached by the declared list and by no other route."""
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [AMOUNT_AXIS])
+        result = evaluate(a_pair_citing_another_invoice())
+
+    assert result.verdict is Verdict.COVERED
+    assert result.imperfection == ()
+    assert not any("settles document" in line for line in result.policy_trace)
+
+
+def test_an_uncited_payment_is_not_a_subject_disagreement():
+    """⛔ ABSENCE IS NEVER A DISAGREEMENT ON THIS AXIS — the guard the old refusal of a subject
+    axis turned into. A generic purpose, a ВН citation and an unprinted purpose line all leave
+    `cites_document_no` empty, and every such pair is an ordinary covered claim; anything else
+    would relabel the majority of the corpus for carrying the citation noise KL-16 documents."""
+    uncited = [
+        doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+            document_code="2847"),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00"),
+    ]
+    result = evaluate(uncited)
+    assert result.verdict is Verdict.COVERED
+    assert result.imperfection == ()
+
+
+def test_an_unnumbered_subject_is_not_a_subject_disagreement():
+    """The other side of the same guard: a subject class that prints no № of its own gives the
+    citation nothing to resolve against, and the axis stays silent rather than guessing."""
+    unnumbered = [
+        doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")]),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00",
+            cites_document_no="7411"),
+    ]
+    result = evaluate(unnumbered)
+    assert result.verdict is Verdict.COVERED
+    assert result.imperfection == ()
+
+
+def test_a_payment_citing_the_claims_own_invoice_passes():
+    """The agreement case, asserted so the axis is known to be able to answer 'one transaction'
+    at all — the positive control of this comparison, per the instrument lesson."""
+    agreeing = [
+        doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+            document_code="2847"),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00",
+            cites_document_no="2847"),
+    ]
+    result = evaluate(agreeing)
+    assert result.verdict is Verdict.COVERED
+    assert result.imperfection == ()
 
 
 def test_a_disagreement_is_not_a_flag_on_a_coverage_verdict():
