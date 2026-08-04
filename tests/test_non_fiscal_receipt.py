@@ -31,6 +31,7 @@ from receipt_synth.content_builder import (
     resolve_vendor,
     validate_amount_in_words,
     validate_line_item_sum,
+    vendor_can_carry,
 )
 from receipt_synth.policy_engine import document_evidence
 from receipt_synth.renderer import Renderer
@@ -95,7 +96,7 @@ def test_a_registered_vat_payer_cannot_issue_one():
         make(vendor=PAYER)
 
 
-def test_the_archetype_carries_exactly_the_categories_that_have_a_non_payer_vendor():
+def test_the_archetype_carries_exactly_the_categories_a_non_payer_can_sell_in():
     """🔴 THE REGISTRY AND config/vendors.json HAVE TO AGREE, and neither can be read off the
     other by a reader. The archetype declares six categories of seven; which six is a consequence
     of the rule above — a category served only by registered sellers cannot produce this document —
@@ -106,16 +107,26 @@ def test_the_archetype_carries_exactly_the_categories_that_have_a_non_payer_vend
     silently remove a document class from that part of the corpus; a category added while every
     seller is registered would make `assembler._pick_vendor` raise mid-run, on the claim that
     happened to draw it.
+
+    🔴 THE CONDITION IS A CONJUNCTION AND WAS ONE CLAUSE SHORT. `_pick_vendor` filters by
+    `vendor_can_carry` FIRST and by the VAT status second, so what the tuple has to encode is a
+    non-payer that can also SELL something the category covers — not merely a non-payer. The
+    difference is not hypothetical arithmetic: a vendors.json edit that gave a category a
+    non-payer selling nothing it covers would have made this test demand that category be ADDED,
+    and every slip claim drawn there would then raise inside `_pick_vendor`, a stage away from the
+    edit that caused it. `mixed=False` because a claim aimed at `not_proof_of_payment` carries no
+    coverage target, which is what the assembler passes for it.
     """
     vendors = load_vendors()["vendors"]["UA"]
-    with_a_non_payer = {
+    sellable_by_a_non_payer = {
         entry["id"]
         for entry in load_policy()["categories"]
-        if any(not vendor["vat_payer"] for vendor in vendors.get(entry["id"], []))
+        for vendor in vendors.get(entry["id"], [])
+        if not vendor["vat_payer"] and vendor_can_carry(vendor, entry["id"], mixed=False)
     }
-    assert with_a_non_payer, "no category has a non-payer vendor — this test asserts nothing"
+    assert sellable_by_a_non_payer, "no category has such a vendor — this test asserts nothing"
 
-    assert set(ARCHETYPES[SLUG].categories) == with_a_non_payer
+    assert set(ARCHETYPES[SLUG].categories) == sellable_by_a_non_payer
 
 
 def test_the_registration_says_what_the_document_proves_and_not_what_it_is_offered_as():
