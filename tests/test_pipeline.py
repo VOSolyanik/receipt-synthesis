@@ -2252,8 +2252,13 @@ def test_a_party_mismatch_cannot_be_planned_where_the_category_has_one_seller():
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(assembler, "load_vendors", lambda: only_one)
         vendor = assembler._pick_vendor(random.Random(1), Country.UA, plan.category, mixed=False)
-        with pytest.raises(ValueError, match="two sellers|no vendor"):
+        with pytest.raises(ValueError, match=COUNTERPARTY_MISMATCH) as refusal:
             assembler._payee_the_payment_names(random.Random(1), plan, vendor, Country.UA)
+
+    # The vendor pool's own refusal is kept as the cause of this one rather than swallowed: it
+    # names the seller that was excluded, which is the next thing a reader asks.
+    assert "at least two sellers" in str(refusal.value)
+    assert "Sport Life" in str(refusal.value.__cause__)
 
 
 def test_a_partly_settled_claim_carries_its_term_on_the_rendered_page(multi_claim_dataset):

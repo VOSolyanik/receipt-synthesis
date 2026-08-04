@@ -656,17 +656,29 @@ def _payee_the_payment_names(
     """
     if plan.cause != COUNTERPARTY_MISMATCH:
         return vendor
+    unbuildable = (
+        f"claim {plan.claim_id} is planned as {COUNTERPARTY_MISMATCH!r}: its payment has to name a "
+        f"party its subject document does not, and no second seller for {plan.category!r} in "
+        f"{country.value} could be drawn"
+    )
     for _ in range(_PAYEE_DRAW_ATTEMPTS):
-        other = _pick_vendor(
-            rng, country, plan.category, mixed=False, excluding_name=vendor["name"]
-        )
+        try:
+            other = _pick_vendor(
+                rng, country, plan.category, mixed=False, excluding_name=vendor["name"]
+            )
+        except ValueError as no_second_seller:
+            # RE-RAISED WITH THE CAUSE NAMED. `_pick_vendor` refuses in the language of a vendor
+            # pool — it does not know what the claim was planned as — and a reader meeting that
+            # sentence alone would go looking for a basket problem rather than at the category
+            # needing two sellers for this cause.
+            raise ValueError(
+                f"{unbuildable}: the category needs at least two sellers in config/vendors.json"
+            ) from no_second_seller
         if other["name"] != vendor["name"]:
             return other
     raise ValueError(
-        f"claim {plan.claim_id} is planned as {COUNTERPARTY_MISMATCH!r} and no second seller for "
-        f"{plan.category!r} in {country.value} could be drawn in {_PAYEE_DRAW_ATTEMPTS} attempts: "
-        "the payment has to name a party the subject document does not, so the category needs at "
-        "least two sellers in config/vendors.json"
+        f"{unbuildable} in {_PAYEE_DRAW_ATTEMPTS} attempts — every draw returned a sole trader "
+        "whose name collided with the claim's own, which the pool filter cannot prevent"
     )
 
 
