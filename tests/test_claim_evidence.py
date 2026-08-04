@@ -51,6 +51,7 @@ from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
     OUTSIDE_PERIOD,
+    PARTIAL_PAYMENT_MARKER_FIELDS,
     PAYMENT_PRECEDES_SUBJECT,
     SUBJECT_NOT_EVIDENCED,
     ClaimInput,
@@ -60,6 +61,7 @@ from receipt_synth.policy_engine import (
     document_evidence,
     evaluate_claim,
     evaluate_claims,
+    partial_payment_marker_fields,
     resolve_evidence,
 )
 from receipt_synth.schemas import (
@@ -101,12 +103,17 @@ def doc(
     items: list[LineItem] | None = None,
     currency: str = "UAH",
     direction: Direction | None = None,
+    instalment_amount: str | None = None,
 ) -> DocGroundTruth:
     """One document label.
 
     `amount` is stated independently of `items` on purpose: a payment confirmation carries
     an amount and no lines, and the disagreement cases below need the two to be settable
     apart.
+
+    `instalment_amount` is the printed marker of a partial settlement — what one part of this
+    document's obligation comes to, where the document says it is settled in parts. `None` on
+    every ordinary document, which is what makes the mismatch cases below still mismatch.
     """
     return DocGroundTruth(
         doc_id=doc_id,
@@ -115,6 +122,7 @@ def doc(
         language="uk",
         currency=currency,
         amount=Decimal(amount),
+        instalment_amount=None if instalment_amount is None else Decimal(instalment_amount),
         date=when,
         counterparty="Vendor",
         direction=direction,
@@ -515,6 +523,166 @@ def test_documents_stating_different_amounts_are_insufficient_evidence():
         "documents disagree: c1_d1 (invoice) states 1200.00 UAH, "
         "payment c1_d2 states 1000.00 UAH"
     )
+
+
+# ------------------------------------------ a payment that settles one part --
+#
+# 🔴 TWO CLAIMS WITH THE SAME PAIR OF NUMBERS AND DIFFERENT VERDICTS. Every case below is an
+# invoice of 1200.00 beside a payment of less, and what decides the label is whether the INVOICE
+# SAYS the obligation is settled in parts. The arithmetic is identical throughout on purpose:
+# these tests are what stops `partially_paid` from being implemented as "the payment is smaller",
+# which would relabel every low-side `amount_mismatch` and cost the corpus a negative it already
+# has. config/policy.yaml, `partial_payment`, states the rule.
+
+
+def test_a_payment_settling_one_instalment_is_partially_paid():
+    """The lawful pair: an obligation of 1200.00 the invoice says is settled in parts of 300.00,
+    and a payment of exactly 300.00.
+
+    `covered_fraction` is still 1.0 — every line of the invoice is covered, which is a fact about
+    the lines and says nothing about how much has been paid — and `reimbursable` is 0.00, because
+    policy.yaml has not decided how much of a partly settled obligation is payable.
+
+    NO CAUSE, for the reason `not_proof_of_payment` carries none: one mechanism, one way to reach
+    it, nothing for a cause to distinguish.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00")
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.PARTIALLY_PAID
+    assert result.imperfection == ()
+    assert result.covered_fraction == Decimal(1)
+    assert result.reimbursable == Decimal("0.00")
+    assert result.policy_trace[-1] == (
+        "partial settlement: c1_d1 states 1200.00 UAH settled in parts of 300.00, "
+        "and payment c1_d2 states 300.00"
+    )
+
+
+def test_a_smaller_payment_without_the_marker_is_not_partially_paid():
+    """🔴 THE DISCRIMINATOR, AND THE TEST THIS WHOLE BRANCH IS ON PROBATION FOR. The same two
+    amounts as the case above — 1200.00 against 300.00 — with the instalment term absent from the
+    invoice. The claim states no arrangement to pay in parts, so what it shows is a payment for an
+    amount its subject document does not name: `insufficient_evidence`, cause `amount_mismatch`,
+    exactly as before this verdict existed.
+
+    A `partially_paid` implemented as "the payment is smaller" passes every other test in this
+    section and fails this one. That is the whole of why it is here: the mismatch cause is a
+    negative the corpus already contains, and a rule that swallowed it would leave the dataset
+    with fewer distinctions than it had.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")])
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00")
+
+    assert invoice.instalment_amount is None, "the marker is what this test removes"
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.verdict is not Verdict.PARTIALLY_PAID
+    assert result.imperfection == (AMOUNT_MISMATCH,)
+
+
+def test_a_payment_matching_no_part_of_a_stated_arrangement_is_a_mismatch():
+    """The marker has to AGREE with the payment, not merely be present. An invoice settled in
+    parts of 300.00 beside a payment of 250.00 is a payment for some third amount — the mismatch
+    case again — and a rule that read only the presence of the term would label it a lawful
+    instalment of an arrangement it does not fit."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="250.00")
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.imperfection == (AMOUNT_MISMATCH,)
+
+
+def test_an_instalment_paid_before_its_invoice_is_still_insufficient_evidence():
+    """The amount check is skipped for a partial settlement; the DATE check is not. A payment that
+    precedes what it settles is an impossible order whether it pays a part or the whole, so the
+    cause survives and the verdict with it — `partially_paid` describes a claim whose documents
+    agree, and these do not."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", when=date(2026, 6, 10),
+                  items=[item("1200.00")], instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00", when=date(2026, 6, 1))
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.imperfection == (PAYMENT_PRECEDES_SUBJECT,)
+    assert AMOUNT_MISMATCH not in result.imperfection, (
+        "the pair agrees about the amount — the part is what the invoice says it is"
+    )
+
+
+def test_a_part_equal_to_the_whole_is_not_a_partial_settlement():
+    """A "part" that comes to the whole obligation settles it, and a claim whose payment settles
+    its invoice in full is an ordinary claim. Asserted because the guard is one comparison a
+    reading of "the marker is present" would drop, and the resulting corpus would carry
+    `partially_paid` on claims that were paid in full."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="1200.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00")
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.COVERED
+    assert result.reimbursable == Decimal("1200.00")
+
+
+def test_a_partly_settled_claim_consumes_no_balance():
+    """It pays out nothing, so it must leave the annual limit where it found it — otherwise a
+    later claim of the same persona would be labelled against a balance this one never spent.
+
+    The absolute the assertion is against is 12000 written out — the `vitamins_nutrition` limit
+    this module's header records — rather than a figure read back through the code that spends it.
+    """
+    ledger = Ledger()
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00")
+
+    result = evaluate([invoice, payment], ledger=ledger)
+    ledger.record("p001", "vitamins_nutrition", result.reimbursable)
+
+    assert result.verdict is Verdict.PARTIALLY_PAID
+    assert ledger.spent("p001", "vitamins_nutrition") == Decimal("0.00")
+    assert ledger.remaining("p001", "vitamins_nutrition") == Decimal(12000)
+
+
+def test_the_marker_the_engine_reads_is_the_one_the_policy_declares():
+    """🔴 A CONSUMER BUILDS ITS OWN ENGINE FROM policy.yaml. If this module's marker and the
+    file's ever differ, the two engines label the same claim differently while each is correct
+    about the field it read — the most expensive class of disagreement this repository has, because
+    it looks like a measurement problem.
+
+    Both directions are asserted: the names agree, and every name is a real field of the label
+    record rather than a string nothing carries.
+    """
+    assert partial_payment_marker_fields() == PARTIAL_PAYMENT_MARKER_FIELDS
+    assert PARTIAL_PAYMENT_MARKER_FIELDS, "an empty marker would make every pair a mismatch"
+    for name in PARTIAL_PAYMENT_MARKER_FIELDS:
+        assert name in DocGroundTruth.model_fields, f"{name} is not a label field"
+
+
+def test_an_engine_reading_a_marker_the_policy_does_not_declare_refuses_to_label():
+    """The drift above, made to happen. Patched on the POLICY side because that is the side a
+    consumer vendors: an engine that went on labelling against a field the file no longer names
+    would produce ground truth nobody can reproduce from the published spec."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            "receipt_synth.policy_engine.partial_payment_marker_fields", lambda: ("amount_due",)
+        )
+        with pytest.raises(PolicyGapError, match="amount_due"):
+            evaluate([invoice, payment])
 
 
 def test_a_disagreement_is_not_a_flag_on_a_coverage_verdict():

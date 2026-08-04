@@ -577,6 +577,67 @@ insufficient_evidence_causes:
 # guideline was correct for the subset of its day.
 insufficient_evidence_causes_min_run_size: 85
 
+# WHEN A PAYMENT SMALLER THAN ITS SUBJECT DOCUMENT IS A PART RATHER THAN A MISMATCH.
+#
+# 🔴 TWO CLAIMS WITH THE SAME PAIR OF NUMBERS AND DIFFERENT VERDICTS, which is why this block
+# exists at all. An invoice for 12000.00 beside a payment of 3000.00 is either
+#
+#   * an obligation settled IN PARTS — an annual gym subscription billed for the year and paid
+#     quarterly — which is `partially_paid`, a lawful claim of which part of the amount has been
+#     paid; or
+#   * a payment that simply states a different amount from the document it is offered as
+#     settling, which is `insufficient_evidence` with the cause `amount_mismatch`: the two
+#     documents do not describe one transaction, so nothing establishes that THIS payment paid
+#     for THIS subject.
+#
+# ⛔ THE DIFFERENCE IS NOT THE ARITHMETIC AND CANNOT BE. "The payment is smaller" is true of both,
+# so a rule reading only the amounts would relabel every `amount_mismatch` whose delta happens to
+# fall on the low side as `partially_paid` — collapsing a negative the corpus already contains
+# into one it is only now gaining, and leaving the dataset with fewer distinctions than it
+# started with. The difference is INTENT, and intent has to be PRINTED to be readable.
+#
+# 🔴 SO THE RULE TURNS ON A MARKER THE SUBJECT DOCUMENT CARRIES: the document states that its
+# obligation is settled in equal parts and what one part comes to. On this generator's Ukrainian
+# invoice that is the payment term «Умови оплати: оплата частинами …, черговий платіж: …»,
+# labelled as `instalment_amount`. A document that carries no such term states one obligation
+# payable in one, and a payment disagreeing with it disagrees.
+#
+# A PAYMENT TERM IS NOT A PAYMENT STATUS, and the distinction is what keeps this rule from
+# reading proof of payment off a printed word. The term says how the seller proposes to be paid
+# and is fixed when the document is drawn up; whether money moved is still decided from the
+# PAYMENT document's type in `document_evidence` below, exactly as on every other claim.
+#
+# WHAT A CONSUMER'S OWN ENGINE HAS TO IMPLEMENT, stated so that it can be implemented from this
+# file alone:
+#
+#   for a transaction whose subject and payment are DIFFERENT documents:
+#     if   subject.instalment_amount is not null
+#     and  payment.amount == subject.instalment_amount
+#     and  subject.instalment_amount <  subject.amount     -> partially_paid
+#     elif payment.amount            != subject.amount     -> insufficient_evidence /
+#                                                             amount_mismatch
+#
+# 🔴 EQUALITY WITH THE PRINTED PART, NOT MERELY "SMALLER THAN THE TOTAL". A document that states
+# its parts and a payment that matches none of them is not a partial settlement of it — it is a
+# payment for some third amount, which is the mismatch case again. The equality is what makes the
+# marker load-bearing rather than decorative: it has to AGREE with the payment, not merely be
+# present.
+#
+# ⚠️ AND IT IS CHECKED ON THE SUBJECT DOCUMENT ONLY. A payment document states what left the
+# account and has no view of the obligation behind it; 👁 a payment purpose names an invoice, not
+# how much of one is left.
+#
+# WHAT SUCH A CLAIM IS PAID OUT: NOTHING, in this version, and that is a policy decision rather
+# than an implementation gap. The plan reimburses against the obligation the subject document
+# states, and only part of that obligation has been settled; how much of a partly settled
+# obligation is payable — the part paid, the whole once completed, nothing until then — is a
+# decision this policy has not taken. `reimbursable_amount` is therefore 0.00 and the ledger is
+# untouched, exactly as for the other verdicts that establish something and pay nothing.
+partial_payment:
+  # The label field(s) carrying the marker. `policy_engine` pins its own reading against this
+  # list, so the file and the engine cannot drift apart in silence.
+  marker_fields: [instalment_amount]
+
 # What each document type proves. A claim is reimbursable only when BOTH facts
 # are established — what was bought, and that it was paid for — possibly across
 # different documents. That is where linked claims come from (an order screenshot

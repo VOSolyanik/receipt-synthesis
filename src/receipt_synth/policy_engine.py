@@ -39,6 +39,18 @@ Six rules, in the order they are applied:
    `imperfection`; the claim does not establish that *this* payment paid for *this*
    subject.
 
+   🔴 THE SAME AMOUNT, OR ONE PART OF IT WHERE THE SUBJECT SAYS SO. This rule has a SECOND
+   outcome, and it is not a failure of the slot: a subject document may state that its
+   obligation is settled in equal parts and what one part comes to — an annual subscription
+   billed for the year and paid quarterly — and a payment equal to that part then describes
+   the same transaction as the document beside it. Such a claim is `partially_paid`, with no
+   cause: the linkage holds, and what is true of the claim is that part of the amount has
+   been paid. The marker has to be PRINTED on the subject document (`instalment_amount`);
+   the arithmetic alone cannot tell the two apart, because "the payment is smaller" is true
+   of a mismatch as well, and a rule reading only the amounts would swallow that cause
+   whole. See `_settles_one_instalment` and `partial_payment` in policy.yaml, which states
+   the rule for a consumer building its own engine from that file.
+
    Each slot is decided from the claim's own documents and never by comparison with
    another verdict. That construction is deliberate: while two of these were written as
    "the one that is not the other", editing either silently moved the other, and it went
@@ -150,6 +162,14 @@ PAYMENT_PRECEDES_SUBJECT = "payment_precedes_subject"
 # is not `insufficient_evidence`.
 OUTSIDE_PERIOD = "outside_period"
 
+# 🔴 THE DOCUMENT FIELDS WHOSE VALUE MAKES A SMALLER PAYMENT A PART RATHER THAN A DISAGREEMENT —
+# the marker of `partially_paid`, declared in policy.yaml under `partial_payment.marker_fields`
+# and repeated here because THIS module reads the attribute by name. Two places holding one fact
+# is how they come apart, so `_settles_one_instalment` compares them on every call rather than
+# trusting that they still agree: a consumer builds its own engine from the file, and an engine
+# reading a field the file does not name would be labelling by a rule nobody can reproduce.
+PARTIAL_PAYMENT_MARKER_FIELDS: tuple[str, ...] = ("instalment_amount",)
+
 
 class PolicyGapError(Exception):
     """Raised where policy.yaml specifies no answer and guessing one would corrupt the
@@ -240,6 +260,17 @@ def insufficient_evidence_causes() -> dict[str, float]:
     """
     return {str(name): float(share) for name, share in
             load_policy()["insufficient_evidence_causes"].items()}
+
+
+def partial_payment_marker_fields() -> tuple[str, ...]:
+    """Which document field(s) policy.yaml says carry the partial-payment marker.
+
+    Read rather than assumed for the reason every other rule in this module is read from that
+    file: a downstream consumer builds its own engine from it, and the two engines have to be
+    labelling on the same marker or they will disagree about a VERDICT while both are correct
+    about what they read.
+    """
+    return tuple(str(name) for name in load_policy()["partial_payment"]["marker_fields"])
 
 
 def insufficient_evidence_causes_min_run_size() -> int:
@@ -742,6 +773,51 @@ def _evidence_trace(shape: EvidenceShape) -> str:
     return f"evidence: {count} transaction{'' if count == 1 else 's'} — {'; '.join(parts)}"
 
 
+def _settles_one_instalment(transaction: Transaction) -> bool:
+    """Whether this payment settles ONE PART of an obligation its subject document says is
+    settled in parts.
+
+    🔴 THE DISCRIMINATOR BETWEEN `partially_paid` AND `amount_mismatch`, and the whole of it. Both
+    are a payment stating less than the subject beside it; what tells them apart is whether the
+    SUBJECT DOCUMENT SAYS SO — see `partial_payment` in policy.yaml, which states the rule for a
+    consumer building its own engine.
+
+    THREE CONDITIONS, AND EACH ONE IS LOad-BEARING:
+
+    * the subject document PRINTS an instalment amount. Without it there is no intent on the page
+      and a smaller payment is a smaller payment;
+    * the payment EQUALS that instalment. A document stating its parts beside a payment matching
+      none of them is a payment for some third amount, which is the mismatch case again — the
+      marker has to agree with the payment, not merely be present;
+    * the instalment is SMALLER than the whole. A "part" equal to the total settles the whole
+      obligation and is an ordinary claim; the builder cannot produce one (every schedule divides
+      into at least two parts) and the engine does not rely on it not doing so.
+
+    ⛔ NOT CHECKED ON A SELF-CONTAINED DOCUMENT. A receipt is its own payment, so there is no
+    second document for it to settle part of, and its `instalment_amount` is `None` on every class
+    but the invoice anyway. The same shape as `_disagreements`, which is deliberate: both ask what
+    the two documents of one transaction say about each other.
+    """
+    if not transaction.is_split:
+        return False
+    declared = partial_payment_marker_fields()
+    if declared != PARTIAL_PAYMENT_MARKER_FIELDS:
+        raise PolicyGapError(
+            f"policy.yaml declares the partial-payment marker as {list(declared)} while this "
+            f"engine reads {list(PARTIAL_PAYMENT_MARKER_FIELDS)}. A consumer builds its own "
+            "engine from that file, so the two would label the same claim differently while each "
+            "was correct about the field it read. Move both or neither."
+        )
+    instalment = transaction.subject.instalment_amount
+    if instalment is None:
+        return False
+    instalment = instalment.quantize(KOPIYKA)
+    return (
+        transaction.payment.amount.quantize(KOPIYKA) == instalment
+        and instalment < transaction.subject.amount.quantize(KOPIYKA)
+    )
+
+
 def _disagreements(shape: EvidenceShape) -> list[tuple[str, str]]:
     """Where the two documents of one transaction fail to describe one transaction.
 
@@ -754,6 +830,13 @@ def _disagreements(shape: EvidenceShape) -> list[tuple[str, str]]:
     `content_builder.validate_line_item_sum`, deliberately without a caller on the honest
     path, and belonging to the fraud archetypes that break it on purpose. Checking it here
     would pre-empt the decision about how those archetypes are labelled.
+
+    🔴 A PAIR THAT SETTLES ONE INSTALMENT IS NOT A DISAGREEMENT ABOUT THE AMOUNT, and the amount
+    check is skipped for it rather than the finding being discarded afterwards. Nothing else about
+    such a pair is exempt: a payment dated before the invoice it settles is an impossible order
+    whether it pays a part or the whole, so the DATE check below still runs and still wins — a
+    claim that fails it is `insufficient_evidence`, not `partially_paid`. See
+    `_settles_one_instalment`.
     """
     found: list[tuple[str, str]] = []
     for transaction in shape.transactions:
@@ -761,7 +844,10 @@ def _disagreements(shape: EvidenceShape) -> list[tuple[str, str]]:
             continue
         subject, payment = transaction.subject, transaction.payment
 
-        if subject.amount.quantize(KOPIYKA) != payment.amount.quantize(KOPIYKA):
+        if (
+            not _settles_one_instalment(transaction)
+            and subject.amount.quantize(KOPIYKA) != payment.amount.quantize(KOPIYKA)
+        ):
             found.append((
                 AMOUNT_MISMATCH,
                 f"documents disagree: {subject.doc_id} ({subject.doc_type.value}) states "
@@ -878,9 +964,16 @@ def evaluate_claim(
         states what justified the verdict, and coverage did not. The fraction is still
         reported where there were lines to compute one from, as a fact about those lines.
 
-        Three verdicts reach it, not two: `not_proof_of_payment`, `insufficient_evidence`
-        and — for a payment outside the benefit period — `rejected`. `verdict_basis` is
-        `DOCUMENTS` for all three, because each of the facts above is printed on the image.
+        Four verdicts reach it: `not_proof_of_payment`, `insufficient_evidence`, `rejected` for
+        a payment outside the benefit period, and `partially_paid`. `verdict_basis` is
+        `DOCUMENTS` for all four, because each of the facts above is printed on the image.
+
+        ⚠️ THE FOURTH IS NOT A CLAIM THAT FAILED ANYTHING, and it reaches this helper for what the
+        helper does rather than for what its name suggests. A `partially_paid` claim's documents
+        agree; what it reimburses is nothing, because policy.yaml has not decided how much of a
+        partly settled obligation is payable — see `partial_payment` there. The helper's job is
+        "verdict established from the CONTENT of the documents, paying out nothing", and that is
+        exactly this case.
         """
         return ClaimEvaluation(
             verdict=verdict,
@@ -907,6 +1000,24 @@ def evaluate_claim(
         return refused(
             Verdict.INSUFFICIENT_EVIDENCE, tuple(cause for cause, _ in disagreements)
         )
+
+    # -- one transaction, settled in parts. Checked HERE, in the place the amount cross-check
+    # would have caught it, because that is the case it discriminates from: moving it across the
+    # period check below would relabel a partial settlement paid out of window for a reason that
+    # has nothing to do with the discrimination. See `_settles_one_instalment`.
+    instalments = [t for t in shape.transactions if _settles_one_instalment(t)]
+    if instalments:
+        first = instalments[0]
+        trace.append(
+            f"partial settlement: {first.subject.doc_id} states "
+            f"{_money(first.subject.amount)} {reporting_currency()} settled in parts of "
+            f"{_money(first.subject.instalment_amount)}, and payment {first.payment.doc_id} "  # type: ignore[arg-type]
+            f"states {_money(first.payment.amount)}"
+        )
+        # NO CAUSE, for the reason `not_proof_of_payment` carries none: there is one mechanism
+        # behind this verdict and one way to reach it, so there is nothing for a cause to
+        # distinguish.
+        return refused(Verdict.PARTIALLY_PAID, ())
 
     # -- the period, on the payment date and on no other. `rejected`, not
     # `insufficient_evidence`: nothing here is unestablished, the policy simply does not
