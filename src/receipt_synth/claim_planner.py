@@ -108,8 +108,8 @@ def evidence_of(archetype: Archetype) -> Evidence:
     return document_evidence(archetype.doc_type)
 
 
-# The registry the planner selects from. Three entries today, all of them Ukrainian fiscal
-# receipts; the rest register here as their templates land.
+# The registry the planner selects from — eleven archetypes over six document classes today;
+# further ones register here as their templates land.
 #
 # THREE ENTRIES OF ONE DOCUMENT CLASS ARE STILL THREE ARCHETYPES. They carry the same
 # `doc_type`, so they establish the same facts and the planner treats them as interchangeable —
@@ -155,13 +155,11 @@ ARCHETYPES: dict[str, Archetype] = {
     # the two lists are checked against each other by a test, so a category added there cannot
     # silently drop out of this tuple.
     #
-    # ⚠️ NO CLAIM CAN BE ASSEMBLED FROM IT YET, and the reason is structural rather than a
-    # shortcoming of this entry: a claim needs both facts, this archetype supplies one, and the
-    # archetype that supplies the other — an invoice — is not written. `documentable_categories`
-    # therefore reports none of these categories as documentable, which is why registering it
-    # changes no dataset. It is registered all the same: the template, the builder and the label
-    # fields are what a later step pairs with an invoice, and an unregistered archetype is one
-    # nothing renders and no test can reach.
+    # It is the payment half of the dominant pair: the invoice below supplies the subject fact,
+    # and every category this tuple names is documentable through the two together. (Until the
+    # invoice landed, no claim could be assembled from this archetype at all — a claim needs both
+    # facts — and registering it changed no dataset; that early state is recorded in the
+    # contract's version history rather than restated here as if it were current.)
     "ua_bank_payment_confirmation": Archetype(
         slug="ua_bank_payment_confirmation",
         doc_type=DocType.PAYMENT_CONFIRMATION,
@@ -187,10 +185,10 @@ ARCHETYPES: dict[str, Archetype] = {
     # against policy.yaml's categories by a test, so a category added there cannot silently drop
     # out of it.
     #
-    # ⚠️ STILL NO CLAIM, and the reason is unchanged and structural: a claim needs both facts, this
-    # supplies one, and the archetype that supplies the other — an invoice — is not written. Two
-    # payment-proving archetypes are not better than one for that purpose. What it does change is
-    # that `_select_documents` now has a CHOICE of payment archetype for the step that pairs them.
+    # The second payment-proving class of the pair era: `_select_documents` draws the payment
+    # half of a split claim from this archetype and the confirmations, so a statement reaches a
+    # dataset on every run. (It, too, could reach none before the invoice existed — the planner
+    # had a payment fact twice over and no subject fact to pair it with.)
     "ua_bank_statement": Archetype(
         slug="ua_bank_statement",
         doc_type=DocType.BANK_STATEMENT,

@@ -1051,7 +1051,49 @@
 # `fixed_by`, misfiled under KL-17 since it was written, moved home. A consumer that vendored
 # version 32 receives claims of a cause it does not know and `rejected` claims its date rule
 # cannot explain — re-vendor before scoring anything generated at this version.
-version: 33
+#
+# Version 34 is THE CONTRACT CATCHING UP WITH ITS OWN DATA — a truth pass, and deliberately
+# nothing else: NO document, NO draw and NO comparison rule changes, and `config/policy.yaml`
+# IS NOT TOUCHED, so this is not an I-2 event. What changes is which statements of this file
+# describe the dataset a consumer actually receives.
+#
+#   🔴 THE THREE REMAINING TARGET CLASSES MOVE TO `emitted`. `payment_confirmation`,
+#   `bank_statement` and `invoice` read `forward_contract` — this file's word for NOT PRESENT IN
+#   THE DATASET — while RP-06, the authoritative delivered corpus, counts 293 / 294 / 587 of them
+#   among its 1315 documents: 89% of the corpus was described as absent, and the prose beside the
+#   statuses still said "IN NO RUN YET … an invoice is not written". The transition was made
+#   under the rule, not around it: one document of each class was re-checked FIELD BY FIELD
+#   against the reference run (seed 42) — each class's `emitted_since` says what was read — which
+#   is the check `status_vocabulary` demands and RC-06's note declined to skip. The classes'
+#   `prd_required_fields` rows, payment-date blocks and `fee.cardinality` move with them.
+#
+#   🔴 AND EVERY OTHER STATEMENT ASSERTING AN EMPTY OR SINGLE-CLASS DATASET WAS SWEPT AND
+#   RE-DERIVED, because a wrong status with correct prose and a correct status with wrong prose
+#   are the same defect at different volumes. Corrected, each with its history at the key:
+#   `verdict_notes.realizability` ("only two verdicts buildable" against a six-member
+#   `REALIZABLE_VERDICTS`), `claim_evidence.shapes` (self-contained "the only shape", the
+#   bank-statement refusal that version 11 resolved), `claim_label.documents.cardinality`
+#   ("exactly one in every run"), `linked.observed` ("always false"),
+#   `covered_fraction.absence` / `reimbursable_amount.absence` (null IS on real claims since
+#   version 25, and the two fields part company there), `fx_rates` (`emitted`, against the run
+#   named beside it), `language`/`currency` observed lists and `open_enum.label_side` (`en`/`EUR`
+#   since version 31), the three fiscality flags' "always true", `party_name`'s "ПрАТ is not
+#   produced" (it prints on the reference run), KL-01 (its own condition fired: two covered-only
+#   profiles DO reach datasets — the leak is live and now says so), KL-02 (`hobby` has an
+#   archetype; `electronics` stays out for the reason that still holds), KL-05 ("every document"
+#   narrowed to the receipt classes), the section-9 header counts (SEVENTEEN entries), the
+#   `run_profiles` header ("authoritative: false on every profile" beside an
+#   `authoritative: true`), the split-flag note still calling RP-05 authoritative, section 10's
+#   own title ("NONE OF THEM MADE"), RC-07's "no invoice archetype exists", and RC-10's account
+#   of an engine that stopped raising at version 25.
+#
+#   ⚠️ NO LABEL A CONSUMER EVER RECEIVED WAS DESCRIBED WRONGLY — every correction above is this
+#   file catching up with data that was already right. A consumer that SKIPPED scoring against
+#   the three classes on the strength of their status was under-prepared, exactly as the
+#   version-26 precedent states for `insufficient_evidence`; one that scored them anyway was
+#   right to. Diffing 33 against 34 is where such a consumer learns which of its guards were
+#   built against words this file had outgrown.
+version: 34
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -1076,11 +1118,12 @@ status_vocabulary:
 
     AMENDED IN VERSION 10, and the amendment is the difference between a promise about code and a
     promise about data. This word used to say "not produced by any template yet", which stopped
-    being true of `payment_confirmation`: a template, a builder and the label fields all exist,
-    while no run contains such a document, because a claim needs both facts and this class proves
-    one. The operative half was always the second sentence, so the definition now turns on the
-    DATASET. A consumer reads this word as "do not expect to find it in the labels", and that
-    reading is unchanged.
+    being true of `payment_confirmation`: a template, a builder and the label fields all existed
+    while — at that version — no run contained such a document, because a claim needs both facts
+    and this class proves one. (The class has since entered the data and its status moved; the
+    amendment's reasoning is kept because it is what the word still means.) The operative half was
+    always the second sentence, so the definition turns on the DATASET. A consumer reads this word
+    as "do not expect to find it in the labels", and that reading is unchanged.
   divergent: >
     Both sides exist and disagree — on a name, a type, or a definition. Neither is chosen
     here. See `required_changes`.
@@ -1310,19 +1353,32 @@ document_types:
           DLA SPRZEDAWCY», an empty receipt-number field) OVERRIDES every positive
           fiscality signal, however many of those a document carries — a slip may hold a
           QR code, a tax number and a total and still declare itself not a fiscal receipt.
-          No generator field records a marker and no archetype prints one yet. See RC-08.
+          No generator field records a marker, and no archetype of THIS class prints one; the one
+          printed negative marker of the corpus is the platform receipt's
+          `not_a_tax_invoice_note` (version 31), and the товарний чек carries the negative as an
+          ABSENCE of requisites. Both halves are argued at RC-08.
 
   payment_confirmation:
     classifier_role: target_class
-    status: forward_contract
+    status: emitted
+    emitted_since: >
+      VERSION 34 AS A WORD, VERSION 12 AS A FACT, and the gap between the two is a defect of this
+      file rather than of the dataset. The class entered the data the moment the invoice archetype
+      made a split pair buildable; RP-06 — the authoritative delivered corpus — counts 293 such
+      documents among its 1315, and the status went on reading `forward_contract`, which RC-06's
+      note recorded as a standing contradiction rather than half-fixing. Moved now under the rule
+      `status_vocabulary` states: one document of the class was re-checked FIELD BY FIELD against
+      the reference run (`sources.reference_run`, seed 42) at this version — the printed amount,
+      fee, date caption, payee, hyphen payer, authorization code and document code all matching
+      their label — which is the check the transition demands. No label a consumer received was
+      ever described wrongly; what was wrong was this file's word for their presence.
     archetypes:
-      # ONE ARCHETYPE, AND IT IS IN NO RUN YET. `ua_bank_payment_confirmation` is registered in
-      # `ARCHETYPES` in claim_planner.py, has a template and a stylesheet, and produces every label
-      # field listed below. No dataset contains one, and the reason is structural rather than an
-      # oversight: a claim needs BOTH facts — what was bought and that it was paid for — this class
-      # proves one, and the class that proves the other (an invoice) is not written. So
-      # `documentable_categories` reports no category as documentable through it, and the type's
-      # `status` stays `forward_contract` in the amended sense of that word.
+      # THREE ARCHETYPES, ALL IN THE DATA. `ua_bank_payment_confirmation` is the A4 sheet; the two
+      # phone renderings joined it in version 32. The sentence that stood here — "ONE ARCHETYPE,
+      # AND IT IS IN NO RUN YET … the class that proves the other (an invoice) is not written" —
+      # described versions 10 and 11: the invoice landed in version 12 and made the pair buildable,
+      # and this comment was left behind by every version since. A claim still needs BOTH facts;
+      # what changed is that the other fact has a class to prove it.
       - slug: ua_bank_payment_confirmation
         jurisdiction: UA
         language: uk
@@ -1427,10 +1483,11 @@ document_types:
     # VERDICT, and the disagreement would arrive as a scorecard reporting a date error against
     # a system that read the document correctly.
     payment_date:
-      # `forward_contract` in the amended sense: the mapping is what the archetype PRINTS — every
-      # caption it prints is one of the three accepted, checked by a test — while no run contains
-      # such a document, so a consumer may not look for one in the labels yet.
-      status: forward_contract
+      # `emitted` with the class: the mapping is what the archetype PRINTS — every caption it
+      # prints is one of the three accepted, checked by a test — and runs contain such documents,
+      # so the mapping is exercised on real labels. The document re-checked for version 34 printed
+      # «Дата проведення», the second accepted caption, and the label carried its date.
+      status: emitted
       concept: >
         config/policy.yaml, `period.payment_date`. Not restated here — a second statement of a
         definition becomes a second definition the first time one of them is edited.
@@ -1504,7 +1561,7 @@ document_types:
     prd_required_fields:
       - prd: amount
         generator: [amount]
-        status: forward_contract
+        status: emitted
         note: >
           🔴 `amount` IS THE TRANSFER, AND NOT THE LARGEST NUMBER PRINTED — THE ONE FIELD OF THIS
           CLASS A CORRECT-LOOKING SYSTEM GETS WRONG. 👁 0 of 8 real
@@ -1517,11 +1574,11 @@ document_types:
           prominent figure is wrong by exactly the fee — measurably, which is the point.
       - prd: date
         generator: [date]
-        status: forward_contract
+        status: emitted
         see: document_types.payment_confirmation.payment_date
       - prd: payer / payee
         generator: [payer, counterparty]
-        status: forward_contract
+        status: emitted
         note: >
           THE DIVERGENCE IS RESOLVED, and this entry used to record it: `counterparty` is one
           party and could not carry two. `payer` now carries the other. `counterparty` keeps its
@@ -1534,7 +1591,7 @@ document_types:
           party — never for an unidentified payer, whose label carries the hyphen.
       - prd: payment purpose
         generator: [payment_purpose]
-        status: forward_contract
+        status: emitted
         note: >
           🔴 IT NEVER NAMES WHAT WAS BOUGHT — 👁 0 of 7 documents that carry the field. It names
           another DOCUMENT (an invoice by number, a delivery note), or a generic category, or
@@ -1550,7 +1607,7 @@ document_types:
           consumer must NOT read a subject out of.
       - prd: authorization code
         generator: [auth_code]
-        status: forward_contract
+        status: emitted
         note: >
           👁 4 of 8 — the card operations, six digits in 4 of 4 of them. OPTIONAL BY NATURE: a
           transfer by account details has no card operation to authorize, so its absence is
@@ -1561,7 +1618,7 @@ document_types:
           a key missing from half the cases is not a key. See `document_code`.
       - prd: bank document code
         generator: [document_code]
-        status: forward_contract
+        status: emitted
         note: >
           👁 8 of 8, 📄 mandatory as "the number of the payment instruction", and 📄 the key the
           official check services take. THIS is the deduplication key of the class. Three formats
@@ -1584,11 +1641,18 @@ document_types:
 
   bank_statement:
     classifier_role: target_class
-    status: forward_contract
+    status: emitted
+    emitted_since: >
+      VERSION 34 AS A WORD, VERSION 12 AS A FACT — the same gap `payment_confirmation` carries, on
+      the same history: the invoice made the split pair buildable and this status was left behind.
+      RP-06 counts 294 statements among its 1315 documents. Moved under `status_vocabulary`'s rule:
+      a two-sheet statement of the reference run (seed 42) was re-checked FIELD BY FIELD at this
+      version — the labelled row's amount, operation date, counterparty, purpose and debit column
+      all matching, with the row on the second sheet and `page_count: 2` saying so.
     archetypes:
-      # ONE ARCHETYPE, AND IT IS IN NO RUN YET, for the reason `payment_confirmation` above gives:
-      # a claim needs both facts, this class proves one, and the class that proves the other — an
-      # invoice — is not written. `ua_bank_statement` is registered in `ARCHETYPES` in
+      # ONE ARCHETYPE, IN THE DATA SINCE THE INVOICE MADE PAIRS BUILDABLE. The sentence that stood
+      # here — "IN NO RUN YET … an invoice — is not written" — described version 11 and was stale
+      # from version 12 on. `ua_bank_statement` is registered in `ARCHETYPES` in
       # claim_planner.py, has a template and a stylesheet, and produces every field below.
       - slug: ua_bank_statement
         jurisdiction: UA
@@ -1625,7 +1689,7 @@ document_types:
     # with no claim around it, is not a well-posed extraction task for these fields, and no
     # threshold in `extraction_thresholds` should be read as one.
     the_label_is_one_transaction:
-      status: forward_contract
+      status: emitted
       labelled_from_the_row: [amount, date, counterparty, payment_purpose, direction]
       pointer: relevant_transaction
       bboxes: >
@@ -1659,7 +1723,7 @@ document_types:
     # order was derived from eight payment confirmations; applying it to a statement would be
     # applying a rule outside the evidence it was derived on.
     payment_date:
-      status: forward_contract
+      status: emitted
       concept: >
         config/policy.yaml, `period.payment_date` — the date the funds left the payer's account. Not
         restated here: a second statement of a definition becomes a second definition the first time
@@ -1774,9 +1838,14 @@ document_types:
       would leave the ground truth pointing at either.
 
     narrower_than_observed: >
-      SIX WAYS THIS CLASS IS NARROWER THAN, OR DIFFERENT FROM, WHAT WAS OBSERVED. Recorded here
-      rather than under `known_limitations` because every entry there states a share of a reference
-      run and no run contains this class yet. They move there when one does.
+      SIX WAYS THIS CLASS IS NARROWER THAN, OR DIFFERENT FROM, WHAT WAS OBSERVED.
+
+      ⚠️ WHY THEY SIT HERE RATHER THAN UNDER `known_limitations` IS THE SAME OPEN QUESTION THE
+      OTHER TWO CLASSES CARRY, RECORDED RATHER THAN RESOLVED. The justification that stood here —
+      that entries there state shares of a reference run and no run contains this class — is dead
+      in both halves: entries there quote no run now, and this class reaches every corpus, which
+      RP-06 counts. The dead justification is removed rather than replaced by one reasoned up to
+      fit, exactly as at `payment_confirmation.narrower_than_observed`.
 
       ONE LAYOUT OF AT LEAST THREE. 👁 The corporate current-account statement is modelled: no
       running balance per row, and the turnover block instead. 📄 A personal CARD statement carries a
@@ -1839,12 +1908,12 @@ document_types:
     prd_required_fields:
       - prd: amount
         generator: [amount]
-        status: forward_contract
+        status: emitted
         note: THE LABELLED ROW'S amount, not the document's
         see: document_types.bank_statement.the_label_is_one_transaction
       - prd: date
         generator: [date]
-        status: forward_contract
+        status: emitted
         note: the labelled row's OPERATION date
         see: document_types.bank_statement.payment_date
       - prd: payee
@@ -1865,7 +1934,7 @@ document_types:
           difference between proof of an expense and proof that the money came back.
       - prd: payment purpose
         generator: [payment_purpose]
-        status: forward_contract
+        status: emitted
         note: >
           THE GENERATOR NOW HAS A COUNTERPART — this entry emitted nothing until version 11,
           when the archetype began printing a purpose on every row and labelling the relevant one.
@@ -1881,7 +1950,7 @@ document_types:
           NOT A REQUIRED FIELD, and named because the generator emits it: `direction`, and the
           pointer `relevant_transaction`.
         generator: [direction, relevant_transaction]
-        status: forward_contract
+        status: emitted
         note: >
           Neither is asked for by the requirement. `relevant_transaction` is forced by the shape of
           the label — a field list in the singular over a document with twenty rows has to say WHICH
@@ -1915,7 +1984,14 @@ document_types:
 
   invoice:
     classifier_role: target_class
-    status: forward_contract
+    status: emitted
+    emitted_since: >
+      VERSION 34 AS A WORD, VERSION 12 AS A FACT — the class landed WITH the pair it activates and
+      the status never moved. It is the largest class of the delivered corpus: RP-06 counts 587
+      invoices among its 1315 documents, one on every split claim. Moved under
+      `status_vocabulary`'s rule: an invoice of the reference run (seed 42) was re-checked FIELD BY
+      FIELD at this version — title number and date (in words), specimen payment order, seller and
+      buyer blocks, four line items, the total and the amount in words all matching their label.
     archetypes:
       # 🔴 THE ARCHETYPE THAT ACTIVATES THE DOMINANT PAIR. It states what was bought and proves no
       # payment, which is the exact inverse of the two bank classes — so `claim_planner` can now
@@ -1937,7 +2013,7 @@ document_types:
         exercises_the_pair_in: six categories; `vitamins_nutrition` still gets a fiscal receipt
 
     the_class_is_an_offer_to_pay:
-      status: forward_contract
+      status: emitted
       note: >
         🔴 EVERYTHING BELOW FOLLOWS FROM ONE FACT. 📄 A Ukrainian рахунок на оплату is NOT a primary
         accounting document: the seller PROPOSES that the buyer pay, and the fact of payment is
@@ -1959,7 +2035,7 @@ document_types:
     prd_required_fields:
       - prd: total
         generator: [amount]
-        status: forward_contract
+        status: emitted
         note: >
           👁 ONE TOTAL BLOCK, and the amount is Σ over the line items exactly, as on a receipt. A
           registered payer additionally prints the tax CONTAINED WITHIN it («У т.ч. ПДВ»), which is
@@ -1967,7 +2043,7 @@ document_types:
           whole of what is owed.
       - prd: date
         generator: [date]
-        status: forward_contract
+        status: emitted
         note: >
           ⚠️ TWO SPELLINGS OF ONE DATE ON ONE PAGE. 👁 The title writes it in words — «Рахунок на
           оплату № … від 3 червня 2026 р.» — while the agreement line and any validity line use
@@ -1986,7 +2062,7 @@ document_types:
           reproduced rather than smoothed away because a real invoice does it.
       - prd: subject / line items
         generator: [line_items]
-        status: forward_contract
+        status: emitted
         note: >
           🔴 THIS IS THE CLASS'S REASON FOR EXISTING. An invoice STATES WHAT WAS BOUGHT, which is
           what `proves_subject: true` means for it in policy.yaml and what makes it the subject
@@ -2317,7 +2393,8 @@ normalization:
     status: divergent
     label_side: >
       Always a concrete code. The generator builds the document, so it knows the language
-      and the currency exactly and never needs a fallback. Today: `uk` and `UAH` only. Both
+      and the currency exactly and never needs a fallback. Today: `uk` and `en`, `UAH` and
+      `EUR` — the second pair since version 31, on `platform_receipt` alone. Both
       fields are plain `str` in schemas.py, not enums, so the type already permits any code.
     extraction_side: >
       THE ENUM IS OPEN. It carries an `other` value with a free-text qualifier, and amount
@@ -2410,11 +2487,14 @@ normalization:
         printed on the document:   ТОВ «Вітамін Плюс»
         counterparty in the label: Вітамін Плюс
       `_LEGAL_FORM_PREFIX` in content_builder.py SUPPORTS three Ukrainian forms — ТОВ, ФОП,
-      ПрАТ. TWO OF THE THREE ARE PRODUCED, and ФОП is the majority — most counterparties are sole
+      ПрАТ. ALL THREE ARE PRODUCED, and ФОП is the majority — most counterparties are sole
       traders, whose printed form is `ФОП Прізвище І. Б.`, no guillemets, because the name is a
-      person's. How a particular run divides between the two is a count, not a rule here. ПрАТ
-      is not produced: vendors.json carries ПрАТ entries, but none of them sells the one category
-      the registered archetypes cover.
+      person's. How a particular run divides among them is a count, not a rule here. ПрАТ became
+      producible the day the invoice carried every category (version 12): vendors.json's ПрАТ
+      entries are all insurers, `medical_insurance` had no archetype before that, and the sentence
+      here — "ПрАТ is not produced: none of them sells the one category the registered archetypes
+      cover" — outlived its registry by twenty-two versions. The reference run (seed 42) prints
+      «ПрАТ «ІНГО»» on a confirmation's payee block, read there for version 34.
 
       (This paragraph said "only ТОВ has ever been PRODUCED" through version 7, which was false —
       ФОП receipts were the larger half of every run. It was corrected in version 8 on a measured
@@ -2940,13 +3020,19 @@ document_label:
       type: string
       required: true
       normalize: open_enum
-      observed: ["uk"]
+      observed: ["uk", "en"]
+      observed_note: >
+        `en` since version 31, on `platform_receipt` alone (`eu_platform_receipt`); a run's split
+        between the two archetypes is `archetype_shares` in config/generation.yaml. Verified
+        against `generate-dataset --seed 9105 --personas 12 --claims-per-persona 3 --split 0.5`,
+        which carries one English document. The list read `["uk"]` until version 34, three
+        versions after it stopped being true.
 
     - name: currency
       type: string
       required: true
       normalize: open_enum
-      observed: ["UAH"]
+      observed: ["UAH", "EUR"]
       note: >
         The document's amounts stay in ITS OWN currency — nothing on the record is
         converted, which is why the original amount, currency and date are all kept per
@@ -3127,10 +3213,11 @@ document_label:
         banking service rather than for anything a benefit category covers, so no annual limit
         reaches it and it is not part of a claim's amount.
       cardinality:
-        forward_contract: >
+        emitted: >
           👁 Non-zero on 3 of 8 real confirmations — about 37% — and generated at that rate. A field
           that were always zero would discriminate nothing, which is the state `amount_due` is in
-          and says so; this one is not in that state.
+          and says so; this one is not in that state. (The key read `forward_contract` while the
+          class was in no run; it moved with the class at version 34.)
       null_on: every class but `payment_confirmation`
 
     - name: total_charged
@@ -3488,13 +3575,17 @@ document_label:
       # here, where a reader finds it and a lookup does not.
       element_rules: see the `line_item` field list below; every element field names its own rule
       cardinality:
-        emitted: at least one on every document produced so far
-        forward_contract: >
-          EMPTY for `payment_confirmation` and `bank_statement`: the requirements document
-          gives neither type line items. Settled by the requirement — this is not an open
-          question. Two places in `src/` currently treat an empty array as wrong:
-          `validate_line_item_sum` returns False for it, and
-          `policy_engine` raises on a claim whose total is zero. See RC-09 and RC-10.
+        emitted: >
+          AT LEAST ONE on the classes that state a subject — `fiscal_receipt`,
+          `non_fiscal_receipt`, `invoice`, `platform_receipt` — and EMPTY on
+          `payment_confirmation` and `bank_statement`: the requirements document gives neither of
+          those types line items, and both shapes are ordinary in every run. (The empty case sat
+          under a `forward_contract` key while those classes were in no run; it moved with them at
+          version 34.) One place in `src/` still treats an empty array as wrong on the honest
+          path: `validate_line_item_sum` returns False for it — see RC-09. `policy_engine` no
+          longer raises on a zero-total CLAIM (a payment-only claim evaluates with a `null`
+          fraction since version 25); the helper `covered_fraction` still raises, which is RC-10's
+          remaining half.
         consumer_interaction: >
           The consumer's line-item guard routes a claim to `in_review` with reason
           `line_items_unreliable` when the line-item array is empty while `total > 0`, on
@@ -3509,7 +3600,12 @@ document_label:
     - name: has_qr
       type: boolean
       required: true
-      observed: always true
+      observed: >
+        BOTH VALUES, BY CLASS: `true` on every `fiscal_receipt` (the fiscal QR is a requisite),
+        `true` on the payment confirmations that draw the DECORATIVE verification code
+        (`payment_confirmation.qr_share` in config/generation.yaml — the classification trap this
+        pair of booleans exists to record, since on those documents `qr_is_fiscal` is `false`),
+        and `false` on every other class. "Always true" was the fiscal-receipt-only corpus.
       divergence:
         name: divergence_qr
         status: divergent
@@ -3522,13 +3618,19 @@ document_label:
     - name: qr_is_fiscal
       type: boolean
       required: true
-      observed: always true
+      observed: >
+        `true` exactly where the class is `fiscal_receipt`; `false` everywhere else — INCLUDING
+        the confirmations whose `has_qr` is `true`, which is the pair's whole point: presence
+        without fiscality. "Always true" was the fiscal-receipt-only corpus.
       see: divergence_qr
 
     - name: has_fiscal_number
       type: boolean
       required: true
-      observed: always true
+      observed: >
+        `true` exactly where the class is `fiscal_receipt`; `false` on all five other classes —
+        which is what makes the slip a trap: a page shaped like a receipt carrying `false` here.
+        "Always true" was the fiscal-receipt-only corpus.
       divergence:
         name: divergence_fiscal_scheme
         status: divergent
@@ -4533,11 +4635,16 @@ verdict_notes:
   realizability:
     status: emitted
     note: >
-      Only `covered` and `partially_covered` can be built today
-      (`claim_planner.REALIZABLE_VERDICTS`); the other four are refused rather than
-      approximated. A realized distribution from a current run is therefore CONDITIONAL on
-      that subset, and the assembler's balance report says so. Do not read it as this
-      dataset's balance against `verdict_mix`.
+      ALL SIX VERDICTS ARE BUILDABLE (`claim_planner.REALIZABLE_VERDICTS` holds the whole enum,
+      and each member's entry there records what made it realizable and when). This note read
+      "Only `covered` and `partially_covered` can be built today … the other four are refused" —
+      true through version 12 and left standing while the enum filled: the
+      third arrived at 13, the fourth at 26, the fifth at 27, the sixth at 28, and this file's own
+      history records each. The conditionality it warned about is GONE with the subset: the
+      realizable set is the whole mix, the renormalization denominator is 1.00, and a realized
+      distribution compares against `verdict_mix` directly. What remains true is the other half:
+      the balance report says where the ORACLE overruled a TARGET, and that is still not the
+      dataset's balance against the mix.
 
   distribution:
     status: emitted
@@ -4585,8 +4692,11 @@ claim_evidence:
   shapes_the_generator_can_resolve:
     self_contained: >
       Every payment document proves its own subject and no other document is present. One
-      transaction per document; their amounts add. THE ONLY SHAPE ANY DATASET CONTAINS
-      TODAY, since the single registered archetype is a fiscal receipt.
+      transaction per document; their amounts add. This sentence closed "THE ONLY SHAPE ANY
+      DATASET CONTAINS TODAY, since the single registered archetype is a fiscal receipt" — true
+      when written and stale from version 12 on, when the invoice made the pair buildable. Both
+      shapes are ordinary now, and the PAIR is the majority: RP-06's corpus is 587 two-document
+      claims against 141 receipts.
     one_split_pair: >
       Exactly one document proves the subject, exactly one proves the payment, and they are
       different documents. One transaction described twice, counted once.
@@ -4599,12 +4709,16 @@ claim_evidence:
       described twice or two purchases one of which was never paid; one invoice beside two
       payments leaves open which payment settles it. `document_evidence` answers neither.
     bank_statement: >
-      REFUSED OUTRIGHT, and worth stating separately because it is the one type that
-      genuinely adds money: a statement lists several transactions while its label carries
-      a single `amount` for the whole document, so nothing identifies the row a given claim
-      is about. That is the same question left open under
-      `document_types.bank_statement.undecided` — whether a statement is labelled once or
-      once per transaction — and it has to be settled before a statement archetype lands.
+      NO LONGER REFUSED, AND THE SENTENCE THAT REFUSED IT IS KEPT IN THE PAST TENSE because a
+      consumer diffing an old copy comes looking for it. It read: "REFUSED OUTRIGHT … a statement
+      lists several transactions while its label carries a single `amount` for the whole document,
+      so nothing identifies the row a given claim is about … it has to be settled before a
+      statement archetype lands." It WAS settled before the archetype landed — by
+      `the_label_is_one_transaction` and the `relevant_transaction` pointer, at version 11, which
+      is exactly the resolution the refusal demanded (the open question it cited now lives at
+      `document_types.bank_statement.decided_in_version_11`). A statement resolves as the payment
+      half of a split pair, its labelled row identified by the pointer; what remains refused is a
+      statement whose relevant row NOTHING identifies, which the generator does not produce.
 
   cross_checks:
     status: emitted
@@ -4726,10 +4840,13 @@ claim_label:
         qualifier is here.
       answers: which document labels make up the evidence
       cardinality: >
-        At least one; exactly one in every run so far, and that is a property of the
-        ARCHETYPE REGISTRY rather than of a claim — the one registered template is a fiscal
-        receipt, which proves both facts, so no claim needs a second document yet. Nothing
-        in the pipeline assumes the count is one.
+        ONE OR TWO, and which is a property of the CLAIM'S EVIDENCE rather than a constant: one
+        where a single document proves both facts (a fiscal or platform receipt) or where a gap is
+        the point (a bare payment, a bare subject), two where the evidence is split across the
+        dominant pair. The pair is the majority of the delivered corpus — RP-06 counts 587
+        two-document claims. This key read "exactly one in every run so far … the one registered
+        template is a fiscal receipt", which described version 9 and nothing since. Nothing in the
+        pipeline assumes either count.
       ordering: >
         The order the assembler wrote them in, which for a split claim is subject first and
         payment second. Do NOT read a role off the position: the pairing is derived from
@@ -4761,12 +4878,16 @@ claim_label:
         two facts kept apart rather than a contradiction. The reasoning is in
         docs/architecture.md#ground-truth.
       absence: >
-        `null` means nothing derived a fraction. TWO CAUSES NOW, and they are different
-        states: an undecided claim, which is what the default of the model is for; and a
-        claim with NO LINE ITEMS to compute a fraction from — one evidenced by a payment
-        and nothing saying what it bought. `null` is emphatically not `0`, which says the
-        lines were read and none of them is covered. Present and non-null on every record
-        written so far, because no archetype produces a claim of the second kind.
+        `null` means nothing derived a fraction. TWO CAUSES, and they are different states: an
+        undecided claim, which is what the default of the model is for; and a claim with NO LINE
+        ITEMS to compute a fraction from — one evidenced by a payment and nothing saying what it
+        bought. `null` is emphatically not `0`, which says the lines were read and none of them is
+        covered. THE SECOND KIND IS IN THE DATA since version 25 (`subject_not_evidenced`), so a
+        consumer meets real records carrying `null` here beside `insufficient_evidence` — verified
+        against `generate-dataset --seed 9105 --personas 12 --claims-per-persona 3 --split 0.5`,
+        two of whose claims carry exactly that shape. The sentence "present and non-null on every
+        record written so far, because no archetype produces a claim of the second kind" described
+        the corpus before that version and is withdrawn.
       definition_across_documents: >
         Covered amount over total, over the line items of the claim's SUBJECT documents,
         counted once per transaction — not over every document's lines. An invoice and the
@@ -4792,14 +4913,24 @@ claim_label:
           loses a line, which is the case that subtraction exists for. No generator change
           follows — this is recorded so a consumer does not read the agreement as a licence
           to compute it the generator's way.
-      absence: same as `covered_fraction`. Present on every record written so far.
+      absence: >
+        `null` would mean nothing derived an amount — and unlike `covered_fraction`, WHICH IS NULL
+        ON REAL CLAIMS, this field is a number on every record written so far: a claim that
+        reimburses nothing carries 0.00, including the payment-only claims whose fraction is
+        `null`. The two fields part company on exactly those records — nothing to compute a
+        fraction FROM is not the same statement as nothing being paid OUT — and this key read
+        "same as `covered_fraction`" while the two behaved the same, which stopped at version 25.
 
     - name: linked
       type: boolean
       required: true
       answers: whether the evidence is split across more than one document
       definition: "`len(documents) > 1`, exactly"
-      observed: always false — linked claims need archetypes that do not exist yet
+      observed: >
+        BOTH VALUES, and `true` is the majority: every split-pair claim is linked, and the pair
+        dominates the corpus (RP-06: 587 of 728 claims). This key read "always false — linked
+        claims need archetypes that do not exist yet", which described the registry before
+        version 12.
       note: >
         The consumer models this richly: `DocumentLink` carries the result of named
         cross-checks (amount, date order, counterparty tax number, payment form, contract
@@ -4952,7 +5083,16 @@ claim_label:
       # The other members are lookups, not comparisons: `doc_id` and `currency` match
       # exactly, `on` is an ISO date.
       normalize: money
-      status: forward_contract
+      status: emitted
+      emitted_since: >
+        VERSION 31 AS A FACT — the field landed at 30 and the class that populates it at 31 — and
+        VERSION 34 AS A WORD. A non-empty array is a BUCKET SHAPE (it needs a claim drawing
+        `eu_platform_receipt`, one archetype of one category), so per `sources.reference_run`'s
+        rule the run that contains one is named beside the statement: verified against
+        `generate-dataset --seed 9105 --personas 12 --claims-per-persona 3 --split 0.5`, whose
+        EUR claim carries `{doc_id, currency: EUR, rate: 45.0, on}` and whose
+        `reimbursable_amount` reproduces as Σ(covered lines) × rate, quantized as
+        config/fx-rates.yaml declares — checked by hand for this version.
       answers: WHICH RATE THE ORACLE APPLIED to each document not stated in the reporting currency
       shape: >
         One object per converted document: `doc_id` (which document), `currency` (what the
@@ -5106,9 +5246,9 @@ artifacts:
 #
 # WHICH ENTRY MATTERS TO WHOM IS `hurts:`, AND IT IS A LIST. Every entry carries one, holding one
 # or more words of `hurts_vocabulary` directly below — an entry may be hurtful in more than one
-# way at once, and SEVEN OF THE SIXTEEN are (re-derived at version 29; the sentence read "three of
-# the thirteen", which was the count when the slot became a list at version 23 and was left behind
-# by every entry added since). 🔴 SO A CONSUMER SELECTS BY MEMBERSHIP, `"evaluation"
+# way at once, and SEVEN OF THE SEVENTEEN are (re-derived at version 34; earlier readings — "three
+# of the thirteen" at version 23, "seven of the sixteen" at version 29 — were each left behind by
+# the entries added after them). 🔴 SO A CONSUMER SELECTS BY MEMBERSHIP, `"evaluation"
 # in entry["hurts"]`, AND NEVER BY EQUALITY. Until version 23 the slot was a comma-joined STRING and
 # this comment told a consumer to compare it against one — which was false for exactly the three
 # entries that carry two words, so a consumer following these instructions silently dropped the
@@ -5130,9 +5270,9 @@ artifacts:
 #   then an estimate of behaviour on this dataset's distribution and not on an open world,
 #   and the person adjusting a prompt until the number rises is the channel by which the
 #   bias arrives. Entries whose `hurts:` CONTAINS `evaluation` are the ones that reach this
-#   consumer — NINE OF THE SIXTEEN, SEVEN OF THEM ALSO CONTAINING `training` (re-derived at version
-#   29; it read "three of them", which was the count at version 23 — equality would today miss all
-#   seven).
+#   consumer — TEN OF THE SEVENTEEN, SEVEN OF THEM ALSO CONTAINING `training` (re-derived at
+#   version 34; it read "three of them" at version 23 and "nine of the sixteen" at version 29 —
+#   equality would today miss all seven double-carriers).
 #
 # This is the same obligation policy.yaml states for `verdict_mix`, applied to predictors
 # rather than to class shares: report what was measured, and say on what.
@@ -5192,20 +5332,28 @@ known_limitations:
       document it issues is fully covered by construction and its name alone settles the
       question.
     how_a_consumer_detects_it: >
-      The shortcut is available on a MINORITY OF DOCUMENTS and every one of them is a sole trader's
-      single-document claim; a company's receipt never has this shape. Two different quantities used
-      to be reported here as though they were one — a STRUCTURAL count of vendors whose profile
-      makes the shortcut inevitable, which is zero because `nutrition_practice` sells a medical
-      device and its sole traders issue mixed receipts like any pharmacy, and an EMPIRICAL count of
-      documents on which it happened to hold. The first is a property of config/vendors.json and is
-      stated here; the second is a measurement of one run, and section 9b is where it would live —
-      NOT MEASURED YET, so no profile there carries it.
+      Two different quantities used to be reported here as though they were one — a STRUCTURAL
+      count of vendor profiles whose shape makes the shortcut inevitable, and an EMPIRICAL count
+      of documents on which it happened to hold. The first is a property of config/vendors.json
+      and is stated here: TWO PROFILES ARE COVERED-ONLY AND BOTH REACH DATASETS — see
+      `the_leak_is_live` below, which withdrew the "zero" this key used to report. The second is a
+      measurement of one run, and section 9b is where it would live — NOT MEASURED YET, so no
+      profile there carries it.
     see_profile: run_profiles
-    still_open_where: >
-      `private_tutor` under language_courses and `online_learning_platform` under
-      professional_development are covered-only today. Neither category has an archetype, so
-      neither reaches a dataset yet; both must gain a vendor that can carry a mixed basket
-      before their first template lands, or this entry stops being empty.
+    the_leak_is_live: >
+      🔴 THIS ENTRY'S CONDITION FIRED AND WENT UNRECORDED UNTIL VERSION 34. The key that stood
+      here, `still_open_where`, said `private_tutor` (language_courses) and
+      `online_learning_platform` (professional_development) are covered-only AND that "neither
+      category has an archetype, so neither reaches a dataset yet … both must gain a vendor that
+      can carry a mixed basket before their first template lands, or this entry stops being
+      empty". Both categories reach every dataset — the invoice carries them since version 12 and
+      `platform_receipt` carries professional_development since version 31 — and neither profile
+      gained a mixed-capable shape: config/vendors.json's own reachability note names the same two
+      as "a residual leak on the counterparty, recorded under known_limitations". So the
+      structural count is TWO, not zero: a document whose seller is one of those profiles is fully
+      covered by construction, and the profile settles the coverage question without the lines
+      being read (`how_to_stratify` says why the profile and not the printed string is the key to
+      group on).
     how_to_stratify: >
       Do NOT group by the counterparty string. Most counterparties are sole traders whose
       names are drawn per claim, so grouping by the string produces buckets of one and a
@@ -5269,11 +5417,14 @@ known_limitations:
       400. A consumer stratifying by head noun gains a family, and one measuring string diversity
       gains almost nothing.
 
-      `electronics` HAS THE SAME DEFECT AND KEEPS IT. It is an excluded kind of `hobby`, which has
-      no archetype, so it reaches no dataset either way; the brandless form is not applied to it
-      because the form is evidenced for hygiene articles and not for consumer electronics, where a
-      real receipt line names a brand and a model. It remains declared in
-      `unprintable_item_kinds`, and it is not a cause of any narrowing here.
+      `electronics` HAS THE SAME DEFECT AND KEEPS IT. It is an excluded kind of `hobby` and it
+      reaches no dataset — no longer because the category lacks an archetype (the invoice has
+      carried `hobby` since version 12; that reasoning went stale and is corrected at version 34)
+      but because the kind is declared in `unprintable_item_kinds` in config/generation.yaml,
+      which is the half of the old sentence that still holds. The brandless form is not applied to
+      it because the form is evidenced for hygiene articles and not for consumer electronics,
+      where a real receipt line names a brand and a model. It is not a cause of any narrowing
+      here.
     a_second_leak_inside_one_kind: >
       🔴 WITHIN `hygiene`, THE STRING IS THE LABEL — and this is a DIFFERENT leak from the one this
       entry is named for, not the same one measured another way. It has its own predictor and its
@@ -5423,11 +5574,13 @@ known_limitations:
     predictor: none — a distribution gap rather than a label leak
     hurts: [training, evaluation]
     subset: >
-      EVERY document. All of them print the «ІД» identification code (bbox key
-      `seller_tax_code`), while of the real ПРРО receipts examined only 1 of 3 carries one: two
-      of three print no such line at all.
+      EVERY RECEIPT-SHAPED DOCUMENT — the three fiscal archetypes and the товарний чек all print
+      the «ІД» identification code (bbox key `seller_tax_code`), while of the real ПРРО receipts
+      examined only 1 of 3 carries one: two of three print no such line at all. ("EVERY document"
+      stood here from the fiscal-receipt-only corpus; the other classes carry their own code
+      requisites under their own captions and do not bear on this gap.)
     how_a_consumer_detects_it: >
-      EVERY document this generator produces prints the identification code, while 👁 only 1 of 3
+      EVERY receipt this generator produces prints the identification code, while 👁 only 1 of 3
       real ПРРО receipts examined carries one — two of three print no such line at all. Both figures
       survive the move because NEITHER IS A RUN MEASUREMENT: "every" is true by construction, and
       the 1-of-3 is an observation about real documents, which is evidence rather than a count of
@@ -6081,9 +6234,12 @@ known_limitations:
 # command, the seed and the sizes. A figure that cannot say which corpus it measured is a figure
 # that will one day be read as describing a different one.
 #
-# `authoritative: false` on every profile here is a statement about THIS repository rather than
-# modesty: the generator ships configuration and a seed, not a corpus, so no run recorded here is
-# the run a consumer holds. Whoever generates the delivered corpus adds its profile and marks it.
+# `authoritative: false` on a profile is a statement about THIS repository rather than modesty:
+# the generator ships configuration and a seed, not a corpus, so an example run recorded here is
+# not the run a consumer holds. This paragraph read "on every profile here" until version 34 —
+# stale from the moment RP-06 landed marked `authoritative: true`, which is exactly the "whoever
+# generates the delivered corpus adds its profile and marks it" this paragraph used to promise.
+# `authoritative_profile` below is the key that says which one it is.
 
 run_profiles:
   status: emitted
@@ -6157,10 +6313,13 @@ run_profiles:
     current, and the way to reproduce them WITH a partition is RP-04's command.
 
     ⚠️ AND WHERE THE NUMBERS DO NOT DIFFER, THE PROFILES STILL DO. RP-03, RP-04 and RP-05 describe
-    ONE corpus — the draw has not moved since version 17 — so they agree count for count. What
-    separates them is what each is FOR: RP-03 and RP-04 are examples, RP-05 is the delivered corpus
-    and is the authoritative one. Agreement between profiles is not redundancy to be tidied away;
-    deleting the older ones would destroy the record that the run happened.
+    ONE corpus — the draw had not moved between their versions — so they agree count for count.
+    What separates them is what each is FOR: RP-03 and RP-04 are examples, RP-05 is the FIRST
+    production corpus. (This sentence called RP-05 "the authoritative one" until version 34, which
+    had been false since RP-06 superseded it — `authoritative_profile` above and RP-05's own
+    `superseded_by` already said so, and this paragraph was the one place left saying otherwise.)
+    Agreement between profiles is not redundancy to be tidied away; deleting the older ones would
+    destroy the record that the run happened.
 
     Earlier profiles are kept rather than refreshed. A profile is a record of a run that happened,
     and a run that happened does not go stale; rewriting one to match a newer version would destroy
@@ -6904,7 +7063,7 @@ run_profiles:
 
 
 # =============================================================================
-# 10. Required changes to src/ — NONE OF THEM MADE
+# 10. Required changes to src/ — `blocked_on:` SAYS WHICH ARE MADE
 # =============================================================================
 #
 # Every divergence above that can only be closed by editing this repository, collected in one
@@ -6915,9 +7074,12 @@ run_profiles:
 # ⚠️ THE SENTENCE "NOTHING IN THIS LIST HAS BEEN IMPLEMENTED" STOOD HERE UNTIL VERSION 29 AND IS
 # WITHDRAWN. It was already false at version 22, which added the word `done` for RC-06 — so this
 # comment and the vocabulary directly below contradicted each other for seven versions, and a
-# consumer that trusted the comment would not have read the slot. TWO of the sixteen entries are
-# `done` (RC-06, RC-12), one is withdrawn, and thirteen are open. `blocked_on:` is the answer;
-# this comment no longer offers a second one.
+# consumer that trusted the comment would not have read the slot. AND THE SECTION TITLE ABOVE
+# CARRIED THE SAME CLAIM — "NONE OF THEM MADE" — for five versions longer still, until version 34:
+# the sentence was withdrawn here while its shorter twin went on standing in the largest type on
+# the section. TWO of the sixteen entries are `done` (RC-06, RC-12), one is withdrawn, and
+# thirteen are open. `blocked_on:` is the answer; neither the comment nor the title offers a
+# second one now.
 #
 # The four words `blocked_on:` may take are declared as DATA, in `blocked_on_vocabulary` directly
 # below, for the reason the rest of this version is about: they were declared in this comment
@@ -7043,22 +7205,25 @@ required_changes:
       — counts 293 payment confirmations among its 1315 documents. The condition this entry named
       as outstanding has been met.
 
-      🔴 THE SAME STALENESS REACHES `document_types.payment_confirmation.status`, WHICH STILL READS
-      `forward_contract`, AND IS NOT TOUCHED HERE. That word means NOT PRESENT IN THE DATASET, and
-      RP-06 refutes it for this class and for two others. Moving a type to `emitted` requires the
-      field-by-field check against a real run that `status_vocabulary` demands, which is a
-      measurement and the author's call — not something to infer from a count while repairing a
-      neighbouring key. Recorded here so the contradiction is visible rather than silently
-      half-fixed.
+      🔴 THE CONTRADICTION THIS NOTE USED TO RECORD IS RESOLVED AT VERSION 34.
+      `document_types.payment_confirmation.status` read `forward_contract` — NOT PRESENT IN THE
+      DATASET — while RP-06 counted the class by the hundred, and this note refused to move the
+      word on a count alone, the transition demanding the field-by-field check against a real run
+      that `status_vocabulary` states. That check was then performed: one document of each of the
+      three affected classes was read field by field against its rendered image on the reference
+      run (seed 42), and all three statuses moved to `emitted` — each class's `emitted_since`
+      names what was checked. This paragraph stays as the record that the contradiction was
+      visible for two versions rather than silently half-fixed.
 
   - id: RC-07
     file: src/receipt_synth/schemas.py
     change: >
       Add INVOICE payment status. The `amount_due` half of this entry is no longer "no
       counterpart of any kind exists": the field is on `DocGroundTruth` and is populated on
-      fiscal receipts, where the published form actually defines the line. Nothing about the
-      invoice changed — no invoice archetype exists, and whether a Ukrainian invoice prints a
-      payment status at all is itself disputed.
+      fiscal receipts, where the published form actually defines the line. (This sentence closed
+      "no invoice archetype exists" until version 34 — the archetype has existed since version 12;
+      what has NOT changed is that no Ukrainian invoice prints a payment status, which
+      `document_types.invoice` establishes structurally rather than leaves disputed.)
     progress: >
       VERSION 28 SETTLED THE NEIGHBOURING QUESTION AND NOT THIS ONE, which is worth stating because
       the two look alike from the field list. The invoice now prints a PAYMENT TERM and carries
@@ -7111,10 +7276,18 @@ required_changes:
 
   - id: RC-10
     file: src/receipt_synth/policy_engine.py
+    progress: >
+      HALF DONE SINCE VERSION 25, RECORDED AT 34. `evaluate_claim` no longer raises on a
+      payment-only claim: it evaluates one to `insufficient_evidence` / `subject_not_evidenced`
+      with a `null` fraction — which is the evaluability this entry asked for, and such claims
+      are in the data. The helper `covered_fraction` still raises on a zero total, deliberately:
+      0/0 is not 0, and a caller that reaches it with no lines has asked an ill-posed question.
     change: >
-      `covered_fraction` and `evaluate_claim` raise when the line-item total is zero. A claim
-      evidenced only by a payment confirmation has no lines and must still be evaluable.
-      Related to RC-09 but not the same: this one changes what a verdict can be derived from.
+      `covered_fraction` raises when the line-item total is zero. A claim
+      evidenced only by a payment confirmation has no lines and must still be evaluable — and now
+      is; what remains open is whether the raising helper is the right shape for a consumer
+      re-deriving fractions. Related to RC-09 but not the same: this one changes what a verdict
+      can be derived from.
     blocked_on: decision
 
   - id: RC-11
