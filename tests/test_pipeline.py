@@ -3004,22 +3004,25 @@ def a_document_on(capture, *, doc_id, lost=()):
 
 
 def test_the_draw_can_reach_every_capture_channel():
-    """`CAPTURE_CHANNELS` is what the assembler draws from, and `Capture` is what the label may
-    carry. A channel present in the enum and missing from the tuple would be a value the contract
-    declares and no corpus can contain — unreachable rather than merely rare, and nothing about a
-    run would say so."""
-    from receipt_synth.assembler import CAPTURE_CHANNELS
+    """`CAPTURE_DRAW_ORDER` is what the assembler walks when it draws, and `Capture` is what the
+    label may carry. A channel present in the enum and missing from the tuple would be a value the
+    contract declares and no draw can ever return — unreachable rather than merely rare, and
+    nothing about a run would say so."""
+    from receipt_synth.assembler import CAPTURE_DRAW_ORDER
 
-    assert set(CAPTURE_CHANNELS) == set(Capture)
-    assert len(CAPTURE_CHANNELS) == len(Capture), "a channel is listed twice, which weights it"
+    assert set(CAPTURE_DRAW_ORDER) == set(Capture)
+    assert len(CAPTURE_DRAW_ORDER) == len(Capture), "a channel is listed twice, which weights it"
 
 
 def test_a_run_of_any_size_contains_more_than_one_capture_channel(multi_claim_dataset):
     """🔴 THE CHANNEL IS DRAWN, NOT FIXED. Every earlier version of this generator produced a
     corpus of screenshots only, and nothing in the labels distinguished "this channel was chosen"
-    from "this channel is the only one there is". With sixty-odd documents and an equal three-way
-    draw, all three appear with a probability that rounds to one — so anything less is the draw
-    being gone rather than the run being unlucky.
+    from "this channel is the only one there is". The draw is per class now (`capture_mix` in
+    policy.yaml), and the run's majority classes each give their thinnest declared channel at
+    least a fifth of the weight — so over fifty-odd documents every channel appears with a
+    probability that rounds to one, and anything less is the draw being gone rather than the run
+    being unlucky. (The per-class shape itself — a zero-weight channel never drawn, a screen-born
+    archetype always a screenshot — is tests/test_capture_mix.py's job.)
 
     It matters beyond variety: the two paper channels are the ONLY route by which the electronic
     side of the VAT-row rule stops being the whole corpus. See `test_vat_row_form.py`.

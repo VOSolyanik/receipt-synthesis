@@ -27,15 +27,23 @@ wrong answers, so telling "the transform is wrong" from "this channel is wrong" 
 cheap. Hence: one channel, one transform, one hand-computed answer, before anything fanned
 out.
 
-THREE CHANNELS, FOUR MEDIA. `Capture` has three members and every one of them is a way a
-document was DAMAGED on its way to the verifier. A natively generated PDF is the fourth
-medium a consumer's file may be in and is NOT a fourth channel — it is the undamaged
-original, the absence of degradation rather than a kind of it. See RC-11 in
-config/labelling-schema.yaml, and `capture.divergence` beside it.
+FOUR CHANNELS, AND ONE OF THEM APPLIES NOTHING. `Capture` is read as what its docstring says —
+ways a document REACHED the verifier — and `digital_pdf` is the way that damages nothing: the
+original file, submitted as generated. This module's contract for it is the IDENTITY, asserted
+by test rather than implied: same pixels, same boxes. (An earlier version of this header argued
+the opposite — that the enum holds only kinds of damage and the undamaged case is the absence of
+a channel. That reading kept the consumer's fourth `medium` value unrepresentable and was
+reversed at contract version 35; RC-11's naming-and-home question is what remains open.)
+
+WHICH DOCUMENTS TAKE WHICH CHANNEL is not this module's question: the mix per document class is
+`capture_mix` in config/policy.yaml — a label-sizing decision — and the heavy artefacts' per-
+document probabilities are `degradation` in config/generation.yaml, a pixels-only one. This
+module owns the recipes; both dials live beside their own kind.
 """
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 
 import albumentations as A
@@ -51,6 +59,7 @@ from augraphy import (
     SubtleNoise,
 )
 
+from receipt_synth.config import degradation_p
 from receipt_synth.schemas import BBox, Capture
 
 # Augraphy seeds OpenCV through `cv2.setRNGSeed`, which takes a signed C int. Callers
@@ -71,24 +80,39 @@ class DegradedDocument:
     field_bboxes: dict[str, BBox]
 
 
-def _paper_pipeline(capture: Capture, seed: int) -> AugraphyPipeline:
-    """Paper, ink and sensor character for one channel. Procedural, and free of geometry.
+def _paper_pipeline(capture: Capture, seed: int) -> AugraphyPipeline | None:
+    """Paper, ink and sensor character for one channel — `None` where a channel has none.
 
     Each channel gets the artefacts of the device that produced it, and only those:
 
-    * `screenshot` — a screen capture of an electronic document. Almost clean: the pixels
-      were never light on paper, so the only real losses are the compression of whatever
-      viewer produced it and a little sensor-free noise.
-    * `photo` — a hand-held camera over paper on a desk. Uneven illumination and a cast
-      shadow are the characteristic losses, and they are the ones that actually cost an OCR
-      system accuracy.
-    * `scan` — a flatbed. Evenly lit by construction, so no lighting gradient; what it adds
-      instead is the faint streaking of the transport, along the direction of travel.
+    * `digital_pdf` — the original file. NOTHING: no device produced it, so there is no
+      device character to apply, and `None` is that stated rather than an empty pipeline
+      run for show.
+    * `screenshot` — a screen capture of an electronic document. `None` TOO, and that is a
+      correction rather than a variant: the pixels were never light on paper and never
+      crossed a sensor, so the paper grain and the sensor noise this channel used to carry
+      were physically impossible artefacts — a screenshot showing paper texture is a
+      composite no capture produces. What a screenshot does lose is compression, which is
+      geometry-phase (`_geometry`) and stays.
+    * `photo` — a hand-held camera over paper on a desk. Paper texture and sensor noise
+      always (they are the physics of a camera over paper); uneven illumination and a cast
+      shadow at the rates config/generation.yaml declares (`degradation.photo`) — common,
+      and no longer certain, because a defect carried by 100% of a channel is a property of
+      the channel constant rather than evidence about documents.
+    * `scan` — a flatbed. Evenly lit by construction, so no lighting gradient; the faint
+      transport streaking fires at `degradation.scan.streak_p` — a clean flatbed produces
+      none — over the paper texture and mild noise that always ride a scan.
 
-    ⚠️ THE SETTINGS ARE PLAUSIBLE RATHER THAN MEASURED. No corpus of real captures was
-    available to fit them against, so they are a designer's choice of what each device does,
-    not a calibration. A consumer must not read the difficulty of a channel here as an
-    estimate of the difficulty of that channel in the field.
+    WHICH HEAVY EFFECTS FIRE IS DRAWN FROM `seed` in a fixed order, through this function's
+    own `random.Random` — one decision stream per document, separate from the pixel noise
+    Augraphy derives from the same integer — so a run stays byte-reproducible under
+    `--seed` and a test can pin the inclusion rate against the config value.
+
+    ⚠️ THE INTENSITY SETTINGS ARE PLAUSIBLE RATHER THAN MEASURED. No corpus of real captures
+    was available to fit them against, so they are a designer's choice of what each device
+    does; what the config calibrates is how OFTEN each heavy artefact occurs, not how hard
+    it hits. A consumer must not read the difficulty of a channel here as an estimate of the
+    difficulty of that channel in the field.
 
     🔴 `DirtyRollers` IS DELIBERATELY ABSENT FROM THE SCAN RECIPE, and it is the effect that
     names what a scanner does. It IGNORES `random_seed`: two pipelines built with the same
@@ -97,46 +121,53 @@ def _paper_pipeline(capture: Capture, seed: int) -> AugraphyPipeline:
     fits, and `NoisyLines` carries the streaking instead. Every other effect named in this
     function was checked the same way and is reproducible.
     """
-    if capture is Capture.SCREENSHOT:
-        paper = [
-            NoiseTexturize(sigma_range=(2, 5), turbulence_range=(3, 7), p=1.0),
-            BrightnessTexturize(texturize_range=(0.9, 0.99), deviation=0.03, p=1.0),
-        ]
-        post = [SubtleNoise(subtle_range=8, p=1.0)]
-    elif capture is Capture.PHOTO:
+    if capture in (Capture.SCREENSHOT, Capture.DIGITAL_PDF):
+        return None
+    include = random.Random(seed)
+    if capture is Capture.PHOTO:
         paper = [
             NoiseTexturize(sigma_range=(3, 8), turbulence_range=(3, 9), p=1.0),
             BrightnessTexturize(texturize_range=(0.85, 0.98), deviation=0.06, p=1.0),
         ]
-        post = [
-            LightingGradient(
-                light_position=None, direction=90, max_brightness=250, min_brightness=0,
-                mode="gaussian", transparency=0.5, p=1.0,
-            ),
-            ShadowCast(
-                shadow_side="random", shadow_vertices_range=(2, 3),
-                shadow_width_range=(0.5, 0.8), shadow_height_range=(0.5, 0.8),
-                shadow_color=(0, 0, 0), shadow_opacity_range=(0.3, 0.4),
-                shadow_iterations_range=(1, 2), shadow_blur_kernel_range=(101, 301), p=1.0,
-            ),
-            SubtleNoise(subtle_range=14, p=1.0),
-        ]
+        post: list[object] = []
+        # Fixed order — lighting, then shadow — so the seed means the same thing on every
+        # build of the same document.
+        if include.random() < degradation_p("photo", "lighting"):
+            post.append(
+                LightingGradient(
+                    light_position=None, direction=90, max_brightness=250, min_brightness=0,
+                    mode="gaussian", transparency=0.5, p=1.0,
+                )
+            )
+        if include.random() < degradation_p("photo", "shadow"):
+            post.append(
+                ShadowCast(
+                    shadow_side="random", shadow_vertices_range=(2, 3),
+                    shadow_width_range=(0.5, 0.8), shadow_height_range=(0.5, 0.8),
+                    shadow_color=(0, 0, 0), shadow_opacity_range=(0.3, 0.4),
+                    shadow_iterations_range=(1, 2), shadow_blur_kernel_range=(101, 301),
+                    p=1.0,
+                )
+            )
+        post.append(SubtleNoise(subtle_range=14, p=1.0))
     elif capture is Capture.SCAN:
         paper = [
             NoiseTexturize(sigma_range=(2, 6), turbulence_range=(3, 7), p=1.0),
             BrightnessTexturize(texturize_range=(0.92, 1.0), deviation=0.04, p=1.0),
         ]
-        post = [
-            NoisyLines(
-                noisy_lines_direction=0,  # horizontal: the direction a sheet travels
-                noisy_lines_location="random",
-                noisy_lines_number_range=(2, 5),
-                noisy_lines_thickness_range=(1, 1),
-                noisy_lines_random_noise_intensity_range=(0.01, 0.04),
-                p=1.0,
-            ),
-            SubtleNoise(subtle_range=6, p=1.0),
-        ]
+        post = []
+        if include.random() < degradation_p("scan", "streak"):
+            post.append(
+                NoisyLines(
+                    noisy_lines_direction=0,  # horizontal: the direction a sheet travels
+                    noisy_lines_location="random",
+                    noisy_lines_number_range=(2, 5),
+                    noisy_lines_thickness_range=(1, 1),
+                    noisy_lines_random_noise_intensity_range=(0.01, 0.04),
+                    p=1.0,
+                )
+            )
+        post.append(SubtleNoise(subtle_range=6, p=1.0))
     else:
         raise NotImplementedError(_unknown(capture))
 
@@ -148,13 +179,19 @@ def _paper_pipeline(capture: Capture, seed: int) -> AugraphyPipeline:
 def _geometry(capture: Capture) -> list[A.BasicTransform]:
     """The geometry of one channel — and the reason the three differ is the device, not taste.
 
-    * `screenshot` — NONE. A screen capture is axis-aligned by construction; there is no hand
-      holding it and no sheet to lie crooked. Its boxes still go through this pipeline, so the
-      channel that moves nothing takes the same route as the two that do.
+    * `digital_pdf` — NONE AT ALL, not even compression: the original file, as generated. Its
+      boxes still take this route, so the channel that changes nothing is measured by the same
+      gate as the three that do.
+    * `screenshot` — no geometry. A screen capture is axis-aligned by construction; there is no
+      hand holding it and no sheet to lie crooked. What it does carry is the compression of
+      whatever produced and re-sent it, which is the one loss this channel has.
     * `photo` — the paper is first padded onto a surface, because a photograph frames a
       document with the desk around it and a full-bleed render has no room to rotate into.
       Then a small perspective (the camera is not parallel to the page), a small rotation
-      (nobody holds it square), and the blur and compression of a phone.
+      (nobody holds it square), the compression of a phone — always, being the physics of the
+      device — and motion blur at `degradation.photo.motion_blur_p`: most phone shots of a
+      still page are sharp, so blur is the minority case rather than the rule. Its inclusion is
+      drawn by `A.Compose`'s own seeded stream, which the same `seed` drives.
     * `scan` — a rotation of a degree or so onto a narrow white margin, and nothing else. A
       flatbed is parallel to the page by construction; what it gets wrong is only how straight
       the sheet was laid.
@@ -183,6 +220,13 @@ def _geometry(capture: Capture) -> list[A.BasicTransform]:
     `scan` is padded too, but only slightly and to white: a flatbed lays the whole sheet on the
     platen, so it is not expected to crop at all, and it does not.
     """
+    if capture is Capture.DIGITAL_PDF:
+        return [
+            # THE IDENTITY, WRITTEN DOWN — see the screenshot branch for why `A.NoOp` rather
+            # than an empty list. No compression either: the consumer receives the file the
+            # generator wrote.
+            A.NoOp(p=1.0),
+        ]
     if capture is Capture.SCREENSHOT:
         return [
             # THE IDENTITY, WRITTEN DOWN. "No geometry" is a decision about this channel, and
@@ -210,7 +254,7 @@ def _geometry(capture: Capture) -> list[A.BasicTransform]:
             A.Affine(
                 rotate=(-3.0, 3.0), border_mode=cv2.BORDER_CONSTANT, fill=_SURFACE, p=1.0
             ),
-            A.MotionBlur(blur_limit=(3, 5), p=1.0),
+            A.MotionBlur(blur_limit=(3, 5), p=degradation_p("photo", "motion_blur")),
             A.ImageCompression(compression_type="jpeg", quality_range=(45, 75), p=1.0),
         ]
     if capture is Capture.SCAN:
@@ -354,7 +398,8 @@ def degrade(
 ) -> DegradedDocument:
     """Apply one capture channel to a rendered document and its bounding boxes."""
     seed %= _C_INT_MAX
-    degraded = _paper_pipeline(capture, seed)(image)
+    paper = _paper_pipeline(capture, seed)
+    degraded = paper(image) if paper is not None else image
     moved_image, moved_boxes = carry_boxes(
         _geometry(capture), degraded, field_bboxes, seed=seed
     )

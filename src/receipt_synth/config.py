@@ -649,3 +649,73 @@ def file_composition_share(name: str) -> float:
             f"{sorted(k for k in block if k.endswith('_share'))}"
         )
     return float(block[key])
+
+
+# --- policy.yaml: how a document of each class reaches the verifier -----------
+
+
+@cache
+def capture_mix(doc_type: str) -> MappingProxyType[str, float]:
+    """The capture-channel weights for one document class, from policy.yaml's `capture_mix`.
+
+    🔴 IN POLICY AND NOT IN GENERATION because `capture` is a label: these shares size labelled
+    buckets, which is policy.yaml's business by generation.yaml's own rule. The keys are members
+    of `schemas.Capture` and the weights of one class sum to 1 — both checked here, so a typo'd
+    channel or a mix that quietly re-weights the others fails at load time naming the class,
+    instead of drawing some distribution nobody declared.
+
+    ⛔ SCREEN-NATIVE ARCHETYPES NEVER CONSULT THIS TABLE (`claim_planner.Archetype.screen_native`):
+    a transaction screen exists only as a screenshot, and that is a fact of the archetype rather
+    than a weight of its class.
+    """
+    from receipt_synth.schemas import Capture
+
+    table = load_policy().get("capture_mix", {})
+    if doc_type not in table:
+        raise KeyError(
+            f"config/policy.yaml declares no `capture_mix.{doc_type}`; it has {sorted(table)}"
+        )
+    mix = {str(channel): float(weight) for channel, weight in table[doc_type].items()}
+    valid = {member.value for member in Capture}
+    unknown = sorted(set(mix) - valid)
+    if unknown:
+        raise ValueError(
+            f"`capture_mix.{doc_type}` names {unknown}, which are not capture channels; "
+            f"`schemas.Capture` has {sorted(valid)}"
+        )
+    total = sum(mix.values())
+    if abs(total - 1.0) > 1e-9:
+        raise ValueError(
+            f"`capture_mix.{doc_type}` weights sum to {total}, not 1 — a mix that does not sum "
+            "to one silently re-weights every channel"
+        )
+    return MappingProxyType(mix)
+
+
+# --- generation.yaml: how hard each capture channel damages a document --------
+
+
+@cache
+def degradation_p(channel: str, effect: str) -> float:
+    """The probability that one document of `channel` carries the named heavy artefact.
+
+    Read by `degrader` when it assembles a recipe. The arithmetic behind each value is at the
+    `degradation` block of config/generation.yaml; a channel or effect not declared there fails
+    here naming what exists, instead of defaulting to a rate nobody chose.
+    """
+    table = load_generation().get("degradation", {})
+    if channel not in table:
+        raise KeyError(
+            f"config/generation.yaml declares no `degradation.{channel}`; it has {sorted(table)}"
+        )
+    key = f"{effect}_p"
+    block = table[channel]
+    if key not in block:
+        raise KeyError(
+            f"config/generation.yaml declares no `degradation.{channel}.{key}`; it has "
+            f"{sorted(block)}"
+        )
+    value = float(block[key])
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"`degradation.{channel}.{key}` is {value}, not a probability")
+    return value

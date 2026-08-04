@@ -101,6 +101,12 @@ class Archetype:
     # the config/vendors.json block that seller draws from where the two differ; `None`
     # means the claimant's own, which is every domestic archetype.
     vendor_pool: str | None = None
+    # 🔴 THE PAGE EXISTS ONLY ON A SCREEN — a banking-app rendering, not a sheet anything could
+    # print — so its capture channel is `screenshot` BY CONSTRUCTION and the class's
+    # `capture_mix` in policy.yaml is never consulted for it. A physical fact of the archetype,
+    # declared where the archetype is, exactly as its paper size is; the tunable shares stay in
+    # policy.yaml, where a label-sizing weight belongs.
+    screen_native: bool = False
 
 
 def evidence_of(archetype: Archetype) -> Evidence:
@@ -354,6 +360,7 @@ ARCHETYPES: dict[str, Archetype] = {
         doc_type=DocType.PAYMENT_CONFIRMATION,
         country=Country.UA,
         language="uk",
+        screen_native=True,
         categories=(
             "medical_insurance",
             "language_courses",
@@ -369,6 +376,7 @@ ARCHETYPES: dict[str, Archetype] = {
         doc_type=DocType.PAYMENT_CONFIRMATION,
         country=Country.UA,
         language="uk",
+        screen_native=True,
         categories=(
             "medical_insurance",
             "language_courses",

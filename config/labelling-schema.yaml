@@ -1093,7 +1093,49 @@
 #   version-26 precedent states for `insufficient_evidence`; one that scored them anyway was
 #   right to. Diffing 33 against 34 is where such a consumer learns which of its guards were
 #   built against words this file had outgrown.
-version: 34
+#
+# Version 35 is THE CAPTURE LAYER CALIBRATED, in four moves that share one purpose: a defect
+# carried by 100% of a channel is a property of the corpus's construction, not evidence about
+# documents, and every number measured on such a channel is a lower bound wearing a
+# measurement's clothes.
+#
+#   🔴 `capture` HAS A FOURTH VALUE, `digital_pdf` — THE UNDAMAGED ORIGINAL, applied-nothing by
+#   construction and by test. A consumer whose `capture` vocabulary was pinned to three members
+#   meets a fourth on the first corpus of this version. The reversal of version 29's "not a
+#   fourth channel" argument is recorded at RC-11 and at the field's divergence, which narrows
+#   to the NAME and the HOME — the value vocabularies now agree.
+#
+#   🔴 THE CHANNEL FOLLOWS THE CLASS: `capture_mix` in config/policy.yaml, one row per document
+#   class, weights beside their arithmetic — and the uniform in-code draw is gone, taking its
+#   impossible combinations with it: no more flatbed scans of a banking-app screen (the two
+#   in-app renderings are `screenshot` by construction — `Archetype.screen_native`), no more
+#   "screenshots" of a paper till roll bearing paper grain, no undamaged electronic original of
+#   a товарний чек that has no electronic form. 🔴 THIS IS AN I-2 EVENT: config/policy.yaml is
+#   vendored downstream under a sha256 lock, so a consumer holding an earlier copy is holding a
+#   different file. Its `version` stays at 1 under the standing rule — the sha IS its identity.
+#
+#   🔴 A SCREENSHOT STOPPED CARRYING PAPER GRAIN AND SENSOR NOISE — pixels that never were light
+#   on paper and never crossed a camera cannot carry either; compression is the channel's one
+#   loss. And the HEAVY artefacts of `photo` and `scan` fire per document at declared rates
+#   (`degradation` in config/generation.yaml, arithmetic at the block) instead of always: a cast
+#   shadow, uneven light, motion blur and transport streaks are now evidence about documents at
+#   p < 1, not channel constants at p = 1. Intensities are untouched — what moved is the
+#   certainty of the worst case, not the worst case.
+#
+#   ⚠️ EVERY FIGURE MEASURED ON AN EARLIER CORPUS IS A FIGURE ABOUT A DIFFERENT ONE — the channel
+#   marginals, the difficulty of every channel, and the draw itself all moved, so nothing
+#   measured before this version compares with anything measured after it without both mixes
+#   stated. The delivered production corpus predates this version; its profile (RP-06) stands as
+#   the record of its own run. ⚠️ AND THE CORPUS GETS EASIER ON AVERAGE, BY CONSTRUCTION — an
+#   undamaged share exists where none did — WHICH IS THE REMOVAL OF A SYSTEMATIC ERROR, NOT A
+#   CLAIM ABOUT SYSTEMS: whoever quotes a before/after gain must attribute it to the corpus, and
+#   the measured before/after legibility of the invoice's amount-in-words line under this
+#   calibration is in the session record beside the change, not here — it is a run measurement,
+#   and this file quotes no run it does not profile.
+#
+#   KL-11 is rewritten around the declared mix — its `fixed_by` had named exactly this fix, and
+#   what remains of it is the survey no config block can replace.
+version: 35
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -3643,19 +3685,28 @@ document_label:
       type: enum
       required: true
       normalize: closed_enum
-      vocabulary: [screenshot, photo, scan]
+      vocabulary: [screenshot, photo, scan, digital_pdf]
       meaning: how the document reached the verifier
       observed: >
-        ALL THREE, since version 17. Each is drawn per document and each has its own recipe:
-        `screenshot` is a screen capture and applies no geometry at all; `photo` is a hand-held
-        camera over paper on a desk — uneven light, a cast shadow, a perspective, a small rotation
-        and a surface around the page; `scan` is a flatbed — evenly lit, faint transport streaking,
-        a degree or so of skew.
-      the_mix_is_uniform_and_that_is_a_placeholder: >
-        ⚠️ THE THREE ARE DRAWN WITH EQUAL WEIGHT, and that split claims NOTHING about how real
-        reimbursement evidence arrives. No survey of the field was available, and any other split
-        would be a made-up frequency wearing the authority of a config key. See
-        `known_limitations` KL-11.
+        ALL FOUR — three since version 17, `digital_pdf` since version 35. Each has its own
+        recipe: `digital_pdf` is the ORIGINAL FILE and applies NOTHING — same pixels, same boxes,
+        asserted by test; `screenshot` is a screen capture — no geometry, no paper grain and no
+        sensor noise (both physically impossible on pixels that never crossed a camera; they were
+        applied anyway until version 35), only the compression of whatever re-sent it; `photo` is
+        a hand-held camera over paper on a desk — texture, sensor noise, a perspective, a small
+        rotation, phone compression always, and uneven light / a cast shadow / motion blur at the
+        per-document rates `degradation` in config/generation.yaml declares; `scan` is a flatbed —
+        evenly lit, a degree or so of skew, transport streaking at its declared rate.
+      the_mix_is_declared_per_class: >
+        🔴 WHICH CHANNEL CARRIES A DOCUMENT FOLLOWS ITS CLASS — `capture_mix` in
+        config/policy.yaml, one row per document class, with the born-medium physics stated at
+        the block: a till roll has no undamaged electronic original (`digital_pdf: 0`), a
+        товарний чек has no electronic form at all, and the two banking-app renderings are
+        screenshots BY CONSTRUCTION (`claim_planner.Archetype.screen_native`) rather than by
+        weight. ⚠️ The weights are a dataset-balance decision sized for measurability, NOT a
+        survey of how evidence arrives — see KL-11, which carried the uniform placeholder until
+        version 35 and now carries this. A consumer slicing per channel within one class must
+        note the class's own mix as the denominator's shape.
       drawn_per_document_or_per_file: >
         🔴 PER DOCUMENT, EXCEPT THAT A FILE IS CAPTURED ONCE. Where a claim's two documents are
         carried in one file, ONE channel is drawn for the FILE and both records carry it — a
@@ -3676,11 +3727,13 @@ document_label:
         consumer: >
           The requirement calls this `medium` and puts it on `ClaimFile` (the binary) rather
           than on the logical document, with FOUR values: digital_pdf / screenshot / photo /
-          scan. 🔴 THE FOURTH IS NOT A MISSING RECIPE. A natively generated PDF is the
-          UNDAMAGED ORIGINAL — the absence of a capture channel rather than one of them — so
-          the gap cannot be closed by adding a fourth entry here, and adding one would put a
-          document with no degradation into a vocabulary whose every member names a kind of
-          degradation. Four media, three channels. See RC-11.
+          scan. 🔴 THE VALUE VOCABULARIES AGREE SINCE VERSION 35 — `digital_pdf` is a member
+          here too, the undamaged original, closing the half of RC-11 that was about what the
+          enum can say. (Version 29 through 34 argued the reverse — that the enum holds only
+          kinds of damage, so the fourth value could not be a member; that reading was reversed
+          deliberately, and the reversal is recorded at RC-11 rather than smoothed over.) WHAT
+          STILL DIVERGES IS THE NAME AND THE HOME: `capture` on the document against `medium` on
+          the file, and two labels of a shared file repeating one file's fact. See RC-11.
 
     # ------------------------------------------------------------------------
     # THREE FIELDS ADDED IN VERSION 29, CARRYING TWO RELATIONS THAT ARE INDEPENDENT OF EACH OTHER.
@@ -5830,39 +5883,43 @@ known_limitations:
 
 
   - id: KL-11
-    name: the capture mix is uniform, and uniform is a placeholder rather than a measurement
+    name: the capture mix is declared per class, and the weights are a decision, not a survey
     predictor: none — an arbitrary marginal, not a leak
     hurts: [reporting]
     subset: >
-      EVERY DOCUMENT. The three capture channels are drawn with equal weight, so each holds about a
-      third of any corpus. ⚠️ NOTHING IS KNOWN ABOUT HOW REAL REIMBURSEMENT EVIDENCE ARRIVES. No
-      survey of the field was available to this repository, so a weighted split would have been a
-      made-up frequency with a config key's authority behind it, while an equal one claims nothing
-      and leaves every channel large enough to measure.
+      EVERY DOCUMENT. Which channel carries a document follows `capture_mix` in config/policy.yaml
+      since version 35 — per document class, with the born-medium constraints stated at the block
+      (a till roll has no undamaged electronic original; a banking-app screen exists only as a
+      screenshot). ⚠️ WITHIN THOSE CONSTRAINTS, NOTHING IS STILL KNOWN ABOUT HOW REAL
+      REIMBURSEMENT EVIDENCE ARRIVES: no survey of the field was available, so the weights are a
+      dataset-balance decision sized for per-channel measurability, not frequencies of a world.
+
+      THIS ENTRY DESCRIBED A UNIFORM DRAW UNTIL VERSION 35 — every class a third per channel,
+      including a flatbed scan of a phone screen and a screenshot of a till roll — and its
+      `fixed_by` named exactly the fix that has now been made. What the fix removes is the
+      IMPOSSIBLE combinations and the arbitrary equality; what it cannot supply is the survey.
     how_a_consumer_detects_it: >
-      By reading `capture` across the corpus and finding the three channels at roughly a third
-      each. That near-equality is itself the tell — a real population of submitted evidence is not
-      uniform, whatever its true shape is, so a corpus that looks uniform is reporting a draw rather
-      than a world. There is nothing else to look for: the mix leaves no other trace, which is
-      exactly why it has to be declared here instead of being noticed later.
+      By reading `capture` across a class and finding the declared weights of `capture_mix` —
+      shares that round, not a measured population. A real population of submitted evidence has
+      some true shape nobody here knows; a corpus whose channel marginal equals a config block is
+      reporting a decision, and the block is public precisely so the decision is legible.
     see_profile: run_profiles
     consequence: >
-      ANY FIGURE AGGREGATED OVER THE WHOLE CORPUS IS WEIGHTED BY THIS MARGINAL, and the marginal is
-      arbitrary. A single accuracy number over a corpus whose channels differ in difficulty says as
-      much about the mix as about the system. A consumer reporting one number must either report
-      per channel as well, or state that the aggregate is over an equal mix. It also propagates:
-      `vat_row_form`'s realized split is a function of it (KL-10), because the medium follows the
-      channel.
+      ANY FIGURE AGGREGATED OVER THE WHOLE CORPUS IS WEIGHTED BY THIS MARGINAL, and the marginal
+      is declared rather than true. A single accuracy number over a corpus whose channels differ
+      in difficulty says as much about the mix as about the system. A consumer reporting one
+      number must either report per channel as well, or state the mix it aggregated over — which
+      is now one block of policy.yaml rather than "equal". It also propagates: `vat_row_form`'s
+      realized split is a function of it (KL-10), because the medium follows the channel.
     how_to_stratify: >
       By `capture`, which is exactly why the field is labelled. Report per channel and the marginal
       stops mattering.
     fixed_by: >
-      A DECLARED MIX WITH A STATED BASIS, in config/policy.yaml beside `verdict_mix` — a share that
-      decides what fraction of a corpus carries a given LABEL VALUE sizes a labelled bucket, and
-      that is where such shares live in this repository. It is not in a config file today
-      DELIBERATELY: the honest home for it is the one file this step was not permitted to change,
-      and putting it in the nearest file that would accept it is how a configuration split stops
-      meaning anything. Recorded as an open question rather than settled by whoever was passing.
+      A SURVEY OF HOW REIMBURSEMENT EVIDENCE ACTUALLY ARRIVES, which is the one thing a config
+      block cannot replace. The structural half of the old fix is done — the mix is declared in
+      config/policy.yaml beside the other label-sizing shares, exactly where this entry said it
+      belonged — so what remains is evidence, not plumbing: measured arrival frequencies would
+      turn the declared weights from a defensible decision into a calibration.
 
 
   - id: KL-12
@@ -7292,28 +7349,35 @@ required_changes:
 
   - id: RC-11
     file: src/receipt_synth/degrader.py, schemas.py
-    progress: the recipes are done in version 17; the naming and the fourth value are not
+    progress: >
+      the recipes are done in version 17; the fourth value is done in version 35, BY REVERSING
+      version 29's own argument; the naming and the home are not
     change: >
-      DONE: `degrade` no longer raises. `photo` and `scan` have calibrated recipes, the channel is
-      drawn per document, and all three values of `Capture` occur in the data.
+      DONE: `degrade` no longer raises. `photo` and `scan` have recipes, the channel is drawn per
+      document from the class mix (`capture_mix` in policy.yaml, version 35), and all FOUR values
+      of `Capture` occur in the data.
 
-      STILL OPEN, and it is one question rather than two. The consumer calls the field `medium`,
-      puts it on `ClaimFile` (the binary) rather than on the logical document, and gives it FOUR
-      values including `digital_pdf`.
+      🔴 THE FOURTH VALUE IS A MEMBER NOW, AND THE ENTRY'S OWN EARLIER ARGUMENT AGAINST IT IS
+      KEPT, BECAUSE IT WAS REVERSED RATHER THAN REFUTED. This entry said: every member of
+      `Capture` names a way a document was DAMAGED, a natively generated PDF is the undamaged
+      original, and adding it "would put 'nothing happened' in a vocabulary of things that
+      happen. Four media, three channels." The reversal reads the enum as the field's own
+      `meaning:` line always has — HOW THE DOCUMENT REACHED THE VERIFIER — and arriving as the
+      original file is a way of arriving. What decided it was the cost of the purist reading:
+      the undamaged case was UNREPRESENTABLE, so every corpus overstated damage — 100% of every
+      class arrived degraded, which the delivered corpus's own report calls a lower bound on
+      every number — and the consumer's `medium` vocabulary had carried the value all along.
+      `degrader` applies NOTHING on the channel, asserted by an identity test.
 
-      🔴 THE FOURTH VALUE CANNOT BE CLOSED BY A FOURTH RECIPE, and this entry used to imply it
-      could. Every member of `Capture` names a way a document was DAMAGED on its way to the
-      verifier; a natively generated PDF is the undamaged original — the absence of a capture
-      channel, not one of them. Adding it to this enum would put "nothing happened" in a
-      vocabulary of things that happen. Four media, three channels. What it actually needs is
-      either a separate field on the file, or the consumer's shape adopted whole, and that is a
-      modelling decision rather than a missing branch.
+      STILL OPEN: the consumer calls the field `medium` and puts it on `ClaimFile` (the binary)
+      rather than on the logical document, and two labels of a shared file still repeat one
+      file's fact. That is the naming-and-home question, and it is untouched by the new member.
     blocked_on: decision
     blocked_on_note: >
-      FOR THE FIELD'S NAME, ITS HOME (file or document), AND HOW THE UNDAMAGED CASE IS EXPRESSED.
-      The recipes are no longer part of this entry — see `progress:`. The word was always
-      `decision`; only the scope of the decision needed saying, and saying it in the slot made the
-      slot unreadable.
+      FOR THE FIELD'S NAME AND ITS HOME (file or document). The undamaged case stopped being part
+      of this entry at version 35 — see `progress:` — and the recipes stopped at 17. The word was
+      always `decision`; only the scope of the decision needed saying, and saying it in the slot
+      made the slot unreadable.
 
   - id: RC-12
     file: src/receipt_synth/assembler.py, schemas.py, templates/ua_claim_bundle.html

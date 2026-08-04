@@ -290,8 +290,15 @@ def test_every_enum_value_emitted_is_in_its_declared_vocabulary(labels):
     }
     assert kinds, "no item kinds in the policy — the sweep below would assert nothing"
 
+    capture_vocabulary = next(
+        entry["vocabulary"]
+        for entry in CONTRACT["document_label"]["fields"]
+        if entry["name"] == "capture"
+    )
     for record in labels:
         assert record["doc_type"] in CONTRACT["document_types"], record["doc_id"]
-        assert record["capture"] in {"screenshot", "photo", "scan"}, record["doc_id"]
+        # Read from the contract rather than restated: a literal here was a second copy of the
+        # vocabulary, and it went stale the day the enum gained a member.
+        assert record["capture"] in capture_vocabulary, record["doc_id"]
         for item in record["line_items"]:
             assert item["item_kind"] in kinds, (record["doc_id"], item["item_kind"])

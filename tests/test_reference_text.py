@@ -441,7 +441,7 @@ def test_the_label_carries_both_and_they_survive_the_degrader(renderer, tmp_path
     assert assembler._CONTENT_BBOX_KEY not in document.field_bboxes, (
         "the reserved key reached the label — it must be removed after the transform"
     )
-    assert document.capture in assembler.CAPTURE_CHANNELS
+    assert document.capture in assembler.CAPTURE_DRAW_ORDER
     # Measured rather than defaulted: `None` here would mean no extent was compared against any
     # frame, which is a different statement from "the content survived".
     assert isinstance(document.content_complete, bool)
