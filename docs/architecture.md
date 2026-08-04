@@ -93,6 +93,13 @@ distinction the intent carries is the whole of why it exists: a claim short of a
 absent is a defect the planner still refuses to build, and the two are indistinguishable from the document
 list alone. Nothing here asserts the label — the planner builds the evidence, the engine derives the answer.
 
+**There are two such gaps and they are opposite.** `EvidenceIntent.PAYMENT_GAP` asks for a *subject* document
+with nothing beside it — a bare invoice, or the sales slip `ua_non_fiscal_receipt` prints — so the claim
+states what was bought and never that money moved, and the engine answers `not_proof_of_payment` with no
+cause: one slot of `document_evidence`, one way to fail it. The two intents must not be read as versions of
+one another; each opens a different slot, and the corpus needs both because a system that notices a missing
+receipt need not notice a missing payment.
+
 **A claim may also be planned outside the benefit period, which is the one mechanism that is a date rather
 than a document.** The payment is displaced by a whole period, into the benefit year before or after the
 window — the side is drawn, so a corpus does not teach "late" where the rule says "outside" — and everything
@@ -550,7 +557,7 @@ Twenty-four rows below, sixteen Ukrainian and eight European. Layouts follow the
 conventions of each document class and jurisdiction.
 
 **Rows are not templates one for one.** Row 8 is realized by two templates, one per paper width, so the
-twenty-four rows are twenty-five templates. **Five exist today**, across three document classes:
+twenty-four rows are twenty-five templates. **Seven exist today**, across five document classes:
 
 | Template | Class |
 |---|---|
@@ -558,6 +565,7 @@ twenty-four rows are twenty-five templates. **Five exist today**, across three d
 | `ua_bank_payment_confirmation` | `payment_confirmation` |
 | `ua_bank_statement` | `bank_statement` |
 | `ua_invoice` | `invoice` |
+| `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
 
 The three receipts share one body, `templates/ua_fiscal_receipt.jinja`, and differ in the paper width and in
 the fiscal identity the register prints. That is deliberate and it is also a limit: real registers differ in
@@ -570,7 +578,16 @@ the fields four issuers all carry, and the statement models the **corporate** ac
 of at least three layouts that go by that name. Both limits are declared in `config/labelling-schema.yaml`
 rather than left to be discovered from a score.
 
-**All four classes reach a dataset.** The invoice is what changed that: it states what was bought and proves
+**The sales slip is row 12 of the Ukrainian table below, and it is the one archetype whose classification
+cannot be read off its layout.** A товарний чек is, by the tax service's own rule, the fiscal receipt's form
+less the fiscal number of the register and the wording «ФІСКАЛЬНИЙ ЧЕК» — so the basket, the totals and the
+columns are a fiscal receipt's and the whole difference is a set of requisites left out. It proves what was
+bought and no payment, so a claim carrying one alone is `not_proof_of_payment`: the document an employee
+submits believing it is proof of payment, and the policy saying it is not. Its seller is never registered for
+VAT, a registered payer being obliged to use a cash register, so no line carries a VAT letter and the page has
+no tax block.
+
+**All five classes reach a dataset.** The invoice is what changed that: it states what was bought and proves
 no payment, the exact inverse of the two bank classes, so a claim's evidence can be **split across two
 documents** for the first time. Six of the seven Ukrainian categories are documented by such a pair; the
 seventh, `vitamins_nutrition`, still produces a single fiscal receipt, because the planner prefers one
@@ -590,7 +607,7 @@ reimbursement* above.
 | 9 | Classic hardware cash register receipt (РРО), 80 mm — `ЗН` beside `ФН`, sequential number | `fiscal_receipt` | Register diversity |
 | 10 | Account statement, A4 landscape — **one page, 15–25 operations, one of them labelled** | `bank_statement` | The statement class |
 | 11 | Sole-trader invoice for services | `invoice` | The invoice class |
-| 12 | Sales slip marked "not a fiscal receipt" | trap | Fiscality trap |
+| 12 | Sales slip (товарний чек) — «ТОВАРНИЙ ЧЕК» where the fiscal wording stands, and **no** fiscal number, serial, maker, mode marker or QR | `non_fiscal_receipt` | Fiscality trap; proves the subject, not the payment |
 | 13 | Non-fiscal POS slip — RRN and auth code, no fiscal number | trap | Fiscality trap |
 | 14 | Online marketplace order screenshot | linked | Proves the subject, not the payment |
 | 15 | *withdrawn* — a bank receipt whose payment purpose proves the subject | — | See the note under this table |

@@ -5,10 +5,15 @@
 
 WHY THIS IS A SCRIPT AND NOT PART OF THE PIPELINE. Every template it renders is a MOCK-UP:
 none is registered in `claim_planner.ARCHETYPES`, none has a builder in
-`assembler._BUILDERS`, and none may reach a dataset yet — the production run measures four
-document classes, and adding layout variety before that measurement would change what the
-measurement means. So there is no place in the pipeline for them, and inventing one would be
-the connection this branch deliberately does not make. See templates/README.md.
+`assembler._BUILDERS`, and none reaches a dataset. So there is no place in the pipeline for them,
+and inventing one would be a connection nobody has decided to make. See templates/README.md.
+
+⚠️ ONE MOCK-UP LEFT THIS SCRIPT BY BEING CONNECTED. `ua_non_fiscal_receipt` is registered, built
+by `content_builder.build_non_fiscal_receipt` and rendered by runs, so it is no longer something
+this script has any business drawing — a second, script-only way of building a shipped page would
+drift from the builder the moment either changed. Its Ukrainian strings went to
+`receipt.non_fiscal` in config/fiscal-rules.yaml, which is what the block below always said would
+happen to them.
 
 THE OUTPUT GOES OUTSIDE THE REPOSITORY by default, for the same reason `out/` is gitignored:
 rendered images are not what this repository ships. `--out` overrides it, and a path inside
@@ -20,8 +25,8 @@ JSON beside the images. That is the boundary the branch was given: labels and bo
 the connection, not with the layout.
 
 DETERMINISM. One seed, one set of images. Every draw goes through the `random.Random` created
-here, and the two documents built by the shipped builders (`build_prro_receipt`,
-`build_payment_confirmation`) take it as their generator, exactly as the assembler does.
+here, and the documents built by shipped builders (`build_payment_confirmation`, `build_invoice`)
+take it as their generator, exactly as the assembler does.
 """
 
 from __future__ import annotations
@@ -42,14 +47,12 @@ from receipt_synth.config import (
 from receipt_synth.content_builder import (
     build_invoice,
     build_payment_confirmation,
-    build_prro_receipt,
     draw_party_identity,
     generate_edrpou,
     printed_legal_name,
     resolve_vendor,
 )
 from receipt_synth.renderer import REPO_ROOT, Renderer
-from receipt_synth.schemas import Capture
 
 DEFAULT_OUT = Path(tempfile.gettempdir()) / "receipt-synth-mockups"
 
@@ -78,19 +81,11 @@ _PURPOSE_DRAW_LIMIT = 40
 # vocabularies are draw inputs (generation.yaml).
 # ---------------------------------------------------------------------------
 
-# 🔴 THE TITLE OF THE NON-FISCAL SLIP, AND IT IS NOT THE STRING CONFIG HOLDS.
-# `receipt.non_fiscal_marker` in config/fiscal-rules.yaml is «НЕ ФІСКАЛЬНИЙ ЧЕК», and no public
-# source found says that wording is printed on a Ukrainian SALES document. What the tax service
-# states (БЗ 109.10) is that such a document carries the wording «Товарний чек» and omits the
-# fiscal number and the wording «Фіскальний чек». So the mock-up prints what is evidenced, and
-# the configured constant is left exactly as it is: changing it is the author's decision after
-# reading the report, not a side effect of a mock-up. See templates/README.md.
-NON_FISCAL_TITLE = "ТОВАРНИЙ ЧЕК"
-
-# 📄 ст. 9 of the accounting law № 996-XIV: a primary document names the person responsible for
-# the operation and carries their signature. A fiscal receipt carries neither.
-ISSUER_LABEL = "Видав:"
-SIGNATURE_LABEL = "Підпис"
+# ⚠️ THE NON-FISCAL SLIP'S STRINGS ARE GONE FROM HERE, and their absence is the block's own rule
+# working. `ua_non_fiscal_receipt` is a SHIPPED archetype now — registered, built and rendered by
+# runs — so its title and its two accounting-law captions are jurisdiction wording like any other
+# and live in `receipt.non_fiscal` in config/fiscal-rules.yaml. This block holds the strings of
+# templates NO RUN RENDERS; a string here for a shipped page would be a second source of truth.
 
 # Ukrainian month names in the genitive, which is the case a date written out in words takes:
 # «2 лютого 2024». Jurisdiction wording, and it belongs in config/fiscal-rules.yaml the moment
@@ -438,59 +433,8 @@ def _descriptor(rng: random.Random, merchant_name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# The three contexts
+# The contexts
 # ---------------------------------------------------------------------------
-
-
-def non_fiscal_context(rng: random.Random) -> dict:
-    """A товарний чек, built from the fiscal receipt's own builder.
-
-    🔴 THE BASKET, THE ARITHMETIC AND THE AMOUNT IN WORDS COME FROM `build_prro_receipt`, and
-    that is the point rather than a shortcut: the trap only works if this document is what a
-    fiscal receipt would have been for the same purchase. The builder also computes a fiscal
-    identity — a fiscal number, a QR payload, a register's maker — and the template prints none
-    of it. The difference between the two documents IS the set of requisites left out.
-
-    The seller is a sole trader who is not registered for ПДВ. 📄 A ПДВ payer is obliged to use
-    a register, so the issuer of such a slip is a non-payer; the receipt therefore carries an
-    «ІД» line and no «ПН» line, and no tax rows under the totals.
-    """
-    vendor = resolve_vendor(
-        rng,
-        {"legal_form": "FOP", "profile": "nutrition_practice", "vat_payer": False},
-        "UA",
-    )
-    receipt = build_prro_receipt(
-        rng,
-        category_id="vitamins_nutrition",
-        issued_at=ISSUED_AT,
-        vendor=vendor,
-        identity=draw_party_identity(rng, vendor, "UA"),
-        capture=Capture.SCAN,
-    )
-    context = receipt.render_context()
-    rules = jurisdiction("UA")
-
-    # A hand-kept book of товарні чеки is numbered sequentially. The builder's own number is a
-    # ПРРО's eleven-character identifier, which a document with no ПРРО cannot have carried.
-    context["receipt_number"] = f"{rng.randint(1, 9999):04d}"
-    context["title"] = NON_FISCAL_TITLE
-    context["issuer_label"] = ISSUER_LABEL
-    context["issuer_name"] = vendor["name"]
-    context["signature_label"] = SIGNATURE_LABEL
-    context["footer"] = rules["receipt"]["footer"]
-
-    # 🔴 CASH, AND IT IS NOT A COSMETIC CHOICE. The builder drew «БЕЗГОТІВКОВА», which is the
-    # only value any shipped document prints — `payment_method_labels` in config/fiscal-rules.yaml
-    # notes that its second entry is unreachable. On THIS document the first entry is the wrong
-    # one: 📄 a card sale is a settlement operation that obliges the seller to use a register, so
-    # a slip issued without one records cash. The mock-up is therefore the first document in this
-    # repository to print «ГОТІВКА», and the value is read from config rather than written here.
-    context["payment_method"] = rules["acquiring_block"]["payment_method_labels"][1]
-    # No QR: 📄 it is a requisite of the FISCAL form. The renderer requires the key, and `None`
-    # is how a template says the document has none.
-    context["qr_payload"] = None
-    return context
 
 
 def app_transaction_context(rng: random.Random) -> dict:
@@ -981,7 +925,8 @@ def _report_conversion(eur_total: Decimal) -> None:
 
 
 def render_all(out_dir: Path, seed: int) -> list[Path]:
-    """Render the three mock-ups, and the A4 twin of the third. Returns what was written."""
+    """Render every mock-up, and the two extra pages two of them are made of. Returns what was
+    written."""
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
@@ -993,7 +938,6 @@ def render_all(out_dir: Path, seed: int) -> list[Path]:
         # is built — it measures the document that goes inside its card — and a tuple of
         # already-built contexts would put that render before the first line of output.
         for slug, build_context in (
-            ("ua_non_fiscal_receipt", lambda: non_fiscal_context(rng)),
             ("ua_bank_app_transaction", lambda: app_transaction_context(rng)),
             ("ua_bank_receipt_in_app", lambda: receipt_in_app_context(rng, renderer, out_dir)),
             ("eu_platform_receipt", lambda: eu_platform_receipt_context(rng)),
