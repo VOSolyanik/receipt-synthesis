@@ -62,6 +62,7 @@ from receipt_synth.policy_engine import (
     evaluate_claim,
     evaluate_claims,
     partial_payment_marker_fields,
+    partial_payment_outside_the_period,
     resolve_evidence,
 )
 from receipt_synth.schemas import (
@@ -617,6 +618,60 @@ def test_an_instalment_paid_before_its_invoice_is_still_insufficient_evidence():
     assert AMOUNT_MISMATCH not in result.imperfection, (
         "the pair agrees about the amount — the part is what the invoice says it is"
     )
+
+
+def test_a_partial_settlement_paid_outside_the_period_is_rejected():
+    """🔴 THE ONE CLAIM TWO BRANCHES BOTH DESCRIBE, and policy.yaml decides which wins:
+    `partial_payment.outside_the_period` says `rejected`, and this pins it.
+
+    THE PRECEDENCE IS THE POINT, not the arithmetic. Both facts are proven, the pair agrees, and
+    the invoice's term is printed — so `partially_paid` is true of the documents — while the
+    payment fell outside the benefit window, so the plan does not cover the expense at all. The
+    period question is prior: it asks whether the plan covers this claim, and `partially_paid` is
+    a statement about a claim the plan does cover.
+
+    ⚠️ NO GENERATED CLAIM REACHES IT. `claim_planner` names a schedule for a `partially_paid` plan
+    and displaces the payment for a `rejected` one, never both, so this case exists in the
+    consumer's world and not in the corpus. It is pinned here precisely because nothing else would
+    catch a change to it: an engine that answered `partially_paid` would produce a corpus
+    indistinguishable from this one.
+    """
+    outside = date(2025, 6, 15)
+    start, end = active_period()
+    assert not start <= outside <= end, "the date is inside the window — this proves nothing"
+
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", when=date(2025, 6, 1),
+                  items=[item("1200.00")], instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00", when=outside)
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.verdict is not Verdict.PARTIALLY_PAID
+    assert result.imperfection == (OUTSIDE_PERIOD,)
+    assert partial_payment_outside_the_period() is Verdict.REJECTED, (
+        "policy.yaml declares the other precedence; this test pins the engine to the file"
+    )
+
+
+def test_an_engine_ordered_against_the_declared_precedence_refuses_to_label():
+    """The drift above, made to happen. The branch ORDER in `evaluate_claim` is this engine's
+    answer to the precedence question, so a file declaring the other answer must stop the run
+    rather than be silently overruled — a consumer reading that file would label such a claim
+    `partially_paid` and score this dataset's `rejected` as a miss.
+
+    Patched on the POLICY side because that is the side a consumer vendors."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", when=date(2025, 6, 1),
+                  items=[item("1200.00")], instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00", when=date(2025, 6, 15))
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            "receipt_synth.policy_engine.partial_payment_outside_the_period",
+            lambda: Verdict.PARTIALLY_PAID,
+        )
+        with pytest.raises(PolicyGapError, match="outside_the_period"):
+            evaluate([invoice, payment])
 
 
 def test_a_part_equal_to_the_whole_is_not_a_partial_settlement():

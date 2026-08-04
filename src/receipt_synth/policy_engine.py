@@ -15,7 +15,11 @@ that itself, against `covered_items` and `excluded_items`, and treats the `cover
 input to be trusted. An oracle that could not disagree with the thing it is labelling
 would be a pass-through with a docstring.
 
-Six rules, in the order they are applied:
+Six rules, in the order they are applied — seven branches, rule 4a having been inserted
+BETWEEN two of them rather than appended, because where it sits is what it says. The numbering
+is not renumbered for it: a dozen cross-references in this file and in
+config/labelling-schema.yaml point at these numbers, and shifting them all to place one branch
+would make every one of those references silently wrong in the git history.
 
 1. **Currency.** Limits are expressed in `reporting_currency`, and every archetype this
    generator has emits documents in it. A document in any other currency is therefore a
@@ -39,17 +43,20 @@ Six rules, in the order they are applied:
    `imperfection`; the claim does not establish that *this* payment paid for *this*
    subject.
 
-   🔴 THE SAME AMOUNT, OR ONE PART OF IT WHERE THE SUBJECT SAYS SO. This rule has a SECOND
-   outcome, and it is not a failure of the slot: a subject document may state that its
-   obligation is settled in equal parts and what one part comes to — an annual subscription
-   billed for the year and paid quarterly — and a payment equal to that part then describes
-   the same transaction as the document beside it. Such a claim is `partially_paid`, with no
-   cause: the linkage holds, and what is true of the claim is that part of the amount has
-   been paid. The marker has to be PRINTED on the subject document (`instalment_amount`);
-   the arithmetic alone cannot tell the two apart, because "the payment is smaller" is true
-   of a mismatch as well, and a rule reading only the amounts would swallow that cause
-   whole. See `_settles_one_instalment` and `partial_payment` in policy.yaml, which states
-   the rule for a consumer building its own engine from that file.
+   🔴 THE SAME AMOUNT, OR ONE PART OF IT WHERE THE SUBJECT SAYS SO — and this is an EXEMPTION
+   from the amount check rather than a second failure of the slot. A subject document may
+   state that its obligation is settled in equal parts and what one part comes to — an annual
+   subscription billed for the year and paid quarterly — and a payment equal to that part
+   then describes the same transaction as the document beside it, so the linkage holds and
+   this rule finds nothing. The marker has to be PRINTED on the subject document
+   (`instalment_amount`); the arithmetic alone cannot tell the two apart, because "the
+   payment is smaller" is true of a mismatch as well, and a rule reading only the amounts
+   would swallow that cause whole. See `_settles_one_instalment` and `partial_payment` in
+   policy.yaml, which states the rule for a consumer building its own engine from that file.
+
+   WHAT SUCH A CLAIM IS LABELLED is decided further down, at rule 4a, and NOT here: the
+   exemption and the label are separate steps on purpose, so that the period can come between
+   them.
 
    Each slot is decided from the claim's own documents and never by comparison with
    another verdict. That construction is deliberate: while two of these were written as
@@ -72,6 +79,21 @@ Six rules, in the order they are applied:
    seventh enum member meaning "outside period" — was rejected because it would pull a
    share into `verdict_mix` and cost the downstream contract another revision, for no gain
    in precision over a named cause on a verdict that already fits.
+4a. **A transaction exempted by rule 3** — a payment equal to an instalment its subject
+   document prints — is `partially_paid`, with no cause: one mechanism, one way to reach it.
+
+   NUMBERED 4a BECAUSE THE POSITION IS THE RULE. It sits AFTER the period deliberately, so a
+   partial settlement paid outside the window is `rejected` and not this. That precedence is
+   policy.yaml's — `partial_payment.outside_the_period` — and it is stated there rather than
+   left to the order these branches happen to be written in, because a consumer builds its own
+   engine from that file and two faithful engines disagreeing about a LABEL is the most
+   expensive defect this repository has. The reasoning, in one line: the period asks whether
+   the plan covers this expense at all, and `partially_paid` is a statement about a claim the
+   plan does cover.
+
+   ⚠️ AND IT COULD NOT HAVE BEEN FOLDED INTO RULE 3. The exemption there decides whether the
+   documents AGREE; this decides what an agreeing pair is called. Keeping them one step would
+   have put the label before the period with no way to say why.
 5. **The verdict.** STRICT, as the prose of the `coverage` block states it: *any*
    non-covered line makes the claim `partially_covered`, however small — the fraction is
    reported, never used as a tolerance. Everything covered is `covered`, and
@@ -260,6 +282,20 @@ def insufficient_evidence_causes() -> dict[str, float]:
     """
     return {str(name): float(share) for name, share in
             load_policy()["insufficient_evidence_causes"].items()}
+
+
+def partial_payment_outside_the_period() -> Verdict:
+    """Which verdict a partial settlement paid outside the benefit period gets.
+
+    A PRECEDENCE, not a preference, and it is read from policy.yaml for the same reason the
+    marker is: a downstream consumer builds its own engine from that file, and the order of two
+    branches is exactly the kind of thing two faithful implementations decide differently. The
+    file's own reasoning is beside the key.
+
+    Returned as a `Verdict` so a value the enum does not name fails here — where the file is
+    being read — rather than three branches later as a label nothing recognizes.
+    """
+    return Verdict(load_policy()["partial_payment"]["outside_the_period"])
 
 
 def partial_payment_marker_fields() -> tuple[str, ...]:
@@ -1001,10 +1037,47 @@ def evaluate_claim(
             Verdict.INSUFFICIENT_EVIDENCE, tuple(cause for cause, _ in disagreements)
         )
 
-    # -- one transaction, settled in parts. Checked HERE, in the place the amount cross-check
-    # would have caught it, because that is the case it discriminates from: moving it across the
-    # period check below would relabel a partial settlement paid out of window for a reason that
-    # has nothing to do with the discrimination. See `_settles_one_instalment`.
+    # -- the period, on the payment date and on no other. `rejected`, not
+    # `insufficient_evidence`: nothing here is unestablished, the policy simply does not
+    # cover a payment made outside its window. See the module docstring, rule 4.
+    start, end = active_period()
+    late = [t.payment for t in shape.transactions if not start <= t.payment.date <= end]
+    if late:
+        # 🔴 THE ONE CASE WHERE THIS BRANCH AND THE ONE BELOW BOTH APPLY, and policy.yaml decides
+        # which wins. The order these two are written in IS the answer this engine gives, so the
+        # order is checked against the file rather than assumed to still agree with it: a consumer
+        # building its own engine from that file must not be able to reach a different LABEL while
+        # reading the same rules. Flipping the declared precedence is a real edit somebody may
+        # make; it has to move this code too, and this is what says so instead of a comment.
+        if any(_settles_one_instalment(t) for t in shape.transactions):
+            declared = partial_payment_outside_the_period()
+            if declared is not Verdict.REJECTED:
+                raise PolicyGapError(
+                    f"policy.yaml says a partial settlement paid outside the benefit period is "
+                    f"{declared.value!r} (`partial_payment.outside_the_period`), and this engine "
+                    "checks the period first, which answers 'rejected'. The two would label the "
+                    "same claim differently. Move the partial-settlement branch above the period "
+                    "check, or restore the declared precedence."
+                )
+        first = min(late, key=lambda document: document.date)
+        trace.append(
+            f"period: payment {first.doc_id} dated {first.date} falls outside "
+            f"{start}..{end}"
+        )
+        return refused(Verdict.REJECTED, (OUTSIDE_PERIOD,))
+    trace.append("period ok")
+
+    # -- one transaction, settled in parts. AFTER THE PERIOD AND BEFORE COVERAGE, which is a
+    # precedence policy.yaml decides and this code follows — `partial_payment.outside_the_period`
+    # there, with the reasoning in the paragraphs above it. In one line: the evidence verdicts come
+    # first because a claim that has established nothing cannot be assessed at all, and among the
+    # POLICY verdicts the period is prior, because it answers whether the plan covers this expense
+    # while `partially_paid` is a statement about a claim the plan does cover.
+    #
+    # 🔴 THE DISCRIMINATION FROM `amount_mismatch` DOES NOT LIVE HERE and is unaffected by this
+    # ordering: it is the exemption inside `_disagreements`, which runs before either branch. What
+    # this branch decides is only what an exempted pair is LABELLED, so moving it past the period
+    # check relabels the out-of-window case and nothing else. See `_settles_one_instalment`.
     instalments = [t for t in shape.transactions if _settles_one_instalment(t)]
     if instalments:
         settlement = instalments[0]
@@ -1024,20 +1097,6 @@ def evaluate_claim(
         # behind this verdict and one way to reach it, so there is nothing for a cause to
         # distinguish.
         return refused(Verdict.PARTIALLY_PAID, ())
-
-    # -- the period, on the payment date and on no other. `rejected`, not
-    # `insufficient_evidence`: nothing here is unestablished, the policy simply does not
-    # cover a payment made outside its window. See the module docstring, rule 4.
-    start, end = active_period()
-    late = [t.payment for t in shape.transactions if not start <= t.payment.date <= end]
-    if late:
-        first = min(late, key=lambda document: document.date)
-        trace.append(
-            f"period: payment {first.doc_id} dated {first.date} falls outside "
-            f"{start}..{end}"
-        )
-        return refused(Verdict.REJECTED, (OUTSIDE_PERIOD,))
-    trace.append("period ok")
 
     if total <= 0:
         raise ValueError(f"a claim with a total of {total} has no verdict")

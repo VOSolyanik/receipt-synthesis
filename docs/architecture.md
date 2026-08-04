@@ -539,7 +539,11 @@ can implement it from the same file:
 A payment matching *no* part of a stated arrangement is a payment for some third amount, i.e. the mismatch
 case again — the marker has to agree with the payment, not merely be present. The date cross-check is
 untouched: a payment dated before the invoice it settles is `payment_precedes_subject` whether it pays a part
-or the whole.
+or the whole. And a partial settlement paid **outside the benefit period** is `rejected` with the cause
+`outside_period`, never this verdict — `partial_payment.outside_the_period` in `config/policy.yaml` states
+that precedence, because two rules describe such a claim and two engines reading a file that did not say
+would label it differently. The period asks whether the plan covers the expense at all; `partially_paid` is
+a statement about a claim the plan does cover.
 
 A payment term is **not** a payment status. It says how the seller proposes to be paid and is fixed when the
 invoice is drawn up; nothing on the page says money moved, and whether it did is still decided from the

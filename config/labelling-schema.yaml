@@ -85,6 +85,13 @@
 #   distinction where a reader will look for the contradiction. ⚠️ The wording is NOT observed —
 #   neither open invoice carried such a term — and is declared as a divergence there.
 #
+#   🔴 AND ONE PRECEDENCE IS SETTLED THAT NO CORPUS CAN SHOW A CONSUMER. A payment settling a
+#   printed instalment that ALSO falls outside `period` is `rejected`, not `partially_paid` —
+#   two rules describe that claim and a consumer implementing them in the other order would score
+#   this dataset's label as a miss. No generated claim exercises it (the planner never gives one
+#   claim both mechanisms), so it is stated rather than demonstrated: policy.yaml's
+#   `partial_payment.outside_the_period` and `verdicts.partially_paid.outside_the_period_is_rejected`.
+#
 #   `config/policy.yaml` CHANGED WITHOUT A SHARE MOVING, for the second version running.
 #   `verdict_mix.partially_paid` has read 0.10 since the file was written and now sizes a bucket
 #   that fills; what moved is `insufficient_evidence_causes_min_run_size`, FROM 85 TO 90, because
@@ -3707,6 +3714,25 @@ verdicts:
       A partial settlement dated BEFORE the invoice it settles is `insufficient_evidence` with the
       cause `payment_precedes_subject`, not this verdict. An impossible order is an impossible order
       whether the payment covers a part or the whole; only the AMOUNT cross-check is exempted.
+    outside_the_period_is_rejected: >
+      🔴 THE ONE CLAIM TWO RULES BOTH DESCRIBE, AND A CONSUMER MUST NOT DECIDE IT FOR ITSELF. A
+      payment that settles a printed instalment AND falls outside `period` in policy.yaml is
+      `rejected` with the cause `outside_period` — never this verdict. Both readings are faithful
+      to a file that did not say, which is why policy.yaml now says:
+      `partial_payment.outside_the_period`, with the reasoning beside it.
+
+      WHY THAT WAY. The verdicts fall in two tiers. The EVIDENCE verdicts come first, because a
+      claim that has not established what it is about cannot be assessed against a policy at all.
+      The POLICY verdicts presuppose that every slot IS established, and among them the period is
+      prior: it answers whether the plan covers this expense, and it answers no on an axis nothing
+      about the settlement can change. This verdict is a statement about a claim the plan DOES
+      cover — one awaiting the rest of its instalments — and saying it of an expense outside the
+      window would describe a settlement the plan is not party to.
+
+      ⚠️ NO CLAIM OF THIS DATASET EXERCISES IT, at any run size. `claim_planner` gives a payment
+      schedule to a `partially_paid` claim and displaces the payment of a `rejected` one, and never
+      both. So a consumer meets this rule before the corpus does — which is the reason it is
+      written down rather than left to the order two branches happen to be in.
 
   rejected:
     status: emitted

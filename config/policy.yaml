@@ -651,10 +651,43 @@ insufficient_evidence_causes_min_run_size: 90
 # obligation is payable — the part paid, the whole once completed, nothing until then — is a
 # decision this policy has not taken. `reimbursable_amount` is therefore 0.00 and the ledger is
 # untouched, exactly as for the other verdicts that establish something and pay nothing.
+#
+# 🔴 AND WHAT HAPPENS WHEN A PARTIAL SETTLEMENT IS PAID OUTSIDE THE `period` ABOVE — a question two
+# engines built from this file must not be left to answer differently. The period rule above is
+# stated UNCONDITIONALLY, so a reader implementing it in the order this file declares things would
+# check the window first and answer `rejected`; an implementer following the discrimination above,
+# which lives beside the amount cross-check, could as reasonably answer `partially_paid`. Both
+# would be faithful to the file and they would disagree about a LABEL, which is the most expensive
+# kind of disagreement this project has. So the precedence is decided here rather than left to the
+# order of paragraphs, and `partial_payment.outside_the_period` below is the machine-readable form.
+#
+# `rejected` WINS, AND THE STRUCTURE OF THE VERDICTS IS WHAT DECIDES IT. There are two tiers:
+#
+#   * the EVIDENCE verdicts — `not_proof_of_payment`, `insufficient_evidence` — say that a slot of
+#     `document_evidence` is unestablished. They come first, because a claim that has not
+#     established what it is about cannot be assessed against a policy at all. That is why a
+#     payment dated BEFORE the invoice it settles stays `insufficient_evidence` even when the
+#     amounts agree perfectly: the order is impossible, so there is nothing to score.
+#   * the POLICY verdicts — `rejected`, `partially_paid`, and the coverage ones — presuppose that
+#     every slot IS established, and then say what the plan makes of the claim. Among them,
+#     `rejected` by period comes first because it answers a PRIOR question: whether the plan
+#     covers this expense at all. It does not, on an axis that nothing about the settlement can
+#     change. `partially_paid` is a statement about a claim the plan DOES cover — a lawful claim
+#     awaiting the rest of its instalments — and saying that of an expense outside the benefit
+#     window would describe a settlement the plan is not party to.
+#
+# ⚠️ IT IS UNREACHABLE IN A GENERATED CORPUS TODAY and is specified all the same. `claim_planner`
+# names a payment schedule for a `partially_paid` claim and displaces a payment out of the window
+# for a `rejected` one, and never both, so no claim of this dataset exercises the precedence. A
+# consumer's own engine meets it the first time a real claim does, and a rule that exists only in
+# whichever branch an implementation happened to write first is not a rule.
 partial_payment:
   # The label field(s) carrying the marker. `policy_engine` pins its own reading against this
   # list, so the file and the engine cannot drift apart in silence.
   marker_fields: [instalment_amount]
+  # WHICH VERDICT A PARTIAL SETTLEMENT PAID OUTSIDE `period` GETS. See the paragraphs above for
+  # why: the period question is prior, and `partially_paid` describes a claim the plan covers.
+  outside_the_period: rejected
 
 # What each document type proves. A claim is reimbursable only when BOTH facts
 # are established — what was bought, and that it was paid for — possibly across
