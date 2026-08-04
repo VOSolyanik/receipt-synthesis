@@ -630,13 +630,22 @@ payment_confirmation:
   # PERSON, written by the payer. It is left out rather than modelled — it would put a personal
   # name into a free-text field on a published image for no gain this step needs — and it is
   # named here so the corpus is known to be narrower than the observation.
+  # ⛔ «Переказ власних коштів» WAS IN THIS POOL AND IS DELIBERATELY NOT ANYMORE. Every
+  # confirmation this generator builds pays a NAMED FIRM — the payee block carries the
+  # vendor's name, code and IBAN — and a purpose asserting a transfer between the payer's
+  # own accounts contradicts the page it is printed on. Measured before the repair, on the
+  # production corpus (RP-06): 54 of 261 confirmations printing a purpose carried it, 55%
+  # of the "cites nothing" bucket — see docs/cross-document-fields.md, which blocked the
+  # `cites_subject_document` contract field on exactly these 54. The wording itself is
+  # real and stays where it is coherent: the bank statement's `credit_from_self` pool,
+  # whose counterparty IS the holder. Same defect, same repair as the one that pool's
+  # comment records — a purpose is only as honest as the party block beside it.
   purposes:
     uk:
       - "Оплата згідно рахунку № {invoice_no} від {invoice_date}"
       - "Оплата за послуги згідно рахунку № {invoice_no}"
       - "Поповнення балансу (гарантійний внесок) згідно рахунку № {invoice_no}"
       - "Оплата за товар"
-      - "Переказ власних коштів"
 
   # The value under a "name of the initiating system" caption: 👁 a system named in ordinary
   # words. Generic descriptions of a channel rather than marks, so nothing here names a firm.

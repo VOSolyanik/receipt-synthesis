@@ -30,7 +30,13 @@ import pytest
 import yaml
 
 from receipt_synth.claim_planner import ARCHETYPES, evidence_of
-from receipt_synth.config import CONFIG_DIR, initiation_shares, jurisdiction, load_policy
+from receipt_synth.config import (
+    CONFIG_DIR,
+    initiation_shares,
+    jurisdiction,
+    load_policy,
+    payment_purposes,
+)
 from receipt_synth.content_builder import (
     build_payment_confirmation,
     draw_party_identity,
@@ -511,6 +517,34 @@ def test_the_purpose_names_a_document_and_never_the_subject_of_the_expense():
             continue
         named = [name for name in printable if name in confirmation.purpose.lower()]
         assert not named, f"a payment purpose names what was bought: {named}"
+
+
+def test_no_purpose_asserts_a_transfer_between_the_payers_own_accounts():
+    """Every confirmation this generator builds pays a NAMED FIRM — the payee block prints
+    the vendor's name, code and IBAN — so a purpose saying «Переказ власних коштів», a
+    transfer between the payer's own accounts, contradicts the page it is printed on.
+
+    Measured before the repair, on the production corpus (RP-06): 54 of 261 confirmations
+    printing a purpose carried exactly that formula — 55% of the "cites nothing" bucket —
+    and `docs/cross-document-fields.md` blocked the `cites_subject_document` contract
+    field on those 54, because the flag would have certified them as legitimately
+    non-citing. The wording legitimately survives in ONE place, the bank statement's
+    `credit_from_self` pool, whose counterparty is the holder.
+
+    Pinned at the pool AND on built documents: the pool is what the repair edited, the
+    documents are what the defect was measured on.
+    """
+    for formula in payment_purposes("uk"):
+        assert "власних коштів" not in formula.lower(), (
+            f"the self-transfer purpose is back in the confirmation pool: {formula!r}"
+        )
+    for confirmation in many():
+        if confirmation.purpose is None:
+            continue
+        assert "власних коштів" not in confirmation.purpose.lower(), (
+            f"{confirmation.purpose!r} asserts a self-transfer on a page whose payee "
+            f"block names {confirmation.payee.name!r}"
+        )
 
 
 # ============================================================ determinism ==
