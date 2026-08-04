@@ -429,6 +429,19 @@ verdict_mix:
   # described and the reason the run-size guideline is derived rather than picked.
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
+  # 🔴 THE SHARE DID NOT MOVE AND THE VERDICT DID, for the second time in this file and by a
+  # different route. This entry has read 0.10 since the file was written; what it sized was
+  # unbuildable because no archetype PRINTED anything a payment could be part of. The invoice now
+  # states an instalment term — that its obligation is settled in equal parts, and what one part
+  # comes to — so `claim_planner` plans a pair whose payment settles exactly one part and the
+  # engine reads the printed term. See `partial_payment` below for the rule and for why the
+  # arithmetic alone could not have supplied it.
+  #
+  # 🔴 AND WITH IT THE REALIZABLE SUBSET BECOMES THE WHOLE MIX. It summed to 0.90 while this member
+  # was absent from it; it sums to 1.00 now, so every other verdict is drawn slightly RARER than
+  # before at an unchanged declared share, and the balance report's shares stop being conditional
+  # on anything. `insufficient_evidence_causes_min_run_size` below moves from 85 to 90 for that
+  # reason and for no other — the derivation is redone there rather than assumed to have survived.
   partially_paid: 0.10
   # 🔴 A SHARE AT LAST, AND IT ARRIVES WITH THE MECHANISM RATHER THAN BEFORE IT. This entry
   # read `null` while nothing could build such a claim, on the ground that a number set then
@@ -552,30 +565,35 @@ insufficient_evidence_causes:
   payment_precedes_subject: 0.33  # the payment is dated before what it settles
 
 # THE RUN SIZE AT WHICH THE NON-ZERO REQUIREMENT ABOVE BINDS, derived from the actual draw
-# probabilities rather than picked. `verdict_mix` renormalizes over the realizable subset —
-# `covered` 0.40, `partially_covered` 0.20, `insufficient_evidence` 0.10, `rejected` 0.10,
-# `not_proof_of_payment` 0.10 — so `insufficient_evidence` is drawn on
-# 0.10 / (0.40 + 0.20 + 0.10 + 0.10 + 0.10) = 11.1% of built claims (this is the same
-# renormalization the balance report prints as "target, of the realizable subset").
-# `insufficient_evidence_causes` above then splits that three ways, so a single built claim lands
-# on the RAREST cause with probability 0.111 * 0.33 = 0.0367.
+# probabilities rather than picked. `verdict_mix` renormalizes over the realizable subset, and
+# EVERY MEMBER IS NOW REALIZABLE — `covered` 0.40, `partially_covered` 0.20,
+# `insufficient_evidence` 0.10, `not_proof_of_payment` 0.10, `partially_paid` 0.10, `rejected`
+# 0.10 — so the subset sums to 1.00 and `insufficient_evidence` is drawn on 10.0% of built claims
+# (this is the same renormalization the balance report prints as "target, of the realizable
+# subset", which is now the whole mix). `insufficient_evidence_causes` above then splits that
+# three ways, so a single built claim lands on the RAREST cause with probability
+# 0.100 * 0.33 = 0.033.
 #
 # For a run of N built claims, the probability that a cause drawn at rate p is realized at
-# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.0367)^N >= 0.95 for the smallest N gives
-# N >= ln(0.05) / ln(1 - 0.0367) ~= 80.2, i.e. 81 built claims — rounded up here to 85, a
-# number worth naming rather than a fraction of one. At 85 built claims or more, a zero count
-# for any cause is unlikely enough (<5%) to report as a defect rather than as sampling
+# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.033)^N >= 0.95 for the smallest N gives
+# N >= ln(0.05) / ln(1 - 0.033) ~= 89.3, i.e. 90 built claims. At 90 built claims or more, a zero
+# count for any cause is unlikely enough (<5%) to report as a defect rather than as sampling
 # noise; below it, a zero count is unremarkable and the balance report says so.
 #
-# ⚠️ IT MOVED FROM 50 TO 75 WHEN THE THIRD CAUSE GAINED A SHARE, and from 75 TO 85 WHEN
-# `not_proof_of_payment` BECAME REALIZABLE — and the second move is the instructive one, because
-# NOTHING ABOUT `insufficient_evidence` OR ITS CAUSES CHANGED. A fifth member entered the
-# realizable subset, so the denominator of the renormalization went from 0.80 to 0.90 and every
-# other verdict is drawn slightly rarer at an unchanged declared share. A guideline derived from
-# a share alone would have missed it; this one is derived from the DRAW, which is why it moves
-# when a verdict elsewhere in the file gains a mechanism. A figure quoted against either older
-# guideline was correct for the subset of its day.
-insufficient_evidence_causes_min_run_size: 85
+# ⚠️ IT MOVED FROM 50 TO 75 WHEN THE THIRD CAUSE GAINED A SHARE, from 75 TO 85 WHEN
+# `not_proof_of_payment` BECAME REALIZABLE, and from 85 TO 90 WHEN `partially_paid` DID — and the
+# last two are the instructive ones, because NOTHING ABOUT `insufficient_evidence` OR ITS CAUSES
+# CHANGED IN EITHER. A member entered the realizable subset, so the denominator of the
+# renormalization rose — 0.80, then 0.90, now 1.00 — and every other verdict is drawn slightly
+# rarer at an unchanged declared share. A guideline derived from a share alone would have missed
+# all three; this one is derived from the DRAW, which is why it moves when a verdict elsewhere in
+# the file gains a mechanism. A figure quoted against any older guideline was correct for the
+# subset of its day.
+#
+# 🔴 AND THE DENOMINATOR CAN NO LONGER RISE. It is 1.00; the enum is fully realizable, so the next
+# move of this number will have to come from `insufficient_evidence`'s own share or from its
+# causes, which is the first time that has been true.
+insufficient_evidence_causes_min_run_size: 90
 
 # WHEN A PAYMENT SMALLER THAN ITS SUBJECT DOCUMENT IS A PART RATHER THAN A MISMATCH.
 #

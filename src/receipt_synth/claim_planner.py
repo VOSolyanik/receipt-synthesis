@@ -32,7 +32,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 
-from receipt_synth.config import coverage_targets
+from receipt_synth.config import coverage_targets, partial_payment_schedules
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
@@ -288,6 +288,18 @@ ARCHETYPES: dict[str, Archetype] = {
 # nothing can build would be a decision nothing exercises.
 _SETTLED_BY_A_PAYMENT: frozenset[DocType] = frozenset({DocType.INVOICE})
 
+# 🔴 WHICH SUBJECT CLASSES CAN STATE THAT THEIR OBLIGATION IS SETTLED IN PARTS, and therefore
+# which ones can be the subject half of a `partially_paid` claim. PUBLIC, unlike the set above,
+# because `assembler` reads it too: it is what decides whether a plan's schedule may be handed to
+# a builder, and a second copy of the answer there is how the two would come to differ.
+#
+# 📄 An instalment term is a condition of an OFFER — it says how the seller proposes to be paid —
+# so it belongs to the class that makes an offer. ⛔ A товарний чек makes none: it is handed over
+# with the goods, it states no obligation, and there is nothing left of it to settle in parts.
+# That is the same reasoning that keeps it out of `_SETTLED_BY_A_PAYMENT`, arrived at from the
+# other end.
+STATES_AN_INSTALMENT_TERM: frozenset[DocType] = frozenset({DocType.INVOICE})
+
 
 def _pairable_subjects(candidates: list[Archetype]) -> list[Archetype]:
     """The subject-only archetypes that may be paired with a payment document.
@@ -303,6 +315,27 @@ def _pairable_subjects(candidates: list[Archetype]) -> list[Archetype]:
         for archetype in candidates
         if evidence_of(archetype) == Evidence(True, False)
         and archetype.doc_type in _SETTLED_BY_A_PAYMENT
+    ]
+
+
+def _instalment_subjects(candidates: list[Archetype]) -> list[Archetype]:
+    """The pairable subjects that can also STATE an instalment term — the subject half of a
+    `partially_paid` claim.
+
+    Narrower than `_pairable_subjects` and for a different reason, so it is a second predicate
+    rather than a widened first one: that one asks whether a payment can settle this class at all,
+    this one asks whether the class can print the marker the engine reads. A class could satisfy
+    either without the other.
+
+    ONE PREDICATE, TWO CALLERS, for the reason `_pairable_subjects` is one: `plannable_categories`
+    answers whether such a claim can be planned and `_select_documents` selects the documents for
+    it, and a category admitted by the first and refused by the second would fail a stage away
+    from its cause.
+    """
+    return [
+        archetype
+        for archetype in _pairable_subjects(candidates)
+        if archetype.doc_type in STATES_AN_INSTALMENT_TERM
     ]
 
 
@@ -388,6 +421,18 @@ REALIZABLE_VERDICTS: tuple[Verdict, ...] = (
     # claim minus its payment document: an ordinary covered basket, an ordinary date inside the
     # period, and `covered_fraction` typically 1.0 beside a reimbursable amount of zero.
     Verdict.NOT_PROOF_OF_PAYMENT,
+    # 🔴 THE SIXTH, WHICH COMPLETES THE ENUM, AND THE ONLY ONE THAT NEEDED THE CORPUS'S BYTES TO
+    # CHANGE. Every verdict above was realized by a SHAPE — which documents a claim carries, which
+    # dates they bear — and this one needed a document to PRINT something no archetype printed: an
+    # invoice that states its obligation is settled in equal parts and what one part comes to
+    # (`content_builder.Invoice.schedule`). The planner then dates and sizes the claim exactly as
+    # an ordinary one and lets the payment settle one part.
+    #
+    # 🔴 THE MARKER IS THE WHOLE MECHANISM, AND THE ARITHMETIC IS NOT. A payment smaller than its
+    # invoice is ALSO how `insufficient_evidence` / `amount_mismatch` is built, so what separates
+    # the two is the printed term and nothing else — see `partial_payment` in policy.yaml. A plan
+    # aimed here that produced no term would be an `amount_mismatch` claim wearing this label.
+    Verdict.PARTIALLY_PAID,
 )
 
 # WHY A ROUTE TO A REALIZABLE VERDICT NEEDS ITS OWN TABLE. `_UNREALIZABLE_REASONS` below is keyed
@@ -416,16 +461,21 @@ _UNREALIZABLE_ROUTES: dict[str, str] = {
 }
 
 _UNREALIZABLE_REASONS: dict[Verdict, str] = {
-    Verdict.PARTIALLY_PAID: (
-        "needs a document showing PART of an amount settled, and the statement archetype now "
-        "registered does not narrow this: a statement row states the amount that moved, and a "
-        "row worth less than the invoice beside it is a claim whose two documents disagree, "
-        "which `policy_engine` already labels `insufficient_evidence` with the cause "
-        "`amount_mismatch`. What is missing is what has always been missing — a document that "
-        "states an amount OUTSTANDING against a total, which no archetype prints. `amount_due` is "
-        "not that field: it is a receipt's ДО СПЛАТИ, the basket total less a discount plus cash "
-        "rounding, and it says nothing about how much of an obligation is still open"
-    ),
+    # 🔴 EMPTY, AND KEPT. Every member of `Verdict` is realizable, so there is no verdict left for
+    # this table to explain — which is a statement about today's registry and not about the design.
+    # `unrealizable_verdicts()` accordingly returns nothing, and the balance report's "NOT
+    # GENERATED IN THIS RUN" block is silent for the first time; both are exercised against a
+    # patched registry in the tests, because a capability with no live case is one that rots.
+    # The next verdict added to the enum lands here before it lands in `REALIZABLE_VERDICTS`.
+    #
+    # ⚠️ `PARTIALLY_PAID` WAS THE LAST ENTRY AND ITS REASON IS WORTH ONE LINE, because it is the
+    # sentence a reader of the git history will find: it needed "a document that states an amount
+    # OUTSTANDING against a total, which no archetype prints". What supplied it is not that field
+    # — an invoice now prints the INSTALMENT its obligation is settled in, which is the same
+    # discriminating fact stated as a term of the offer rather than as a record of what has been
+    # paid. `amount_due` never was that field and still is not: it is a receipt's ДО СПЛАТИ, the
+    # basket total less a discount plus cash rounding.
+    #
     # ⚠️ `NOT_PROOF_OF_PAYMENT` LEFT THIS TABLE WHOLE, ROUTES AND ALL, which is why nothing of its
     # entry moved to `_UNREALIZABLE_ROUTES` the way `rejected`'s did. It has ONE route — a claim
     # every document of which is a `proves_payment: false` type — and that route is now planned by
@@ -536,6 +586,24 @@ def draw_insufficient_evidence_cause(rng: random.Random) -> str:
     return rng.choices(list(causes), weights=list(causes.values()), k=1)[0]
 
 
+def draw_payment_schedule(rng: random.Random) -> str:
+    """Into how many parts a `partially_paid` claim's obligation is divided — by name, per
+    `config/generation.yaml`.
+
+    UNIFORM, and drawn rather than fixed. A quarterly arrangement is surely more common in the
+    world than a half-yearly one, but nothing in this repository has measured that, and a weight
+    here would smuggle a claim about the world into a draw input — the same reasoning that keeps
+    `insufficient_evidence_causes` even. What the draw buys is that the distance between the
+    payment and the invoice varies, so a consumer cannot learn one ratio.
+
+    ⚠️ NOT A LABEL, UNLIKE A CAUSE. The schedule decides how much the payment states; the verdict
+    turns on the presence of the printed term and on the payment matching it, never on which
+    schedule it was. That is why it lives in generation.yaml with the mismatch delta rather than
+    in policy.yaml with the shares.
+    """
+    return rng.choice(list(partial_payment_schedules()))
+
+
 def draw_partially_covered_cause(rng: random.Random) -> str:
     """Why a `partially_covered` claim is partially covered, per `partially_covered_causes`.
 
@@ -608,6 +676,13 @@ class ClaimPlan:
     # doubling it.
     coverage_target: Decimal | None = None
     item_count: int | None = None
+    # INTO HOW MANY PARTS THE OBLIGATION IS SETTLED, by the name `config/generation.yaml` gives the
+    # arrangement — `None` for every claim paid in one, which is every claim but a `partially_paid`
+    # one. CLAIM-LEVEL like the two above, and for the same reason: it decides what the subject
+    # document PRINTS and what the payment document then STATES, so it belongs to neither document
+    # alone. `assembler` hands it to the subject builder and reads the resulting instalment back
+    # off the built document to size the payment.
+    schedule: str | None = None
 
     @property
     def subject_document(self) -> DocumentPlan:
@@ -756,6 +831,12 @@ def plannable_categories(
     use. Widening this means drawing the cause first, which is a reordering of the seed stream and
     a decision nobody has needed to take.
 
+    `partially_paid` NARROWS THE SAME WAY AND THEN ONCE MORE. It also needs a pair — a payment
+    settles PART of an obligation some other document states — and it additionally needs that
+    other document to be a class that can STATE the arrangement, which is what
+    `_instalment_subjects` answers. The second step excludes nothing today and is written for the
+    day a second pairable subject class is registered.
+
     `not_proof_of_payment` NARROWS THE OTHER WAY, and the two narrowings are not versions of one
     rule. It is realized by a claim carrying a SUBJECT DOCUMENT ALONE, so it needs a category some
     subject-only archetype covers — the opposite requirement to the pair rule above, which is
@@ -783,14 +864,30 @@ def plannable_categories(
         for category in documentable_categories(persona)
         if ledger.remaining(persona.persona_id, category) > 0
     ]
-    if verdict is Verdict.INSUFFICIENT_EVIDENCE:
-        return [
+    if verdict in (Verdict.INSUFFICIENT_EVIDENCE, Verdict.PARTIALLY_PAID):
+        # BOTH NEED A PAIR, and a category served by a self-contained document does not get one:
+        # `_select_documents` prefers that shape, and one document can neither contradict itself
+        # nor settle part of itself.
+        paired = [
             category
             for category in open_balance
             if not any(
                 all(evidence_of(archetype))
                 for archetype in archetypes_for(persona.location.country, category)
             )
+        ]
+        if verdict is Verdict.INSUFFICIENT_EVIDENCE:
+            return paired
+        # 🔴 AND `partially_paid` NEEDS THE SUBJECT OF THAT PAIR TO BE ABLE TO STATE THE TERM. A
+        # pair can disagree about an amount whatever its subject class is; only a class that makes
+        # an OFFER can say the offer is settled in parts, which is a narrower requirement and not a
+        # stricter version of the same one. It excludes nothing today — the invoice is the only
+        # pairable subject there is — and it is written because the day a second one is registered
+        # is the day a category would be drawn here and refused inside `_select_documents`.
+        return [
+            category
+            for category in paired
+            if _instalment_subjects(archetypes_for(persona.location.country, category))
         ]
     if verdict is Verdict.NOT_PROOF_OF_PAYMENT:
         return [
@@ -889,6 +986,7 @@ def _select_documents(
     *,
     intent: EvidenceIntent = EvidenceIntent.COMPLETE,
     payment_precedes_subject: bool = False,
+    subject_states_instalments: bool = False,
 ) -> tuple[DocumentPlan, ...]:
     """The documents a claim carries: both facts a reimbursement rests on, or the one
     `intent` asks for.
@@ -919,6 +1017,13 @@ def _select_documents(
     ⚠️ THE SUBJECT OF A PAIR IS NARROWER THAN "AN ARCHETYPE THAT PROVES THE SUBJECT" — see
     `_pairable_subjects`. A payment settles an obligation, and a class that states none is not
     half of a pair however well it states what was bought.
+
+    🔴 `subject_states_instalments` NARROWS IT AGAIN, and it is what `partially_paid` needs: the
+    subject has to be a class that can PRINT the term saying its obligation is settled in parts
+    (`STATES_AN_INSTALMENT_TERM`), because the verdict rests on that printed marker and on nothing
+    else. It changes no date and no amount — the whole difference between such a claim and an
+    ordinary one is a line on the invoice and the size of the payment beside it, and the payment's
+    size is `assembler`'s to apply.
 
     🔴 `intent` IS THE THIRD AND FOURTH SHAPES, AND THEY ARE THE ONES THAT ARE NOT ABOUT WHICH
     ARCHETYPES EXIST.
@@ -975,7 +1080,18 @@ def _select_documents(
     if both:
         return (DocumentPlan(archetype=rng.choice(both), issued_at=issued_at),)
 
-    subjects = _pairable_subjects(candidates)
+    subjects = (
+        _instalment_subjects(candidates)
+        if subject_states_instalments
+        else _pairable_subjects(candidates)
+    )
+    if subject_states_instalments and not subjects:
+        raise ValueError(
+            "a partially paid claim is a payment settling one part of an obligation some other "
+            "document STATES is settled in parts, and no registered archetype here can print such "
+            f"a term: {sorted(a.slug for a in candidates)}. Without it the pair is a payment for "
+            "the wrong amount, which is a different verdict."
+        )
     if subjects and payments:
         # Drawn before the archetypes so that adding a template does not shift the dates
         # of a run: the lead is a property of the claim, the templates are a property of
@@ -1088,6 +1204,7 @@ def plan_claim(
 
     coverage_target: Decimal | None = None
     item_count: int | None = None
+    schedule: str | None = None
     intent = EvidenceIntent.COMPLETE
     if verdict is Verdict.PARTIALLY_COVERED:
         cause = cause or draw_partially_covered_cause(rng)
@@ -1157,6 +1274,23 @@ def plan_claim(
                 "`policy_engine.evaluate_claim`, which returns it with an empty `imperfection`."
             )
         intent = EvidenceIntent.PAYMENT_GAP
+    elif verdict is Verdict.PARTIALLY_PAID:
+        # 🔴 THE ONE VERDICT REALIZED BY WHAT A DOCUMENT PRINTS. Everything else about the plan is
+        # ordinary — a complete pair, a covered basket, a payment inside the period — and the
+        # difference is the schedule drawn here: it makes the invoice state that its obligation is
+        # settled in parts, and `assembler` then sizes the payment to one of them.
+        #
+        # ⛔ NO CAUSE, like `not_proof_of_payment`. policy.yaml gives this verdict one mechanism,
+        # the engine returns it with an empty `imperfection`, and a plan naming a cause would be
+        # aiming at a distinction the label cannot carry.
+        if cause is not None:
+            raise ValueError(
+                f"`partially_paid` carries no cause and {cause!r} was named. There is one way to "
+                "reach it — a payment equal to an instalment its subject document prints — so "
+                "there is nothing for a cause to distinguish; see "
+                "`policy_engine._settles_one_instalment`."
+            )
+        schedule = draw_payment_schedule(rng)
     elif cause is not None:
         raise ValueError(
             f"a cause belongs to a partially_covered, an insufficient_evidence or a rejected "
@@ -1173,11 +1307,13 @@ def plan_claim(
             rng, candidates, issued_at,
             intent=intent,
             payment_precedes_subject=cause == PAYMENT_PRECEDES_SUBJECT,
+            subject_states_instalments=schedule is not None,
         ),
         issued_at=issued_at,
         intent=intent,
         coverage_target=coverage_target,
         item_count=item_count,
+        schedule=schedule,
     )
 
 

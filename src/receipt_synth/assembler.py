@@ -27,6 +27,7 @@ from receipt_synth import __version__
 from receipt_synth.claim_planner import (
     ARCHETYPES,
     REALIZABLE_VERDICTS,
+    STATES_AN_INSTALMENT_TERM,
     ClaimPlan,
     DocumentPlan,
     documentable_categories,
@@ -480,6 +481,20 @@ def _build_document(
         # answers happened to coincide. A class may name the claimant, or take the capture
         # channel, or neither — the slip is the class that does neither, and folding the two back
         # together would give it a buyer field no source puts on the form.
+        if plan.schedule is not None:
+            # 🔴 THE PLAN DECIDES WHAT THE PAGE STATES, and the builder is only told. A schedule
+            # handed to a class that cannot print the term would produce an ordinary invoice, the
+            # payment would be sized to an instalment nothing on the page names, and the engine
+            # would label the claim `insufficient_evidence` with the cause `amount_mismatch` — a
+            # wrong label rather than a failure. `claim_planner` selects the subject for exactly
+            # this, so reaching the refusal means the two have come apart.
+            if archetype.doc_type not in STATES_AN_INSTALMENT_TERM:
+                raise ValueError(
+                    f"{slug!r} is the subject of a claim planned to be settled in parts, and its "
+                    f"class {archetype.doc_type.value!r} states no instalment term — see "
+                    "`claim_planner.STATES_AN_INSTALMENT_TERM`"
+                )
+            basket |= {"schedule": plan.schedule}
         if archetype.doc_type in _NAMES_THE_BUYER:
             # AN OFFER TO PAY HAS TO SAY TO WHOM IT IS MADE. Keyed by class rather than by
             # evidence — see `_NAMES_THE_BUYER`, which is where the change of predicate is
@@ -569,13 +584,20 @@ def _build_document(
 
 
 def _amount_the_payment_states(
-    rng: random.Random, plan: ClaimPlan, subject_amount: Decimal
+    rng: random.Random, plan: ClaimPlan, subject: DocGroundTruth
 ) -> Decimal:
-    """What the payment document of this claim should state, given the subject's amount.
+    """What the payment document of this claim should state, given the subject document.
 
     THE SAME AMOUNT ON AN ORDINARY CLAIM, which is what makes a pair one transaction:
     `policy_engine._cross_checks` compares the two EXACTLY, and there is no tolerance anywhere in
     this repository.
+
+    🔴 ONE INSTALMENT WHEN THE CLAIM IS PLANNED AS `partially_paid`, AND THE FIGURE IS READ OFF THE
+    BUILT DOCUMENT rather than computed here. The invoice divided its own total by the schedule and
+    PRINTED the result; recomputing it would be a second implementation of the division, and the
+    two would round apart on the first total that does not divide evenly — leaving the payment
+    disagreeing with the term beside it by a kopiyka, which the engine labels `amount_mismatch`.
+    That is why this function takes the whole subject record and not its amount.
 
     🔴 A DIFFERENT AMOUNT WHEN THE PLAN ASKED FOR ONE. A claim planned as `insufficient_evidence`
     with the cause `amount_mismatch` is realized here and nowhere else: the label was chosen first
@@ -589,6 +611,18 @@ def _amount_the_payment_states(
     anybody assuming they agree — which is why the floor is in the configured range rather than in
     an assertion here.
     """
+    subject_amount = subject.amount
+    if plan.schedule is not None:
+        if subject.instalment_amount is None:
+            raise ValueError(
+                f"claim {plan.claim_id} is planned to be settled in parts on the "
+                f"{plan.schedule!r} schedule, and its subject document {subject.doc_id} prints no "
+                "instalment term. The payment would state a part nothing on the page names, and "
+                "the engine would label the claim `insufficient_evidence` with the cause "
+                "`amount_mismatch` — see `policy_engine._settles_one_instalment`"
+            )
+        return subject.instalment_amount
+
     if plan.cause != AMOUNT_MISMATCH:
         return subject_amount
 
@@ -712,7 +746,7 @@ def generate_dataset(
                         cites=cites,
                     )
                     if evidence_of(document_plan.archetype).proves_subject:
-                        settles = _amount_the_payment_states(rng, plan, document.amount)
+                        settles = _amount_the_payment_states(rng, plan, document)
                         # What the payment document will cite. It travels beside `settles` because
                         # it is the same kind of fact — a property of the claim that the subject
                         # document decides and the payment document has to be told.
