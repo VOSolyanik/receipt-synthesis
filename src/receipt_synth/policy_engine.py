@@ -782,7 +782,7 @@ def _settles_one_instalment(transaction: Transaction) -> bool:
     SUBJECT DOCUMENT SAYS SO — see `partial_payment` in policy.yaml, which states the rule for a
     consumer building its own engine.
 
-    THREE CONDITIONS, AND EACH ONE IS LOad-BEARING:
+    THREE CONDITIONS, AND EACH ONE IS LOAD-BEARING:
 
     * the subject document PRINTS an instalment amount. Without it there is no intent on the page
       and a smaller payment is a smaller payment;
@@ -1007,12 +1007,18 @@ def evaluate_claim(
     # has nothing to do with the discrimination. See `_settles_one_instalment`.
     instalments = [t for t in shape.transactions if _settles_one_instalment(t)]
     if instalments:
-        first = instalments[0]
+        settlement = instalments[0]
+        subject, payment = settlement.subject, settlement.payment
+        part = subject.instalment_amount
+        if part is None:  # pragma: no cover - `_settles_one_instalment` returns False for one
+            raise AssertionError(
+                f"{subject.doc_id} was read as settling one instalment and carries none; the "
+                "predicate and this branch have come apart"
+            )
         trace.append(
-            f"partial settlement: {first.subject.doc_id} states "
-            f"{_money(first.subject.amount)} {reporting_currency()} settled in parts of "
-            f"{_money(first.subject.instalment_amount)}, and payment {first.payment.doc_id} "  # type: ignore[arg-type]
-            f"states {_money(first.payment.amount)}"
+            f"partial settlement: {subject.doc_id} states {_money(subject.amount)} "
+            f"{reporting_currency()} settled in parts of {_money(part)}, and payment "
+            f"{payment.doc_id} states {_money(payment.amount)}"
         )
         # NO CAUSE, for the reason `not_proof_of_payment` carries none: there is one mechanism
         # behind this verdict and one way to reach it, so there is nothing for a cause to

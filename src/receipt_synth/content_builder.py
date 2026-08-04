@@ -2996,6 +2996,16 @@ class Invoice:
             # 📄 A seller that is not registered prices without ПДВ, so the two money columns lose
             # the suffix. The status is the vendor's, exactly as on a receipt.
             columns["price"], columns["sum"] = columns["price_no_vat"], columns["sum_no_vat"]
+        # The instalment term, composed here rather than in Jinja: the template prints a caption
+        # and a money value or nothing at all, and whether this invoice states one is a property
+        # of the document. `instalment_amount` is not None exactly when `schedule` is not.
+        part = self.instalment_amount
+        instalment = None if part is None else {
+            "caption": block["instalment_caption_format"].format(
+                period=block["instalment_periods"][self.schedule]
+            ),
+            "amount": self._amount(part),
+        }
         return {
             "attention_line": block["attention_line"],
             "title": block["title_format"].format(number=self.number, date=self._long_date()),
@@ -3031,21 +3041,7 @@ class Invoice:
             "amount_in_words": amount_in_words_uk(self.total),
             "vat_in_words": amount_in_words_uk(self.vat_total) if self.vat_payer else None,
             "validity": self.validity,
-            # The instalment term, already composed: the template prints a caption and a money
-            # value or nothing at all, so the decision whether this invoice states one is taken
-            # here and not in Jinja.
-            "instalment": (
-                None
-                if self.schedule is None
-                else {
-                    "caption": block["instalment_caption_format"].format(
-                        period=block["instalment_periods"][self.schedule]
-                    ),
-                    # `instalment_amount` is not None whenever `schedule` is not — same guard,
-                    # asserted by the branch above rather than by a second check.
-                    "amount": self._amount(self.instalment_amount),  # type: ignore[arg-type]
-                }
-            ),
+            "instalment": instalment,
             "signature_labels": block["signature"],
             "signatory_name": self.signatory_name,
             "signatory_post": self.signatory_post,
