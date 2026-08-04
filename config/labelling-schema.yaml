@@ -60,6 +60,49 @@
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 27 by A DOCUMENT CLASS AND A VERDICT ENTERING THE DATA TOGETHER. NO LABEL RECORD
+# GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHAT A CONSUMER RECEIVES:
+# a fifth document class, and the last of the three evidence verdicts that had never been emitted.
+# SIX consequences.
+#
+#   🔴 `non_fiscal_receipt` IS NOW A CLASS OF THE DATASET. `templates/ua_non_fiscal_receipt` — a
+#   товарний чек, the sales slip issued without a cash register — is registered, built and
+#   rendered. Its label record is an ordinary one: a basket, a total, `amount_due`, a
+#   counterparty, and `has_fiscal_number`, `has_qr`, `qr_is_fiscal` all FALSE on a page that
+#   otherwise reads like a fiscal receipt line for line. A consumer whose classifier vocabulary
+#   has four target classes now meets a fifth — see `document_types.non_fiscal_receipt`, whose
+#   `classifier_role` is still `undecided` and is no longer hypothetical.
+#
+#   🔴 `not_proof_of_payment` IS NOW EMITTED. A claim may carry ONE document that states what was
+#   bought and nothing that attests a payment — a bare invoice, or that slip — and it is labelled
+#   `not_proof_of_payment` with an EMPTY `imperfection`: one slot of `document_evidence`, one way
+#   to fail it. Five of the six verdicts are now in the data; only `partially_paid` is not.
+#
+#   🔴 AND SUCH A CLAIM'S `covered_fraction` IS A REAL NUMBER, TYPICALLY 1.0, beside a
+#   `reimbursable_amount` of 0.00. It is the mirror image of the subject gap version 25 added,
+#   where the fraction is `null` because there are no lines at all. A consumer that learned
+#   "nothing reimbursed ⇒ nothing covered" from either has it backwards on the other.
+#
+#   `config/policy.yaml` CHANGED WITHOUT A SHARE MOVING. `verdict_mix.not_proof_of_payment` has
+#   read 0.10 since the file was written and now sizes a bucket that fills; what moved is
+#   `insufficient_evidence_causes_min_run_size`, FROM 75 TO 85, because a fifth realizable member
+#   makes the renormalization denominator 0.90 instead of 0.80 and every other verdict is drawn
+#   slightly rarer at an unchanged declared share. 🔴 THIS IS AN I-2 EVENT: the file is vendored
+#   under a sha lock, so a consumer holding an earlier copy is holding a different file. Its
+#   `version` stays at 1 under the standing rule — the sha IS its identity.
+#
+#   THE DRAW SHIFTED. A fifth verdict in the draw changes what every seed produces from the first
+#   claim onward, so any figure measured on an earlier run — a per-class F1, a document-class mix —
+#   is a figure about a different corpus. The profiles in `run_profiles` are records of the runs
+#   they name and their counts are left untouched; two of their notes said `non_fiscal_receipt`
+#   "has no archetype", which was true when they were taken and is now written in the past tense.
+#
+#   ONE NEW `known_limitations` ENTRY, KL-14: the slip occurs in exactly one claim shape — alone —
+#   so its CLASS predicts the verdict on this corpus, which is a shortcut the world does not have.
+#   And RC-08 is AMENDED rather than closed: archetypes that carry a negative fiscality signal now
+#   exist, the field that would record one still does not, and what this archetype carries is an
+#   ABSENCE that the proposed field's shape cannot hold.
+#
 # Bumped to 26 by A VERDICT OF THE ENUM ENTERING THE DATA FOR THE FIRST TIME. NO LABEL RECORD
 # GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHICH LABELS A CONSUMER
 # RECEIVES, and one of them is a verdict every earlier dataset promised and none contained. FIVE
@@ -810,7 +853,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 26
+version: 27
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -1750,7 +1793,26 @@ document_types:
 
   non_fiscal_receipt:
     classifier_role: undecided
-    status: forward_contract
+    status: emitted
+    emitted_since: >
+      VERSION 27, AND IT IS THE FIRST CLASS OF THIS DATASET WHOSE LAYOUT DOES NOT IDENTIFY IT.
+      📄 The State Tax Service's rule (БЗ 109.10) is that a товарний чек carries the wording
+      «Товарний чек» and otherwise satisfies the fiscal receipt's own form EXCEPT the fiscal number
+      of the register and the wording «ФІСКАЛЬНИЙ ЧЕК» — so the basket, the four amount lines, the
+      columns and the arithmetic are a fiscal receipt's, and the whole difference is a set of
+      requisites left out. A classifier that recognizes a receipt by its shape recognizes this one
+      too, and is wrong.
+
+      WHAT ITS LABEL RECORD CARRIES: `doc_type: non_fiscal_receipt`, a basket in `line_items`,
+      `amount` and `amount_due` (equal, as on a fiscal receipt — see that field), `counterparty`
+      the seller, `date`, and `payer: null` — 📄 the form it follows names no buyer, the person who
+      paid having been at the counter. `vat_letter` is `null` on every line and there is no VAT
+      row: 📄 a registered ПДВ payer is obliged to use a cash register, so the seller of such a
+      slip is a non-payer, and `vat_row_form` is `null` for the same reason.
+
+      🔴 THE THREE FISCALITY FLAGS ARE ALL `false`, AND THEY ARE WHAT THE ABSENCE IS RECORDED AS:
+      `has_fiscal_number`, `has_qr`, `qr_is_fiscal`. No field records the negative marker itself —
+      see RC-08, amended in this version rather than closed by this archetype.
     undecided: >
       The consumer's `other` class is defined as "everything else", which mechanically
       absorbs this type — but the requirement's `other` row says such a document gets
@@ -3344,7 +3406,7 @@ verdicts:
       on one claim.
 
   not_proof_of_payment:
-    status: forward_contract
+    status: emitted
     means: >
       THE SLOT: that MONEY MOVED. This verdict is what the claim gets when that one fact of
       `document_evidence` is not established, and it is decided from the DOCUMENT TYPE — every
@@ -3359,11 +3421,19 @@ verdicts:
       All three sources read it this way: policy.yaml's `document_evidence`, the verdict table
       in docs/architecture.md, and the consumer's own definition, whose canonical example is an
       invoice reading "Zapłacono: 0,00".
-    derived_but_not_built: >
-      `policy_engine.evaluate_claim` NOW LABELS THIS CASE: a claim none of whose documents is a
-      payment-proving type comes back `not_proof_of_payment` with an empty `imperfection`. No
-      archetype produces such a document, so the verdict still reaches no dataset and the
-      status above stays `forward_contract`.
+    derived_and_now_built: >
+      BOTH HALVES EXIST AS OF VERSION 27, and the key is renamed because its old name
+      (`derived_but_not_built`) described a state that has ended. `policy_engine.evaluate_claim`
+      labels the case — a claim none of whose documents is a payment-proving type comes back
+      `not_proof_of_payment` with an empty `imperfection` — and `claim_planner` now BUILDS one:
+      `EvidenceIntent.PAYMENT_GAP` plans a claim carrying a subject document and nothing beside it.
+
+      ⚠️ WHAT WAS MISSING WAS NEVER THE TEMPLATE, and that is worth keeping because it is the
+      lesson rather than the history. An archetype of a `proves_payment: false` type had existed
+      since the invoice landed; what did not exist was a planner that would deliberately plan an
+      INCOMPLETE claim, and naming the intent is what supplied it. TWO archetypes realize the
+      verdict now — a bare invoice and a товарний чек — and KL-14 records what follows from the
+      second occurring in no other claim shape.
     why_this_was_once_unreachable: >
       HISTORY, kept because it has gone wrong twice. This verdict used to be written as what it
       was NOT, and under that construction it lost its own territory: policy.yaml's `coverage`
@@ -4857,6 +4927,58 @@ known_limitations:
       fix it is the generator quietly balancing the sides: a report that cannot show an unbalanced
       partition is a report that says nothing about balance.
 
+  - id: KL-14
+    name: the sales slip occurs in exactly one claim shape, so its class predicts the verdict
+    predictor: >
+      doc_type — a claim containing a `non_fiscal_receipt` is `not_proof_of_payment` on this
+      corpus, without any other field being read
+    hurts: [training, evaluation]
+    subset: >
+      🔴 EVERY `non_fiscal_receipt` IN THE CORPUS IS THE WHOLE OF ITS CLAIM. The planner draws one
+      only as the evidence of a `not_proof_of_payment` claim
+      (`claim_planner.EvidenceIntent.PAYMENT_GAP`) and never as the subject half of a pair, because
+      nothing settles a sales slip: 👁 a payment purpose names an invoice or a delivery note, and
+      the invoice is the only class this generator gives a citable reference. So the CLASS and the
+      VERDICT are in one-to-one correspondence in this direction, and a system that learns "a
+      товарний чек means not proof of payment" scores perfectly here while having learnt a
+      regularity of the corpus rather than the rule.
+
+      ⚠️ THE OTHER DIRECTION DOES NOT HOLD, and that is what keeps the entry from being the whole
+      verdict: a `not_proof_of_payment` claim may equally carry a bare INVOICE, which also appears
+      in ordinary paired claims. So the verdict does not predict the class, and a consumer reading
+      this entry as "the two are interchangeable" has it half right in the expensive direction.
+
+      ⛔ IT IS NOT A LABELLING ERROR. The verdict really is decided from the document types — that
+      is what `document_evidence` says — so the correspondence is sound on every claim. What is
+      missing is the OTHER shape the world has: a slip submitted alongside a genuine payment
+      document, where the claim is complete and the slip is merely the subject. Nothing in this
+      corpus contains one.
+    how_a_consumer_detects_it: >
+      Group claims by the document classes they carry: every claim whose `documents` include a
+      `non_fiscal_receipt` has exactly one document and the verdict `not_proof_of_payment`. The
+      complement — a `non_fiscal_receipt` beside a `payment_confirmation` or a `bank_statement` —
+      has a denominator of zero at any run size, so a scorecard row for it is unmeasured rather
+      than perfect.
+    see_profile: run_profiles
+    when_it_appeared: >
+      WITH THE CLASS ITSELF, in contract version 27. Every profile measured earlier counts
+      `non_fiscal_receipt` as absent, correctly for the run it names.
+    consequence: >
+      A per-class figure for `non_fiscal_receipt` measured here is a figure about a document that
+      is always alone. It evidences that a system can recognize the class and refuse the claim; it
+      does not evidence that the system reads the slip as EVIDENCE OF THE SUBJECT when a payment
+      document is beside it, which is the same document doing a different job.
+    how_to_stratify: >
+      By the SET of document classes on a claim rather than by `doc_type` per document. That is the
+      grouping in which this limitation is visible at all — per document, the class simply occurs;
+      per claim, it occurs in one shape only.
+    fixed_by: >
+      A DECISION ABOUT WHAT SETTLES A SALES SLIP, not a planner change on its own. Pairing one with
+      a payment document means asserting a settlement relation no observation in this project
+      supports, and the payment's purpose line would cite an invoice that does not exist. The
+      honest route is an observation of how such a claim is actually filed; until then the
+      one-shape corpus is the accurate one and this entry is its declaration.
+
 
 # =============================================================================
 # 9b. Run profiles — the measurements, kept apart from the limitations
@@ -5064,8 +5186,10 @@ run_profiles:
           per class, never equal n.
 
           `other` is outside the minimum and reported separately: EMPTY. `act`, `order_screenshot`
-          and `non_fiscal_receipt` have no archetype, so no run of any size contains one. Absence,
-          not a count of zero.
+          and `non_fiscal_receipt` HAD no archetype at the generator version this run was measured
+          at, so no run of any size contained one. Absence, not a count of zero. ⚠️ That is a
+          statement about this run: `non_fiscal_receipt` gained an archetype in contract version 27
+          and later runs contain it.
       split_by_document_class:
         train: {invoice: 291, bank_statement: 146, payment_confirmation: 145, fiscal_receipt: 71}
         validation: {invoice: 296, bank_statement: 148, payment_confirmation: 148, fiscal_receipt: 70}
@@ -5303,8 +5427,10 @@ run_profiles:
           match the small one would discard data for the look of the table.
 
           `other` is outside the minimum and reported separately: EMPTY. `act`, `order_screenshot`
-          and `non_fiscal_receipt` have no archetype, so no run of any size contains one. Absence,
-          not a count of zero.
+          and `non_fiscal_receipt` HAD no archetype at the generator version this run was measured
+          at, so no run of any size contained one. Absence, not a count of zero. ⚠️ That is a
+          statement about this run: `non_fiscal_receipt` gained an archetype in contract version 27
+          and later runs contain it.
       claim_shapes:
         two_documents: 307
         one_document: 52
@@ -5853,10 +5979,35 @@ required_changes:
 
   - id: RC-08
     file: src/receipt_synth/schemas.py, templates/
+    progress: the archetype half is done in version 27; the field is not, and its SHAPE is the
+      open question rather than its wording
     change: >
       Record positive and negative fiscality markers with their position in the text.
-      Needs both a field and archetypes that print such a marker.
+
+      DONE: an archetype that carries a negative fiscality signal exists and reaches the corpus.
+      `ua_non_fiscal_receipt` prints a товарний чек — the rule that a negative signal overrides
+      every positive one has a test document for the first time.
+
+      🔴 STILL OPEN, AND NARROWED BY WHAT THAT ARCHETYPE TURNED OUT TO CARRY. The signal on it is
+      NOT the string this file names for Ukraine: ⛔ no public source found shows «НЕ ФІСКАЛЬНИЙ
+      ЧЕК» printed on a SALES document (the one observed Ukrainian denial, «! НЕ ФІСКАЛЬНИЙ !», is
+      on a ПРРО SERVICE document — a cash movement). What the sources evidence is two things: a
+      positive self-identifying TITLE standing where the fiscal wording stands, and an ABSENCE —
+      no fiscal number, no factory serial, no maker, no mode marker, no QR.
+
+      So the field this entry proposes — marker text together with its position in the text —
+      CANNOT HOLD WHAT THIS DOCUMENT CARRIES: an absence has no string and no coordinate, and a
+      generator filling that field would write something that is not on the page. The absence is
+      recorded instead as `has_fiscal_number` / `has_qr` / `qr_is_fiscal`, all false, which is
+      ground truth and is not the field this entry asks for. `receipt.non_fiscal_marker` in
+      config/fiscal-rules.yaml is left exactly as it stands, and NO ARCHETYPE PRINTS IT.
     blocked_on: decision
+    blocked_on_note: >
+      FOR THE SHAPE OF THE FIELD, AND FOR WHETHER THE UKRAINIAN MARKER'S DESCRIPTION SHOULD BE
+      NARROWED TO SERVICE DOCUMENTS. Both are the author's, and neither was decided as a side
+      effect of connecting the archetype. What the evidence would support today is narrower than
+      this entry: a non-fiscal TITLE in the fiscal title's slot, plus the set of fiscal requisites
+      found absent.
 
   - id: RC-09
     file: src/receipt_synth/content_builder.py
