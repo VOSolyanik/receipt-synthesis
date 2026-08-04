@@ -53,6 +53,7 @@ from receipt_synth.config import (
     high_frequency_surnames,
     jurisdiction,
     load_policy,
+    load_vendors,
     partial_payment_schedules,
 )
 from receipt_synth.content_builder import (
@@ -2233,6 +2234,77 @@ def test_the_payment_of_a_mismatched_party_claim_names_a_seller_the_invoice_does
         assert _payee_the_payment_names(rng, ordinary, vendor, Country.UA) is vendor, (
             f"seed {seed}: an ordinary claim's payment must name the claim's own seller"
         )
+
+
+def test_the_party_a_document_names_follows_what_that_document_ESTABLISHES(tmp_path):
+    """🔴 THE OTHER HALF OF THE MECHANISM: WHICH DOCUMENT RECEIVES WHICH PARTY. The sweep above
+    asserts only which party is DRAWN; the claim loop then has to hand the invoice's seller to the
+    document that states what was bought and the second party to the one that proves the payment,
+    and a loop that handed both documents the same party would leave the corpus with ZERO claims of
+    this cause while every engine test stayed green — the `partially_paid` lesson exactly.
+
+    🔴 AND IT MUST NOT DEPEND ON A DRAW LANDING ON A 2.5% CAUSE. The plan is FORCED — `plan_claims`
+    is replaced by one hand-built plan — so this runs the real assembler loop, the real builders and
+    the real renderer on a claim that is a party mismatch by construction, at any seed.
+
+    THE TWO SELLERS ARE FIXED TOO, and that is what makes the assertion about the DISPATCH rather
+    than about two names being different: `_pick_vendor` is stubbed to answer the claim's draw with
+    the first seller and the payee's draw — the one that excludes a name — with the second. So an
+    inverted dispatch prints two different names and still fails here, which it could not do if the
+    assertion only said "the two disagree". Both entries are real rows of config/vendors.json, so
+    the basket and the VAT status the builders derive from a profile stay the ones a real claim has.
+    """
+    from receipt_synth import assembler
+
+    named = [entry for entry in load_vendors()["vendors"]["UA"]["sport"] if "name" in entry]
+    assert len(named) >= 2, "config/vendors.json no longer offers two named sellers for sport"
+    seller, payee = dict(named[0]), dict(named[1])
+    assert seller["name"] != payee["name"]
+
+    plan = ClaimPlan(
+        claim_id="p001_c1", persona_id="p001", category="sport",
+        verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=COUNTERPARTY_MISMATCH,
+        documents=(
+            DocumentPlan(archetype=ARCHETYPES["ua_invoice"], issued_at=WHEN),
+            DocumentPlan(archetype=ARCHETYPES["ua_bank_payment_confirmation"], issued_at=WHEN),
+        ),
+        issued_at=WHEN,
+    )
+
+    def one_plan(rng, **kwargs):
+        return iter([plan])
+
+    def fixed_vendors(rng, country, category, *, mixed, vat_payer=None, excluding_name=None):
+        # The claim's own draw names nothing to exclude; the payee's draw excludes the seller. That
+        # is the only difference between the two call sites, and it is what this stub keys on.
+        return dict(payee) if excluding_name is not None else dict(seller)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(assembler, "plan_claims", one_plan)
+        patch.setattr(assembler, "_pick_vendor", fixed_vendors)
+        result = generate_dataset(
+            seed=SEED, out_dir=tmp_path, train_fraction=0.5, personas=1, claims_per_persona=1
+        )
+
+    claim = result.claims[0]
+    by_id = {document.doc_id: document for document in result.documents}
+    documents = [by_id[doc_id] for doc_id in claim.documents]
+    assert len(documents) == 2, claim.documents
+
+    for document in documents:
+        expected = (
+            seller["name"]
+            if document_evidence(document.doc_type).proves_subject
+            else payee["name"]
+        )
+        assert document.counterparty == expected, (
+            f"{document.doc_id} is a {document.doc_type.value} and names "
+            f"{document.counterparty!r}; the party a document names follows what it establishes"
+        )
+
+    # And the label the built pair earns, since the whole point of the dispatch is to produce it.
+    assert claim.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert claim.imperfection == [COUNTERPARTY_MISMATCH]
 
 
 def test_a_party_mismatch_cannot_be_planned_where_the_category_has_one_seller():
