@@ -749,12 +749,41 @@ invoice:
 # document. Neither is a measurement anybody should quote, and where a number could not be
 # derived from one document at all it says so instead of looking derived.
 bank_statement:
-  # 👁 ≈18–20 operations on the first page, 89 over four. ONE PAGE IS GENERATED, and the reason
-  # is not cost: ⛔ a second page was never seen, so whether the header repeats on it is
-  # unestablished, and a repetition invented here would be on every image of the class. Twenty
-  # rows already make "find the relevant transaction" non-trivial, which is the whole task the
-  # class carries — 89 rows would buy nothing but four times the paper.
+  # 👁 ≈18–20 operations on the first page, 89 over four. The bound is what fits under the header
+  # block on one sheet — see `bank_statement.pagination` in config/fiscal-rules.yaml — and it is
+  # the range a statement that stays on ONE page draws from. Twenty rows already make "find the
+  # relevant transaction" non-trivial, which is the whole task the class carries.
   row_count_range: [15, 25]
+
+  # 🔴 HOW OFTEN A STATEMENT RUNS ONTO A SECOND SHEET, and why the case exists at all: until it
+  # did, EVERY document in this corpus was one page, so "one page is one document" was true by
+  # construction and a step that splits a submitted file into logical documents scored a perfect
+  # result on data that could not contradict it. A measurement whose ideal is guaranteed by the
+  # construction of the data measures the construction. 👁 The one observed statement ran to four
+  # pages, so the multi-page form is the ordinary shape of this document rather than an edge case.
+  #
+  # ⛔ NOT A RATE, AND NOTHING MEASURED ONE. How often a PRIVATE PERSON's statement covers enough
+  # operations to paginate depends on the period they pull and how much they spend, and no source
+  # in this repository observes either. This is a DIFFICULTY AND COMPOSITION knob, in the same
+  # class as `mixed_basket.coverage_targets` — which is why it is here and not in
+  # config/policy.yaml: it sizes no verdict bucket and no label depends on its value.
+  #
+  # 0.15 IS CHOSEN FROM TWO BOUNDS RATHER THAN PICKED. Below it, a run of a few hundred claims
+  # holds too few paginated statements for a per-page segmentation figure to mean anything —
+  # roughly half of the split pairs take a statement rather than a confirmation, so 0.15 puts
+  # about one paginated document in fourteen claims. Above it, the ONE-PAGE statement stops being
+  # the overwhelming majority, and every figure already measured on this class was measured on
+  # one-page documents: a share that changed the mix would change what those numbers describe
+  # without anybody editing them. Asserted from both sides in tests/test_statement_pagination.py.
+  two_page_share: 0.15
+
+  # The row count once a statement paginates. Its own range rather than a widened
+  # `row_count_range`: that bound is tuned against the first sheet, and one range serving both
+  # would either underfill the second sheet or overflow the first. The low end clears
+  # `pagination.rows_first_page` so a paginated statement always has a real second sheet, and the
+  # high end stays inside one continuation sheet — three sheets are allowed by the split and are
+  # not drawn, because the second page is what makes the rule falsifiable and a third adds paper.
+  two_page_row_count_range: [28, 45]
 
   # 👁 15 of 89 operations are credits — money arriving. The share matters because `direction` is
   # a label field: a page with no credit row at all would carry no visible instance of the

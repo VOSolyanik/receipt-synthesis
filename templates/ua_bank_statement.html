@@ -36,6 +36,30 @@
   INDEXED one of its own — `operation_<i>` over the whole row rect — so a consumer can find the
   rows without reading them, and so the claim that the labelled boxes fall on the labelled row is
   a MEASUREMENT rather than an assertion: box containment in `operation_<k>` decides it.
+
+  🔴 THE CONTENT LIVES IN SHEETS, AND THAT IS WHY THIS ARCHETYPE EXISTS TWICE OVER. Until it
+  paginated, every template in this repository rendered exactly ONE page, so «one page is one
+  document» was true by construction across the whole corpus — and a step that splits a submitted
+  file into logical documents would have scored a perfect result on data that could not contradict
+  it. A measurement whose ideal is guaranteed by the construction of the data measures the
+  construction. A statement of forty operations is the counter-example; the loop below is it.
+
+  ONE `data-document` FOR ALL THE SHEETS, and one `data-region="page_N"` per sheet. The renderer
+  frames the image on the document root, so the image is the whole FILE, and the regions say where
+  each page of it is — `DocGroundTruth.page_count` and `page_regions`. A root per sheet would have
+  produced one document per page, which is the very confusion the pagination exists to break.
+
+  ⛔ WHAT A CONTINUATION SHEET CARRIES IS NOT AN OBSERVED ANATOMY. Only a preview of the FIRST page
+  of the one statement behind this class was ever seen, so nothing about the second may be marked
+  👁. The column headings repeat over the continued rows and each sheet says which of how many it
+  is — that is general layout of a paginated table, and it is all that is claimed. The bank header,
+  the title and the turnover block are printed ONCE and are deliberately not repeated: repeating
+  them would assert an arrangement no source supports, and printing them once is the weaker claim.
+
+  ⚠️ A ONE-SHEET STATEMENT RENDERS EXACTLY AS IT DID, footer and all — which is to say without one.
+  «Сторінка 1 з 1» would be a visible change to the overwhelming majority of this class's images in
+  exchange for a count a reader can already see, and every figure measured on the class so far was
+  measured on that page.
 #}
 <!DOCTYPE html>
 <html lang="uk">
@@ -58,6 +82,13 @@
    image is the document and not the browser window around it. Exactly one per template. #}
 <div class="page" data-document="bank_statement">
 
+{% for page in pages %}
+{# ONE SHEET. `data-region` is what the label's `page_regions` is read from, and the name carries
+   the reading order: `page_1` is the top sheet. The renderer collects these in the SAME pass as
+   the `data-field` boxes, so a region and a field are in one coordinate system by construction. #}
+<section class="sheet" data-region="page_{{ loop.index }}">
+
+  {% if loop.first %}
   {# 👁 The header identifies the bank, then the client, then the account — in that order. The
      ACCOUNT HOLDER IS THE CLAIMANT, so the code beside the name is a РНОКПП; the observed
      statement was a company's and carried a ЄДРПОУ. That is not a layout preference: a statement
@@ -111,6 +142,11 @@
       <span class="count">({{ totals.operations_label }}: {{ debit_count }})</span>
     </div>
   </section>
+  {% else %}
+  {# A CONTINUATION SHEET carries no header, no title and no turnover block — see the head of this
+     file for why they are printed once rather than repeated. What continues is the table, and the
+     column headings below repeat with it. #}
+  {% endif %}
 
   {# The operations table. 👁 Seven columns in the observed order, with the amount split into two
      as explained at the head of this file. ⚠️ THE COUNTERPARTY IS FOUR FIELDS laid out as two
@@ -125,9 +161,15 @@
            makes `direction` READABLE: the field has no printed element of its own — the direction
            is which of these two columns the amount sits in — so the box a consumer needs is this
            header together with the amount's own. A box per column is also what lets a test prove
-           the labelled amount is in the debit column and not merely somewhere on the right row. #}
-        <th class="c-money" data-field="column_debit">{{ columns.debit }}</th>
-        <th class="c-money" data-field="column_credit">{{ columns.credit }}</th>
+           the labelled amount is in the debit column and not merely somewhere on the right row.
+
+           🔴 MARKED ON THE FIRST SHEET ONLY, on a paginated statement. The heading is PRINTED on
+           every sheet, because a continued table repeats its headings — but a `data-field` name is
+           unique within one render and a second sheet claiming it would silently overwrite the
+           first. Marking one is not a loss: the field names a COLUMN, the table is fixed-layout,
+           and a column occupies the same horizontal band on every sheet. #}
+        <th class="c-money" {% if loop.first %}data-field="column_debit"{% endif %}>{{ columns.debit }}</th>
+        <th class="c-money" {% if loop.first %}data-field="column_credit"{% endif %}>{{ columns.credit }}</th>
         <th class="c-purpose">{{ columns.purpose }}</th>
         <th class="c-party">{{ columns.counterparty }}<span class="sub">{{ columns.counterparty_name }} / {{ columns.counterparty_code }}</span></th>
         <th class="c-acct">{{ columns.counterparty_account }} / {{ columns.counterparty_bank }}</th>
@@ -140,9 +182,13 @@
 
          The conditional `data-field` attributes are the whole of what `relevant` does. A
          non-relevant row renders the same span with no attribute — identical pixels, and the only
-         difference is a box in the label. #}
-      {% for row in rows %}
-      <tr data-field="operation_{{ loop.index0 }}">
+         difference is a box in the label.
+
+         `row.index` IS THE ROW'S PLACE IN THE DOCUMENT, not on this sheet. A counter that restarted
+         per sheet would give two rows one box name, which the renderer refuses — and which would
+         otherwise have let the second sheet's boxes overwrite the first's. #}
+      {% for row in page.rows %}
+      <tr data-field="operation_{{ row.index }}">
         <td class="c-num"><span {% if row.relevant %}data-field="relevant_transaction"{% endif %}>{{ row.number }}</span></td>
         <td class="c-when">
           <span {% if row.relevant %}data-field="date"{% endif %}>{{ row.date }}</span>
@@ -166,6 +212,19 @@
       {% endfor %}
     </tbody>
   </table>
+
+  {# 🔴 THE HUMAN-VISIBLE HALF OF THE SEGMENTATION SIGNAL, at the foot of every sheet of a
+     paginated statement: «Сторінка N з M». The count says how many sheets the document has, which
+     is what tells a reader looking at one of them that there is another — and it has to agree with
+     the label's `page_count`, which a test checks by reading this line back off the rendered page.
+
+     ⚠️ ABSENT ON A ONE-SHEET STATEMENT, deliberately. See the head of this file. #}
+  {% if page.folio %}
+  <footer class="page-foot">{{ page.folio }}</footer>
+  {% endif %}
+
+</section>
+{% endfor %}
 
 </div>
 </body>

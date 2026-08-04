@@ -16,6 +16,14 @@
  * payment purpose may wrap, so the sheet lengthens instead of clipping. A bounding box running
  * past the bottom of the image is the one failure a fixed height would guarantee.
  *
+ * 🔴 THE PAPER BELONGS TO `.sheet`, NOT TO `.page`, and a statement may be several sheets — which
+ * is the whole reason this class exists twice over. See the head of the template. `.page` is the
+ * document and carries no geometry of its own, so a one-sheet statement's document rect IS its
+ * sheet's and the settled single-page image is unchanged to the byte. ⚠️ The row capacities that
+ * keep every sheet on ONE A4 height are `bank_statement.pagination` in config/fiscal-rules.yaml,
+ * and they are tuned against THIS stylesheet: a rule here that changed a row's height by a pixel
+ * would push the tallest sheet past the paper, which a test measures rather than trusts.
+ *
  * 🔴 NOTHING HERE MAY SELECT ON `data-field`. Those attributes mark the cells of the ONE row the
  * label describes, and a rule keyed on them would make that row look different from its
  * neighbours — which would turn "find the relevant transaction among twenty" into "find the
@@ -35,16 +43,43 @@ body {
   background: #ffffff;
 }
 
+/* THE DOCUMENT, WHICH MAY BE SEVERAL SHEETS. It carries the type and the colour and nothing
+ * geometric: no padding and no height of its own, so that a one-sheet statement's document rect is
+ * exactly its single sheet's and the settled single-page image is unchanged. */
 .page {
-  box-sizing: border-box;
   width: 1123px;
-  min-height: 794px;
-  padding: 18px 30px 14px;
   background: #ffffff;
   color: #14171c;
   font-family: "Noto Sans", "Roboto", sans-serif;
   font-size: 11px;
   line-height: 1.25;
+}
+
+/* ONE SHEET — the paper, and the element `data-region="page_N"` marks. It holds what used to be on
+ * `.page`: the A4 landscape box, the margins, and `min-height` rather than `height` for the reason
+ * given above.
+ *
+ * A COLUMN SO THAT THE FOOTER CAN SIT AT THE FOOT. `margin-top: auto` on `.page-foot` is what puts
+ * «Сторінка N з M» at the bottom of a sheet the rows did not fill, which is where a page footer is;
+ * a sheet without a footer lays out identically either way. */
+.sheet {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 1123px;
+  min-height: 794px;
+  padding: 18px 30px 14px;
+}
+
+/* ⛔ NOT AN OBSERVED PIECE OF FURNITURE — see `bank_statement.pagination` in
+ * config/fiscal-rules.yaml. Set small, grey and flush right: it is a printer's mark rather than a
+ * requisite, and giving it the weight of one would put a false emphasis on the page. */
+.page-foot {
+  margin-top: auto;
+  padding-top: 6px;
+  color: #3d444d;
+  font-size: 9px;
+  text-align: right;
 }
 
 .muted {
