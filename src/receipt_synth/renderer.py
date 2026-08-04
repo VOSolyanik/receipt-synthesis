@@ -67,6 +67,12 @@ class RenderedDocument:
     width: int
     height: int
     field_bboxes: dict[str, BBox]
+    # One box per `[data-region]` element, keyed by the attribute's value — EMPTY on every
+    # template today, none of which mark one. Collected in the SAME pass as `field_bboxes` (see
+    # `_COLLECT_BBOXES`) rather than a second page evaluation, and with the same rounding
+    # convention. Nothing draws a multi-document file yet; this is the geometry a later stage
+    # needs once a template starts marking more than one document's rectangle on a page.
+    region_bboxes: dict[str, BBox]
     # The page's text in reading order, taken from the layout engine BEFORE rasterization — so it
     # is ground truth by construction rather than by annotation. See `_COLLECT_TEXT`.
     reference_text: str
@@ -143,15 +149,27 @@ _COLLECT_TEXT = """
 # equal page coordinates because the renderer never scrolls and sizes the viewport to the
 # whole document first. Rounded to whole pixels: a box is an index into an image, and a
 # fractional pixel index means nothing to a consumer.
+#
+# ONE PASS COLLECTS BOTH `[data-field]` AND `[data-region]` BOXES, rather than a second page
+# evaluation for the region markers — the same layout, read once. Regions come back as a LIST OF
+# PAIRS rather than an object: `Object.fromEntries` on a duplicate key keeps only the last write
+# silently, and a duplicate `data-region` value has to fail loudly instead (`Renderer.render`
+# checks the list for repeats before turning it into the dict `region_bboxes` holds).
 _COLLECT_BBOXES = """
-() => Object.fromEntries(
-  [...document.querySelectorAll('[data-field]')].map(el => {
+() => {
+  const box = (el) => {
     const r = el.getBoundingClientRect();
-    return [el.dataset.field, [
-      Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height),
-    ]];
-  })
-)
+    return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
+  };
+  return {
+    fields: Object.fromEntries(
+      [...document.querySelectorAll('[data-field]')].map(el => [el.dataset.field, box(el)])
+    ),
+    regions: [...document.querySelectorAll('[data-region]')].map(
+      el => [el.dataset.region, box(el)]
+    ),
+  };
+}
 """
 
 
@@ -226,9 +244,9 @@ class Renderer:
                 page_path.write_text(html, encoding="utf-8")
                 page.goto(page_path.as_uri())
                 width, height = _fit_viewport_to_content(page)
-                bboxes = {
-                    name: tuple(box) for name, box in page.evaluate(_COLLECT_BBOXES).items()
-                }
+                collected = page.evaluate(_COLLECT_BBOXES)
+                bboxes = {name: tuple(box) for name, box in collected["fields"].items()}
+                region_bboxes = _region_bboxes(collected["regions"])
                 # Read BEFORE the screenshot, from the same page state. The order matters only in
                 # that nothing may change between them; there is no scrolling or animation here, so
                 # both describe one layout.
@@ -242,9 +260,28 @@ class Renderer:
             width=width,
             height=height,
             field_bboxes=bboxes,
+            region_bboxes=region_bboxes,
             reference_text=content["text"],
             content_bbox=tuple(content["bbox"]),
         )
+
+
+def _region_bboxes(pairs: list[list]) -> dict[str, BBox]:
+    """`[data-region]` boxes, keyed by attribute value — refusing a duplicate key rather than
+    letting one silently overwrite another.
+
+    Takes the pairs as JavaScript returned them (a list, not an object) precisely so a repeat
+    survives to be checked here: an `Object.fromEntries` on the JavaScript side would already
+    have collapsed it to whichever element came last, with nothing left to detect.
+    """
+    names = [name for name, _ in pairs]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise ValueError(
+            f"duplicate data-region value(s): {duplicates} — every data-region must be unique "
+            "within one render"
+        )
+    return {name: tuple(box) for name, box in pairs}
 
 
 def _fit_viewport_to_content(page: Page) -> tuple[int, int]:
