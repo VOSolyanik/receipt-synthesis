@@ -20,7 +20,11 @@
 # `status: divergent`, and THIS FILE PICKS NEITHER. Resolving a divergence means either a
 # change in `src/` or an amendment to the requirement, and both are the author's call.
 # Every `src/` change a divergence implies is collected in `required_changes` at the foot
-# of this file. None of them has been made.
+# of this file. That sentence used to close "None of them has been made", which version 29
+# withdraws: it stopped being true at version 22, when RC-06 was recorded as `done`, and
+# RC-12 is the second entry to close. Of the sixteen entries, TWO are `done`, one is
+# withdrawn and thirteen are open — `blocked_on:` on each entry is what says which, and no
+# count of them is kept anywhere else.
 #
 # IT DUPLICATES NOTHING. Coverage rules, limits, the category vocabulary and the evidence
 # matrix stay in policy.yaml; pipeline narrative stays in docs/architecture.md; the
@@ -60,6 +64,77 @@
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 29 by A FILE CEASING TO BE A DOCUMENT, IN BOTH DIRECTIONS AT ONCE. Until this version
+# every image held exactly one document and every document occupied exactly one image, so "the
+# file" and "the document" were one thing under two words. They are now TWO RELATIONS — the
+# documents OF a file, and the pages OF a document — THREE NEW LABEL FIELDS carry them, and neither
+# relation implies the other. SEVEN consequences, and the first is the one that breaks a reader of
+# coordinates.
+#
+#   🔴 EVERY COORDINATE IS IN THE SPACE OF THE FILE `source_file` NAMES, AND THAT IS NO LONGER
+#   ALWAYS THIS DOCUMENT'S OWN PAGE. `file_region` says where this document sits inside that file:
+#   `null` is the statement that the document IS the whole file — the ordinary case, and every case
+#   before this version — and a box says the file holds another document besides. WHERE IT IS A
+#   BOX, `field_bboxes`, `content_bbox` AND `page_regions` ARE ALREADY IN THE FILE'S COORDINATES,
+#   so a consumer that crops by `file_region` and then indexes with a field box applies the offset
+#   twice. A consumer diffing v28 against v29 must decide, per record, whose pixel space it is in
+#   before it reads a single box — and `file_region is null` is that test.
+#
+#   🔴 `page_count` AND `page_regions` ARE THE SECOND RELATION, AND THEY ARE INDEPENDENT OF THE
+#   FIRST. How many sheets THIS document runs to, and where each of them is, in reading order.
+#   `page_regions` is present exactly when `page_count > 1` and holds exactly that many entries;
+#   `null` at one page, because a single page has nothing to add over `file_region`. THE TWO
+#   RELATIONS COMBINE AND THE GENERATOR PRODUCES THE COMBINATION: a two-sheet bank statement
+#   carried in one file with the invoice it settles has a `file_region`, a `page_count` of 2 and
+#   two `page_regions` inside that region. A consumer that implemented either as the other's
+#   special case meets the combination on the first such claim.
+#
+#   🔴 A SHARED FILE IS NAMED AFTER THE CLAIM, AND `images/<doc_id>.png` IS NO LONGER THE WHOLE
+#   RULE. Such a file is `images/<claim_id>.png` and BOTH labels of that claim carry it in
+#   `source_file`. A consumer that reconstructed an image path from `doc_id` — the field this file
+#   tells a consumer to treat as opaque, in that field's own entry — now builds the name of a file
+#   that does not exist.
+#   `source_file` is the join, and it always was.
+#
+#   🔴 `capture` IS DRAWN PER FILE WHERE A FILE HOLDS TWO DOCUMENTS, so both records carry the same
+#   channel: a stapled pair is photographed once, not photographed and scanned. The field still
+#   sits on the DOCUMENT record, which is precisely the shape RC-11 disputes — the consumer puts
+#   `medium` on the file — and this is the first evidence in this dataset that it is right about
+#   the home, since two records now carry one file's fact. ⚠️ `content_lost_edges` and
+#   `content_complete` are measured against the FILE's frame for the same reason: the file is what
+#   a consumer receives, and a document whose sheet fell off the photograph lost its content
+#   exactly as a single-document capture does.
+#
+#   ⚠️ A REGION IS AN AXIS-ALIGNED HULL AFTER DEGRADATION, AND IS NOT A CUT LINE. It carries the
+#   caveat `field_bboxes` and `content_bbox` already carry, because it is carried by the same
+#   transform in the same call: under `photo` or `scan`, which rotate, each rectangle is rebuilt as
+#   the smallest axis-aligned box containing its four moved corners. So a region is a little larger
+#   than the document it covers, TWO ADJACENT `file_region`s MAY OVERLAP BY A FEW PIXELS, and a
+#   region may extend past the frame with a negative coordinate. A segmentation step scored pixel
+#   for pixel against these is being scored against an annotation convention as much as against
+#   itself.
+#
+#   RC-12 IS CLOSED, AND ONE HALF OF IT IS CLOSED BY A DECISION RATHER THAN BY CODE. The generator
+#   models multi-document files and is the source of ground truth for their boundaries, which is
+#   what that entry asked for. ⛔ ONLY THE DOCUMENTS OF ONE CLAIM EVER SHARE A FILE: the pattern
+#   "documents of DIFFERENT claims in one file" is deliberately unsupported, files hold at most one
+#   claim's documents — today two — and never the consumer's "up to twelve". The entry states the
+#   boundary and names the consumer's own guard for the case. ONE NEW `known_limitations` ENTRY,
+#   KL-16, and it is a DELIBERATE KEEP rather than a defect found: a payment's purpose text may
+#   cite a document number, or name a kind of goods, that the subject document does not, on claims
+#   whose label is perfectly ordinary.
+#
+#   ⛔ `config/policy.yaml` IS NOT TOUCHED BY THIS VERSION, so this is not an I-2 event and no
+#   share moved. Both new knobs are in config/generation.yaml —
+#   `bank_statement.two_page_share: 0.15` and `file_composition.bundle_share: 0.25` — by that
+#   file's own rule: they size no verdict bucket and no label depends on their value. NO CLAIM'S
+#   VERDICT, CAUSE, AMOUNT, DATE OR PARTY CHANGES because a file is shared; the bundling draw is
+#   seeded independently of every other draw, and at `bundle_share: 0` a run reproduces the corpus
+#   of the commit before it byte for byte — measured, not asserted. ⚠️ THAT IS NOT THE SAME
+#   STATEMENT ABOUT PAGINATION: `two_page_share` changes what a statement PRINTS, so a corpus
+#   generated at version 29 is not version 28's corpus at any share, and any figure measured on an
+#   earlier run is a figure about a different one.
+#
 # Bumped to 28 by THE LAST VERDICT ENTERING THE DATA, and by the printed field that let it. The
 # dataset's six labels are all emitted for the first time. FIVE consequences, and the first two
 # would otherwise be read as defects.
@@ -931,7 +1006,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 28
+version: 29
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -1441,10 +1516,18 @@ document_types:
         # the page lists transactions and no items, so nothing on it can contradict a category.
         categories: all
         paper: >
-          A4 the long way round — 297 × 210 mm — and ONE page. ⛔ The orientation is not observed:
-          it follows from seven columns, two of them free text. Every generated statement is exactly
-          one sheet, and a test holds the tallest row counts to it.
-        rows: 15–25 operations, of which exactly one is labelled
+          A4 the long way round — 297 × 210 mm — and ONE OR TWO sheets. ⛔ The orientation is not
+          observed: it follows from seven columns, two of them free text.
+
+          ⚠️ THIS ENTRY READ "and ONE page … Every generated statement is exactly one sheet, and a
+          test holds the tallest row counts to it" UNTIL VERSION 29. A statement now runs onto a
+          second sheet at the share `bank_statement.two_page_share` declares in
+          config/generation.yaml, and the test that held one sheet holds the split instead. The
+          one-sheet form is still the overwhelming majority, and the label says which a document is:
+          `page_count` and `page_regions`.
+        rows: >
+          15–25 operations on one sheet, 28–45 across two, of which exactly one is labelled — and
+          the labelled one may fall on either sheet
 
     # 🔴 THE SHAPE OF THIS TYPE'S LABEL, AND IT IS DERIVED RATHER THAN CHOSEN.
     #
@@ -1621,10 +1704,18 @@ document_types:
       Mixing them would reproduce a document that does not exist, so one is built and the other two
       are gaps. A consumer must not read robustness across statement layouts off this corpus.
 
-      ONE PAGE. 👁 The observed statement had four. ⛔ Only a preview of its first page was seen, so
-      whether the header repeats on the second is unestablished, and a repetition invented here
-      would be on every image of the class. Twenty rows already make finding the relevant
-      transaction non-trivial.
+      TWO PAGES AT MOST, AND THE SECOND IS LAYOUT-GENERIC. 👁 The observed statement had four. ⛔
+      Only a preview of its first page was seen, so what a real continuation sheet repeats is
+      unestablished; what is generated repeats the column headings and prints a «Сторінка N з M»
+      footer, which is the least the sheet can do and still be readable, and it is DERIVED rather
+      than transcribed. A third sheet is allowed by the split and is not drawn — the second is what
+      makes "one page is one document" falsifiable, and a third only adds paper.
+
+      ⚠️ THIS ITEM READ "ONE PAGE … a repetition invented here would be on every image of the class"
+      UNTIL VERSION 29, when the class began to paginate at the share `bank_statement.two_page_share`
+      declares. The worry the withdrawn sentence carried is answered by the share rather than
+      refuted: the invented continuation is on a minority of this class's images and on none of the
+      rest of the corpus, and the label says which document has one.
 
       THE ACCOUNT HOLDER IS A NATURAL PERSON ON A CORPORATE LAYOUT. ⚠️ 👁 The observed statement was a
       company's, and printed a ЄДРПОУ beside the client's name; this one prints a persona and a
@@ -1724,9 +1815,22 @@ document_types:
 
       It is settled, and by derivation rather than by choice: the requirement's own field list is
       singular over a type it says has no line items, so the extraction target it describes is one
-      transaction — see `the_label_is_one_transaction`. Multi-page is a separate question and is now
+      transaction — see `the_label_is_one_transaction`.
+
+      ⚠️ AND THE SECOND HALF OF THIS ENTRY IS WITHDRAWN IN VERSION 29, KEPT HERE IN THE PAST TENSE
+      FOR THE SAME REASON THE FIRST HALF IS. It read: "Multi-page is a separate question and is now
       a declared gap rather than an open decision: one page is generated because ⛔ a second was
-      never observed.
+      never observed." MULTI-PAGE STATEMENTS ARE GENERATED, at the share
+      `bank_statement.two_page_share` declares, and the gap is closed on the terms the withdrawn
+      sentence set rather than in spite of them: the answer to "one label or one per transaction" is
+      unchanged — a paginated statement still carries ONE label for ONE transaction, and that
+      transaction may sit on either sheet — and what carries the pagination is
+      `document_label.page_count` and `page_regions`, which describe the document's SHEETS and say
+      nothing about how many labels it has.
+
+      ⛔ WHAT WAS NEVER OBSERVED IS STILL NOT OBSERVED. The continuation sheet is layout-generic —
+      see `narrower_than_observed` above, which carries the same ⛔ — so what closed here is the
+      measurement gap, not the anatomy.
 
   invoice:
     classifier_role: target_class
@@ -2260,6 +2364,13 @@ normalization:
       The SHIPPED image, after degradation. Geometric transforms carry the boxes with them,
       so a box aligns with the artifact on disk and not with the clean intermediate render,
       which is never written out.
+
+      🔴 AND SINCE VERSION 29 THE SHIPPED IMAGE IS THE FILE, WHICH IS NOT ALWAYS THE DOCUMENT. Where
+      `document_label.file_region` is non-null the file holds this document and another, and every
+      box of both — fields, content extent, page regions and the two file regions — is in that
+      file's single coordinate space, because they were all carried through one call of one
+      transform. There is no per-document frame in the label and none is derivable except by
+      subtracting `file_region`.
     rule: >
       No matching rule is stated here. IoU thresholds, and whether boxes are scored at all,
       are the consumer's evaluation decision; the boxes come from the browser's layout engine
@@ -2627,13 +2738,26 @@ document_label:
       type: string
       required: true
       normalize: identity
-      note: the image file name, relative to the run's `images/` directory
+      note: >
+        The image file name, relative to the run's `images/` directory — AND IT IS NOT UNIQUE PER
+        DOCUMENT SINCE VERSION 29. Where a claim's two documents are carried in one file, both
+        labels name that one file and `file_region` below says which part of it each occupies.
+        It is the only join from a label to an image: `images/<doc_id>.png` holds for a file
+        holding one document and a shared file is `images/<claim_id>.png`, so a path rebuilt from
+        `doc_id` names nothing on such a claim.
       divergence:
         name: divergence_one_file_one_document
         status: divergent
         generator: >
-          One image is one document; `source_file` and `doc_id` are 1:1, and no label
-          describes a region of a file.
+          A FILE MAY HOLD MORE THAN ONE DOCUMENT, AND A DOCUMENT MAY RUN TO MORE THAN ONE PAGE.
+          `source_file` and `doc_id` are 1:1 on the ordinary file and n:1 on a shared one;
+          `file_region` describes this document's region of its file, `page_regions` the sheets
+          within it, and both are ground truth by construction.
+
+          ⚠️ WHAT STILL DIVERGES IS THE SHAPE, NOT THE FACT. There is no file-level record here:
+          `capture` — drawn per FILE where a file holds two documents — `source_file` and the
+          content-completeness fields are all carried on the DOCUMENT, so two labels of one file
+          repeat one file's facts. See RC-11 for the same disagreement on `capture` alone.
         consumer: >
           The consuming system makes file-to-document segmentation a pipeline step in its
           own right, on the ground that one file may hold up to twelve separate receipts,
@@ -2641,7 +2765,22 @@ document_label:
           separates `ClaimFile` (the binary, with a `medium` and a content hash) from
           `ClaimDocument` (a logical document, with a page or region reference into the
           file).
-        note: nothing in the generator models a multi-document file. See RC-12.
+        withdrawn_in_version_29: >
+          TWO SENTENCES ARE PAST-TENSED HERE RATHER THAN DELETED, because they are what a consumer
+          diffing an earlier copy comes looking for. The generator side read: "One image is one
+          document; `source_file` and `doc_id` are 1:1, and no label describes a region of a file."
+          The note beside it read: "nothing in the generator models a multi-document file. See
+          RC-12."
+
+          BOTH WERE TRUE UNTIL VERSION 29 AND BOTH ARE NOW FALSE — three label fields describe
+          exactly the regions they denied, and RC-12 is closed. A consumer that pinned "one image,
+          one document" as an invariant of this dataset is the one this note is for: nothing warns
+          it at read time, since a record with `file_region: null` looks exactly as it always did.
+        note: >
+          ⛔ AND THE GAP THAT REMAINS IS A DECIDED BOUNDARY RATHER THAN AN OMISSION: the documents
+          of one CLAIM share a file, documents of different claims never do, and the consumer's
+          "up to twelve separate receipts" is a shape this dataset will not contain. RC-12 states
+          the decision, its reason, and the guard the consumer applies instead.
 
     - name: doc_type
       type: enum
@@ -3064,6 +3203,13 @@ document_label:
       meaning: >
         WHICH EDGES OF THE IMAGE THE TEXT CROSSES after degradation — empty when the text is wholly
         on the page. Derived from `content_bbox` against the degraded image's own dimensions.
+      the_frame_is_the_file: >
+        🔴 SINCE VERSION 29, AND IT IS THE FILE A CONSUMER RECEIVES. Where two documents share a
+        file the edges are the FILE's, so this says whether this document's text survived the
+        capture of that file — a document whose sheet fell outside the photograph loses its content
+        exactly as a single-document capture does. `content_complete` inherits the frame, being
+        computed from this. It follows that one file's two documents can report differently: the
+        one at the bottom of a stapled pair is the one a crop reaches first.
       its_scope_is_text: >
         ⚠️ THE SCOPE OF `content_bbox`, AND NO WIDER. A capture that cut off a QR code, a stamp or a
         signature while keeping every character reports NO lost edge, and truthfully. A completeness
@@ -3231,6 +3377,14 @@ document_label:
         reimbursement evidence arrives. No survey of the field was available, and any other split
         would be a made-up frequency wearing the authority of a config key. See
         `known_limitations` KL-11.
+      drawn_per_document_or_per_file: >
+        🔴 PER DOCUMENT, EXCEPT THAT A FILE IS CAPTURED ONCE. Where a claim's two documents are
+        carried in one file, ONE channel is drawn for the FILE and both records carry it — a
+        claimant who photographs a stapled pair does not photograph one sheet and scan the other.
+        So on such a claim `capture` is not independent between the two labels, and a consumer
+        computing a per-channel figure over documents must know that some of them come in pairs
+        that could not have differed. It is also why the same claim's two documents share their
+        degradation exactly: one image was degraded, not two.
       label_invariance: >
         Capture mode changes pixels and boxes, never content — so one rendered document may
         yield several examples sharing every other field of this record. 🔴 WITH ONE EXCEPTION,
@@ -3248,6 +3402,133 @@ document_label:
           the gap cannot be closed by adding a fourth entry here, and adding one would put a
           document with no degradation into a vocabulary whose every member names a kind of
           degradation. Four media, three channels. See RC-11.
+
+    # ------------------------------------------------------------------------
+    # THREE FIELDS ADDED IN VERSION 29, CARRYING TWO RELATIONS THAT ARE INDEPENDENT OF EACH OTHER.
+    # `file_region` answers WHICH PART OF ITS FILE this document is; `page_count` and `page_regions`
+    # answer HOW MANY SHEETS THIS DOCUMENT RUNS TO and where each of them is. A file holding two
+    # documents of which one is a two-sheet statement carries both at once, and the generator
+    # produces that combination — so neither relation may be implemented as the other's special
+    # case.
+    #
+    # 🔴 ONE PIXEL SPACE FOR ALL THREE, AND IT IS THE FILE'S. Every box below is in the coordinates
+    # of the image named by `source_file`, in the same `[x, y, width, height]` COCO convention as
+    # `field_bboxes` and under the same `bbox` rule. Where `file_region` is non-null, `field_bboxes`,
+    # `content_bbox` and `page_regions` are ALREADY offset into that space: a consumer that crops by
+    # `file_region` and then indexes with a field box applies the offset twice. Nothing here is in
+    # per-document coordinates, and nothing derives them for a consumer.
+    #
+    # ⚠️ AFTER DEGRADATION EVERY ONE OF THEM IS AN AXIS-ALIGNED HULL, which is the caveat
+    # `field_bboxes` and `content_bbox` already carry and is inherited for the reason it is
+    # inherited: `degrader.carry_boxes` moves every rectangle of one file in ONE call, as four
+    # keypoints each, and rebuilds each box as the smallest axis-aligned rectangle containing its
+    # four moved corners. Under `photo` and `scan`, which rotate, a region is therefore a little
+    # larger than what it covers — SO TWO ADJACENT `file_region`s MAY OVERLAP BY A FEW PIXELS, and a
+    # region may extend past the frame with a negative coordinate or a far edge beyond it, exactly
+    # as a field box may. A region says where a document is. It is not a cut line, and a splitter
+    # scored pixel for pixel against one is being scored against an annotation convention as much as
+    # against itself.
+    # ------------------------------------------------------------------------
+
+    - name: file_region
+      type: "[number, number, number, number] or null"
+      required: false
+      normalize: bbox
+      status: emitted
+      meaning: >
+        WHERE THIS DOCUMENT SITS INSIDE `source_file`. `null` is the statement that the document IS
+        the whole file — the ordinary case, and every case before version 29 — and a box is the
+        statement that the file holds another document besides this one.
+      null_is_the_whole_file_and_not_a_missing_value: >
+        🔴 A CONSUMER MUST NOT READ `null` AS "UNKNOWN". It is the segmentation answer for a file
+        with one document in it: the region is the image. Treating it as absent leaves the
+        commonest case of the corpus with no ground truth at all, and treating it as an error
+        leaves it with a fabricated one.
+      what_may_share_a_file: >
+        ⛔ THE DOCUMENTS OF ONE CLAIM, AND NOTHING ELSE — a claimant stapling them together before
+        submitting them, subject document first and payment document below, at the share
+        `file_composition.bundle_share` declares in config/generation.yaml.
+
+        ⚠️ THAT SHAPE IS A JUDGEMENT AND NOT AN OBSERVATION, AND THE HONEST NUMBER IS BESIDE THE
+        SHARE: 👁 zero of the author's own 87 files holds more than one document. The argument for
+        the share not being zero is about the SUBMISSION rather than about the document — a channel
+        taking one file per claim, while a claim needs both a subject document and a payment
+        document, makes stitching the two the ordinary way to file it — and it is written out where
+        the number is, not restated here.
+
+        Documents of DIFFERENT claims never share a file: a
+        claim is the unit a verdict is reached on, so such a file would be evidence for two answers
+        at once and no relation in this schema could say which part of the image belongs to which
+        claim's label. See RC-12 for the decision and for what a consumer does with the pattern
+        this dataset will not contain.
+      it_is_the_boundary_ground_truth: >
+        THIS IS WHAT MAKES A FILE-SPLITTING STEP MEASURABLE. While every file held exactly one
+        document, a step that splits a submitted file into logical documents scored a perfect
+        result on data whose ideal it could not fail — a measurement of the construction of the
+        data rather than of the step. ⚠️ Nothing printed on such a file says that its sheets are two
+        different documents; the only mark the stitching leaves is the gap between them, which is
+        what makes refusing a cut a real problem.
+      null_on: >
+        every document of a file that holds only it, which is most of the corpus. The share that
+        carries a box follows `file_composition.bundle_share` and the proportion of claims with two
+        documents; a run's own count belongs in `run_profiles`, and NOT MEASURED YET.
+
+    - name: page_count
+      type: integer
+      required: true
+      status: emitted
+      # NO `normalize:` KEY, DELIBERATELY, and for a different reason from `line_items`. This is a
+      # fact about how the document was carried, not a value an extractor returns: nothing prints
+      # it on a single-sheet document, and a paginated one prints «Сторінка N з M» in its footer,
+      # which is a printed caption rather than a labelled field. Naming `identity` would be worse
+      # than naming nothing — that rule's own `why` says nothing prints its fields.
+      meaning: >
+        HOW MANY SHEETS OF ITS FILE THIS DOCUMENT RUNS TO. `1` on every class but a paginated bank
+        statement, which is the only archetype that splits today, at the share
+        `bank_statement.two_page_share` declares in config/generation.yaml.
+      it_is_not_the_file: >
+        A file may hold two documents, so the sheets of a file are not the pages of a document. Only
+        `page_regions` and `file_region` together say which sheet belongs to which document, and a
+        consumer counting sheets in an image is counting neither field.
+      do_not_report_its_accuracy: >
+        NOT AN EXTRACTION TARGET. On the overwhelming majority of documents nothing on the page
+        states it, so a system answering `1` unconditionally scores near-perfectly having read
+        nothing — the same refusal `amount_due` and `direction` carry.
+      null_on: never; it is `1` where there is one sheet, and never absent
+
+    - name: page_regions
+      type: "array of [number, number, number, number], or null"
+      required: false
+      normalize: bbox
+      status: emitted
+      meaning: >
+        ONE RECTANGLE PER SHEET OF THIS DOCUMENT, in READING ORDER — element `i` is page `i + 1`.
+        Present exactly when `page_count > 1`, with exactly that many entries, and `null` at one
+        page, where `file_region` already says where the whole document is and a list of one would
+        say it a second way. The agreement is enforced in `schemas.DocGroundTruth` rather than left
+        for a consumer to discover as a length mismatch.
+      the_rule_is_per_element_and_the_order_is_information: >
+        `bbox` is named for each ELEMENT; the list itself is ORDERED and must not be compared as a
+        set. Which sheet is the first one is the whole of what a continuation sheet means — 📄 the
+        footer prints «Сторінка N з M» — and a comparison that sorted or set-ified the list would
+        score a document assembled backwards as correct.
+      a_document_can_be_split_across_sheets_and_its_boxes_are_not: >
+        ⚠️ A FIELD BOX LIVES ON WHICHEVER SHEET PRINTS IT, AND THE LABEL DOES NOT SAY WHICH. On a
+        paginated statement the two unlabelled money-column headers, `column_debit` and
+        `column_credit`, are marked on the FIRST sheet only, while the relevant row — and so the
+        `amount` box a consumer combines with them to read `direction` — may sit on the SECOND. The
+        combination stays valid because the column band is compared on x, which the sheets share;
+        a consumer comparing on y, or assuming a header and its row are on one page, meets this on
+        the first paginated statement whose relevant transaction fell to page two.
+      what_the_second_sheet_is: >
+        ⛔ A LAYOUT-GENERIC CONTINUATION, NOT OBSERVED ANATOMY. 👁 The one observed statement ran to
+        four pages and ⛔ only a preview of its first was seen, so how a real second sheet repeats
+        the header is unestablished. What is generated repeats the column headings and prints the
+        page footer, which is the least this document can do and still be readable; the template and
+        config/generation.yaml carry the same ⛔ beside the same claim.
+      null_on: >
+        every single-sheet document, which is every class but a bank statement and most bank
+        statements.
 
     - name: field_bboxes
       type: map<string, [number, number, number, number]>
@@ -4535,7 +4816,9 @@ artifacts:
 #
 # WHICH ENTRY MATTERS TO WHOM IS `hurts:`, AND IT IS A LIST. Every entry carries one, holding one
 # or more words of `hurts_vocabulary` directly below — an entry may be hurtful in more than one
-# way at once, and three of the thirteen are. 🔴 SO A CONSUMER SELECTS BY MEMBERSHIP, `"evaluation"
+# way at once, and SEVEN OF THE SIXTEEN are (re-derived at version 29; the sentence read "three of
+# the thirteen", which was the count when the slot became a list at version 23 and was left behind
+# by every entry added since). 🔴 SO A CONSUMER SELECTS BY MEMBERSHIP, `"evaluation"
 # in entry["hurts"]`, AND NEVER BY EQUALITY. Until version 23 the slot was a comma-joined STRING and
 # this comment told a consumer to compare it against one — which was false for exactly the three
 # entries that carry two words, so a consumer following these instructions silently dropped the
@@ -4557,7 +4840,9 @@ artifacts:
 #   then an estimate of behaviour on this dataset's distribution and not on an open world,
 #   and the person adjusting a prompt until the number rises is the channel by which the
 #   bias arrives. Entries whose `hurts:` CONTAINS `evaluation` are the ones that reach this
-#   consumer — three of them also contain `training`, and equality would have missed all three.
+#   consumer — NINE OF THE SIXTEEN, SEVEN OF THEM ALSO CONTAINING `training` (re-derived at version
+#   29; it read "three of them", which was the count at version 23 — equality would today miss all
+#   seven).
 #
 # This is the same obligation policy.yaml states for `verdict_mix`, applied to predictors
 # rather than to class shares: report what was measured, and say on what.
@@ -5305,6 +5590,94 @@ known_limitations:
       schedule and the mismatch delta are independent knobs — and neither is drawn, because a share
       for them would size a bucket nothing in policy.yaml declares. Adding them is a policy decision
       about the mix and not an implementation gap.
+
+  - id: KL-16
+    name: the payment purpose reads like a linkage key and is not one
+    predictor: >
+      none — a cross-document cue that carries no information about the verdict, while disagreeing
+      with the subject document on some claims whose label is perfectly ordinary
+    hurts: [training, evaluation]
+    subset: >
+      🔴 EVERY CLAIM EVIDENCED BY A PAIR, because every payment document of one prints a purpose
+      line and the line is drawn from one pool of formulas whatever the claim was planned as
+      (`payment_purposes` and `bank_statement.purposes` in config/generation.yaml). TWO THINGS IN
+      IT ARE DRAWN WITHOUT REFERENCE TO THE SUBJECT DOCUMENT, and both are visible to a reader:
+
+      THE DOCUMENT CITED. Some formulas name a рахунок and are filled with the claim's own invoice
+      number and date; others name a ВН — a delivery note — whose number is DRAWN AND BELONGS TO NO
+      DOCUMENT OF THE CLAIM (`content_builder._fill_reference`: `{delivery_note_no}` is never filled
+      from the claim, deliberately, so that a linker matching on «№» without reading which class is
+      named links the wrong document). So on a share of ordinary, fully covered claims the payment
+      cites a document number the invoice beside it does not carry.
+
+      THE GOODS NOUN. «за товар», «за обладнання», «за витратні матеріали» — generic, and drawn
+      without reference to the claim's category, so a psychotherapy invoice may be settled by a
+      payment "for consumables". Nothing in the pool names a category at all, which is exactly why
+      a statement 📄 CONFIRMS `proves_subject: false` for its type rather than testing it.
+
+      ⛔ IT IS NOT A LABELLING ERROR AND THE CITATION IS NOT AN AXIS. `cross_document_agreement` in
+      config/policy.yaml declares three — amount, date order, counterparty — and document-number
+      agreement is deliberately not among them. 👁 An observed purpose line names an invoice OR a
+      delivery note by number, and a delivery note is a class no claim of this dataset holds, so a
+      citation pointing outside the claim is the ordinary form of the line rather than a defect in
+      it; what makes a pair one transaction is the money and the party. Every verdict here is
+      derived from the declared axes and is right on every such claim.
+    how_a_consumer_detects_it: >
+      Read the purpose line of a claim's payment document against the subject document's own number
+      and against its line items. The mismatches are visible without any label, and they fall on
+      claims of every verdict — including `covered` — while the `counterparty_mismatch` negative,
+      whose only defect is the party, carries a purpose that cites the claim's own invoice
+      correctly whenever the drawn formula cites a рахунок at all (`assembler`, at the payee draw:
+      the citation is left alone on purpose, because a payment that went to the wrong provider while
+      quoting the right invoice number is what the mistake actually looks like).
+
+      HOW OFTEN EITHER HAPPENS IS A PROPERTY OF THE FORMULA POOL and not of a run's size — it
+      follows from how many formulas of `payment_purposes` and `bank_statement.purposes` name a
+      рахунок rather than a ВН. No profile in section 9b carries the count; where citations have
+      actually been measured is `docs/cross-document-fields.md`, on a run that page names.
+    see_profile: run_profiles
+    what_prompted_it_and_what_it_corrects: >
+      AN INDEPENDENT VERIFIER'S OBSERVATION ON A RUN OF 36 CLAIMS, kept because the author decided
+      to keep the behaviour rather than because it was found to be wrong. That observation went
+      further than the evidence: it read the mismatches as ANTICORRELATED with the traps — weak
+      citations on positives against a perfect one on the negative it had examined — and inferred
+      that a learner could read a perfect citation as a trap signal.
+
+      ⚠️ THAT INFERENCE IS NOT SUPPORTED, AND SAYING SO IS THE USEFUL PART. The formula is drawn from
+      the same pool on a planned negative as on an ordinary claim, and the negative's own realization
+      touches the PARTY and nothing else — so citation fidelity is drawn INDEPENDENTLY OF THE LABEL
+      and no correlation exists in either direction. What was seen at that size was a coincidence of
+      the draw. The limitation is the independence itself: the cue looks like a linkage key, and a
+      system that treats a matching citation as evidence of a link is right by accident and wrong by
+      accident in equal measure.
+    consequence: >
+      A SYSTEM MEASURED HERE IS TAUGHT TO IGNORE THE PURPOSE TEXT, and that lesson does not transfer.
+      A learner that used purpose-text linkage would be penalized on the positives whose citation
+      points elsewhere and unrewarded on the negatives whose citation is perfect, so the corpus's own
+      gradient points at dropping the field — while in the world a payment purpose is one of the few
+      places a payment says which obligation it settles.
+
+      ⚠️ AND A LINKER'S RECALL IS NOT HONESTLY MEASURABLE ON THIS CORPUS, for a reason no run size
+      fixes: nothing in the label says whether a citation of the claim's own document was THERE TO BE
+      FOUND, so "the linker missed it" and "there was nothing to find" fall into one bucket. A
+      `cites_subject_document` flag is specified for exactly that denominator in
+      docs/cross-document-fields.md and DOES NOT EXIST — ⛔ it is deliberately blocked there until a
+      contaminated share of the confirmation purpose pool is repaired, because shipping it earlier
+      would certify those documents as legitimately non-citing.
+    how_to_stratify: >
+      By whether the payment's purpose cites the claim's own document at all — parsed from
+      `reference_text`, since no label field carries it. Report a linkage figure separately on the
+      citing and non-citing shares, and never as one number; a single figure moves with the pool's
+      formula mix, which is a property of config/generation.yaml and not of the system.
+    fixed_by: >
+      NOTHING THAT SHOULD BE DONE BY WIDENING THE POOL, and the decision is the author's: 👁 the
+      observed purpose lines name a delivery note as well as an invoice, and a corpus in which
+      every payment cited its own invoice perfectly would put that field into the state
+      `docs/cross-document-fields.md` calls ① — matching by construction, so a selector built on it
+      measures the generator rather than the system. What WOULD close it is the flag above, once its
+      denominator is honest, plus a policy decision about whether document-number agreement becomes a
+      fourth axis of `cross_document_agreement`. Neither is an implementation gap and neither is
+      taken here.
 
 
 # =============================================================================
@@ -6158,9 +6531,16 @@ run_profiles:
 # =============================================================================
 #
 # Every divergence above that can only be closed by editing this repository, collected in one
-# place. NOTHING IN THIS LIST HAS BEEN IMPLEMENTED. Each says which file, what would change,
-# and whether it is mechanical or waits on a decision — because a change that waits on a
-# decision must not be made by whoever happens to read this next.
+# place. Each says which file, what would change, and whether it is mechanical or waits on a
+# decision — because a change that waits on a decision must not be made by whoever happens to read
+# this next.
+#
+# ⚠️ THE SENTENCE "NOTHING IN THIS LIST HAS BEEN IMPLEMENTED" STOOD HERE UNTIL VERSION 29 AND IS
+# WITHDRAWN. It was already false at version 22, which added the word `done` for RC-06 — so this
+# comment and the vocabulary directly below contradicted each other for seven versions, and a
+# consumer that trusted the comment would not have read the slot. TWO of the sixteen entries are
+# `done` (RC-06, RC-12), one is withdrawn, and thirteen are open. `blocked_on:` is the answer;
+# this comment no longer offers a second one.
 #
 # The four words `blocked_on:` may take are declared as DATA, in `blocked_on_vocabulary` directly
 # below, for the reason the rest of this version is about: they were declared in this comment
@@ -6386,12 +6766,58 @@ required_changes:
       slot unreadable.
 
   - id: RC-12
-    file: src/receipt_synth/assembler.py, schemas.py
+    file: src/receipt_synth/assembler.py, schemas.py, templates/ua_claim_bundle.html
+    progress: >
+      done in version 29 for the pattern this generator will contain, and CLOSED rather than
+      narrowed for the pattern it will not — the second half is a decision, not an omission
     change: >
-      Model multi-document files. The consumer makes file-to-document segmentation a
-      pipeline step and names this generator as the source of ground truth for the
-      boundaries; today one image is one document and no label describes a region of a file.
-    blocked_on: decision
+      DONE. Multi-document files are modelled and this generator is the source of ground truth for
+      their boundaries, which is what this entry asked for. A share of eligible claims —
+      `file_composition.bundle_share` in config/generation.yaml — is composed into ONE image, the
+      subject document above the payment document, and each document keeps its own label file with
+      the shared `source_file`, its own `file_region`, and every coordinate in the file's space.
+      The whole file is degraded ONCE, so the regions and the boxes cannot desynchronize. The
+      independent second relation landed with it: `page_count` and `page_regions` for a document
+      that runs onto more than one sheet, and the combination of the two — a paginated statement
+      inside a shared file — is produced and tested. The entry's own words for what was missing,
+      "today one image is one document and no label describes a region of a file", are false in both
+      halves as of version 29.
+
+      ⛔ AND ONE PATTERN IS DELIBERATELY UNSUPPORTED, WHICH IS WHY THIS ENTRY CLOSES RATHER THAN
+      LEAVING A REMAINDER. Three things a consumer must read as stated, not inferred:
+
+      ONLY "THE DOCUMENTS OF ONE CLAIM IN ONE FILE" IS MODELLED. A claim is the unit a verdict is
+      reached on, so a file spanning two claims would be evidence for two answers at once and no
+      relation in this schema could say which part of the image belongs to which claim's label. It
+      is refused by construction rather than deferred.
+
+      "THE DOCUMENTS OF DIFFERENT CLAIMS IN ONE FILE" WILL NOT BE BUILT — the author's decision of
+      31.07, on the ground that the product removes the manual-process incentive that produces such
+      a file in the first place. THE CONSUMER'S GUARD IS NAMED HERE AS THE BOUNDARY, and it is
+      consumer behaviour rather than anything this generator does: documents of one file that do not
+      converge on one claim route that claim to MANUAL REVIEW. A dataset is therefore not the place
+      that case is answered, and no label of this corpus describes one.
+
+      A FILE HOLDS AT MOST THE DOCUMENTS OF ONE CLAIM — today at most TWO, since that is the largest
+      evidence set the planner builds — AND NEVER THE CONSUMER'S "UP TO TWELVE". A segmentation step
+      measured here is measured on one boundary at a time. That is a real limit on what a figure
+      taken on this corpus supports, and it is stated rather than left to be discovered from a
+      histogram.
+
+      ⚠️ WHAT IS NOT CLOSED IS A DIFFERENT QUESTION AND HAS ITS OWN ENTRY: there is still no
+      file-level record. `capture` — now drawn per FILE where a file holds two documents —
+      `source_file` and the content-completeness fields all sit on the DOCUMENT, so two labels of
+      one file repeat one file's facts. That is RC-11, whose `medium`-on-`ClaimFile` disagreement is
+      the same modelling decision seen from one field.
+    blocked_on: done
+    blocked_on_note: >
+      THE `src/` CHANGE IS MADE — see `change:` above — and `done` is the word for it under this
+      file's own definitions, although the entry closes in TWO ways at once and the vocabulary has
+      no word for that. Half of the ask was BUILT and half was WITHDRAWN by decision, which is
+      `nothing`'s meaning; `nothing` alone would assert that a completed change had been dropped,
+      which is the exact defect the fourth word was added to prevent at version 22. The word says
+      the change was made and this note says what was decided instead of built, rather than a fifth
+      word being invented to carry a single entry.
 
   - id: RC-13
     file: src/receipt_synth/schemas.py
