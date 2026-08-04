@@ -1052,6 +1052,16 @@ def _bundle_one_file(
     composed = _compose_bundle(
         renderer, [built.clean for built in builts], output_path=staging / f"{claim_id}.png"
     )
+    # ⛔ THE FILE TAKES THE FIRST DOCUMENT'S CHANNEL AND THE SECOND'S IS DROPPED, WHICH IS SOUND
+    # ONLY WHILE NO BUILDER PRINTS MEDIUM-DEPENDENT CONTENT. Today none does: `capture` reaches the
+    # degrader and the label and never a content builder, so the second document's pixels are the
+    # same whichever channel was drawn for it and the discard costs nothing. A builder that started
+    # to read its own capture — a caption naming the copy as scanned, a header only a screenshot
+    # carries — would make this line quietly wrong: that document would print for one channel while
+    # its file was captured on another, and nothing downstream measures the two against each other.
+    # The precondition is stated here because the violation would be invisible, not because it is
+    # near; if it ever stops holding, the channel has to be chosen for the CLAIM before its
+    # documents are built rather than picked off one of them afterwards.
     capture = builts[0].capture
     moved = degrade(
         cv2.imread(str(composed.image_path)),
