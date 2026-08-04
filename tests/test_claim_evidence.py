@@ -1373,6 +1373,46 @@ def test_a_rejected_plan_is_refused_by_the_engine_on_the_period_and_on_nothing_e
     assert any("falls outside" in line for line in result.policy_trace)
 
 
+def test_a_zero_coverage_plan_is_rejected_by_the_engine_on_the_basket_and_on_nothing_else():
+    """The loop closed for the OTHER route: the planner's zero coverage target, read back by the
+    oracle that labels it. The mirror of the period test above, with the two mechanisms swapped —
+    an ordinary in-window date and a basket the category covers none of.
+
+    🔴 THE DATE IS INSIDE THE WINDOW HERE, deliberately: `covered_fraction` comes back 0.0 and
+    the verdict is still `rejected`, with an EMPTY `imperfection` — which is the whole of the
+    distinction the two routes draw, and the property that stops a consumer reading the verdict
+    off the calendar. A plan that also displaced the date would collapse the two routes into one
+    and the corpus would go back to measuring a single rule.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claim_planner, "ARCHETYPES", PAIR_REGISTRY)
+        plan = claim_planner.plan_claim(
+            random.Random(3), persona=_persona(), claim_id="c1",
+            category="vitamins_nutrition", ledger=Ledger(), verdict=Verdict.REJECTED,
+            cause=claim_planner.ZERO_COVERAGE,
+        )
+
+    start, end = active_period()
+    assert plan.cause == claim_planner.ZERO_COVERAGE
+    assert plan.coverage_target == Decimal(0)
+    assert start <= plan.issued_at.date() <= end, plan.issued_at
+
+    subject, payment = plan.documents
+    assert plan.issued_at == payment.issued_at, "the claim is dated by its proof of payment"
+
+    result = evaluate([
+        doc("c1_d1", DocType.INVOICE, amount="600.00", when=subject.issued_at.date(),
+            items=[item("600.00", covered=False)]),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="600.00",
+            when=payment.issued_at.date()),
+    ])
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == ()
+    assert result.covered_fraction == Decimal(0)
+    assert result.reimbursable == Decimal("0.00")
+
+
 def test_a_gap_claim_refuses_its_subject_document_by_naming_the_intent():
     """Two refusals, one method, and they must not read alike. A COMPLETE plan with no carrier is
     inconsistent — something went missing — while a gap plan has none by design, and a caller told

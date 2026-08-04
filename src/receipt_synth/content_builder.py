@@ -1269,7 +1269,9 @@ def _draw_basket(
     `covered_only` is the label-first knob: the planner has already chosen the verdict, and the
     builder realizes it. For `covered` the basket is drawn from the category's covered items
     alone; for `partially_covered` by `mixed_items` the caller clears the flag and states the
-    `coverage_target` the basket should come to.
+    `coverage_target` the basket should come to; for the zero-coverage route to `rejected` the
+    caller states a target of exactly ZERO and every line comes from `excluded_items` — the
+    mirror of `covered_only`, and the branch that used to be refused while nothing could plan it.
 
     `document` names the class in the length message and changes nothing else — "a receipt
     carries 1 to 20 lines" is what a caller of that builder needs to read, and the bound itself
@@ -1310,9 +1312,29 @@ def _draw_basket(
             "a mixed basket needs the coverage_target the planner chose — the builder "
             "realizes a verdict, it does not decide one"
         )
+    if coverage_target == Decimal(0):
+        # 🔴 THE ZERO-COVERAGE ROUTE TO `rejected`: every line drawn from the category's
+        # `excluded_items`, none covered, so the covered amount comes to zero and
+        # `policy_engine.verdict_for` answers `rejected` with no cause. The mirror of the
+        # `covered_only` branch above rather than a degenerate mixed basket — there is no ratio
+        # to price toward and no covered side to shrink, so `_build_mixed_basket` has nothing to
+        # do here and its "produced no covered line" guard keeps meaning what it says.
+        catalogue = category(category_id)["excluded_items"]
+        kinds = sellable_kinds(catalogue, vendor)
+        if not kinds:
+            raise ValueError(
+                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
+                f"category {category_id!r} excludes, so it cannot carry a zero-coverage "
+                "basket — ask `vendor_can_carry` before choosing the vendor"
+            )
+        return _draw_distinct_items(
+            rng, kinds, catalogue, count, covered=False, vat_payer=vat_payer,
+            language=language, currency=currency,
+        )
     if not Decimal(0) < coverage_target < Decimal(1):
         raise ValueError(
-            f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
+            f"a coverage target lies between 0 inclusive — the zero-coverage route to "
+            f"`rejected`, handled above — and 1 exclusive, got {coverage_target}"
         )
     return _build_mixed_basket(
         rng,

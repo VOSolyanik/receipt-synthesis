@@ -393,6 +393,19 @@ def insufficient_evidence_causes() -> dict[str, float]:
             load_policy()["insufficient_evidence_causes"].items()}
 
 
+def rejected_routes() -> dict[str, float]:
+    """How the `rejected` bucket splits by route, in declaration order.
+
+    A ROUTE MAP AND NOT A CAUSE MAP, which is why its keys are not all causes this engine can
+    emit: `outside_period` is the cause of one route, while `zero_coverage` names a route whose
+    claims carry NO cause at all — the verdict says the whole of it (`verdict_for`). This engine
+    derives a `rejected` verdict from dates and line items and never consults these shares; what
+    the map describes is the DRAW, exactly as `insufficient_evidence_causes` above.
+    """
+    return {str(name): float(share) for name, share in
+            load_policy()["rejected_routes"].items()}
+
+
 def partial_payment_outside_the_period() -> Verdict:
     """Which verdict a partial settlement paid outside the benefit period gets.
 
