@@ -1205,6 +1205,78 @@ def _build_mixed_basket(
     return items
 
 
+def _draw_basket(
+    rng: random.Random,
+    *,
+    document: str,
+    category_id: str,
+    vendor: dict,
+    vat_payer: bool,
+    covered_only: bool,
+    coverage_target: Decimal | None,
+    item_count: int | None,
+) -> list[LineItem]:
+    """What a document lists, drawn from the category's own buckets.
+
+    🔴 ONE DRAW FOR EVERY CLASS THAT CARRIES A BASKET, and the reason is a label rather than
+    tidiness: coverage is a property of WHAT WAS BOUGHT and not of the document that lists it,
+    so a receipt and an invoice listing the same purchase must produce the same covered
+    fraction. Two builders drawing baskets two ways would make the verdict depend on which
+    class a claim happened to be given. The three callers said so in three copies of this
+    block before it was extracted; the third copy is what made the duplication worth removing.
+
+    `covered_only` is the label-first knob: the planner has already chosen the verdict, and the
+    builder realizes it. For `covered` the basket is drawn from the category's covered items
+    alone; for `partially_covered` by `mixed_items` the caller clears the flag and states the
+    `coverage_target` the basket should come to.
+
+    `document` names the class in the length message and changes nothing else — "a receipt
+    carries 1 to 20 lines" is what a caller of that builder needs to read, and the bound itself
+    is `MAX_LINE_ITEMS` for every class.
+
+    ⚠️ THE ORDER OF THE DRAWS IS PART OF THE SEED'S MEANING. The line count is taken from `rng`
+    before anything else here, exactly as it was in each copy; moving it would change every
+    document of every existing corpus for a refactor that is meant to change nothing.
+    """
+    count = item_count if item_count is not None else rng.randint(2, 4)
+    if not 1 <= count <= MAX_LINE_ITEMS:
+        raise ValueError(f"{document} carries 1 to {MAX_LINE_ITEMS} lines, not {count}")
+
+    if covered_only:
+        if coverage_target is not None:
+            raise ValueError(
+                "coverage_target describes a mixed basket; covered_only=True already "
+                "means every line is covered"
+            )
+        catalogue = category(category_id)["covered_items"]
+        kinds = sellable_kinds(catalogue, vendor)
+        if not kinds:
+            raise ValueError(
+                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
+                f"category {category_id!r} covers"
+            )
+        return _draw_distinct_items(
+            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
+        )
+
+    if coverage_target is None:
+        raise ValueError(
+            "a mixed basket needs the coverage_target the planner chose — the builder "
+            "realizes a verdict, it does not decide one"
+        )
+    if not Decimal(0) < coverage_target < Decimal(1):
+        raise ValueError(
+            f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
+        )
+    return _build_mixed_basket(
+        rng,
+        category_id=category_id,
+        vendor=vendor,
+        count=count,
+        coverage_target=coverage_target,
+    )
+
+
 def _build_tax_lines(items: list[LineItem], *, vat_payer: bool) -> list[TaxLine]:
     """One row per VAT letter present, in the order the jurisdiction declares them.
 
@@ -1418,43 +1490,16 @@ def build_prro_receipt(
     vat_payer = vendor_is_vat_payer(vendor)
 
     # -- what was bought
-    count = item_count if item_count is not None else rng.randint(2, 4)
-    if not 1 <= count <= MAX_LINE_ITEMS:
-        raise ValueError(f"a receipt carries 1 to {MAX_LINE_ITEMS} lines, not {count}")
-
-    if covered_only:
-        if coverage_target is not None:
-            raise ValueError(
-                "coverage_target describes a mixed basket; covered_only=True already "
-                "means every line is covered"
-            )
-        catalogue = category(category_id)["covered_items"]
-        kinds = sellable_kinds(catalogue, vendor)
-        if not kinds:
-            raise ValueError(
-                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
-                f"category {category_id!r} covers"
-            )
-        items = _draw_distinct_items(
-            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
-        )
-    else:
-        if coverage_target is None:
-            raise ValueError(
-                "a mixed basket needs the coverage_target the planner chose — the builder "
-                "realizes a verdict, it does not decide one"
-            )
-        if not Decimal(0) < coverage_target < Decimal(1):
-            raise ValueError(
-                f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
-            )
-        items = _build_mixed_basket(
-            rng,
-            category_id=category_id,
-            vendor=vendor,
-            count=count,
-            coverage_target=coverage_target,
-        )
+    items = _draw_basket(
+        rng,
+        document="a receipt",
+        category_id=category_id,
+        vendor=vendor,
+        vat_payer=vat_payer,
+        covered_only=covered_only,
+        coverage_target=coverage_target,
+        item_count=item_count,
+    )
     total = line_items_total(items)
 
     # -- who sold it
@@ -3037,11 +3082,9 @@ def build_invoice(
 ) -> Invoice:
     """Build one Ukrainian рахунок на оплату.
 
-    THE BASKET IS DRAWN EXACTLY AS A RECEIPT'S IS — same knobs, same meaning, and deliberately the
-    same helpers: `covered_only` for a `covered` claim, `coverage_target` for a mixed one. Coverage
-    is a property of what was bought and not of the document that lists it, so an invoice and a
-    receipt listing the same basket must produce the same covered fraction. Two builders drawing
-    baskets two ways would make the verdict depend on which document class a claim happened to get.
+    THE BASKET IS DRAWN EXACTLY AS A RECEIPT'S IS — same knobs, same meaning, and since the third
+    basket-carrying class landed the same FUNCTION: `_draw_basket`, whose docstring carries the
+    reasoning. `covered_only` for a `covered` claim, `coverage_target` for a mixed one.
 
     `identity` is the SUPPLIER's `PartyIdentity` — its code, its account and the bank holding it —
     drawn once for the claim so that the payment document settling this invoice names the same
@@ -3057,44 +3100,17 @@ def build_invoice(
     block = rules["invoice"]
     vat_payer = vendor_is_vat_payer(vendor)
 
-    # -- what was bought. The receipt's own helpers, called with the receipt's own arguments.
-    count = item_count if item_count is not None else rng.randint(2, 4)
-    if not 1 <= count <= MAX_LINE_ITEMS:
-        raise ValueError(f"an invoice carries 1 to {MAX_LINE_ITEMS} lines, not {count}")
-
-    if covered_only:
-        if coverage_target is not None:
-            raise ValueError(
-                "coverage_target describes a mixed basket; covered_only=True already means "
-                "every line is covered"
-            )
-        catalogue = category(category_id)["covered_items"]
-        kinds = sellable_kinds(catalogue, vendor)
-        if not kinds:
-            raise ValueError(
-                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
-                f"category {category_id!r} covers"
-            )
-        items = _draw_distinct_items(
-            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
-        )
-    else:
-        if coverage_target is None:
-            raise ValueError(
-                "a mixed basket needs the coverage_target the planner chose — the builder "
-                "realizes a verdict, it does not decide one"
-            )
-        if not Decimal(0) < coverage_target < Decimal(1):
-            raise ValueError(
-                f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
-            )
-        items = _build_mixed_basket(
-            rng,
-            category_id=category_id,
-            vendor=vendor,
-            count=count,
-            coverage_target=coverage_target,
-        )
+    # -- what was bought. The receipt's own draw, called with the receipt's own arguments.
+    items = _draw_basket(
+        rng,
+        document="an invoice",
+        category_id=category_id,
+        vendor=vendor,
+        vat_payer=vat_payer,
+        covered_only=covered_only,
+        coverage_target=coverage_target,
+        item_count=item_count,
+    )
 
     # -- the tax, computed from the letters and THEN the letters dropped. ⛔ The observed table has
     # no per-line letter column, so a label carrying one would be unreadable from the image; the
