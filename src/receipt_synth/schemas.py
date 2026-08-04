@@ -328,6 +328,20 @@ class DocGroundTruth(BaseModel):
     amount: Money
     # ДО СПЛАТИ on a Ukrainian receipt: the total less any discount, plus cash rounding.
     amount_due: Money | None = None
+    # What ONE PART of this document's amount comes to, where the document states that the
+    # obligation is settled in parts — «черговий платіж» on an invoice whose payment term is an
+    # instalment plan. `None` on every class that prints no such term, which is every class but
+    # the invoice and most invoices.
+    #
+    # 🔴 IT IS A TERM OF AN OFFER AND NOT A RECORD OF A PAYMENT, which is the distinction the
+    # invoice class is built on: nothing here says any money has moved, only how the seller
+    # proposes to be paid. `amount` stays the whole obligation.
+    #
+    # 🔴 A VERDICT RESTS ON ITS PRESENCE. It is the marker `policy_engine` reads to tell a payment
+    # that settles ONE INSTALMENT (`partially_paid`) from a payment that states the wrong amount
+    # (`insufficient_evidence`, cause `amount_mismatch`) — two claims whose amounts look identical
+    # and whose labels must not. config/policy.yaml, `partial_payment`, states the rule.
+    instalment_amount: Money | None = None
     # The bank's own charge for executing the payment — комісія. `None` on a class that has no
     # such requisite, and NEVER reimbursable: it pays for a banking service rather than for
     # anything a benefit category covers, so no policy limit applies to it.

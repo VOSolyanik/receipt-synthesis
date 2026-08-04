@@ -710,6 +710,13 @@ jurisdictions:
       # block. «ДО СПЛАТИ» is 📄 line 24 of the FISCAL RECEIPT form, where it differs from «СУМА» by
       # the discount and the rounding; an invoice has one total and nothing to differ from.
       #
+      # 🔴 A PAYMENT TERM IS NOT A PAYMENT STATUS, and the whole of `instalment_format` below rests
+      # on the difference. A status is a RECORD that money moved — «Оплачено» — and this document
+      # never carries one, for the reason above. A term is a CONDITION OF THE OFFER: it says how the
+      # seller proposes to be paid, and it is settled when the invoice is drawn up, before any money
+      # exists to record. `validity_format` is already such a term — 📄 the recommended alternative
+      # to a payment status — and the instalment line is the second one.
+      #
       # 📄 THERE IS NO APPROVED FORM for this document, so layout variation is large by
       # construction. This is one arrangement of the requisites every source lists.
 
@@ -822,6 +829,36 @@ jurisdictions:
       # occupies the place a «Оплачено» line would occupy on a Polish faktura, and printing it is
       # this class's positive statement that the document is an OFFER.
       validity_format: "Рахунок дійсний до {date} р."
+
+      # 🔴 THE SECOND PAYMENT TERM, AND THE ONE A VERDICT RESTS ON. It states that the obligation
+      # this invoice raises is settled IN PARTS and what one part comes to: an annual gym
+      # subscription billed for the year and paid quarterly is the working example, and it is what
+      # makes a payment SMALLER than the invoice a lawful pair rather than a contradiction.
+      # `policy_engine` reads it as the marker that tells `partially_paid` from `amount_mismatch`;
+      # config/policy.yaml states that rule.
+      #
+      # ⚠️ NOT OBSERVED IN THIS PROJECT. Neither open invoice carried an instalment term — both were
+      # payable in one — so this wording is derived from general knowledge of the document rather
+      # than from a document in hand, and it is marked as a divergence in
+      # config/labelling-schema.yaml. What IS carried over from the observed pages is the shape: a
+      # single left-aligned line of prose in the block below the totals, exactly where the validity
+      # line sits.
+      #
+      # ⛔ IT NAMES NO AMOUNT ALREADY SETTLED AND NO BALANCE OUTSTANDING. Either would be a record of
+      # what has happened to the money, i.e. the payment status this class does not carry; the
+      # instalment is a term of the offer and is known when the invoice is drawn up.
+      #
+      # A CAPTION AND A MONEY VALUE, like a total row, rather than one sentence with a figure
+      # inside it: the amount carries its own `data-field` box, and a box drawn round a whole
+      # sentence would score a correct reading of the figure as a miss.
+      instalment_caption_format: "Умови оплати: оплата частинами {period}, черговий платіж:"
+      # The Ukrainian adverb per schedule. The schedules themselves — which ones exist and how many
+      # parts each divides an obligation into — are a draw input and live in config/generation.yaml;
+      # this map is what the page PRINTS, which is this file's business.
+      instalment_periods:
+        quarterly: "щоквартально"
+        monthly: "щомісяця"
+        semiannual: "щопівроку"
 
     bank_statement:
       # 👁 ONE CORPORATE CURRENT-ACCOUNT STATEMENT was observed — 4 pages, 89 operations, a

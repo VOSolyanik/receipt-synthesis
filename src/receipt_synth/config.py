@@ -437,6 +437,34 @@ def mismatch_delta_range() -> tuple[Decimal, Decimal]:
     return low, high
 
 
+@cache
+def partial_payment_schedules() -> MappingProxyType[str, int]:
+    """Schedule id → how many equal parts it divides an obligation into.
+
+    The counterpart of `mismatch_delta_range` for the other imperfection realized by an amount: the
+    SHARE of the corpus that carries it is `verdict_mix.partially_paid` in config/policy.yaml, and
+    the size of a part changes no label, so it lives in config/generation.yaml.
+
+    In file order, which is what keeps a draw over it reproducible — the same rule the cause
+    vocabularies of policy.yaml are read under. Returned as a `MappingProxyType` because
+    `functools.cache` hands every caller the same object; see `bank_codes`.
+
+    Every count is validated to be at least 2 here rather than trusted: a schedule of one part
+    would print an instalment term on an invoice its payment settles in full, which is a marker
+    with nothing to mark and would make `policy_engine`'s partial-payment branch disagree with
+    the page.
+    """
+    schedules = load_generation()["partial_payment"]["schedules"]
+    for name, count in schedules.items():
+        if int(count) < 2:
+            raise ValueError(
+                f"config/generation.yaml gives the payment schedule {name!r} {count} part(s). "
+                "One part is not an instalment plan — it is the ordinary claim, whose payment "
+                "equals its invoice."
+            )
+    return MappingProxyType({str(name): int(count) for name, count in schedules.items()})
+
+
 def _invoice_generation() -> dict[str, Any]:
     return load_generation()["invoice"]
 

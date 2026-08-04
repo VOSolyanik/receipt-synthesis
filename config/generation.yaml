@@ -669,6 +669,39 @@ mismatch:
 
 
 # =============================================================================
+# A claim whose payment settles one INSTALMENT — the draw input, not the share
+# =============================================================================
+#
+# 🔴 THE SAME SPLIT AS `mismatch` ABOVE, AND FOR THE SAME REASON. HOW OFTEN a claim's payment
+# settles part of what its subject document states is `verdict_mix.partially_paid` in
+# config/policy.yaml — it sizes a labelled bucket. INTO HOW MANY PARTS the obligation is divided
+# is here, because it changes no label: a subscription paid in two parts and one paid in twelve
+# are the same verdict, and the marker `policy_engine` reads is the presence of the instalment
+# term rather than its size.
+#
+# ⚠️ WHAT IT DOES CHANGE is how far the payment sits from the invoice — a twelfth is further from
+# the total than a half — so it is the same kind of difficulty knob the mismatch delta is.
+#
+# ⛔ NO SKEW BETWEEN THEM, AND NOT FOR WANT OF THINKING ABOUT IT. A quarterly subscription is
+# surely more common than a half-yearly one in the world, but nothing in this repository has
+# measured that, and a share written here would smuggle a claim about the world into a draw
+# input. They are drawn uniformly for the same reason `insufficient_evidence_causes` splits
+# evenly.
+partial_payment:
+  # Schedule id -> how many equal parts it divides the obligation into. The id is what a plan
+  # carries and what config/fiscal-rules.yaml turns into the Ukrainian adverb the page prints;
+  # the number is what one instalment is computed from.
+  #
+  # 🔴 EVERY COUNT IS AT LEAST 2. One part is not an instalment plan — it is the ordinary claim,
+  # whose payment equals its invoice — and a schedule of 1 would print an instalment term over a
+  # payment that settles the whole thing, i.e. a marker with nothing to mark.
+  schedules:
+    quarterly: 4
+    monthly: 12
+    semiannual: 2
+
+
+# =============================================================================
 # Invoice — the draw inputs
 # =============================================================================
 #

@@ -51,6 +51,7 @@ from receipt_synth.config import (
     invoice_count_range,
     invoice_share,
     jurisdiction,
+    partial_payment_schedules,
     payment_confirmation_money_range,
     payment_confirmation_share,
     payment_purposes,
@@ -2880,6 +2881,14 @@ class Invoice:
       config/labelling-schema.yaml rather than satisfied. Nothing in this repository lets a verdict
       rest on such a line, which is the guard that matters: an oracle reading proof of payment off a
       printed word would be deriving the answer from the thing under test.
+
+      🔴 `schedule` IS NOT THAT LINE AND MUST NOT BE READ AS ONE. It states a PAYMENT TERM — that
+      the obligation is settled in equal parts, and what one part comes to — which is a condition
+      of the offer, settled when the invoice is drawn up and before any money exists to record.
+      The guard above survives intact: a verdict does rest on the term's presence, but the term
+      says only how the seller proposes to be paid, and whether money actually moved is still
+      decided from the PAYMENT document's type, exactly as it is on every other claim. Nothing on
+      this page becomes proof of payment.
     * **NO `amount_due`.** 👁 1/1 has a single total block. «ДО СПЛАТИ» is 📄 line 24 of the fiscal
       receipt form, where it differs from «СУМА» by the discount and the rounding. An invoice has
       one total and nothing for a second field to differ from.
@@ -2910,6 +2919,13 @@ class Invoice:
     agreement: str | None
     # 📄 The recommended alternative to a payment status — how long the offer stands.
     validity: str | None
+    # WHICH INSTALMENT SCHEDULE THIS OBLIGATION IS SETTLED ON — a key of
+    # `config.partial_payment_schedules`, or `None` for an invoice payable in one. The COUNT is not
+    # stored beside it: two values that must agree should not be two values, and the count is a
+    # lookup away. The page prints the schedule's Ukrainian adverb and the amount of one part; it
+    # never prints the count, so no label carries it either — a labelled value unreadable from the
+    # image is the thing this class refuses everywhere else.
+    schedule: str | None
     signatory_name: str
     signatory_post: str | None
     bank_code: str
@@ -2920,6 +2936,27 @@ class Invoice:
         """Σ over the line items. DERIVED rather than stored: an invoice states one total, and two
         numbers that must agree should not be two numbers."""
         return line_items_total(self.line_items)
+
+    @property
+    def instalment_amount(self) -> Decimal | None:
+        """What ONE PART of this obligation comes to, or `None` for an invoice payable in one.
+
+        DERIVED from the total and the schedule for the reason `total` itself is derived: an
+        invoice states one obligation, and a part of it that could disagree with the whole would be
+        a second number saying the same thing. Rounded to the kopiyka half-up, the rule every
+        amount in this repository is normalized under.
+
+        ⚠️ THE PARTS NEED NOT SUM BACK TO THE TOTAL, and the page never claims they do. A total of
+        1000.00 in three parts prints 333.33, and three of those come to 999.99; the invoice states
+        the amount of the NEXT payment, not a schedule of every one, so there is no printed
+        arithmetic for the missing kopiyka to contradict. Deciding where a remainder is carried is
+        a commercial term nothing here observes.
+        """
+        if self.schedule is None:
+            return None
+        return (self.total / partial_payment_schedules()[self.schedule]).quantize(
+            KOPIYKA, rounding=ROUND_HALF_UP
+        )
 
     @property
     def reference(self) -> DocumentReference:
@@ -2994,6 +3031,21 @@ class Invoice:
             "amount_in_words": amount_in_words_uk(self.total),
             "vat_in_words": amount_in_words_uk(self.vat_total) if self.vat_payer else None,
             "validity": self.validity,
+            # The instalment term, already composed: the template prints a caption and a money
+            # value or nothing at all, so the decision whether this invoice states one is taken
+            # here and not in Jinja.
+            "instalment": (
+                None
+                if self.schedule is None
+                else {
+                    "caption": block["instalment_caption_format"].format(
+                        period=block["instalment_periods"][self.schedule]
+                    ),
+                    # `instalment_amount` is not None whenever `schedule` is not — same guard,
+                    # asserted by the branch above rather than by a second check.
+                    "amount": self._amount(self.instalment_amount),  # type: ignore[arg-type]
+                }
+            ),
             "signature_labels": block["signature"],
             "signatory_name": self.signatory_name,
             "signatory_post": self.signatory_post,
@@ -3017,11 +3069,15 @@ class Invoice:
     ) -> DocGroundTruth:
         """The label record for this invoice.
 
-        `amount` is the total and there is no second money field: no `amount_due`, no `fee`, no
-        `total_charged`. `counterparty` is the SUPPLIER — the party opposite the claimant, as on
-        every class — and `payer` is the buyer, which is the claimant.
+        `amount` is the total. The only other money field an invoice can carry is
+        `instalment_amount`, and it is populated exactly when the page prints the instalment term:
+        no `amount_due`, no `fee`, no `total_charged`. `counterparty` is the SUPPLIER — the party
+        opposite the claimant, as on every class — and `payer` is the buyer, which is the claimant.
 
         NOTHING RECORDS WHETHER IT WAS PAID, and that is the point of the class rather than a gap.
+        `instalment_amount` is not that record either — see the field's own entry in `schemas.py`
+        and the `schedule` bullet above: it says what one part of the obligation is, not that any
+        part of it has been settled.
         `has_fiscal_number` and `qr_is_fiscal` are `False` because an invoice is not a fiscal
         document at all; a consumer classifying on a fiscal marker must not find one here.
         """
@@ -3032,6 +3088,7 @@ class Invoice:
             language="uk",
             currency="UAH",
             amount=self.total,
+            instalment_amount=self.instalment_amount,
             date=self.issued_at.date(),
             counterparty=self.supplier.name,
             payer=self.buyer.name,
@@ -3078,6 +3135,7 @@ def build_invoice(
     covered_only: bool = True,
     coverage_target: Decimal | None = None,
     item_count: int | None = None,
+    schedule: str | None = None,
     country: str = "UA",
 ) -> Invoice:
     """Build one Ukrainian рахунок на оплату.
@@ -3095,9 +3153,21 @@ def build_invoice(
     invoice addressed to anybody else would evidence nothing about the persona filing the claim.
     This is where an invoice differs structurally from a receipt: a till receipt names no buyer
     because the payer is standing at the till, while an offer to pay has to say to whom it is made.
+
+    🔴 `schedule` IS NAMED BY THE PLAN AND NEVER DRAWN HERE, unlike every other optional requisite
+    of this class. The others are variation — an agreement line, a telephone, a validity — and a
+    builder may draw them because no label depends on which way they come out. This one decides
+    whether the page carries the marker `policy_engine` reads to tell `partially_paid` from
+    `amount_mismatch`, so drawing it would let the builder choose a claim's verdict. It is a
+    keyword of `claim_planner.ClaimPlan`, and `None` is the ordinary invoice payable in one.
     """
     rules = jurisdiction(country)
     block = rules["invoice"]
+    if schedule is not None and schedule not in partial_payment_schedules():
+        raise ValueError(
+            f"config/generation.yaml declares no payment schedule {schedule!r}; it has "
+            f"{sorted(partial_payment_schedules())}"
+        )
     vat_payer = vendor_is_vat_payer(vendor)
 
     # -- what was bought. The receipt's own draw, called with the receipt's own arguments.
@@ -3183,6 +3253,7 @@ def build_invoice(
         unit=block["units"]["service" if _sells_services(vendor) else "goods"],
         agreement=agreement,
         validity=validity,
+        schedule=schedule,
         signatory_name=signatory_name,
         signatory_post=(
             None if is_sole_trader else rng.choice(block["signature"]["posts"])

@@ -16,12 +16,18 @@ from __future__ import annotations
 import random
 import re
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 import yaml
 
-from receipt_synth.config import CONFIG_DIR, category, jurisdiction, load_policy
+from receipt_synth.config import (
+    CONFIG_DIR,
+    category,
+    jurisdiction,
+    load_policy,
+    partial_payment_schedules,
+)
 from receipt_synth.content_builder import (
     Invoice,
     build_invoice,
@@ -72,6 +78,7 @@ def make_invoice(
     vendor: dict = PAYER,
     category_id: str = PAYER_CATEGORY,
     coverage_target: str | None = None,
+    schedule: str | None = None,
 ) -> Invoice:
     rng = random.Random(seed)
     resolved = resolve_vendor(rng, vendor, "UA")
@@ -86,6 +93,7 @@ def make_invoice(
         address="м. Київ, вул. Хрещатик, 22",
         covered_only=coverage_target is None,
         coverage_target=Decimal(coverage_target) if coverage_target else None,
+        schedule=schedule,
     )
 
 
@@ -158,15 +166,87 @@ def test_the_label_carries_no_amount_due():
 def test_the_page_prints_no_payment_status_either(renderer):
     """The same absence on the RENDER, because a label and a page can disagree. Swept over the
     Ukrainian and Polish words a status would be written in — 📄 the consumer's own example is the
-    Polish «Zapłacono», which is where that requirement came from."""
+    Polish «Zapłacono», which is where that requirement came from.
+
+    🔴 THE INSTALMENT INVOICE IS SWEPT TOO, and it is the case this test is now most needed for. A
+    payment TERM is not a payment status — it says how the seller proposes to be paid, not that
+    anybody paid — and the difference is one word away: «черговий платіж» is a term, «сплачено» is
+    a record. The verdict `partially_paid` rests on the term's presence, so a term that drifted
+    into a status would put a printed word in the position of proof of payment, which is the one
+    thing this class must never do.
+    """
     for vendor, category_id in ((PAYER, PAYER_CATEGORY), (NON_PAYER, NON_PAYER_CATEGORY)):
-        text = printed_text(
-            renderer.build_html(
-                SLUG, make_invoice(vendor=vendor, category_id=category_id).render_context()
+        for schedule in (None, "quarterly"):
+            invoice = make_invoice(
+                vendor=vendor, category_id=category_id, schedule=schedule
             )
-        )
-        for token in ("Оплачено", "Не оплачено", "Zapłacono", "Сплачено", "ДО СПЛАТИ"):
-            assert token not in text, f"{token!r} is printed on an invoice"
+            text = printed_text(renderer.build_html(SLUG, invoice.render_context()))
+            for token in ("Оплачено", "Не оплачено", "Zapłacono", "Сплачено", "ДО СПЛАТИ"):
+                assert token not in text, f"{token!r} is printed on an invoice"
+
+
+# ------------------------------------------------------- the instalment term --
+
+
+def test_an_invoice_payable_in_one_states_no_instalment_term():
+    """THE DEFAULT, and it has to stay the default: the marker a verdict rests on must be absent
+    from every ordinary claim, or `partially_paid` would swallow the pairs that agree. `schedule`
+    is `None` unless a plan names one — `build_invoice` never draws it."""
+    invoice = make_invoice()
+
+    assert invoice.schedule is None
+    assert invoice.instalment_amount is None
+    assert label(invoice).instalment_amount is None
+    assert invoice.render_context()["instalment"] is None
+
+
+@pytest.mark.parametrize("schedule", sorted(partial_payment_schedules()))
+def test_the_instalment_is_the_total_divided_by_its_schedule(schedule):
+    """One part of the obligation, to the kopiyka, half-up — the rounding every amount here uses.
+
+    Computed against config/generation.yaml rather than against a stored figure, so a schedule
+    added or repriced there is covered without this test being edited. STRICTLY SMALLER THAN THE
+    TOTAL is asserted separately, because it is the property `policy_engine` discriminates on and
+    it is not implied by the division being correct: a schedule of one part would divide correctly
+    and mark nothing.
+    """
+    invoice = make_invoice(schedule=schedule)
+    parts = partial_payment_schedules()[schedule]
+
+    assert invoice.instalment_amount == (invoice.total / parts).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    assert invoice.instalment_amount < invoice.total
+    assert invoice.instalment_amount > 0
+    assert label(invoice).instalment_amount == invoice.instalment_amount
+
+
+def test_the_instalment_term_is_printed_with_a_box_round_its_amount(renderer, tmp_path):
+    """The term reaches the PAGE, and the box hugs the figure rather than the sentence.
+
+    Three things, all of which a consumer depends on: the schedule's Ukrainian adverb is printed
+    (so a reader can tell a quarterly plan from a monthly one), the amount is printed in the page's
+    own number format, and `instalment_amount` has its own box — a box drawn round the whole line
+    would score a correct reading of the figure as a miss.
+    """
+    invoice = make_invoice(schedule="quarterly")
+    result = renderer.render(SLUG, invoice.render_context(), tmp_path / "instalment.png")
+    text = printed_text(renderer.build_html(SLUG, invoice.render_context()))
+
+    assert BLOCK["instalment_periods"]["quarterly"] in text
+    assert "instalment_amount" in result.field_bboxes
+    # The box is BELOW the total's, because the term sits in the block under the totals — and it is
+    # narrower than the page, which is what "round the amount" means geometrically.
+    assert result.field_bboxes["instalment_amount"][1] > result.field_bboxes["total"][1]
+    assert result.field_bboxes["instalment_amount"][2] < result.field_bboxes["title"][2] / 2
+
+
+def test_an_invoice_states_no_schedule_the_configuration_does_not_declare():
+    """A typo in a plan must not silently produce an invoice with no term on it — which is exactly
+    what an unguarded lookup of an unknown key would do further down, where the missing marker
+    would read as an ordinary claim and the label would come out `amount_mismatch`."""
+    with pytest.raises(ValueError, match="quarterly"):
+        make_invoice(schedule="quaterly")
 
 
 def test_no_line_item_carries_a_vat_letter():
