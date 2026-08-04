@@ -1487,15 +1487,33 @@ def test_the_vendor_is_chosen_once_per_claim_however_many_documents_it_has(tmp_p
     two different sellers on two documents of one purchase. Counted here through a real
     run, so that the guarantee is a property of the loop and not of a call the loop
     happens not to make yet.
+
+    🔴 THE STUB MIRRORS THE LIVE SIGNATURE KEYWORD FOR KEYWORD, AND THAT IS LOAD-BEARING RATHER
+    THAN TIDINESS. `assembler._payee_the_payment_names` passes `excluding_name=` on every claim
+    planned as `counterparty_mismatch`, so a stub one parameter short raises `TypeError` the
+    moment the seed stream shifts such a claim into this profile — it was green by seed luck
+    alone. Verified rather than assumed: at seed 2, same personas and claims, the run plans one
+    such claim, and the short stub failed there with "counting() got an unexpected keyword
+    argument 'excluding_name'".
+
+    ⚠️ AND THAT SECOND DRAW IS NOT COUNTED, because it is not the call this test is about. It
+    asks for a party the claim's own vendor is NOT — a deliberate second seller for the
+    payment document — while what is asserted here is that the claim's OWN vendor is drawn
+    once. Counting both would make the assertion below fail at seed 2 for a call that is
+    correct.
     """
     from receipt_synth import assembler
 
     calls: list[str] = []
     original = assembler._pick_vendor
 
-    def counting(rng, country, category, *, mixed, vat_payer=None):
-        calls.append(category)
-        return original(rng, country, category, mixed=mixed, vat_payer=vat_payer)
+    def counting(rng, country, category, *, mixed, vat_payer=None, excluding_name=None):
+        if excluding_name is None:
+            calls.append(category)
+        return original(
+            rng, country, category, mixed=mixed, vat_payer=vat_payer,
+            excluding_name=excluding_name,
+        )
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(assembler, "_pick_vendor", counting)
