@@ -153,16 +153,16 @@ from receipt_synth.schemas import DocGroundTruth, DocType, LineItem, Verdict, Ve
 MIXED_ITEMS = "mixed_items"
 LIMIT_EXHAUSTED = "limit_exhausted"
 
-# The four causes below are recorded in `imperfection` beside the two above, under the
-# verdicts that are NOT decided by coverage arithmetic — three under `insufficient_evidence`
+# The five causes below are recorded in `imperfection` beside the two above, under the
+# verdicts that are NOT decided by coverage arithmetic — four under `insufficient_evidence`
 # and one under `rejected`. One verdict, several named causes — the shape
 # `partially_covered` already has, and for the same reason: a consumer can know different
 # things about each. A document that is simply absent and two documents that contradict
 # each other are not the same problem.
 #
-# POLICY.YAML NAMES THREE OF THE FOUR AND SIZES NOTHING BY THE FOURTH. Its cause vocabularies
+# POLICY.YAML NAMES FOUR OF THE FIVE AND SIZES NOTHING BY THE FIFTH. Its cause vocabularies
 # exist to declare SHARES — `partially_covered_causes`, and `insufficient_evidence_causes` since
-# the planner learned to build all three of those — so a cause appears there exactly when a
+# the planner learned to build all four of those — so a cause appears there exactly when a
 # bucket of the dataset is sized by it. `OUTSIDE_PERIOD` is not: `rejected` has two routes, one
 # of them buildable, and a share over a single route would be the number 1.0 written down.
 # THE NAMES ARE STILL THIS MODULE'S EITHER WAY, and a share is not a vocabulary: this engine
@@ -284,10 +284,11 @@ def insufficient_evidence_causes() -> dict[str, float]:
     """How the `insufficient_evidence` bucket splits by cause, in declaration order.
 
     🔴 OVER THE CAUSES THE GENERATOR CAN BUILD, WHICH IS NOT THE SAME QUESTION AS THE VOCABULARY
-    EVEN WHERE THE TWO COINCIDE. Three causes lead to this verdict — `SUBJECT_NOT_EVIDENCED`,
-    `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT` — and policy.yaml now declares a share for each,
-    the third having gained a mechanism (`claim_planner.EvidenceIntent.EVIDENCE_GAP`) rather than
-    an exemption.
+    EVEN WHERE THE TWO COINCIDE. Four causes lead to this verdict — `SUBJECT_NOT_EVIDENCED`,
+    `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT`, `COUNTERPARTY_MISMATCH` — and policy.yaml now
+    declares a share for each, the first having gained a mechanism
+    (`claim_planner.EvidenceIntent.EVIDENCE_GAP`) and the last a second party on the payment
+    (`assembler._payee_the_payment_names`), rather than an exemption.
 
     A reader of this map must still not take it for the cause vocabulary. This engine derives a
     cause from a claim's documents and does not consult these shares at all, so it would go on

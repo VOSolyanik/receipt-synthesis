@@ -17,9 +17,11 @@ It also decides whether a claim's evidence is COMPLETE — see `EvidenceIntent`.
 claim that establishes only one of the two facts is a thing this generator has to do, and
 it is done by naming the intent, never by letting a document quietly fail to turn up.
 
-One of the six verdicts is still refused rather than faked — see `_UNREALIZABLE_REASONS`
-— and one ROUTE to a realizable one is, which is a different statement and has its own
-table, `_UNREALIZABLE_ROUTES`.
+All six verdicts are realizable, so `_UNREALIZABLE_REASONS` is empty and kept only for the
+next member of the enum. What is still refused rather than faked is one ROUTE to a
+realizable verdict — `rejected` reached by an uncovered basket rather than by a payment
+outside the period — which is a different statement and has its own table,
+`_UNREALIZABLE_ROUTES`.
 """
 
 from __future__ import annotations

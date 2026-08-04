@@ -120,6 +120,18 @@
 #   0.90, and every other verdict is drawn slightly rarer at an unchanged declared share. 🔴 AN I-2
 #   EVENT: the file is vendored downstream under a sha256 lock.
 #
+#   ⚠️ AND TWO PROSE CORRECTIONS CARRIED IN THE SAME REVISION, RIDING THIS NUMBER RATHER THAN
+#   MINTING ONE OF THEIR OWN — by the precedent version 26 set, the rule at `version` being about
+#   what a consumer diffing two vendored copies must be able to see, and a copy of 28 stating both
+#   correctly. Neither changes a label. FIRST, `verdicts.insufficient_evidence.note` still read
+#   "No dataset contains this verdict" beside the `status: emitted` and the `emitted:` key of its
+#   own entry, so that entry contradicted itself for two revisions; the sentence is withdrawn and
+#   kept in the past tense at the key. SECOND, `sources.reference_run` closed by claiming that
+#   "every other `emitted` statement is about a shape that occurs on every run", which stopped
+#   being true when `rejected`, `partially_paid` and `instalment_amount` became one-in-ten
+#   buckets — the run those three were verified against is now recorded there, the way version
+#   27's exception was.
+#
 #   ⚠️ EVERY REFERENCE-RUN FIGURE IN `known_limitations` PREDATES THIS VERSION and each names its
 #   own run. A block reporting that `partially_paid` is not drawn is a true statement about the run
 #   it names and a false one about this generator; the shares of any such run are also conditional
@@ -992,8 +1004,25 @@ sources:
     `generate-dataset --seed 20260803 --personas 12 --claims-per-persona 3 --split 0.5`, which
     built 36 claims, 7 of them `not_proof_of_payment` and 4 of those evidenced by a
     `non_fiscal_receipt`; the label of one such document was read field by field against its
-    rendered image. The handle above stays the file's default because every other `emitted`
-    statement is about a shape that occurs on every run.
+    rendered image.
+
+    🔴 AND THE VERSION 28 STATEMENTS WERE VERIFIED AGAINST THE SAME LARGER RUN, THE EXCEPTION
+    HAVING BECOME THE RULE FOR NEGATIVES. `verdicts.rejected`, `verdicts.partially_paid` and
+    `document_label.fields.instalment_amount` each describe a bucket the mix draws at about one
+    claim in ten, so the default handle's eight claims cannot be expected to hold one, and an
+    `emitted` status verified against such a run would be recording a check that did not happen.
+    All three were re-checked against
+    `generate-dataset --seed 20260803 --personas 12 --claims-per-persona 3 --split 0.5`, the run
+    of 36 claims named above: it contains 6 `partially_paid` claims and 2 `rejected` ones (both
+    with the cause `outside_period`), and `instalment_amount` is populated on the invoice of each
+    of the 6 and on no other document of the run.
+
+    ⚠️ SO THE SENTENCE THAT USED TO CLOSE THIS ENTRY IS GONE. It read "the handle above stays the
+    file's default because every other `emitted` statement is about a shape that occurs on every
+    run", which was true while version 27's pair was the sole exception and false from version 26
+    onward, when a negative verdict was first drawn at a tenth of the mix. The handle stays the
+    default because it is the cheapest run that re-checks the SHAPES a label record has; a
+    statement about a BUCKET names the run that contains one, beside itself.
   consumer: >
     The neighbouring product requirements document — its extraction fields per document
     type and its entity model, its classifier classes and metric, its extraction
@@ -3710,9 +3739,18 @@ verdicts:
       every number derived from the verdict would be computed off evidence that does not
       hold together.
     note: >
-      The policy engine labels all three causes correctly; what is missing is a planner path
-      that produces a claim carrying only half its evidence, which needs archetypes that do
-      not exist. No dataset contains this verdict.
+      WITHDRAWN IN VERSION 28, AND KEPT IN THE PAST TENSE RATHER THAN DELETED, because it is the
+      sentence a consumer diffing an earlier copy will come looking for. It read: "The policy
+      engine labels all three causes correctly; what is missing is a planner path that produces a
+      claim carrying only half its evidence, which needs archetypes that do not exist. No dataset
+      contains this verdict."
+
+      EVERY CLAUSE OF IT IS FALSE NOW, AND THE LAST ONE CONTRADICTED ITS OWN ENTRY. The planner
+      path is `claim_planner.EvidenceIntent`, the archetypes exist, the causes are four rather
+      than three, and this verdict has been emitted since version 13 — which `status: emitted` and
+      the `emitted:` key above have said since version 26, while this sentence went on denying it
+      two revisions longer. A consumer reading the entry top to bottom found the two halves
+      disagreeing and no way to tell which held. The entry now agrees with itself.
 
   partially_paid:
     status: emitted

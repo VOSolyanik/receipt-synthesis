@@ -1349,13 +1349,15 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     differ in the thing that matters here: `partially_covered`'s causes can occur together on one
     claim and are counted per claim for that reason, while these are mutually exclusive by
     construction — a claim either carries no subject document at all, or carries a pair that
-    disagrees about the amount, or one dated backwards, and the planner draws one of the three.
+    disagrees about the amount, or one dated backwards, or one naming a different party, and the
+    planner draws one of the four.
 
-    🔴 THE THIRD CAUSE IS NOW DRAWN LIKE THE OTHER TWO, so this block no longer prints it as an
-    absence. `subject_not_evidenced` carries a share in policy.yaml since the planner gained
-    `EvidenceIntent.EVIDENCE_GAP`, which means the loop below reports it — including the zero that
-    says the mechanism stopped working, a finding the hand-written line it replaced could not have
-    made.
+    🔴 EVERY CAUSE IS NOW DRAWN, so this block no longer prints any of them as an absence.
+    `subject_not_evidenced` carries a share in policy.yaml since the planner gained
+    `EvidenceIntent.EVIDENCE_GAP`, and `counterparty_mismatch` since the payment could be made to a
+    seller the subject document does not name (`_payee_the_payment_names`) — which means the loop
+    below reports both, including the zero that says a mechanism stopped working, a finding the
+    hand-written line it replaced could not have made.
 
     A cause realizing zero is flagged two different ways depending on run size, because the two
     readings are not the same finding — and, per the marker convention above the report, a
