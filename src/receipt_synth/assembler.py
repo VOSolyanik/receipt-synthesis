@@ -638,6 +638,17 @@ def _payee_the_payment_names(
     one it stands for. The realistic case is a claimant paying the wrong provider OF THE SAME KIND,
     and it is also the harder one.
 
+    ⛔ THE PAYMENT'S PURPOSE STILL CITES THE CLAIM'S OWN INVOICE, and that is left alone
+    deliberately: 👁 a purpose line names an invoice, and a payment that went to the wrong provider
+    while quoting the right invoice number is what the mistake actually looks like. Cutting the
+    citation would make the claim discriminable by a missing reference rather than by the party.
+
+    ⚠️ AND THE INVOICE'S PARTY MAY APPEAR ON A STATEMENT'S OTHER ROWS. `build_bank_statement` takes
+    the claim's PAYEE out of the pool its ordinary rows draw from, and this claim's payee is the
+    mismatched one — so a decoy row naming the invoice's seller is possible. It does not soften the
+    negative: an ordinary row's amount avoids the labelled one and its purpose cites a document
+    outside the claim, so no row of the page shows THIS invoice settled by its own party.
+
     The engine still decides. Nothing here asserts the label: if the two names ever came out equal
     the pair would agree, the claim would come back `covered`, and `_drift_lines` would report the
     target and the label disagreeing — which is why the equality is checked in the draw rather than
