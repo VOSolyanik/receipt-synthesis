@@ -27,6 +27,8 @@ from receipt_synth.claim_planner import ARCHETYPES
 from receipt_synth.config import jurisdiction
 from receipt_synth.content_builder import (
     PartyIdentity,
+    build_app_transaction,
+    build_bank_receipt_in_app,
     build_bank_statement,
     build_invoice,
     build_non_fiscal_receipt,
@@ -224,26 +226,62 @@ def make_non_fiscal_receipt(seed: int = 20260615, vendor: dict = NON_PAYER):
     )
 
 
-def make_platform_receipt(seed: int = 20260615, vendor: dict | None = None):
+def make_platform_receipt(
+    seed: int = 20260615, vendor: dict | None = None, jurisdiction_code: str = "EU"
+):
     """One platform receipt, for the whole-registry tests below.
 
-    THE VENDOR DEFAULT IS AN EU PLATFORM, not `PAYER`: the class's seller draws from the
-    `EU` pool (`claim_planner.Archetype.vendor_pool`) and prints the bare mark alone. The
-    class's own tests are in test_platform_receipt.py; this exists so that every sweep of
-    the registry sweeps this archetype too.
+    THE VENDOR DEFAULT FOLLOWS THE JURISDICTION: an EU platform for the English variant
+    (the class's seller draws from the `EU` pool — `claim_planner.Archetype.vendor_pool`)
+    and the domestic learning platform for the Ukrainian one. The class's own tests are
+    in test_platform_receipt.py; this exists so that every sweep of the registry sweeps
+    both archetypes too.
     """
-    platform = vendor or {
-        "name": "Coursera", "legal_form": "INC",
-        "profile": "online_learning_platform", "vat_payer": False,
-    }
+    if vendor is None:
+        vendor = (
+            {"name": "Coursera", "legal_form": "INC",
+             "profile": "online_learning_platform", "vat_payer": False}
+            if jurisdiction_code == "EU"
+            else {"name": "Prometheus", "legal_form": "TOV",
+                  "profile": "online_learning_platform", "vat_payer": True}
+        )
     return build_platform_receipt(
         random.Random(seed),
         category_id="professional_development",
         issued_at=datetime(2026, 6, 15, 17, 41, 9),
-        vendor=platform,
-        identity=identity_for(platform),
+        vendor=vendor,
+        identity=identity_for(vendor),
         buyer_name="Ковальчук Олена Петрівна",
         buyer_tax_id="2345678901",
+        address="м. Київ, вул. Хрещатик, 22",
+        jurisdiction_code=jurisdiction_code,
+    )
+
+
+def make_app_transaction(seed: int = 20260615, vendor: dict = PAYER):
+    """One app transaction screen, for the whole-registry tests below. Its class's own
+    tests are in test_app_archetypes.py."""
+    return build_app_transaction(
+        random.Random(seed),
+        issued_at=datetime(2026, 6, 15, 13, 46, 0),
+        vendor=vendor,
+        identity=identity_for(vendor),
+        payer_name="Ковальчук Олена Петрівна",
+        payer_tax_id="2345678901",
+        amount=Decimal("600.00"),
+    )
+
+
+def make_bank_receipt_in_app(seed: int = 20260417, vendor: dict = PAYER):
+    """The A4 confirmation inside the app's frame, for the whole-registry tests below."""
+    return build_bank_receipt_in_app(
+        random.Random(seed),
+        issued_at=datetime(2026, 4, 17, 11, 3, 9),
+        vendor=vendor,
+        identity=identity_for(vendor),
+        payer_name="Ковальчук Олена Петрівна",
+        payer_tax_id="2345678901",
+        amount=Decimal("600.00"),
     )
 
 
@@ -256,6 +294,16 @@ def context_for(slug: str) -> dict:
     confirmation rendered from a receipt's context would raise on the first missing key rather
     than assert anything about the page.
     """
+    # BY SLUG BEFORE BY CLASS: three archetypes render templates their class siblings do
+    # not — the phone carriers need chrome keys the A4 context lacks, and the domestic
+    # platform receipt fills requisites the English one disclaims — so the class alone
+    # stopped naming the context the day a class gained a second rendering.
+    if slug == "ua_platform_receipt":
+        return make_platform_receipt(jurisdiction_code="UA").render_context()
+    if slug == "ua_bank_app_transaction":
+        return make_app_transaction().render_context()
+    if slug == "ua_bank_receipt_in_app":
+        return make_bank_receipt_in_app().render_context()
     doc_type = ARCHETYPES[slug].doc_type
     if doc_type is DocType.FISCAL_RECEIPT:
         return make_receipt(registrar=registrar_of(slug)).render_context()

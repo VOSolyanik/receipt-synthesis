@@ -184,6 +184,22 @@ def price_range(item_kind: str, currency: str = "UAH") -> tuple[Decimal, Decimal
     return low, high
 
 
+def archetype_draw_weights() -> dict[str, float]:
+    """The relative draw weights of archetypes within one pool, keyed by slug.
+
+    From `archetype_shares` in config/generation.yaml, whose comment carries the rule:
+    a pool consults the table only when every one of its members is listed, draws
+    uniformly when none is, and is refused when the listing is partial. That rule is the
+    CALLER'S (`claim_planner._draw_archetype`) — this accessor only reads the numbers.
+
+    ⚠️ Deliberately NOT `@cache`d: every cached accessor in this module returns an
+    immutable value, and this one returns a dict — a fresh one per call, so no caller can
+    edit the configuration every later caller sees.
+    """
+    stated = load_generation().get("archetype_shares", {})
+    return {str(slug): float(weight) for slug, weight in stated.items()}
+
+
 @cache
 def quantity_choices() -> tuple[int, ...]:
     """The pool a line's quantity is drawn from, weighted by repetition."""

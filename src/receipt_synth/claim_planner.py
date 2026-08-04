@@ -34,7 +34,11 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 
-from receipt_synth.config import coverage_targets, partial_payment_schedules
+from receipt_synth.config import (
+    archetype_draw_weights,
+    coverage_targets,
+    partial_payment_schedules,
+)
 from receipt_synth.content_builder import MAX_LINE_ITEMS, estimated_line_value
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
@@ -303,6 +307,77 @@ ARCHETYPES: dict[str, Archetype] = {
         language="en",
         categories=("professional_development",),
         vendor_pool="EU",
+    ),
+    # THE DOMESTIC VARIANT OF THE SAME CLASS — Ukrainian, UAH, the seller a domestic
+    # company whose requisites and contained-VAT row are ordinary where the EU page
+    # disclaims them. One shared body renders both, so the pair is a controlled
+    # comparison of the language and currency axes with the layout held fixed; the split
+    # between the two within a claim is `archetype_shares` in config/generation.yaml.
+    # Same one-category confinement as its twin, and for the same blast-radius reason.
+    "ua_platform_receipt": Archetype(
+        slug="ua_platform_receipt",
+        doc_type=DocType.PLATFORM_RECEIPT,
+        country=Country.UA,
+        language="uk",
+        categories=("professional_development",),
+    ),
+    # 🔴 THE THIRD AND FOURTH RENDERINGS OF THE `payment_confirmation` CLASS — the phone.
+    # Neither is a new document type: the transaction screen and the framed receipt are
+    # what the SAME payment looks like inside the banking application, and registering
+    # them as payment_confirmation is what keeps the four classifier target classes at
+    # four while the corpus gains the domain's dominant carrier.
+    #
+    # `ua_bank_app_transaction` is the strongest negative example for the class by LACK
+    # OF REQUISITES: it looks like proof of payment and carries no document number, no
+    # authorization code, no RRN, no stamp, no signature, no purpose — and its
+    # counterparty line is a processor descriptor (`LIQPAY*…`) that matches no party
+    # block of any document beside it. The LABEL still carries the bare trade name; what
+    # breaks is the printed cross-check, deliberately.
+    #
+    # ⚠️ REGISTERING IT AS ITS TYPE MEANS THE ORACLE TREATS IT AS PROVING PAYMENT — the
+    # evidence model is by type, per-archetype overrides are impossible (`Evidence`), and
+    # whether a screen with no requisites SHOULD prove payment to a benefit plan is a
+    # policy question policy.yaml does not ask. What the corpus records is that the
+    # transaction happened; what a consumer's plan does about weak carriers is measured
+    # against these pages, not answered by them.
+    #
+    # `ua_bank_receipt_in_app` is the A4 confirmation ITSELF inside the app's frame —
+    # built by the same builder, labelled by the same `ground_truth`, so "the medium does
+    # not change the ground truth" holds by construction and the archetype is the
+    # cheapest carrier-invariance test the corpus can hold.
+    #
+    # Both carry every category, for the reason the A4 confirmation does: the page lists
+    # no items, so there is nothing a category could contradict. Their shares of the
+    # payment draw are `archetype_shares` in config/generation.yaml.
+    "ua_bank_app_transaction": Archetype(
+        slug="ua_bank_app_transaction",
+        doc_type=DocType.PAYMENT_CONFIRMATION,
+        country=Country.UA,
+        language="uk",
+        categories=(
+            "medical_insurance",
+            "language_courses",
+            "professional_development",
+            "sport",
+            "mental_health",
+            "vitamins_nutrition",
+            "hobby",
+        ),
+    ),
+    "ua_bank_receipt_in_app": Archetype(
+        slug="ua_bank_receipt_in_app",
+        doc_type=DocType.PAYMENT_CONFIRMATION,
+        country=Country.UA,
+        language="uk",
+        categories=(
+            "medical_insurance",
+            "language_courses",
+            "professional_development",
+            "sport",
+            "mental_health",
+            "vitamins_nutrition",
+            "hobby",
+        ),
     ),
 }
 
@@ -1042,6 +1117,32 @@ def draw_claim_dates(rng: random.Random, count: int) -> list[datetime]:
     return sorted(_draw_date_in_period(rng) for _ in range(count))
 
 
+def _draw_archetype(rng: random.Random, pool: list[Archetype]) -> Archetype:
+    """One archetype from a pool, weighted where config/generation.yaml says so.
+
+    🔴 THE ALL-OR-NONE RULE, enforced here because this is the one place the table is
+    read: a pool consults `archetype_shares` only when EVERY member is listed; a pool
+    with no member listed draws uniformly, exactly as every pool did before the table
+    existed; and a pool with SOME members listed is refused — a half-declared pool is a
+    distribution nobody chose, and defaulting the missing weight would choose it
+    silently. The weights move no label: they decide which RENDERING a claim's document
+    takes after the claim's shape is already fixed, which is why they live in
+    generation.yaml rather than beside `verdict_mix`.
+    """
+    weights = archetype_draw_weights()
+    listed = [archetype for archetype in pool if archetype.slug in weights]
+    if not listed:
+        return rng.choice(pool)
+    if len(listed) != len(pool):
+        missing = sorted(a.slug for a in pool if a.slug not in weights)
+        raise ValueError(
+            f"`archetype_shares` in config/generation.yaml lists {len(listed)} of "
+            f"{len(pool)} archetypes of this pool and not {missing} — a half-declared "
+            "pool is a distribution nobody chose. List every member or none."
+        )
+    return rng.choices(pool, weights=[weights[a.slug] for a in pool], k=1)[0]
+
+
 def _select_documents(
     rng: random.Random,
     candidates: list[Archetype],
@@ -1121,7 +1222,7 @@ def _select_documents(
                 f"{sorted(a.slug for a in candidates)}. A claim that establishes neither fact is "
                 "not this cause and is not what was asked for."
             )
-        return (DocumentPlan(archetype=rng.choice(payments), issued_at=issued_at),)
+        return (DocumentPlan(archetype=_draw_archetype(rng, payments), issued_at=issued_at),)
 
     if intent is EvidenceIntent.PAYMENT_GAP:
         # 🔴 EVERY SUBJECT-ONLY ARCHETYPE IS ELIGIBLE HERE, INCLUDING THE ONES NO PAYMENT CAN
@@ -1137,11 +1238,15 @@ def _select_documents(
                 f"{sorted(a.slug for a in candidates)}. A self-contained receipt proves its own "
                 "payment, so a claim carrying one has no such gap to label."
             )
-        return (DocumentPlan(archetype=rng.choice(unsettled_subjects), issued_at=issued_at),)
+        return (
+            DocumentPlan(
+                archetype=_draw_archetype(rng, unsettled_subjects), issued_at=issued_at
+            ),
+        )
 
     both = [a for a in candidates if all(evidence_of(a))]
     if both:
-        return (DocumentPlan(archetype=rng.choice(both), issued_at=issued_at),)
+        return (DocumentPlan(archetype=_draw_archetype(rng, both), issued_at=issued_at),)
 
     subjects = (
         _instalment_subjects(candidates)
@@ -1169,8 +1274,8 @@ def _select_documents(
             lead = max(lead, timedelta(days=1))
         subject_at = issued_at + lead if payment_precedes_subject else issued_at - lead
         return (
-            DocumentPlan(archetype=rng.choice(subjects), issued_at=subject_at),
-            DocumentPlan(archetype=rng.choice(payments), issued_at=issued_at),
+            DocumentPlan(archetype=_draw_archetype(rng, subjects), issued_at=subject_at),
+            DocumentPlan(archetype=_draw_archetype(rng, payments), issued_at=issued_at),
         )
 
     raise ValueError(

@@ -860,6 +860,68 @@ jurisdictions:
         monthly: "щомісяця"
         semiannual: "щопівроку"
 
+    # The platform receipt's Ukrainian captions — the domestic variant of the class whose
+    # English captions sit in the EU block, moved here from `tools/render_mockups.py` when
+    # the archetype was connected. The subtotal/total wording coincides with the invoice's
+    # totals block above by the nature of the words, not by reference: two classes, two
+    # blocks, and an edit to one must not silently restyle the other.
+    #
+    # ⛔ NO `not_a_tax_invoice_note` KEY, AND ITS ABSENCE IS A FINDING: the seller is a
+    # domestic company registered for ПДВ and prints the tax its gross prices contain, so
+    # it makes no statement about not being a tax document — and 👁 no Ukrainian
+    # equivalent of the English wording was found in any public source. The asymmetry is
+    # declared in templates/README.md rather than smoothed over with a translation
+    # nothing evidences.
+    platform_receipt:
+      labels:
+        title: "Квитанція"
+        paid_caption: "Сплачено"
+        receipt_number: "Номер квитанції"
+        date_paid: "Дата оплати"
+        payment_method: "Спосіб оплати"
+        billed_to: "Платник"
+        description: "Опис"
+        quantity: "К-сть"
+        amount: "Сума"
+        subtotal: "Разом"
+        total: "До сплати"
+      # 📄 «У т.ч. ПДВ» — the tax CONTAINED in a gross price, the same convention the
+      # invoice's totals state; the rate is printed beside it as the mock-up drew it.
+      vat_label_format: "У т.ч. ПДВ {rate}%"
+      card_mask_format: "•••• {tail}"
+      receipt_number:
+        group_pattern: "[0-9]{4}"
+        groups: 2
+        separator: "-"
+      buyer_country_names:
+        UA: "Україна"
+
+    # The banking application's interface strings — an app's own wording, not marks and
+    # not law, moved here from `tools/render_mockups.py` when the two app archetypes were
+    # connected. Shared by `ua_bank_app_transaction` (the transaction screen) and
+    # `ua_bank_receipt_in_app` (the same A4 confirmation inside the app's frame).
+    bank_app:
+      # The app's word for the framed document — 👁 NOT the document's own heading: the
+      # screen says «Квитанція № N» over a page whose own title reads «Платіжна
+      # інструкція», one number under two wordings, and the disagreement is observed
+      # rather than staged.
+      receipt_screen_title: "Квитанція"
+      share_label: "Поділитися"
+      tabs: ["Головна", "Платежі", "Історія", "Ще"]
+      transaction:
+        description_label: "Опис і теги"
+        description_placeholder: "Додати"
+        balance_label: "Залишок після операції"
+        payment_method_label: "Спосіб оплати"
+        # The first entry is the one that matters: it is the tap that opens the framed
+        # receipt the sibling archetype renders.
+        actions: ["Переглянути квитанцію", "Створити шаблон", "Повідомити про проблему"]
+        # 🔴 A bank's own spending categories, which are NOT the benefit categories of
+        # config/policy.yaml and are DRAWN WITHOUT REFERENCE TO THE CLAIM — the chip may
+        # plainly disagree with what was bought, and that mismatch is a property of the
+        # domain the archetype exists to put on a page, not a defect.
+        categories: ["Комуналка та інтернет", "Спорт", "Здоровʼя", "Розваги", "Різне"]
+
     bank_statement:
       # 👁 ONE CORPORATE CURRENT-ACCOUNT STATEMENT was observed — 4 pages, 89 operations, a
       # period of one day — and this block is its arrangement. ⚠️ «Банківська виписка» is not one

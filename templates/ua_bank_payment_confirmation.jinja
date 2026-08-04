@@ -1,0 +1,247 @@
+{#
+  The bank payment confirmation's BODY — the A4 sheet, extracted so that ONE markup serves two
+  carriers: `ua_bank_payment_confirmation.html` (the document as a file of its own) and
+  `ua_bank_receipt_in_app.html` (the same document inside a phone screen). The extraction is
+  the alternative its own header comment always named — two copies of this markup would be two
+  documents that drift, which is the failure the in-app archetype exists to rule out.
+
+  A FRAGMENT, NOT AN ARCHETYPE: `templates/*.jinja` renders on its own by nothing. Every
+  `data-field` of the class lives here, so both carriers collect the same field set from one
+  source; the in-app carrier adds only its own chrome fields on top.
+#}
+{# ⛔ NO `data-document` HERE, and the absence is the design: this body serves two carriers,
+   and the ROOT belongs to whichever template is the whole render — the A4 wrapper marks a
+   fit-content div around this include, the phone screen marks itself. A root in the body and
+   another in a wrapper would be two roots in one render, which the one-root sweep forbids. #}
+<div class="page">
+
+  {# 👁 The header carries the bank's own requisites. The issuer is drawn per document from
+     `banks` in config/vendors.json — a single issuer on every image would teach a consumer the
+     name instead of the field, which is the lesson the acquirer field on the receipt already
+     paid for. #}
+  <header class="head">
+    <div class="bank">
+      <div class="bank-name" data-field="bank_name">{{ bank_name }}</div>
+      <div class="muted">{{ bank_code_label }} <span data-field="bank_code">{{ bank_code }}</span></div>
+    </div>
+    <div class="stamp-slot"></div>
+  </header>
+
+  {# 🔴 THE TITLE IS NOT A TYPE MARKER. 👁 One bank names the same kind of document two ways, and
+     on one observed image the application's screen heading and the document heading inside it
+     disagree while carrying the same number. A classifier keying on this string is keying on a
+     coin toss, which is why both wordings are drawn from. #}
+  <div class="title-row">
+    <h1 class="title" data-field="title">{{ title }}</h1>
+    <div class="doc-code">{{ document_code_label }} <span data-field="document_code">{{ document_code }}</span></div>
+  </div>
+
+  {# THE DATE, under one of the three captions the labelling contract accepts as the payment
+     date. config/policy.yaml names the CONCEPT — the date the funds left the payer's account —
+     and `document_types.payment_confirmation.payment_date` in config/labelling-schema.yaml maps
+     captions onto it. The three captions that must never be read as the payment date are
+     therefore never printed here: a document carrying one would be a document whose payment
+     date the contract says cannot be read, which no honest archetype should produce. #}
+  <div class="row meta">
+    <span class="caption">{{ date_caption }}</span>
+    {# Date and time as two spans with no label between them, the way the receipt prints them.
+       👁 One observed caption is «Дата і час операції» — one caption over both values — so a
+       separate «Час» label would be a caption no document was seen to carry. #}
+    <span>
+      <span data-field="date">{{ date }}</span>
+      <span data-field="time">{{ time }}</span>
+    </span>
+  </div>
+
+  {# 👁 THE LARGEST BLOCK OF THE DOCUMENT — 6/8 lay the two parties out in two columns. ⚠️ The
+     length of a code tells you the KIND of code and not the kind of party: 10 digits is a
+     РНОКПП, which a private individual and a sole trader both have, and 8 is a ЄДРПОУ. A rule
+     reading "ten digits, so not a business" is false — 👁 a sole-trader payee with a ten-digit
+     code was observed. #}
+  <section class="parties">
+    <div class="party">
+      <div class="caption">{{ party_labels.payer_label }}</div>
+      <div class="party-name" data-field="payer_name">{{ payer.name }}</div>
+      {% if payer.code %}
+      <div class="muted">{{ party_labels.code_label }} <span data-field="payer_code">{{ payer.code }}</span></div>
+      {% endif %}
+      {% if payer.account %}
+      <div class="muted">{{ party_labels.account_label }} <span data-field="payer_account">{{ payer.account }}</span></div>
+      {% endif %}
+    </div>
+    <div class="party">
+      <div class="caption">{{ party_labels.payee_label }}</div>
+      <div class="party-name" data-field="payee_name">{{ payee.name }}</div>
+      {% if payee.code %}
+      <div class="muted">{{ party_labels.code_label }} <span data-field="payee_code">{{ payee.code }}</span></div>
+      {% endif %}
+      {% if payee.account %}
+      <div class="muted">{{ party_labels.account_label }} <span data-field="payee_account">{{ payee.account }}</span></div>
+      {% endif %}
+      {# THE SECOND FORM OF EMPTINESS: the caption is printed and there is nothing under it.
+         👁 Observed on the recipient's bank, alongside two other captioned-but-empty fields on
+         one document. The caption stays because that is what makes the field empty rather than
+         absent — and the value element is omitted, so no box points at nothing. #}
+      <div class="muted">{{ party_labels.bank_label }}
+        {% if payee.bank %}<span data-field="payee_bank">{{ payee.bank }}</span>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  {# 🔴 THE MONEY, AND THE DIVERGENCE THIS ARCHETYPE EXISTS TO MAKE MEASURABLE.
+     👁 0 of 8 observed confirmations carry a single amount: every one prints the operation
+     amount and the fee as separate fields, and 👁 1 of 8 also prints their sum — in the largest
+     type on the page.
+
+     📄 The amount of the OPERATION is the transfer, which the National Bank's instruction on
+     non-cash settlements makes a requisite and which does not include the fee. So the most
+     salient number on the page is NOT the amount of the claim. An extractor reaching for the
+     biggest figure is wrong by exactly the fee, and it is now visible whether it resists.
+
+     The fee is NON-ZERO on about a third of documents, matching the observation. It is a bank's
+     charge for a service rather than anything a benefit category covers, so it is labelled and
+     never reimbursed. #}
+  <section class="money">
+    <div class="row">
+      <span class="caption">{{ amount_caption }}</span>
+      <span class="amount" data-field="amount">{{ amount }}</span>
+    </div>
+    <div class="row">
+      <span class="caption">{{ fee_caption }}</span>
+      <span data-field="fee">{{ fee }}</span>
+    </div>
+    {% if total_charged %}
+    <div class="row grand">
+      <span class="caption">{{ total_caption }}</span>
+      <span data-field="total_charged">{{ total_charged }}</span>
+    </div>
+    {% endif %}
+    {% if amount_in_words %}
+    <div class="words">
+      <span class="caption">{{ amount_in_words_caption }}: </span>
+      <span data-field="amount_in_words">{{ amount_in_words }}</span>
+    </div>
+    {% endif %}
+  </section>
+
+  {# 🔴 THE PAYMENT PURPOSE, WHICH NEVER SAYS WHAT WAS BOUGHT — 👁 0 of 7 documents carrying the
+     field. It names ANOTHER DOCUMENT: an invoice by number and date. That is the observation
+     behind `proves_subject: false` for this type in config/policy.yaml, and it is what makes
+     the dominant pair a pair — an invoice proves the subject, this proves the payment.
+
+     Absent entirely on an internet-acquiring document (👁 1/8 has no such field at all), which
+     is one of the three things the initiation mode decides. #}
+  {% if purpose %}
+  <section class="purpose">
+    <div class="caption">{{ purpose_label }}</div>
+    <div data-field="payment_purpose">{{ purpose }}</div>
+  </section>
+  {% endif %}
+
+  {# THE CONDITIONAL BLOCK, and the whole of what "one template, not two archetypes" means.
+     👁 A card operation prints an authorization code (4/4 of the card cases, always six digits)
+     and a card number; a transfer by account details prints neither, because there was no card
+     operation to authorize.
+
+     ⛔ NO RRN — 👁 0 of 8. It is a requisite of the card operation as printed inside a FISCAL
+     RECEIPT, where this repository does print it. ⛔ And no payment form (cash / card) — 👁 0 of
+     8; that too is a receipt requisite, carried over by mistake in an earlier field list.
+
+     👁 CARD MASKING IS NOT UNIFORM: six schemes over six documents, and one of them is no
+     masking at all. The scheme is drawn in the builder. #}
+  {% if auth_code or card_masked or terminal_value %}
+  <section class="operation">
+    {% if auth_code %}
+    <div class="row">
+      <span class="caption">{{ auth_code_label }}</span>
+      <span data-field="auth_code">{{ auth_code }}</span>
+    </div>
+    {% endif %}
+    {% if card_masked %}
+    <div class="row">
+      <span class="caption">{{ card_label }}</span>
+      <span data-field="card_masked">{{ card_masked }}</span>
+    </div>
+    {% endif %}
+    {# 👁 5/8 carry a device or initiating-system field, under five different captions whose
+       values are of three incompatible kinds. The caption travels with the value, so one
+       contract field covering three things is visible rather than hidden. #}
+    {% if terminal_value %}
+    <div class="row">
+      <span class="caption">{{ terminal_label }}</span>
+      <span data-field="terminal">{{ terminal_value }}</span>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# 👁 THE STAMP IS THE ONE CONSTANT OF THIS CLASS — 8 of 8, and usually the bottom right. The
+     signature beside it is 7/8; the exception printed an EMPTY SIGNATURE LINE, so the caption
+     and the rule stay while the ink goes. The signature is geometry and spells no name: what
+     the layout carries is that a document was signed, and a legible name in script would put a
+     personal name on a published image for nothing.
+
+     The stamp is not a `data-field` value — no label field claims it — but it does carry a box,
+     like the receipt's discount line, so a consumer can find it without reading text. #}
+  <section class="attestation">
+    <div class="sign">
+      <div class="sign-line">
+        {% if signature_path %}
+        <svg class="ink" viewBox="0 0 110 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="{{ signature_path }}" fill="none" stroke="#1b3a6b" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        {% endif %}
+      </div>
+      <div class="muted">{{ signature_label }}</div>
+      {% if signatory_post %}
+      <div class="muted" data-field="signatory_post">{{ signatory_post }}</div>
+      {% endif %}
+    </div>
+    <div class="stamp" data-field="stamp">
+      <div class="stamp-inner">
+        <div class="stamp-text">{{ stamp_caption }}</div>
+        <div class="stamp-code">{{ bank_code }}</div>
+      </div>
+    </div>
+  </section>
+
+  {# TWO DIFFERENT MECHANISMS AT THE FOOT, and confusing them is the mistake worth avoiding.
+     A note about the qualified electronic signature answers "is the signature under this file
+     intact"; the verification footer answers "did this payment happen". 👁 3/8 carry the first
+     (2/8 of one bank print a note about the operation being automatic INSTEAD), and 👁 3/8 carry
+     the second — so neither is a constant, which refutes "every such document tells you how to
+     check it".
+
+     ⚠️ The verification host is the STATE cross-bank service rather than any bank's own page.
+     👁 The observed footers name each bank's own address, and printing one here would be this
+     repository asserting that pairing; the narrowing is declared in config/fiscal-rules.yaml.
+
+     THE WHOLE FOOT IS CONDITIONAL, not merely its rows. Every part of it is a minority — 3/8,
+     3/8 and 2/8 — so a document carrying none of them is ordinary, and an unconditional
+     `<footer>` printed its top rule with nothing under it: a line across the page announcing an
+     empty block. Correct and ugly is still a defect on every image that hits it. #}
+  {% if electronic_note or verification_footer or qr_svg %}
+  <footer class="foot">
+    {% if electronic_note %}
+    <div class="note" data-field="electronic_note">{{ electronic_note }}</div>
+    {% endif %}
+    {% if verification_footer %}
+    <div class="note">
+      <span class="caption">{{ verification_caption }}: </span>
+      <span data-field="verification_footer">{{ verification_footer }}</span>
+    </div>
+    {% endif %}
+    {# 👁 2/8 carry a QR and BOTH are marketing — an invitation to install an application. 👁 0/8
+       carry a verification QR: a document is checked by its code as text. ✅ So this class
+       refutes "a QR means the document is fiscal" more sharply than the receipt does, where the
+       QR at least addresses the tax service. #}
+    {% if qr_svg %}
+    <div class="promo">
+      <div class="qr" data-field="qr">{{ qr_svg | safe }}</div>
+      <div class="promo-text">{{ qr_caption }}</div>
+    </div>
+    {% endif %}
+  </footer>
+  {% endif %}
+
+</div>

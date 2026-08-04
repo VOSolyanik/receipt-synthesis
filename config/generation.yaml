@@ -553,6 +553,58 @@ price_ranges_eur:
 
 
 # =============================================================================
+# Archetype draw weights — which rendering a claim's document takes, within one class role
+# =============================================================================
+#
+# 🔴 WHY THIS SIZES NO LABELLED BUCKET AND THEREFORE LIVES HERE. `_select_documents` first
+# decides a claim's SHAPE (self-contained, pair, or a deliberate gap) from the evidence
+# table, and only then picks WHICH archetype renders each slot. The weights below act at
+# that second step: they move no verdict, no cause, no amount and no date — the same claim,
+# the same label, drawn on a different page. A share that sized a labelled bucket would
+# belong beside `verdict_mix` in config/policy.yaml, as `file_composition`'s comment
+# already explains for files.
+#
+# THE RULE: a pool draw consults this table only when EVERY archetype of the pool is
+# listed; a pool with none listed draws uniformly, exactly as before the table existed,
+# and a pool with SOME listed is refused — a half-declared pool is a distribution nobody
+# chose. Weights are relative within the pool actually present.
+#
+# THE PAYMENT POOL: four archetypes, one document type each claim draws one of.
+#   ua_bank_statement 0.50 — the statement keeps the half it has always had, so the TYPE
+#     distribution (`bank_statement` : `payment_confirmation` = 1 : 1 among split pairs)
+#     is exactly what every measured baseline was taken on.
+#   The confirmation family splits the other half 0.30 / 0.12 / 0.08:
+#     ua_bank_payment_confirmation 0.30 — the A4 stays the family's dominant form (60% of
+#       it): it is the rendering every existing figure was measured on, and the two phone
+#       carriers must not silently become the class a consumer was never scored against.
+#     ua_bank_receipt_in_app 0.12 and ua_bank_app_transaction 0.08 — together 40% of the
+#       family, the phone being the domain's dominant capture carrier; the framed receipt
+#       outweighs the bare screen because 👁 the screen is what an employee sends when they
+#       have NOT tapped through to the receipt, and a corpus where the weakest evidence
+#       dominates its own family would overstate the domain's difficulty. ⚠️ ALL FOUR
+#       NUMBERS ARE JUDGEMENTS, not measurements — no public source counts what employees
+#       actually attach — and they are parameters precisely so the author can retune them
+#       without touching code.
+#
+# THE PLATFORM POOL: two archetypes, one class, drawn 0.50 / 0.50 — the pair exists for a
+# controlled comparison of the language and currency axes with the layout held fixed, and
+# equal mass is what maximizes the power of that comparison. Skewing it would need a claim
+# about how often a Ukrainian claimant buys from a foreign platform, which nothing here
+# has measured.
+#
+# ⛔ THE THREE FISCAL RECEIPTS ARE DELIBERATELY ABSENT: their pool draws uniformly, as it
+# always has, and listing them here with equal weights would be a no-op that still moved
+# the draw call onto the weighted path — a behaviour change nothing asked for.
+archetype_shares:
+  ua_bank_statement: 0.50
+  ua_bank_payment_confirmation: 0.30
+  ua_bank_receipt_in_app: 0.12
+  ua_bank_app_transaction: 0.08
+  eu_platform_receipt: 0.50
+  ua_platform_receipt: 0.50
+
+
+# =============================================================================
 # Basket shape
 # =============================================================================
 

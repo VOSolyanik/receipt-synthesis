@@ -1,8 +1,12 @@
 {#
   The SAME bank payment confirmation, captured inside the banking app.
 
-  ⚠️ A MOCK-UP, on the same terms as the other two here: not registered, no builder, no run, and
-  no `data-field` attributes anywhere in this file. See templates/README.md.
+  ✅ SHIPPED: registered as a `payment_confirmation`-class archetype, built by
+  `content_builder.build_bank_receipt_in_app`, which builds the inner confirmation with the
+  SAME builder the A4 archetype uses and delegates the label to it verbatim — the medium does
+  not change the ground truth, by construction rather than by promise. The one `data-field` of
+  this file is the chrome's own `screen_title`; every document field is collected from the
+  shared body included below.
 
   🔴 WHY THIS IS AN ARCHETYPE AND NOT A DEGRADATION SETTING. It tests, directly and cheaply,
   that THE MEDIUM DOES NOT CHANGE THE GROUND TRUTH. One document, two carriers — an A4 sheet and
@@ -10,22 +14,13 @@
   asks that question: `degrader` DAMAGES an image, whereas this REFRAMES the document, and a
   frame is what a classifier is most likely to read as a different kind of thing.
 
-  🔴 THE BODY IS NOT REWRITTEN, AND NOT COPIED EITHER. The white card holds
-  `ua_bank_payment_confirmation` — the shipped template, rendered by the shipped renderer from
-  the shipped builder's context — embedded as a frame. Copying its markup into a second file
-  would create two spellings of one layout, which is the defect the labelling contract exists to
-  prevent; extracting a shared body out of it would edit a file a shipped archetype renders
-  from, which a mock-up on a side branch may not do. The frame is what is left, and it has a
-  property neither of the other routes has: THE INNER DOCUMENT IS THE ONE THE DATASET ALREADY
-  CONTAINS, so "the labels must agree" stops being an assumption about two similar files.
-
-  ⚠️ AND IT IS A COST, STATED RATHER THAN HIDDEN. Connecting this archetype means the renderer
-  learns to render a document INSIDE another one: the inner page has to be written to disk
-  before the outer page can point at it, which `Renderer.render` does not do today — the render
-  script beside this repository does it instead. That is a real decision for whoever connects
-  it, and the alternative — extracting the confirmation's body into a shared `.jinja` fragment,
-  exactly as the three fiscal receipts already share `ua_fiscal_receipt.jinja` — is the cheaper
-  one at that point. It is not taken here because it changes a shipped file.
+  🔴 THE BODY IS NOT REWRITTEN, AND NOT COPIED EITHER. The white card holds the confirmation's
+  own shared body — `templates/ua_bank_payment_confirmation.jinja`, the fragment the A4
+  template includes too, extracted at connection time exactly as the mock-up's own header
+  always named the cheaper route (the same construction the three fiscal receipts already use
+  with `ua_fiscal_receipt.jinja`). The earlier iframe-around-a-second-render is gone with the
+  mock-up status: an embedded raster or frame would keep the inner text out of this render's
+  `reference_text` and its boxes out of one coordinate space, and both belong to THIS image.
 
   WHAT THE FRAME ADDS to the document underneath it, each of them something an extractor now has
   to see past: a dark surround the document is not printed on · a status bar · a back arrow · a
@@ -49,6 +44,10 @@
 }
 {% endfor -%}
 {% include "ua_phone_chrome.css" %}
+{# The inner document's own rules, so the framed sheet is styled by the SAME stylesheet the A4
+   render uses — one look, two carriers. Included before this template's own stylesheet, which
+   therefore wins wherever the two touch (the dark surround over the sheet's white body). #}
+{% include "ua_bank_payment_confirmation.css" %}
 {{ stylesheet | safe }}
 </style>
 </head>
@@ -61,20 +60,19 @@
      own. The spacer keeps the heading centred against the back arrow opposite it. #}
   <div class="navbar">
     {{ back_chevron() }}
-    <span class="screen-title">{{ screen_title }}</span>
+    <span class="screen-title" data-field="screen_title">{{ screen_title }}</span>
     <span class="nav-spacer"></span>
   </div>
 
-  {# 🔴 THE DOCUMENT ITSELF, rendered by its own template and its own stylesheet, scaled to the
-     width of the card. The wrapper's height is the scaled height of the document, computed by
-     the render script from the document's REAL rendered height rather than assumed here: an
-     assumed height would clip a long payment purpose off the bottom of the card, and that is
-     the one failure that would silently make the two carriers show different documents. #}
+  {# 🔴 THE DOCUMENT ITSELF — the SAME shared body the A4 template includes, not a copy and not
+     a frame around a second render. `standalone` is false, so the body emits no document root
+     of its own (the SCREEN above is this render's one root), and `zoom` scales layout and
+     boxes together, so a long payment purpose makes the card taller instead of being clipped —
+     the one failure that would silently make the two carriers show different documents.
+     The zoom is the card width over the A4 width: 1074 / 794. #}
   <div class="sheet">
-    <div class="doc-frame" style="height: {{ frame_height }}px;">
-      <iframe class="doc" src="{{ document_url }}" title="{{ screen_title }}"
-              style="width: {{ document_width }}px; height: {{ document_height }}px;
-                     transform: scale({{ document_scale }});"></iframe>
+    <div class="doc-zoom" style="zoom: 1.352645;">
+      {% include "ua_bank_payment_confirmation.jinja" %}
     </div>
   </div>
 

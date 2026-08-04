@@ -46,6 +46,8 @@ from receipt_synth.content_builder import (
     KOPIYKA,
     DocumentReference,
     PartyIdentity,
+    build_app_transaction,
+    build_bank_receipt_in_app,
     build_bank_statement,
     build_invoice,
     build_non_fiscal_receipt,
@@ -419,6 +421,11 @@ _BUILDERS = {
     "ua_invoice": build_invoice,
     "ua_non_fiscal_receipt": build_non_fiscal_receipt,
     "eu_platform_receipt": build_platform_receipt,
+    # One class, two jurisdictions, one builder — the partial is the whole difference.
+    "ua_platform_receipt": partial(build_platform_receipt, jurisdiction_code="UA"),
+    # The phone: the same payment_confirmation class on its two in-app carriers.
+    "ua_bank_app_transaction": build_app_transaction,
+    "ua_bank_receipt_in_app": build_bank_receipt_in_app,
 }
 
 # WHICH CLASSES NAME THE CLAIMANT ON THE PAGE, and it is keyed by document class because the

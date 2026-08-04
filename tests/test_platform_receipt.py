@@ -57,11 +57,18 @@ def make(seed: int = 20260615, vendor: dict = COURSE_PLATFORM, **kwargs):
 
 
 @pytest.fixture(scope="module")
-def rendered(tmp_path_factory):
-    with Renderer() as renderer:
-        yield renderer.render(
-            SLUG, make().render_context(), tmp_path_factory.mktemp("platform") / "p.png"
-        )
+def renderer():
+    """One browser session for the whole module — a second sync Playwright in the same
+    thread trips over the first one's event loop, besides costing a Chromium launch."""
+    with Renderer() as browser:
+        yield browser
+
+
+@pytest.fixture(scope="module")
+def rendered(renderer, tmp_path_factory):
+    return renderer.render(
+        SLUG, make().render_context(), tmp_path_factory.mktemp("platform") / "p.png"
+    )
 
 
 # ================================================ the archetype and the policy ==
@@ -217,3 +224,93 @@ def test_a_mixed_basket_is_drawn_when_the_plan_asks_for_one():
 
 def test_two_runs_of_one_seed_build_the_same_receipt():
     assert make() == make()
+
+
+# ================================================ the domestic variant ==
+
+UA_PLATFORM = {
+    "name": "Prometheus", "legal_form": "TOV",
+    "profile": "online_learning_platform", "vat_payer": True,
+}
+
+
+def make_ua(seed: int = 20260615, vendor: dict = UA_PLATFORM, **kwargs):
+    rng = random.Random(seed)
+    return build_platform_receipt(
+        rng,
+        category_id=CATEGORY,
+        issued_at=datetime(2026, 6, 15, 17, 41, 9),
+        vendor=vendor,
+        identity=draw_party_identity(random.Random(seed + 1), vendor, "UA"),
+        buyer_name="Ковальчук Олена Петрівна",
+        buyer_tax_id="2345678901",
+        address="м. Київ, вул. Хрещатик, 22",
+        jurisdiction_code="UA",
+        **kwargs,
+    )
+
+
+def test_the_domestic_variant_is_registered_beside_its_twin():
+    archetype = ARCHETYPES["ua_platform_receipt"]
+    assert archetype.doc_type is DocType.PLATFORM_RECEIPT
+    assert archetype.categories == (CATEGORY,)
+    assert archetype.vendor_pool is None  # the claimant's own pool — a domestic seller
+    assert archetype.language == "uk"
+
+
+def test_the_domestic_page_prints_the_requisites_the_eu_page_disclaims():
+    """The third axis of the pair is LAW: the Ukrainian seller is a domestic company, so
+    its legal name, address, identification code, ПН and the contained-VAT row are
+    ordinary — each the exact particular the English page's footer licenses ITSELF to
+    omit. One shared body, so the comparison is controlled by construction."""
+    document = make_ua()
+    context = document.render_context()
+
+    assert context["seller"]["name"] == "ТОВ «Prometheus»"
+    assert context["seller"]["address"] is not None
+    assert context["seller"]["tax_code"] is not None
+    assert context["seller"]["vat_number"] is not None
+    assert context["vat"] is not None
+    assert context["vat"]["label"] == "У т.ч. ПДВ 20%"
+    assert context["not_a_tax_invoice_note"] is None
+    assert context["currency"] == "UAH"
+
+
+def test_the_domestic_vat_row_states_the_tax_contained_in_the_gross():
+    """📄 «У т.ч. ПДВ» is the tax CONTAINED in a gross price, never added on top —
+    gross × 20 / 120, exactly as the invoice states it. Known answer, computed on
+    paper from the document's own total."""
+    document = make_ua()
+    expected = (document.total * Decimal("20") / Decimal("120")).quantize(Decimal("0.01"))
+    assert document.vat_amount == expected
+
+
+def test_the_domestic_label_is_ukrainian_and_hryvnia():
+    truth = make_ua().ground_truth(
+        doc_id="d1", source_file="d1.png", capture=Capture.SCREENSHOT, field_bboxes={}
+    )
+    assert truth.doc_type is DocType.PLATFORM_RECEIPT
+    assert truth.language == "uk"
+    assert truth.currency == "UAH"
+    assert truth.counterparty == "Prometheus"
+    assert all(line.vat_letter is None for line in truth.line_items)
+
+
+def test_the_two_variants_share_one_field_set_plus_the_lawful_extras(renderer, tmp_path):
+    """One body, two variants — so the Ukrainian page's boxes are the English page's plus
+    exactly the requisites its jurisdiction adds: the seller's address and codes, and the
+    VAT row; less the note only the English page prints. Field-set equality is what makes
+    the pair a controlled comparison rather than two templates that resemble each other."""
+    eu = renderer.render("eu_platform_receipt", make().render_context(), tmp_path / "eu.png")
+    ua = renderer.render("ua_platform_receipt", make_ua().render_context(), tmp_path / "ua.png")
+
+    eu_fields = {name for name in eu.field_bboxes if not name.startswith("item_")}
+    ua_fields = {name for name in ua.field_bboxes if not name.startswith("item_")}
+    assert ua_fields - eu_fields == {
+        "seller_address", "seller_tax_code", "seller_vat_number", "vat_amount"
+    }
+    assert eu_fields - ua_fields == {"not_a_tax_invoice_note"}
+
+
+def test_the_same_seed_builds_the_same_domestic_receipt():
+    assert make_ua() == make_ua()

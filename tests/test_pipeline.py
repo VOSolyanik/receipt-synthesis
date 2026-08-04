@@ -1645,6 +1645,24 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
             assert subject["seller_name"] != payment["seller_name"], claim.claim_id
             readable["seller_name_disagrees_on_purpose"] += 1
             continue
+        # 🔴 THE SECOND DELIBERATE EXCLUSION, COUNTED AND VERIFIED RATHER THAN SKIPPED: a claim
+        # whose payment page is the app's transaction screen prints NO party block at all — that
+        # absence is the archetype's entire argument — so the requisite rows below have nothing
+        # to read on it by design, not by defect. The discriminator is the box vocabulary
+        # (`merchant_descriptor` is printed by that archetype and no other), and the branch
+        # ASSERTS the absence it excuses: a party requisite turning up on such a page would mean
+        # the archetype stopped being the negative example it is registered as.
+        payment_document = max(
+            documents, key=lambda d: document_evidence(d.doc_type).proves_payment
+        )
+        if "merchant_descriptor" in payment_document.field_bboxes:
+            for field in ("seller_name", "seller_tax_code", "seller_account"):
+                assert payment[field] is None, (
+                    f"{claim.claim_id}: the app transaction screen printed {field!r}, and its "
+                    "whole registration rests on printing no party requisite at all"
+                )
+            readable["payment_prints_no_party_block"] += 1
+            continue
         pairs += 1
         for field in ("seller_name", "seller_tax_code", "seller_account", "seller_bank_name"):
             if subject[field] is None or payment[field] is None:

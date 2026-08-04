@@ -51,6 +51,7 @@ from receipt_synth.config import (
     invoice_count_range,
     invoice_share,
     jurisdiction,
+    load_vendors,
     partial_payment_schedules,
     payment_confirmation_money_range,
     payment_confirmation_share,
@@ -3753,6 +3754,13 @@ class PlatformReceipt:
     neither receipt class: that pairing is what the archetype puts into the data.
     """
 
+    # The vendors.json jurisdiction block the page's captions, formats, language and
+    # currency come from — "EU" for the English euro variant, "UA" for the Ukrainian one.
+    # ONE CLASS, TWO JURISDICTIONS, THREE AXES: language and currency are data, and the
+    # third axis is LAW — the UA seller is a domestic company whose requisites and tax row
+    # are ordinary, the EU page disclaims them all. The optional fields below are that
+    # third axis: all None on the EU variant, filled on the UA one.
+    jurisdiction_code: str
     seller_name: str
     buyer_name: str
     buyer_country: str
@@ -3763,15 +3771,35 @@ class PlatformReceipt:
     card_masked: str
     line_items: list[LineItem]
     total: Decimal
+    # What the header prints where the EU page prints the bare mark alone: the seller's
+    # legal name («ТОВ «Prometheus»»), address, identification code and ПН — ordinary
+    # requisites of a domestic company, each with the caption fiscal-rules.yaml declares.
+    seller_display: str | None = None
+    seller_address: str | None = None
+    seller_tax_code: str | None = None
+    seller_tax_code_label: str | None = None
+    seller_vat_number: str | None = None
+    seller_vat_number_label: str | None = None
+    # 📄 «У т.ч. ПДВ» — the tax CONTAINED in a gross price, not added to it, exactly as the
+    # invoice states it: subtotal and total are one figure and the row sits between them
+    # for information. None where the page asserts no tax treatment at all.
+    vat_label: str | None = None
+    vat_amount: Decimal | None = None
+    # 👁 Real platform receipts in the English-speaking practice commonly say so in as many
+    # words; no Ukrainian equivalent was found in any public source, so the UA variant
+    # carries None rather than a translation nothing evidences.
+    not_a_tax_invoice_note: str | None = None
+    # UA draws its decimal separator per document, as every Ukrainian class does; the EU
+    # block declares exactly one, so the draw collapses there.
+    decimal_separator: str = "."
 
     # -- rendering ------------------------------------------------------------
 
     def _amount(self, value: Decimal) -> str:
-        rules = jurisdiction("EU")["number_format"]
+        rules = jurisdiction(self.jurisdiction_code)["number_format"]
         whole, _, fraction = f"{value:.2f}".partition(".")
         grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
-        # The EU block declares one decimal separator, so there is nothing to draw.
-        return f"{grouped}{rules['decimal_separator_variants'][0]}{fraction}"
+        return f"{grouped}{self.decimal_separator}{fraction}"
 
     def render_context(self) -> dict:
         """Everything the template prints, already formatted.
@@ -3782,21 +3810,22 @@ class PlatformReceipt:
         templates/platform_receipt.jinja, shared with the Ukrainian variant of the class;
         what makes this document English and EUR is this context, not the markup.
         """
-        rules = jurisdiction("EU")
+        rules = jurisdiction(self.jurisdiction_code)
         block = rules["platform_receipt"]
         return {
             "language": rules["language"],
             "labels": block["labels"],
             "currency": rules["currency"],
-            # The seller block is the mark and nothing beside it — see the class
-            # docstring. The keys exist because the shared body asks conditionally.
+            # On the EU variant the seller block is the mark and nothing beside it — see
+            # the class docstring; the UA variant fills the ordinary requisites. The keys
+            # exist either way because the shared body asks conditionally.
             "seller": {
-                "name": self.seller_name,
-                "address": None,
-                "tax_code": None,
-                "tax_code_label": None,
-                "vat_number": None,
-                "vat_number_label": None,
+                "name": self.seller_display or self.seller_name,
+                "address": self.seller_address,
+                "tax_code": self.seller_tax_code,
+                "tax_code_label": self.seller_tax_code_label,
+                "vat_number": self.seller_vat_number,
+                "vat_number_label": self.seller_vat_number_label,
             },
             "buyer": {"name": self.buyer_name, "country": self.buyer_country},
             "receipt_number": self.receipt_number,
@@ -3815,11 +3844,16 @@ class PlatformReceipt:
                 for item in self.line_items
             ],
             "subtotal": self._amount(self.total),
-            # 📄 Present only where the supplier charges the tax; this page declares it
-            # charges none, and a zero row would assert a treatment rather than omit one.
-            "vat": None,
+            # 📄 Present only where the supplier charges the tax: the UA seller states the
+            # tax its gross prices contain, the EU page declares it charges none — and a
+            # zero row there would assert a treatment rather than omit one.
+            "vat": (
+                {"label": self.vat_label, "amount": self._amount(self.vat_amount)}
+                if self.vat_amount is not None
+                else None
+            ),
             "total": self._amount(self.total),
-            "not_a_tax_invoice_note": block["not_a_tax_invoice_note"],
+            "not_a_tax_invoice_note": self.not_a_tax_invoice_note,
             "support_note": None,
             "qr_payload": None,
         }
@@ -3846,12 +3880,13 @@ class PlatformReceipt:
         three fiscality flags are false, as on the slip, and for the same reason: a
         consumer classifying on a fiscal marker must find none here.
         """
+        rules = jurisdiction(self.jurisdiction_code)
         return DocGroundTruth(
             doc_id=doc_id,
             source_file=source_file,
             doc_type=DocType.PLATFORM_RECEIPT,
-            language=jurisdiction("EU")["language"],
-            currency=jurisdiction("EU")["currency"],
+            language=rules["language"],
+            currency=rules["currency"],
             amount=self.total,
             date=self.issued_at.date(),
             counterparty=self.seller_name,
@@ -3881,8 +3916,10 @@ def build_platform_receipt(
     covered_only: bool = True,
     coverage_target: Decimal | None = None,
     item_count: int | None = None,
+    jurisdiction_code: str = "EU",
 ) -> PlatformReceipt:
-    """Build one platform receipt, in English and EUR.
+    """Build one platform receipt — English and EUR by default, Ukrainian and UAH for
+    the domestic variant (`jurisdiction_code="UA"`), one class either way.
 
     THE BASKET IS THE RECEIPT'S AND THE INVOICE'S — `_draw_basket`, same knobs, same
     meaning — with the two axes that make this class what it is: `language="en"` selects
@@ -3890,32 +3927,35 @@ def build_platform_receipt(
     selects `price_ranges_eur`, whose comment states the arithmetic tying it to the UAH
     ranges the planner sizes baskets by.
 
-    THREE PARAMETERS ARE ACCEPTED AND DELIBERATELY NOT PRINTED, because the assembler
-    hands them to every archetype of their kind and a page must not grow a requisite to
-    use them up:
+    WHAT THE EU VARIANT ACCEPTS AND DELIBERATELY DOES NOT PRINT, because the assembler
+    hands these to every archetype of their kind and a page must not grow a requisite to
+    use them up — while the UA variant prints the first and third as its ordinary
+    requisites:
 
     * `identity` — the seller's drawn identity. 📄 A supplier's identification numbers are
-      invoice particulars, and this page declares itself not an invoice; the parameter
-      stays so that ONE mechanism decides who a seller is, whichever archetype a claim
-      turns out to use.
+      invoice particulars, and the EU page declares itself not an invoice; the UA seller
+      is a domestic company and prints them.
     * `buyer_tax_id` — 📄 the customer's VAT identification number is on the same Article
-      226 list. 👁 A platform account has a name and a country, not a tax number.
-    * `address` — the claimant's city, which nothing on this page names.
+      226 list, and 👁 a platform account has a name and a country, not a tax number.
+      Printed by NEITHER variant.
+    * `address` — the seller's address slot. Blank on the EU page; the UA page prints it.
     """
-    del identity, buyer_tax_id, address  # accepted, not printed — see the docstring
+    del buyer_tax_id  # accepted, never printed — see the docstring
 
-    rules = jurisdiction("EU")
+    rules = jurisdiction(jurisdiction_code)
     block = rules["platform_receipt"]
+    domestic = jurisdiction_code == "UA"
 
     items = _draw_basket(
         rng,
         document="a platform receipt",
         category_id=category_id,
         vendor=vendor,
-        # No VAT letter on any line: the page prints no tax requisite of any kind, which
-        # is the treatment its own footer declares. The vendor's flag is not consulted —
-        # config/vendors.json states it false for every EU entry, and the page's law is
-        # the declaration, not the flag.
+        # ⛔ NO VAT LETTER ON ANY LINE, ON EITHER VARIANT, and for two different reasons
+        # that end in one flag: the EU page prints no tax requisite of any kind (its own
+        # footer is the licence), and the UA page prices VAT-inclusive and states the tax
+        # once at the foot — the same convention the invoice follows, whose lines carry no
+        # letter either. The letter is a requisite of the FISCAL receipt's line.
         vat_payer=False,
         covered_only=covered_only,
         coverage_target=coverage_target,
@@ -3923,6 +3963,7 @@ def build_platform_receipt(
         language=rules["language"],
         currency=rules["currency"],
     )
+    total = line_items_total(items)
 
     number_rules = block["receipt_number"]
     receipt_number = number_rules["separator"].join(
@@ -3930,9 +3971,49 @@ def build_platform_receipt(
         for _ in range(int(number_rules["groups"]))
     )
 
+    # The third axis — law. The Ukrainian seller is a domestic company: its legal name,
+    # address, identification code and (for a registered payer) the ПН and the contained
+    # VAT are ordinary requisites, printed exactly as the invoice prints them. The EU page
+    # disclaims all of them in one sentence, carried in `not_a_tax_invoice_note`.
+    if domestic:
+        vat_payer = vendor_is_vat_payer(vendor)
+        vat_rate = Decimal(str(rules["vat_rates"]["standard"]))
+        seller_extras = dict(
+            seller_display=printed_legal_name(vendor["name"], vendor["legal_form"]),
+            seller_address=address,
+            seller_tax_code=identity.tax_code,
+            seller_tax_code_label=rules["identifiers"][
+                "rnokpp" if vendor["legal_form"] == _SOLE_TRADER else "edrpou"
+            ]["label"],
+            seller_vat_number=identity.vat_number if vat_payer else None,
+            seller_vat_number_label=(
+                rules["identifiers"]["vat_number"]["label"] if vat_payer else None
+            ),
+            vat_label=(
+                block["vat_label_format"].format(rate=f"{float(vat_rate):g}")
+                if vat_payer
+                else None
+            ),
+            # 📄 The tax CONTAINED in a gross price: gross × rate / (100 + rate).
+            vat_amount=(
+                (total * vat_rate / (100 + vat_rate)).quantize(KOPIYKA)
+                if vat_payer
+                else None
+            ),
+            not_a_tax_invoice_note=None,
+            decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
+        )
+    else:
+        del identity, address  # not printed on the EU page — see the docstring
+        seller_extras = dict(
+            not_a_tax_invoice_note=block["not_a_tax_invoice_note"],
+            decimal_separator=rules["number_format"]["decimal_separator_variants"][0],
+        )
+
     return PlatformReceipt(
-        # The bare mark, which is also what `counterparty` carries: an EU platform's
-        # entry states a name and trades under it, and the page prints nothing else.
+        jurisdiction_code=jurisdiction_code,
+        # The bare mark, which is also what `counterparty` carries — the contract's
+        # authoritative form on every class of this dataset.
         seller_name=vendor["name"],
         buyer_name=buyer_name,
         buyer_country=block["buyer_country_names"]["UA"],
@@ -3940,8 +4021,293 @@ def build_platform_receipt(
         receipt_number=receipt_number,
         card_masked=block["card_mask_format"].format(tail=f"{rng.randint(0, 9999):04d}"),
         line_items=items,
-        total=line_items_total(items),
+        total=total,
+        **seller_extras,
     )
+
+
+# =============================================================================
+# The banking application — two carriers, one bank, one phone
+# =============================================================================
+
+# 👁 «2 лютого 2026, 13:46» — how an application screen states a date, unlike every
+# printed document of this corpus, which writes 02.02.2026. Ukrainian linguistic data
+# lives in code exactly as `amount_in_words_uk`'s number words do.
+_MONTHS_GENITIVE = (
+    "січня", "лютого", "березня", "квітня", "травня", "червня",
+    "липня", "серпня", "вересня", "жовтня", "листопада", "грудня",
+)
+
+
+def date_in_words_uk(moment: datetime) -> str:
+    """The date as an app screen states it — day, month in the genitive, year, time."""
+    return (
+        f"{moment.day} {_MONTHS_GENITIVE[moment.month - 1]} {moment.year}, "
+        f"{moment:%H:%M}"
+    )
+
+
+def descriptor_prefixes() -> tuple[str, ...]:
+    """The processor prefixes a card-network descriptor can carry.
+
+    Read from config/vendors.json rather than written here: `payment_providers` and
+    `aggregators` are the public Ukrainian processors this repository already names, and
+    each is used for exactly the trade it is publicly in. A prefix invented to look
+    plausible would be a mark invented to look plausible, which config/generation.yaml
+    forbids at the top of the file.
+    """
+    vendors = load_vendors()
+    providers = [entry["display_name"] for entry in vendors["payment_providers"]["UA"]]
+    aggregators = [entry["name"] for entry in vendors["aggregators"]["UA"]]
+    return tuple(sorted(name.upper() for name in providers + aggregators))
+
+
+def merchant_descriptor(rng: random.Random, merchant_name: str) -> str:
+    """🔴 `LIQPAY*КОВАЛЬЧУК О.С.` — the counterparty as the card network carries it.
+
+    NOT a legal name, and that is the whole phenomenon: the tail is the merchant's name
+    after the descriptor field has had it — uppercased, punctuation squeezed — and the
+    prefix is the processor's, so the one party line the screen prints matches no party
+    block of any other document of the claim. The LABEL still carries the bare trade name
+    in `counterparty`, exactly as on every class: what breaks is the PRINTED cross-check,
+    which is the thing this archetype exists to put in the data. The normalization rule
+    for descriptor prefixes is deliberately a downstream question, not this generator's.
+    """
+    tail = merchant_name.upper().replace(". ", ".")
+    return f"{rng.choice(descriptor_prefixes())}*{tail}"
+
+
+@dataclass(frozen=True)
+class AppTransaction:
+    """One operation as a banking application shows it — the transaction screen.
+
+    🔴 THE STRONGEST NEGATIVE EXAMPLE FOR THE PAYMENT CLASS BY LACK OF REQUISITES. The
+    screen looks like proof of payment and carries none of the requisites by which proof
+    of payment is recognized: ⛔ no document number, no authorization code, no RRN, no
+    stamp, no signature, no amount in words, no payment purpose. What it does carry —
+    👁 from public examples — is a status bar, a back arrow, a processor descriptor for
+    the counterparty, a category chip, a date in words with a time, a signed amount in
+    the largest type, a balance after the operation, the paying card, and a tap that
+    opens the framed receipt the sibling archetype renders.
+
+    ⚠️ THE CATEGORY CHIP IS THE BANK'S, NOT THE POLICY'S, and it is drawn without
+    reference to the claim — it may plainly disagree with what was bought, which is a
+    property of the domain rather than a defect.
+    """
+
+    bank_name: str
+    card_tail: str
+    merchant_descriptor_text: str
+    category_chip: str
+    issued_at: datetime
+    amount: Decimal
+    balance_after: Decimal
+    # The bare trade name the LABEL carries as `counterparty`, while the page prints the
+    # descriptor above — the split is the archetype's point.
+    counterparty: str
+    battery_fill_px: int
+
+    # -- rendering ------------------------------------------------------------
+
+    def _amount(self, value: Decimal) -> str:
+        rules = jurisdiction("UA")["number_format"]
+        whole, _, fraction = f"{value:.2f}".partition(".")
+        grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
+        # 👁 An application prints the sign; the dot is the app convention observed, so
+        # there is nothing to draw.
+        return f"{grouped}.{fraction}"
+
+    def render_context(self) -> dict:
+        rules = jurisdiction("UA")
+        block = rules["bank_app"]
+        strings = block["transaction"]
+        return {
+            "status_time": f"{self.issued_at:%H:%M}",
+            "battery_fill_px": self.battery_fill_px,
+            "merchant_descriptor": self.merchant_descriptor_text,
+            "category": self.category_chip,
+            "datetime_words": date_in_words_uk(self.issued_at),
+            # 👁 Signed, with the true minus sign rather than a hyphen — money leaving
+            # the account. The direction is the one fact this screen states that the A4
+            # confirmation never prints.
+            "amount_signed": f"−{self._amount(self.amount)} ₴",
+            "description_label": strings["description_label"],
+            "description_placeholder": strings["description_placeholder"],
+            "balance_label": strings["balance_label"],
+            "balance": f"{self._amount(self.balance_after)} ₴",
+            "payment_method_label": strings["payment_method_label"],
+            "payment_method": f"{self.bank_name} ••{self.card_tail}",
+            "actions": list(strings["actions"]),
+            "tabs": list(block["tabs"]),
+            "qr_payload": None,
+        }
+
+    # -- labels ---------------------------------------------------------------
+
+    def ground_truth(
+        self,
+        *,
+        doc_id: str,
+        source_file: str,
+        capture: Capture,
+        field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
+    ) -> DocGroundTruth:
+        """The label record for this screen.
+
+        `payment_purpose`, `auth_code` and `fee` are `None`, `payer` is `None` — 👁 the
+        screen is the claimant's own application, so it names nobody — and `direction` is
+        DEBIT, which the printed minus states. `counterparty` carries the bare trade
+        name, as on every class; the descriptor is what the PAGE prints, and the gap
+        between the two is measured on pixels, not smuggled into the label.
+        """
+        return DocGroundTruth(
+            doc_id=doc_id,
+            source_file=source_file,
+            doc_type=DocType.PAYMENT_CONFIRMATION,
+            language="uk",
+            currency="UAH",
+            amount=self.amount,
+            date=self.issued_at.date(),
+            counterparty=self.counterparty,
+            direction=Direction.DEBIT,
+            line_items=[],
+            has_qr=False,
+            qr_is_fiscal=False,
+            has_fiscal_number=False,
+            capture=capture,
+            field_bboxes=field_bboxes,
+            reference_text=reference_text,
+            content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
+        )
+
+
+def build_app_transaction(
+    rng: random.Random,
+    *,
+    issued_at: datetime,
+    vendor: dict,
+    identity: PartyIdentity,
+    payer_name: str,
+    payer_tax_id: str,
+    amount: Decimal | None = None,
+    cites: DocumentReference | None = None,
+) -> AppTransaction:
+    """Build one app transaction screen.
+
+    THE TRANSFER KEYWORDS OF EVERY PAYMENT BUILDER, four of them unprinted here:
+    `identity`, `payer_name` and `payer_tax_id` are accepted so that one mechanism
+    serves every payment archetype — ⛔ nothing on this screen names a party by
+    requisites: the seller appears only as the descriptor, and the payer is holding the
+    phone. `cites` is accepted and NOT printed, and that is the honest outcome rather
+    than an error: the screen has no purpose line, so a claim settled by it carries its
+    citation nowhere — the same case as the internet-acquiring confirmation that prints
+    no purpose, which the contract's KL-16 already tells a consumer to stratify by. The
+    label's `payment_purpose` is `None`, which is what says so.
+
+    `amount` is the claim's, exactly as on the A4 confirmation — a payment document that
+    drew its own would disagree with the subject beside it on every claim.
+    """
+    del identity, payer_name, payer_tax_id, cites  # accepted, never printed — see above
+    if amount is None:
+        raise ValueError(
+            "an app transaction is a payment document: its amount is the claim's, "
+            "handed by the assembler, never drawn here"
+        )
+
+    strings = jurisdiction("UA")["bank_app"]["transaction"]
+    # The NAME is drawn and the pool is the shared one; the МФО table stays honest
+    # because no code is printed beside the name here.
+    bank_name, _ = _draw_bank(rng, "UA")
+    return AppTransaction(
+        bank_name=bank_name,
+        card_tail=f"{rng.randint(1000, 9999)}",
+        merchant_descriptor_text=merchant_descriptor(rng, vendor["name"]),
+        category_chip=rng.choice(list(strings["categories"])),
+        issued_at=issued_at,
+        amount=amount,
+        # 👁 A balance strictly above the amount: the operation went through.
+        balance_after=amount + Decimal(rng.randrange(50_000, 900_000)) / 100,
+        counterparty=vendor["name"],
+        battery_fill_px=46 - rng.randrange(0, 20),
+    )
+
+
+@dataclass(frozen=True)
+class BankReceiptInApp:
+    """The A4 payment confirmation, captured inside the banking application.
+
+    🔴 THE SAME FORMAL DOCUMENT, NOT A SIBLING OF IT: the inner document is a
+    `PaymentConfirmation` built by the same builder, rendered through the same shared
+    body (`templates/ua_bank_payment_confirmation.jinja`), and labelled by ITS OWN
+    `ground_truth` — this class delegates rather than copies, so the two carriers cannot
+    drift. One document, two carriers, and the labels must agree: that is the archetype's
+    whole argument, and delegation is what makes it a property of the construction
+    rather than a promise.
+
+    What the frame adds is chrome an extractor has to see past — a dark surround, a
+    status bar, a back arrow, a share button, a tab bar, and a screen heading that
+    repeats the document's own number in DIFFERENT WORDS than the document's own
+    heading. 👁 The two headings disagreeing over one number is observed, not staged.
+    """
+
+    inner: PaymentConfirmation
+    battery_fill_px: int
+
+    def render_context(self) -> dict:
+        rules = jurisdiction("UA")
+        block = rules["bank_app"]
+        return {
+            **self.inner.render_context(),
+            "status_time": f"{self.inner.issued_at:%H:%M}",
+            "battery_fill_px": self.battery_fill_px,
+            "screen_title": (
+                f"{block['receipt_screen_title']} № {self.inner.document_code}"
+            ),
+            "share_label": block["share_label"],
+            "tabs": list(block["tabs"]),
+        }
+
+    def ground_truth(self, **kwargs) -> DocGroundTruth:
+        """The inner document's label, verbatim — the medium does not change the ground
+        truth. The carrier contributes only what the render measured: the boxes (which
+        include the chrome's own `screen_title`) and the reference text (which includes
+        the chrome's strings), both of which describe the IMAGE and are exactly what the
+        parameters of this call carry."""
+        return self.inner.ground_truth(**kwargs)
+
+
+def build_bank_receipt_in_app(
+    rng: random.Random,
+    *,
+    issued_at: datetime,
+    vendor: dict,
+    identity: PartyIdentity,
+    payer_name: str,
+    payer_tax_id: str,
+    amount: Decimal | None = None,
+    cites: DocumentReference | None = None,
+) -> BankReceiptInApp:
+    """Build the confirmation and the frame around it.
+
+    The inner document is built FIRST and with the same keywords the A4 archetype gets,
+    so a claim carried by this archetype is document-for-document what it would have been
+    on paper; the chrome draws come after, and the order is part of the seed's meaning.
+    """
+    inner = build_payment_confirmation(
+        rng,
+        issued_at=issued_at,
+        vendor=vendor,
+        identity=identity,
+        payer_name=payer_name,
+        payer_tax_id=payer_tax_id,
+        amount=amount,
+        cites=cites,
+    )
+    return BankReceiptInApp(inner=inner, battery_fill_px=46 - rng.randrange(0, 20))
 
 
 # =============================================================================
