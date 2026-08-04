@@ -649,7 +649,7 @@ reimbursement* above.
 | 5–7 | Payment-service receipts (three providers) | `payment_confirmation` | Payment-gateway layouts |
 | 8 | Software cash register receipt (ПРРО) — QR, `ФН ПРРО`, VAT letters; **two templates, 80 mm and 58 mm** | `fiscal_receipt` | Modern fiscal document |
 | 9 | Classic hardware cash register receipt (РРО), 80 mm — `ЗН` beside `ФН`, sequential number | `fiscal_receipt` | Register diversity |
-| 10 | Account statement, A4 landscape — **one page, 15–25 operations, one of them labelled** | `bank_statement` | The statement class |
+| 10 | Account statement, A4 landscape — 15–25 operations on one sheet, one of them labelled; **and, at a declared share, 28–45 operations across two sheets in one file** | `bank_statement` | The statement class; the multi-page case |
 | 11 | Sole-trader invoice for services | `invoice` | The invoice class |
 | 12 | Sales slip (товарний чек) — «ТОВАРНИЙ ЧЕК» where the fiscal wording stands, and **no** fiscal number, serial, maker, mode marker or QR | `non_fiscal_receipt` | Fiscality trap; proves the subject, not the payment |
 | 13 | Non-fiscal POS slip — RRN and auth code, no fiscal number | trap | Fiscality trap |

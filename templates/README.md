@@ -56,8 +56,11 @@ and EUR, and the same class in Ukrainian and UAH.
 **5 · `ua_insurance_contract`** — a three-page voluntary health insurance contract.
 * **File:** `ua_insurance_contract.png` · 794 × 3401 px, fixed — three A4 sheets in one image.
 * **Makes measurable:** **«one page = one document», broken in one direction** — one document
-  across several pages. Every other archetype here renders exactly one page, so a file-splitting
-  step would otherwise score a perfect result against a guarantee.
+  across several pages, so a file-splitting step cannot score a perfect result against a guarantee.
+  ⚠️ **A shipped archetype now breaks it too:** `ua_bank_statement` runs onto a second sheet at the
+  share `bank_statement.two_page_share` declares, which is where the corpus actually gets its
+  multi-page documents. This mock-up remains the *longer* case — three sheets, and continuation
+  pages that carry no requisites at all.
 * **Look for:** the page footers «Сторінка N з 3» beside the document's own number, and pages two
   and three with **no title, no parties and no requisites** — a running head and clauses that
   begin mid-numbering. Also the salience trap: the largest figure is the **sum insured**, and the
@@ -556,14 +559,24 @@ answer costs nothing until it is.
 
 ### 🔴 Why a multi-page document at all
 
-**Every archetype in this repository renders exactly one page.** A corpus built from them cannot
-contradict the rule *one page is one document* — so a later step that splits a submitted file into
-logical documents would score a **perfect result on it while never having been tested**. A
-measurement whose ideal is guaranteed by the construction of the data measures the construction,
-not the system.
+**Every archetype in this repository rendered exactly one page** when this mock-up was drawn. A
+corpus built from them cannot contradict the rule *one page is one document* — so a later step that
+splits a submitted file into logical documents would score a **perfect result on it while never
+having been tested**. A measurement whose ideal is guaranteed by the construction of the data
+measures the construction, not the system.
 
 This document is the control. **One document, three pages**, in one file. Without something like
 it in the corpus, a segmentation figure is not a weak result — it is not a result.
+
+⚠️ **THE SENTENCE ABOVE IS NO LONGER TRUE OF THE SHIPPED CORPUS, AND THIS MOCK-UP IS STILL A
+MOCK-UP.** `ua_bank_statement` now runs onto a **second sheet** at the share
+`bank_statement.two_page_share` declares, with `page_count` and `page_regions` per document — so a
+generated corpus does contain multi-page documents, and the rule is falsifiable without this file.
+What that closed is the *measurement* gap, not this archetype's own case: a statement's continuation
+sheet repeats the table it continues, while pages two and three here carry **no title, no parties
+and no requisites at all**, which is the harder cut. This section is kept as written and corrected
+here rather than rewritten, because the two facts are separate — the mock-up's reasoning stands, and
+what has since been built is what changed.
 
 ### ⛔ It is explicitly not evidence, and it cannot be labelled today
 
