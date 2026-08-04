@@ -47,6 +47,7 @@ from receipt_synth.content_builder import (
     build_payment_confirmation,
     build_prro_receipt,
     draw_party_identity,
+    draw_statement_pages,
     resolve_vendor,
     vendor_can_carry,
 )
@@ -62,8 +63,9 @@ from receipt_synth.policy_engine import (
     partially_covered_causes,
     verdict_mix,
 )
-from receipt_synth.renderer import Renderer
+from receipt_synth.renderer import RenderedDocument, Renderer
 from receipt_synth.schemas import (
+    BBox,
     Capture,
     ClaimGroundTruth,
     Country,
@@ -90,6 +92,12 @@ UNATTRIBUTED = "not attributed — planning stopped for a reason claim_planner c
 # `data-field` name — those are printed-field names, and none begins that way — and the collision is
 # checked rather than assumed.
 _CONTENT_BBOX_KEY = "__content_extent__"
+
+# The same device for a document's PAGE REGIONS — one key per sheet, numbered from 1 in reading
+# order, matching the `data-region="page_N"` the template marks. The prefix is what the split
+# sweeps by, so that EVERY reserved key is removed even where the label has no room for it.
+_PAGE_REGION_PREFIX = "__page_region_"
+_PAGE_REGION_KEY = _PAGE_REGION_PREFIX + "{page}__"
 
 # Stamped into a `tEXt` chunk of every shipped PNG (see `_write_png`), so that a viewer who
 # encounters one outside this repository — cropped into a slide, forwarded in a chat — can tell
@@ -545,39 +553,49 @@ def _build_document(
         # such claim would be labelled `insufficient_evidence` with the cause `amount_mismatch`.
         # Measured before this was written: an invoice of 1200.00 beside an independently drawn
         # payment came out exactly that, while the same pair agreeing came out `covered`.
-        document = _BUILDERS[slug](
-            rng,
-            issued_at=document_plan.issued_at,
-            vendor=vendor,
-            identity=identity,
-            payer_name=persona.full_name,
-            payer_tax_id=persona.tax_id,
-            amount=settles,
-            cites=cites,
-        )
+        transfer = {
+            "issued_at": document_plan.issued_at,
+            "vendor": vendor,
+            "identity": identity,
+            "payer_name": persona.full_name,
+            "payer_tax_id": persona.tax_id,
+            "amount": settles,
+            "cites": cites,
+        }
+        if archetype.doc_type is DocType.BANK_STATEMENT:
+            # 🔴 HOW MANY SHEETS THE STATEMENT RUNS TO IS DRAWN HERE, not in the builder, and it is
+            # drawn for the same reason `capture` is: it is a decision about how difficult this
+            # RUN's documents are, and a builder that took it would leave no caller able to ask for
+            # either case. It is also the change that stops «one page is one document» from being
+            # true by construction across this corpus — see `draw_statement_pages`.
+            transfer |= {"pages": draw_statement_pages(rng)}
+        document = _BUILDERS[slug](rng, **transfer)
 
     image_path = out_dir / "images" / f"{doc_id}.png"
     with tempfile.TemporaryDirectory() as staging:
         # The clean render is an intermediate, not an artifact: the dataset ships the
         # document as it would have been captured.
         clean = renderer.render(slug, document.render_context(), Path(staging) / f"{doc_id}.png")
-        # 🔴 THE CONTENT EXTENT TRAVELS WITH THE FIELD BOXES, THROUGH THE SAME TRANSFORM. Geometry
-        # is Albumentations' alone (see `degrader`), and a box moved by a second route would drift
-        # from the fields the moment a real geometric step arrives — which is exactly when a
-        # measurement built on it would start being quietly wrong.
-        if _CONTENT_BBOX_KEY in clean.field_bboxes:
-            raise ValueError(
-                f"a template marks a field named {_CONTENT_BBOX_KEY!r}, which this module reserves "
-                "for the content extent; rename the `data-field`"
-            )
+        # 🔴 THE CONTENT EXTENT AND THE PAGE REGIONS TRAVEL WITH THE FIELD BOXES, THROUGH ONE CALL
+        # AND ONE TRANSFORM. Geometry is Albumentations' alone (see `degrader`), and every channel
+        # that has any DRAWS it — so a box moved by a second call is moved by a second draw and
+        # lands somewhere else. `tracked_boxes` is the merge and the two lines below are the split.
+        #
+        # Asked of the document rather than assumed, like `reference` below: a class that prints on
+        # one sheet has no such property, and registering one does not bring this branch a case.
+        page_count = getattr(document, "page_count", 1)
         moved = degrade(
             cv2.imread(str(clean.image_path)),
-            {**clean.field_bboxes, _CONTENT_BBOX_KEY: clean.content_bbox},
+            tracked_boxes(clean),
             seed=rng.getrandbits(32),
             capture=capture,
         )
         boxes = dict(moved.field_bboxes)
         content_bbox = boxes.pop(_CONTENT_BBOX_KEY)
+        # `page_regions` is `None` unless the document has more than one sheet, which is what
+        # `DocGroundTruth._page_count_and_regions_agree` requires of a one-page label.
+        page_regions = take_page_regions(boxes, page_count=page_count)
+        pages = {"page_regions": page_regions} if page_regions is not None else {}
         # 🔴 GATE 2 OF THE FIDELITY MATRIX: DID THE CONTENT SURVIVE THE CAPTURE. Measured against
         # the DEGRADED image, because that is the file a consumer receives, and from the CONTENT
         # extent rather than from the field boxes — a document whose every labelled field came
@@ -598,12 +616,99 @@ def _build_document(
             reference_text=clean.reference_text,
             content_bbox=content_bbox,
             content_lost_edges=lost,
+            # Passed only by a class that HAS sheets to report. A `page_regions` parameter added to
+            # all five content classes for the sake of the one that paginates would be four classes
+            # carrying an argument they can only ever be given `None` for.
+            **pages,
         ),
         # Asked of the document rather than composed here: what a reference to an invoice consists
         # of is the invoice's business. A class that nothing cites has no such property and returns
         # nothing, so registering one does not bring this branch a case to handle.
         getattr(document, "reference", None),
     )
+
+
+def tracked_boxes(clean: RenderedDocument) -> dict[str, BBox]:
+    """Every rectangle that has to come out of the degrader where its pixels came out.
+
+    🔴 ONE DICT, ONE CALL, ONE TRANSFORM — and that is the whole of why this function exists rather
+    than three call sites. Geometry belongs to Albumentations alone (see `degrader.carry_boxes`),
+    and the transform each channel applies is DRAWN: a perspective and a rotation are sampled from
+    a range, so a second call with the same seed is a second draw and lands somewhere else. A box
+    carried by a second call would therefore be plausible and wrong, in a way that shows up
+    downstream as a poor extractor or a poor segmenter and never as a coordinate defect.
+
+    Three kinds of rectangle ride together:
+
+    * the LABELLED FIELDS, under their own `data-field` names;
+    * the CONTENT EXTENT, under `_CONTENT_BBOX_KEY` — the box `content_lost_edges` is measured
+      from, which is why it must not drift from the ink by so much as a rotation;
+    * the PAGE REGIONS of a document printed on more than one sheet, under `_PAGE_REGION_KEY`.
+
+    The two reserved names begin with two underscores, which no `data-field` does — and the
+    collision is CHECKED rather than trusted, because "no template does that today" is exactly the
+    kind of premise a later template breaks in silence.
+    """
+    reserved = {_CONTENT_BBOX_KEY} | {
+        _PAGE_REGION_KEY.format(page=index + 1) for index in range(len(clean.region_bboxes))
+    }
+    claimed = sorted(reserved & set(clean.field_bboxes))
+    if claimed:
+        raise ValueError(
+            f"a template marks field(s) named {claimed}, which this module reserves for the "
+            "content extent and the page regions; rename the `data-field`"
+        )
+    tracked: dict[str, BBox] = {**clean.field_bboxes, _CONTENT_BBOX_KEY: clean.content_bbox}
+    for page in range(1, len(clean.region_bboxes) + 1):
+        # By NAME rather than by iterating the dict: `page_regions` is a list in reading order, and
+        # a template that numbered its sheets from 0 or skipped one has to fail here rather than
+        # produce a label whose second region is the third sheet.
+        name = f"page_{page}"
+        if name not in clean.region_bboxes:
+            raise ValueError(
+                f"the render marks {sorted(clean.region_bboxes)} but no {name!r}; a document's "
+                "sheets are `page_1` … `page_N` in reading order"
+            )
+        tracked[_PAGE_REGION_KEY.format(page=page)] = clean.region_bboxes[name]
+    return tracked
+
+
+def take_page_regions(boxes: dict[str, BBox], *, page_count: int) -> list[BBox] | None:
+    """The page half of the inverse of `tracked_boxes` — TAKEN OUT of the degraded boxes.
+
+    Removes every reserved region key from `boxes` and returns the regions in reading order, or
+    `None` where the document is a single sheet, which is what
+    `DocGroundTruth._page_count_and_regions_agree` requires of a one-page label. It pops rather
+    than copies for the reason the content extent above it does: what is left in `boxes` afterwards
+    is exactly the label's `field_bboxes`, so a key this function forgot cannot quietly become one.
+
+    `page_count` COMES FROM THE DOCUMENT, not from counting the keys. A render that lost a sheet's
+    marker would otherwise be split into however many regions survived and labelled as that many
+    pages — an image of two sheets described as a document of one, with nothing anywhere saying so.
+
+    ⚠️ EVERY RESERVED KEY GOES WHATEVER `page_count` SAYS. A one-page document still marks its
+    single sheet, so the carried boxes hold a region the label has no room for — and a key left
+    behind would reach a consumer as a `data-field` named `__page_region_1__`, which is a field no
+    template prints and no requirement names.
+    """
+    carried = {key: boxes.pop(key) for key in list(boxes) if key.startswith(_PAGE_REGION_PREFIX)}
+    if page_count == 1:
+        if len(carried) > 1:
+            raise ValueError(
+                f"this document reports one page and the render marked {len(carried)} sheets; the "
+                "image and the label disagree about how many pages there are"
+            )
+        return None
+    regions = []
+    for page in range(1, page_count + 1):
+        key = _PAGE_REGION_KEY.format(page=page)
+        if key not in carried:
+            raise ValueError(
+                f"this document is printed on {page_count} sheets and the carried boxes hold no "
+                f"{key!r}; the render and the document disagree about how many pages there are"
+            )
+        regions.append(carried[key])
+    return regions
 
 
 # How many times `_payee_the_payment_names` may draw before it gives up. The filter inside
