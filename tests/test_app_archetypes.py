@@ -26,7 +26,11 @@ from receipt_synth.claim_planner import (
     _draw_archetype,
     evidence_of,
 )
-from receipt_synth.config import archetype_draw_weights, load_vendors
+from receipt_synth.config import (
+    archetype_draw_weights,
+    load_vendors,
+    payment_confirmation_money_range,
+)
 from receipt_synth.content_builder import (
     build_app_transaction,
     build_bank_receipt_in_app,
@@ -161,17 +165,29 @@ def test_the_descriptor_is_a_public_prefix_and_the_label_keeps_the_bare_name():
     assert document.counterparty == VENDOR["name"]
 
 
-def test_the_amount_is_the_claims_and_never_drawn():
-    with pytest.raises(ValueError, match="amount is the claim's"):
-        build_app_transaction(
-            random.Random(1),
+def test_the_amount_is_the_claims_where_given_and_drawn_only_for_the_gap():
+    """A payment that drew its own amount beside a subject would disagree with it on
+    every claim — so the assembler's amount is used verbatim. `None` is the EVIDENCE-GAP
+    claim, which carries this document alone: the transfer is then drawn from the same
+    declared range the A4 confirmation draws its own in that case. 🔴 A first version
+    refused `None` outright and crashed the one verification seed whose gap claim drew
+    this rendering — a stage away from the plan that legitimately asked for it — which is
+    the wiring the second half of this test now pins."""
+    assert make_transaction(amount="600.00").amount == Decimal("600.00")
+
+    low, high = payment_confirmation_money_range("transfer_amount")
+    for seed in range(5):
+        drawn = build_app_transaction(
+            random.Random(seed),
             issued_at=WHEN,
             vendor=VENDOR,
             identity=identity(),
             payer_name="X",
             payer_tax_id="1",
             amount=None,
-        )
+        ).amount
+        assert low <= drawn < high
+        assert drawn == drawn.quantize(Decimal("0.10"))
 
 
 def test_the_same_seed_builds_the_same_screen():

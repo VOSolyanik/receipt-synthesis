@@ -4208,15 +4208,23 @@ def build_app_transaction(
     no purpose, which the contract's KL-16 already tells a consumer to stratify by. The
     label's `payment_purpose` is `None`, which is what says so.
 
-    `amount` is the claim's, exactly as on the A4 confirmation — a payment document that
-    drew its own would disagree with the subject beside it on every claim.
+    `amount` is the claim's wherever the claim has a subject document — a payment that
+    drew its own would disagree with the subject beside it on every claim — and is drawn
+    here only for the claim that deliberately has none: the evidence gap, exactly as on
+    the A4 confirmation, from the same range.
     """
     del identity, payer_name, payer_tax_id, cites  # accepted, never printed — see above
     if amount is None:
-        raise ValueError(
-            "an app transaction is a payment document: its amount is the claim's, "
-            "handed by the assembler, never drawn here"
-        )
+        # An EVIDENCE-GAP claim carries this payment document ALONE — there is no subject
+        # whose amount the assembler could hand over — so the transfer is drawn, exactly
+        # as the A4 confirmation draws its own in the same case: the same declared range,
+        # the same ten-kopiyka steps. 🔴 Found by the cross-seed verification sweep, not
+        # by the suite: a refusal here crashed the one seed whose gap claim drew this
+        # rendering, a stage away from the plan that legitimately asked for it.
+        low, high = payment_confirmation_money_range("transfer_amount")
+        amount = Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100
+    if amount <= 0:
+        raise ValueError(f"an app transaction states a positive amount, got {amount}")
 
     strings = jurisdiction("UA")["bank_app"]["transaction"]
     # The NAME is drawn and the pool is the shared one; the МФО table stays honest
