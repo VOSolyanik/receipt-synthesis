@@ -1007,7 +1007,16 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 29
+#
+# Version 30 is the CURRENCY CONVERSION: the oracle converts a foreign-currency document at
+# the rate config/fx-rates.yaml states for the document's date, and the claim label gained
+# `fx_rates` — one record per converted document, carrying the applied rate. The `currency`
+# field's note stops saying the engine refuses; the quantization point of the conversion is
+# declared in fx-rates.yaml (`conversion`), not here, because it belongs to the constant
+# both sides load. KL-17 records the external-validity gap this opens: the corpus converts
+# at STATIC vendored rates, a production system converts at a live rate for the transaction
+# date, and no figure measured here transfers across that difference unexamined.
+version: 30
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -2231,7 +2240,13 @@ normalization:
     currency: >
       Never part of the amount; the `currency` field carries the code, and per `open_enum`
       that code may be one the generator has never emitted.
-    decided_here: half-up rounding. The generator never rounds a comparison, because it never compares.
+    decided_here: >
+      half-up rounding — and since version 30 the generator's oracle does round once
+      itself: a foreign-currency amount is converted and quantized at the single point
+      config/fx-rates.yaml declares (`conversion`: sum-then-convert-then-quantize, step
+      0.01, half-up), which is the same convention this rule names. The declaration lives
+      in that file rather than here because it belongs to the constant both sides load —
+      see the `fx_rates` claim field.
 
   quantity:
     status: emitted
@@ -2802,11 +2817,15 @@ document_label:
       normalize: open_enum
       observed: ["UAH"]
       note: >
-        Every archetype emits `reporting_currency` from policy.yaml, and the policy engine
-        REFUSES a document in anything else rather than converting it — a converted amount
-        would be a number in the ground truth that nothing in the dataset can prove. The
-        consumer converts to a base currency at approval time using the transaction date,
-        which is why the original amount, currency and date are all kept per document.
+        The document's amounts stay in ITS OWN currency — nothing on the record is
+        converted, which is why the original amount, currency and date are all kept per
+        document. Where the currency is not policy.yaml's `reporting_currency`, the policy
+        engine converts FOR THE VERDICT ARITHMETIC ONLY, at the rate config/fx-rates.yaml
+        states for the document's date, and the claim record carries that rate in
+        `fx_rates` — see the claim field, which is where the conversion contract lives. An
+        earlier version of this note said the engine refuses such a document outright;
+        that fell with the decision to convert, and the refusal that remains is narrower:
+        a currency the vendored table has no rate for.
 
     - name: amount
       type: number
@@ -4724,6 +4743,52 @@ claim_label:
           - "annual limit <category id> 9000.00 UAH: 8100.00 already reimbursed, 900.00 remaining"
           - "reimbursable 900.00 UAH of 2400.00 covered — annual limit exhausted"
 
+    - name: fx_rates
+      type: array of object
+      required: true
+      # `money` governs the one member a consumer compares numerically: `rate` serializes
+      # exactly as an amount does, so trailing zeros are lost — 45.00 is written 45.0.
+      # The other members are lookups, not comparisons: `doc_id` and `currency` match
+      # exactly, `on` is an ISO date.
+      normalize: money
+      status: forward_contract
+      answers: WHICH RATE THE ORACLE APPLIED to each document not stated in the reporting currency
+      shape: >
+        One object per converted document: `doc_id` (which document), `currency` (what the
+        rate converts FROM — the target is always policy.yaml's `reporting_currency`),
+        `rate` (reporting-currency units per 1 unit of `currency`, verbatim from
+        config/fx-rates.yaml), `on` (the date the rate was taken at — the document's own
+        date, repeated so the record stands alone). An EMPTY ARRAY means nothing was
+        converted: every document of the claim is already in the reporting currency, and
+        an identity rate on each of them would be noise dressed as information.
+      definition: >
+        The rate itself, not only its result. A converted amount is provable exactly when
+        the label carries the applied rate beside the original amount, currency and date —
+        amount × rate, quantized at the point fx-rates.yaml declares (`conversion`:
+        sum-then-convert-then-quantize, step 0.01, half-up), is then reproducible by
+        anyone holding the same vendored table. The rate is recorded whatever branch the
+        verdict took: a rejected foreign-currency claim still carries it, because a
+        consumer re-deriving any of its amounts needs the same constant the oracle read.
+      the_shared_artifact_is_a_constant_not_a_library: >
+        🔴 THE INDEPENDENCE OF THE LABELLING FROM THE ENGINE EVALUATED AGAINST IT IS NOT
+        COMPROMISED BY THIS FIELD, and the boundary is worth stating because it is easy to
+        blur from either side. What the two sides share is a CONSTANT — the vendored rate
+        table and its declared quantization point, the same class of artifact as the
+        currency code or the field names of this file: if the two sides take different
+        numbers, comparison is meaningless, so vendoring is MANDATORY here. What they must
+        NOT share is INTERPRETATION — each side implements the conversion arithmetic
+        independently from the declaration, exactly as each derives verdicts independently
+        from policy.yaml. A shared conversion LIBRARY would be the two engines being one
+        engine, and the symmetry check between them would measure nothing.
+      derived_not_extractable: >
+        ⚠️ NO CONVERTED AMOUNT IS AN EXTRACTION TARGET. The conversion appears on no
+        document — 👁 no public source shows a platform receipt stating a rate or an
+        equivalent in the buyer's currency — so a per-field score on a converted figure
+        measures nothing about extraction. It is a DERIVED quantity: score it only as
+        arithmetic over (amount, `rate`), never as a field read off pixels. The same trap
+        this file already names for `amount_due`.
+      static_rates_are_a_declared_gap: see KL-17.
+
     - name: split
       type: enum or null
       required: true
@@ -5724,6 +5789,34 @@ known_limitations:
       config file rather than of the system. And take the figure over claims that HAVE a pair: on a
       `subject_not_evidenced` claim there is nothing to cite, so a corpus-wide denominator scores
       that cause as a total linkage failure by construction.
+
+  - id: KL-17
+    name: currency conversion is exercised against static rates, and the world's are live
+    predictor: none — the limitation is about what a measurement transfers to, not about a cue
+    hurts: [evaluation]
+    subset: every claim carrying a document not stated in the reporting currency
+    what_the_corpus_does: >
+      The oracle converts at the rates of config/fx-rates.yaml — STATIC BY DESIGN, as that
+      file's own header says: a live rates API would destroy determinism, and reproducibility
+      outranks realistic drift. Every conversion in the corpus therefore applies a rate that
+      is the same for every transaction date, and the label records it (`fx_rates`).
+    what_the_world_does: >
+      A production system converts at a live rate for the transaction date. Rates drift daily;
+      two documents weeks apart convert at genuinely different figures; the rate applied is an
+      observation about the world, not a vendored constant.
+    consequence: >
+      🔴 A SYSTEM THAT PASSES THE CONVERSION SYMMETRY CHECK HERE HAS SHOWN IT IMPLEMENTS THE
+      DECLARED ARITHMETIC, NOT THAT IT CONVERTS CORRECTLY AGAINST A LIVE SOURCE. What
+      transfers is the mechanism — read the rate for the date, multiply once, quantize at the
+      declared point; what does not transfer is everything a live source adds: retrieval
+      failures, revision of published rates, date-boundary ambiguity (whose midnight?), and
+      the choice of source itself. No figure measured on this corpus speaks to those. The gap
+      is deliberate — the alternative was labels that change with the day they are generated
+      on — and it is recorded here so it is inherited as a decision rather than as a silence.
+    how_a_consumer_detects_it: >
+      Compare `fx_rates[].rate` across documents of different dates: on this corpus they are
+      equal for equal currencies, which is the signature of the static table. Any evaluation
+      of date-sensitive conversion needs data this corpus deliberately does not contain.
     fixed_by: >
       NOTHING THAT SHOULD BE DONE BY WIDENING THE POOL, and the decision is the author's: 👁 the
       observed purpose lines name a delivery note as well as an invoice, and a corpus in which
