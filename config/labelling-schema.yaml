@@ -3509,9 +3509,11 @@ document_label:
         for a consumer to discover as a length mismatch.
       the_rule_is_per_element_and_the_order_is_information: >
         `bbox` is named for each ELEMENT; the list itself is ORDERED and must not be compared as a
-        set. Which sheet is the first one is the whole of what a continuation sheet means — 📄 the
-        footer prints «Сторінка N з M» — and a comparison that sorted or set-ified the list would
-        score a document assembled backwards as correct.
+        set. Which sheet is the first one is the whole of what a continuation sheet means — the
+        footer prints «Сторінка N з M», which is ⛔ the generator's own `folio` template under
+        `bank_statement.pagination` in config/fiscal-rules.yaml and not the text of any published
+        form — and a comparison that sorted or set-ified the list would score a document assembled
+        backwards as correct.
       a_document_can_be_split_across_sheets_and_its_boxes_are_not: >
         ⚠️ A FIELD BOX LIVES ON WHICHEVER SHEET PRINTS IT, AND THE LABEL DOES NOT SAY WHICH. On a
         paginated statement the two unlabelled money-column headers, `column_debit` and
@@ -5598,10 +5600,11 @@ known_limitations:
       with the subject document on some claims whose label is perfectly ordinary
     hurts: [training, evaluation]
     subset: >
-      🔴 EVERY CLAIM EVIDENCED BY A PAIR, because every payment document of one prints a purpose
-      line and the line is drawn from one pool of formulas whatever the claim was planned as
-      (`payment_purposes` and `bank_statement.purposes` in config/generation.yaml). TWO THINGS IN
-      IT ARE DRAWN WITHOUT REFERENCE TO THE SUBJECT DOCUMENT, and both are visible to a reader:
+      🔴 CLAIMS EVIDENCED BY A PAIR WHOSE PAYMENT DOCUMENT PRINTS A PURPOSE LINE, which is most of
+      them and NOT ALL OF THEM. The line, where it is printed, is drawn from one pool of formulas
+      whatever the claim was planned as (`payment_purposes` and `bank_statement.purposes` in
+      config/generation.yaml), and TWO THINGS IN IT ARE DRAWN WITHOUT REFERENCE TO THE SUBJECT
+      DOCUMENT, both visible to a reader:
 
       THE DOCUMENT CITED. Some formulas name a рахунок and are filled with the claim's own invoice
       number and date; others name a ВН — a delivery note — whose number is DRAWN AND BELONGS TO NO
@@ -5612,8 +5615,18 @@ known_limitations:
 
       THE GOODS NOUN. «за товар», «за обладнання», «за витратні матеріали» — generic, and drawn
       without reference to the claim's category, so a psychotherapy invoice may be settled by a
-      payment "for consumables". Nothing in the pool names a category at all, which is exactly why
-      a statement 📄 CONFIRMS `proves_subject: false` for its type rather than testing it.
+      payment "for consumables". Nothing in the pool names a category at all, which is why such a
+      document CONFIRMS the `proves_subject: false` its type carries in policy.yaml's
+      `document_evidence` rather than testing it — a value of that file, not a form's wording.
+
+      ⚠️ AND THERE IS A THIRD CASE BESIDE A MATCHING CITATION AND ONE POINTING OUTSIDE THE CLAIM:
+      NO PURPOSE LINE AT ALL. The internet-acquiring payment confirmation prints none —
+      `acquiring.prints_purpose` is false in config/fiscal-rules.yaml and `content_builder` leaves
+      the label field `null` on that branch — so a claim's payment document may carry nothing for a
+      linker to read. It is the same variant KL-09 is about, at the rate
+      `payment_confirmation.initiation_shares` declares, and a bank statement's labelled row always
+      carries a purpose whatever the draw. A consumer that folds this case into "cites nothing of
+      the claim" is measuring two different things under one name.
 
       ⛔ IT IS NOT A LABELLING ERROR AND THE CITATION IS NOT AN AXIS. `cross_document_agreement` in
       config/policy.yaml declares three — amount, date order, counterparty — and document-number
@@ -5623,8 +5636,9 @@ known_limitations:
       it; what makes a pair one transaction is the money and the party. Every verdict here is
       derived from the declared axes and is right on every such claim.
     how_a_consumer_detects_it: >
-      Read the purpose line of a claim's payment document against the subject document's own number
-      and against its line items. The mismatches are visible without any label, and they fall on
+      Read the purpose line of a claim's payment document — where the document prints one; see the
+      third case above — against the subject document's own number and against its line items. The
+      mismatches are visible without any label, and they fall on
       claims of every verdict — including `covered` — while the `counterparty_mismatch` negative,
       whose only defect is the party, carries a purpose that cites the claim's own invoice
       correctly whenever the drawn formula cites a рахунок at all (`assembler`, at the payee draw:
@@ -5643,13 +5657,24 @@ known_limitations:
       citations on positives against a perfect one on the negative it had examined — and inferred
       that a learner could read a perfect citation as a trap signal.
 
-      ⚠️ THAT INFERENCE IS NOT SUPPORTED, AND SAYING SO IS THE USEFUL PART. The formula is drawn from
-      the same pool on a planned negative as on an ordinary claim, and the negative's own realization
-      touches the PARTY and nothing else — so citation fidelity is drawn INDEPENDENTLY OF THE LABEL
-      and no correlation exists in either direction. What was seen at that size was a coincidence of
-      the draw. The limitation is the independence itself: the cue looks like a linkage key, and a
-      system that treats a matching citation as evidence of a link is right by accident and wrong by
+      ⚠️ THAT INFERENCE IS NOT SUPPORTED ON THE CLAIMS THIS ENTRY IS ABOUT, AND SAYING SO IS THE
+      USEFUL PART. Among claims that HAVE a pair, the formula is drawn from the same pool on a
+      planned negative as on an ordinary claim, and the negative's own realization touches the PARTY
+      and nothing else — so there citation fidelity is drawn INDEPENDENTLY OF THE LABEL and no
+      correlation exists in either direction. What was seen at that size was a coincidence of the
+      draw. The limitation is the independence itself: the cue looks like a linkage key, and a system
+      that treats a matching citation as evidence of a link is right by accident and wrong by
       accident in equal measure.
+
+      ⛔ THE INDEPENDENCE IS NOT A CORPUS-WIDE CLAIM, AND ONE LABELLED CAUSE IS OUTSIDE IT ENTIRELY.
+      An `insufficient_evidence` claim with the cause `subject_not_evidenced` carries a payment
+      document ALONE (`claim_planner.EvidenceIntent.EVIDENCE_GAP`), so there is no subject document
+      for a purpose to cite and `content_builder._fill_reference` fills the line with a drawn number
+      belonging to nothing. A citation of the claim's own document is therefore IMPOSSIBLE on 100%
+      of that cause — which is a property of the claim shape rather than of the purpose pool, and it
+      is the reason the entry is scoped to pairs. A consumer computing "does the purpose cite a
+      document of this claim" over the whole corpus is measuring, on that slice, whether the claim
+      has a second document at all.
     consequence: >
       A SYSTEM MEASURED HERE IS TAUGHT TO IGNORE THE PURPOSE TEXT, and that lesson does not transfer.
       A learner that used purpose-text linkage would be penalized on the positives whose citation
@@ -5665,10 +5690,18 @@ known_limitations:
       contaminated share of the confirmation purpose pool is repaired, because shipping it earlier
       would certify those documents as legitimately non-citing.
     how_to_stratify: >
-      By whether the payment's purpose cites the claim's own document at all — parsed from
-      `reference_text`, since no label field carries it. Report a linkage figure separately on the
-      citing and non-citing shares, and never as one number; a single figure moves with the pool's
-      formula mix, which is a property of config/generation.yaml and not of the system.
+      INTO THREE BUCKETS, NOT TWO, AND THE FIRST OF THEM IS FREE. `payment_purpose` is a label
+      field: `null` says the document PRINTS NO PURPOSE LINE, which is a different fact from a line
+      that cites nothing of the claim, and a consumer that reports them together is measuring a
+      linker against documents that gave it nothing to read.
+
+      Of the documents that do print one, split by whether the line cites the claim's own document —
+      that half has to be parsed from `reference_text`, since no label field carries it. Report a
+      linkage figure on each of the three shares and never as one number; a single figure moves with
+      the pool's formula mix and with `payment_confirmation.initiation_shares`, both properties of a
+      config file rather than of the system. And take the figure over claims that HAVE a pair: on a
+      `subject_not_evidenced` claim there is nothing to cite, so a corpus-wide denominator scores
+      that cause as a total linkage failure by construction.
     fixed_by: >
       NOTHING THAT SHOULD BE DONE BY WIDENING THE POOL, and the decision is the author's: 👁 the
       observed purpose lines name a delivery note as well as an invoice, and a corpus in which
