@@ -108,6 +108,13 @@ answers `rejected`, cause `outside_period`, off the payment date alone. Only one
 verdict is built this way; a claim whose basket the category covers *none* of needs a builder that draws no
 covered line, and `claim_planner._UNREALIZABLE_ROUTES` records that it does not.
 
+**And a claim may be planned to be settled in parts, which is the one mechanism that is neither a document
+shape nor a date but a line of PRINT.** The plan names a payment schedule; the invoice states that its
+obligation is paid in equal parts and what one part comes to; the payment document is then sized to exactly
+that part, read off the built invoice rather than recomputed. Everything else about the claim is ordinary —
+a complete pair, a covered basket, a payment inside the period — and the engine answers `partially_paid` off
+the printed term. See [A smaller payment that is not a disagreement](#a-smaller-payment-that-is-not-a-disagreement).
+
 It processes a persona's claims in date order and carries the remaining category balance, so that a claim can
 also become partially covered by exhausting an annual limit rather than by containing a non-covered item. A
 claim outside the period is outside that order too, and may be: it reimburses nothing, so it consumes no
@@ -394,7 +401,7 @@ not bind is not mentioned, and a claim rejected for its date says so without arg
 | `rejected` | The policy plainly does not cover the claim — nothing bought is covered by the category, or the payment falls outside the active period |
 | `not_proof_of_payment` | It is not established that **money moved**: every document is of a *type* whose `proves_payment` is `false` |
 | `insufficient_evidence` | It is not established **what was bought** (no document states it), or not established that the payment and the purchase are **one transaction** |
-| `partially_paid` | Payment was made in installments; only part has been paid |
+| `partially_paid` | The subject document states that its obligation is settled **in equal parts** and what one part comes to, and the payment settles exactly that part |
 
 The evidence a claim rests on has three slots — that money moved, that a purchase was made, and that the two
 are one transaction — and each row above names **its own slot**. No row is written as "the case that is not one
@@ -512,6 +519,32 @@ whose documents contradict each other come out `covered`.
 These two causes are the linkage slot; the missing **subject** document is the other slot `insufficient_evidence`
 owns. Together they are why the verdict still exists after the period case moved to `rejected`: in all three
 something genuinely *is* unestablished.
+
+### A smaller payment that is not a disagreement
+
+`amount_mismatch` above is *the payment states a different amount*, and one shape of that is not a defect at
+all: an obligation settled **in equal parts**. An annual gym subscription is invoiced for the year and paid
+quarterly, and the payment is then a quarter of the invoice — lawfully.
+
+The two are the same pair of numbers, so the arithmetic cannot separate them. What separates them is a
+**printed marker on the subject document**: an invoice may state its payment term — «Умови оплати: оплата
+частинами щоквартально, черговий платіж: …» — and the amount of that part is labelled `instalment_amount`.
+The rule, stated declaratively in `config/policy.yaml` under `partial_payment` so that a consumer's own engine
+can implement it from the same file:
+
+- the subject document carries `instalment_amount`, **and** the payment equals it, **and** it is smaller than
+  the subject's `amount` → `partially_paid`, with no cause;
+- a discrepancy without that marker → `amount_mismatch`, exactly as before.
+
+A payment matching *no* part of a stated arrangement is a payment for some third amount, i.e. the mismatch
+case again — the marker has to agree with the payment, not merely be present. The date cross-check is
+untouched: a payment dated before the invoice it settles is `payment_precedes_subject` whether it pays a part
+or the whole.
+
+A payment term is **not** a payment status. It says how the seller proposes to be paid and is fixed when the
+invoice is drawn up; nothing on the page says money moved, and whether it did is still decided from the
+payment document's type. Such a claim reimburses nothing and consumes no annual balance: how much of a partly
+settled obligation is payable is a decision the policy has not taken, and the engine will not invent one.
 
 ### What ties a claim's documents together
 
@@ -659,7 +692,7 @@ short. Each mechanism is a parameter of `claim_planner`, combined with a target 
 | Category does not match the policy | A purchase outside the claimed category | `rejected` |
 | Payment outside the active period | Money moved before or after the window | `rejected` |
 | Document does not prove payment | Invoice marked "paid: 0"; sales slip; booking confirmation | `not_proof_of_payment` |
-| Paid in installments | Part of the amount settled | `partially_paid` |
+| Paid in installments | The invoice states an instalment term; the payment settles one part | `partially_paid` |
 | Evidence incomplete | No statement of what was bought — a bare transfer | `insufficient_evidence` |
 | Paid through an aggregator | Payee is a payment intermediary, no visible link to the merchant | requires linking |
 | Documents disagree | Payment amount differs from the contract; payment predates the contract | `insufficient_evidence` |

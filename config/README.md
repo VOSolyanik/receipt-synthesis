@@ -92,8 +92,11 @@ verdict_mix:                   # target distribution; the balance report checks 
   partially_covered: 0.20
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
-  partially_paid: 0.10
+  partially_paid: 0.10         # the last member to gain a mechanism; the subset is now the whole mix
   rejected: 0.10               # 0.50 of `covered` paid for it when the mechanism landed
+
+partial_payment:               # how a smaller payment is told from a mismatched one
+  marker_fields: [instalment_amount]   # the printed marker a `partially_paid` verdict rests on
 
 partially_covered_causes:      # splits the bucket above by cause; must sum to 1.0
   mixed_items: 0.65

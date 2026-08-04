@@ -60,6 +60,44 @@
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 28 by THE LAST VERDICT ENTERING THE DATA, and by the printed field that let it. The
+# dataset's six labels are all emitted for the first time. FIVE consequences, and the first two
+# would otherwise be read as defects.
+#
+#   🔴 ONE NEW LABEL FIELD, `instalment_amount`, AND IT IS SCOREABLE — unlike `amount_due`, which
+#   the entry beside it still refuses to have scored. It is what one PART of a document's amount
+#   comes to where the document says the obligation is settled in parts, `null` everywhere else,
+#   and it differs from `amount` by construction wherever it is populated. See
+#   `document_label.fields.instalment_amount`.
+#
+#   🔴 `partially_paid` IS NOW EMITTED, and A CONSUMER CANNOT DERIVE IT FROM THE AMOUNTS. An
+#   invoice of 1200.00 beside a payment of 300.00 is `partially_paid` when the invoice PRINTS the
+#   instalment term and `insufficient_evidence` / `amount_mismatch` when it does not — the same
+#   two numbers, two labels. A scorecard comparing a payment against `amount` alone scores every
+#   such claim as a mismatch. `verdicts.partially_paid` carries the three conditions and
+#   `partial_payment` in policy.yaml carries the rule an engine is built from.
+#
+#   🔴 THE INVOICE PRINTS A LINE IT DID NOT PRINT, and it is the first line of this dataset a
+#   verdict rests on: «Умови оплати: оплата частинами …, черговий платіж: …», with a box keyed
+#   `instalment_amount`. A consumer pinning a key set for the archetype meets a new key — the same
+#   lesson as version 7's `discount` and `rounding`. THE CLASS STILL PRINTS NO PAYMENT STATUS:
+#   a term of an offer is not a record that money moved, and `document_types.invoice` states the
+#   distinction where a reader will look for the contradiction. ⚠️ The wording is NOT observed —
+#   neither open invoice carried such a term — and is declared as a divergence there.
+#
+#   `config/policy.yaml` CHANGED WITHOUT A SHARE MOVING, for the second version running.
+#   `verdict_mix.partially_paid` has read 0.10 since the file was written and now sizes a bucket
+#   that fills; what moved is `insufficient_evidence_causes_min_run_size`, FROM 85 TO 90, because
+#   the realizable subset is now the WHOLE mix — the renormalization denominator is 1.00 instead of
+#   0.90, and every other verdict is drawn slightly rarer at an unchanged declared share. 🔴 AN I-2
+#   EVENT: the file is vendored downstream under a sha256 lock.
+#
+#   ⚠️ EVERY REFERENCE-RUN FIGURE IN `known_limitations` PREDATES THIS VERSION and each names its
+#   own run. A block reporting that `partially_paid` is not drawn is a true statement about the run
+#   it names and a false one about this generator; the shares of any such run are also conditional
+#   on a realizable subset that no longer excludes anything. They are left as the record of their
+#   run rather than rewritten, which is this file's rule for them.
+#
 # Bumped to 27 by A DOCUMENT CLASS AND A VERDICT ENTERING THE DATA TOGETHER. NO LABEL RECORD
 # GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHAT A CONSUMER RECEIVES:
 # a fifth document class, and the last of the three evidence verdicts that had never been emitted.
@@ -853,7 +891,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 27
+version: 28
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -1666,9 +1704,15 @@ document_types:
         by a line printed on the invoice itself.
 
         THE CONSEQUENCE FOR THE ORACLE, and it is the one that matters: no verdict in this
-        repository rests on anything printed on an invoice about payment, because nothing is printed
-        and nothing is labelled. An oracle deriving proof of payment from a printed word would be
-        reading the answer off the thing under test.
+        repository rests on anything printed on an invoice about PAYMENT HAVING HAPPENED, because
+        nothing of the kind is printed and nothing of the kind is labelled. An oracle deriving
+        proof of payment from a printed word would be reading the answer off the thing under test.
+
+        ⚠️ SINCE VERSION 28 A VERDICT DOES REST ON A LINE OF THIS CLASS, and the sentence above is
+        worded to stay exactly true beside it. `the_instalment_term` below states how the seller
+        proposes to be PAID IN PARTS — a condition of the offer, settled before any money exists —
+        and `partially_paid` turns on its presence. Whether money moved is still decided from the
+        PAYMENT document's type, as on every other claim.
 
     prd_required_fields:
       - prd: total
@@ -1787,6 +1831,38 @@ document_types:
       PRESENT AND LABELLED, unlike on either bank class. This is the only type besides
       `fiscal_receipt` whose label carries a basket, which is exactly why the two are the two that
       can be a claim's subject document.
+
+    the_instalment_term:
+      status: emitted
+      emitted_since: version 28
+      printed_box: instalment_amount
+      label_field: instalment_amount
+      note: >
+        🔴 A SECOND PAYMENT TERM ON THIS CLASS, AND THE ONLY LINE OF THIS DATASET A VERDICT RESTS
+        ON. Some invoices now print «Умови оплати: оплата частинами {щоквартально | щомісяця |
+        щопівроку}, черговий платіж: {сума}» — the obligation is settled in equal parts and this is
+        what one part comes to. The amount carries its own box and its own label field,
+        `instalment_amount`; the adverb is printed and not labelled.
+
+        🔴 WHY IT DOES NOT CONTRADICT `the_class_is_an_offer_to_pay` ABOVE, which a reader will
+        check first. A PAYMENT TERM IS NOT A PAYMENT STATUS. A status is a RECORD that money moved
+        — «Оплачено» — and this class still prints none, for the structural reason that block
+        gives. A term is a CONDITION OF THE OFFER: it says how the seller proposes to be paid, and
+        it is fixed when the invoice is drawn up, before there is any payment to record. The
+        `validity` line is already such a term. Nothing on this page says any money has moved, and
+        `proves_payment` stays `false`.
+
+        WHAT A CONSUMER DOES WITH IT: an invoice whose `instalment_amount` is non-null states an
+        obligation SETTLED IN PARTS, so a payment document beside it stating that part — and not
+        the total — is a correct pair rather than a contradiction. `verdicts.partially_paid` and
+        `partial_payment` in policy.yaml carry the rule. A consumer that compares a payment against
+        `amount` alone will score every such claim as a mismatch.
+
+        ⚠️ NOT OBSERVED, AND DECLARED AS A DIVERGENCE FOR THAT REASON. Neither of the two open
+        invoices behind this class carried an instalment term — both were payable in one — so the
+        wording is derived from general knowledge of the document rather than transcribed from one.
+        What IS carried over is the shape: a left-aligned line in the block below the totals, where
+        the validity line sits. See KL-15.
 
   act:
     classifier_role: other
@@ -2572,6 +2648,36 @@ document_label:
           be net in the first and gross in the second. The two cannot both hold in a
           VAT-inclusive jurisdiction, and this file cannot reconcile them. Raised as a
           question for the requirement, not as a generator change.
+
+    - name: instalment_amount
+      type: number or null
+      required: false
+      normalize: money
+      status: emitted
+      meaning: >
+        WHAT ONE PART OF THIS DOCUMENT'S AMOUNT COMES TO, where the document states that its
+        obligation is settled in equal parts — «черговий платіж» on an invoice printing an
+        instalment term. `null` on every other document, which is every class but `invoice` and
+        most invoices. `amount` stays the WHOLE obligation.
+      not_a_payment_status: >
+        🔴 IT RECORDS NOTHING ABOUT MONEY HAVING MOVED. It is a term of an offer — how the seller
+        proposes to be paid — fixed when the document is drawn up. Reading it as "this much has
+        been paid" inverts it: nothing on the page says any part has been settled, and the payment
+        document beside the claim is what says money moved, exactly as on every other claim.
+      a_verdict_rests_on_it: >
+        🔴 THE ONLY LABEL FIELD OF THIS DATASET WHOSE PRESENCE DECIDES A VERDICT. A payment equal to
+        this value, on a claim whose subject document carries it, is `partially_paid`; the same two
+        amounts with this field `null` are `insufficient_evidence` with the cause `amount_mismatch`.
+        The arithmetic is identical in both — "the payment is smaller" is true of each — so a
+        consumer scoring a payment against `amount` alone will score every partly settled claim as
+        a mismatch. `partial_payment` in config/policy.yaml states the rule in the order an
+        implementer applies it, and `policy_engine` pins its own reading against that block.
+      scoreable: >
+        UNLIKE `amount_due` BELOW, THIS FIELD DISCRIMINATES AND ITS ACCURACY IS A REAL MEASUREMENT.
+        It differs from `amount` by construction wherever it is populated — every declared schedule
+        divides an obligation into at least two parts — so a system echoing the total scores zero on
+        it rather than perfectly. It is `null` on most documents, so a per-class figure belongs on
+        the invoice slice; see KL-15 for what a run contains.
 
     - name: amount_due
       type: number or null
@@ -3567,12 +3673,40 @@ verdicts:
       not exist. No dataset contains this verdict.
 
   partially_paid:
-    status: forward_contract
-    means: payment was made in installments and only part of the amount has been settled
+    status: emitted
+    emitted_since: version 28
+    means: >
+      THE OBLIGATION IS SETTLED IN PARTS AND THIS PAYMENT IS ONE OF THEM. The claim's subject
+      document states that its amount is paid in equal parts and what one part comes to
+      (`instalment_amount`), and the payment document beside it states exactly that part. Nothing
+      about such a claim is unestablished: both facts of `document_evidence` are proven, the two
+      documents describe one transaction, and what is true of the claim is that part of the amount
+      has been paid.
+
+      NO CAUSE in `imperfection`. One mechanism, one way to reach it — the same shape as
+      `not_proof_of_payment`.
     consumer_counterpart: partially_paid
-    depends_on: >
-      The invoice payment-status and amount-due fields, which no model field carries. See
-      `document_types.invoice` and RC-07.
+    how_it_is_told_from_amount_mismatch: >
+      🔴 THE TWO ARE THE SAME PAIR OF NUMBERS AND MUST NOT BE THE SAME LABEL. An invoice of 1200.00
+      beside a payment of 300.00 is this verdict when the invoice PRINTS the instalment term, and
+      `insufficient_evidence` / `amount_mismatch` when it does not. A consumer deriving either from
+      the inequality alone will get both wrong in one direction or the other, whichever it picks.
+
+      THREE CONDITIONS, all readable from the images: the subject document carries
+      `instalment_amount`; the payment equals it; and it is smaller than the subject's `amount`. A
+      payment matching NO part of a stated arrangement is a payment for some third amount, i.e. the
+      mismatch case again. `partial_payment` in config/policy.yaml states this for an engine built
+      from that file, which is where a consumer should read it rather than from this summary.
+    what_it_pays_out: >
+      NOTHING, in this version, and by policy rather than by omission. The plan reimburses against
+      the obligation the subject document states and only part of it has been settled; how much of a
+      partly settled obligation is payable is a decision policy.yaml has not taken. So
+      `reimbursable_amount` is 0.00 and the claim consumes no annual balance. `covered_fraction` is
+      still reported: it is a property of the line items, and they are all on the invoice.
+    the_date_check_still_applies: >
+      A partial settlement dated BEFORE the invoice it settles is `insufficient_evidence` with the
+      cause `payment_precedes_subject`, not this verdict. An impossible order is an impossible order
+      whether the payment covers a part or the whole; only the AMOUNT cross-check is exempted.
 
   rejected:
     status: emitted
@@ -4991,6 +5125,56 @@ known_limitations:
       honest route is an observation of how such a claim is actually filed; until then the
       one-shape corpus is the accurate one and this entry is its declaration.
 
+  - id: KL-15
+    name: the instalment term predicts `partially_paid`, in both directions
+    predictor: >
+      `instalment_amount` non-null on a claim's subject document — the verdict follows from that
+      one field without any amount being compared
+    hurts: [training, evaluation]
+    subset: >
+      🔴 EVERY INVOICE THAT PRINTS AN INSTALMENT TERM IS THE SUBJECT OF A `partially_paid` CLAIM,
+      AND EVERY `partially_paid` CLAIM CARRIES ONE. The planner names a payment schedule for that
+      verdict and for no other (`claim_planner.plan_claim`), so the correspondence is exact in both
+      directions — unlike KL-14, whose other direction does not hold. A system that learns "the term
+      is printed ⇒ partially paid" scores perfectly here while never having compared the payment
+      against the part.
+
+      ⛔ IT IS NOT A LABELLING ERROR, AND THE RULE IS NOT THE SHORTCUT. The verdict requires the
+      payment to EQUAL the printed part and the part to be smaller than the whole; the corpus simply
+      contains no claim where the term is printed and one of those fails. Two shapes the world has
+      are therefore absent: an instalment invoice paid in full, and an instalment invoice paid an
+      amount matching no part of it. The second is `amount_mismatch` and the corpus has plenty of
+      it — but always on an invoice with NO term, so the discriminating comparison is never the
+      thing that decides.
+
+      ⚠️ AND THE WORDING ITSELF IS UNOBSERVED. Neither open invoice behind this class carried an
+      instalment term, so the line is derived from general knowledge of the document rather than
+      transcribed. A system trained here learns THIS phrasing; a real instalment invoice may word
+      the same term differently, and nothing in this corpus would show that.
+    how_a_consumer_detects_it: >
+      Cross-tabulate `instalment_amount is not null` on the subject document against the claim
+      verdict. Both off-diagonal cells are empty at any run size, so a scorecard row for either is
+      unmeasured rather than perfect.
+    see_profile: run_profiles
+    when_it_appeared: >
+      WITH THE FIELD ITSELF, in contract version 28. Every profile measured earlier counts
+      `partially_paid` as absent, correctly for the run it names.
+    consequence: >
+      A per-class figure for `partially_paid` measured here evidences that a system can SPOT the
+      term. It does not evidence that the system checks the payment against it, which is the half
+      of the rule that separates this verdict from `amount_mismatch` — and that is the half a
+      consumer's own engine has to implement from `partial_payment` in policy.yaml.
+    how_to_stratify: >
+      By the presence of the term on the subject document rather than by the verdict. That is the
+      grouping in which the missing cells are visible; by verdict, each class simply looks complete.
+    fixed_by: >
+      TWO PLANNER SHAPES THAT DO NOT EXIST YET, not a change to the rule: an instalment invoice
+      whose payment settles the WHOLE amount (an ordinary claim carrying the term), and one whose
+      payment matches no part of it (`amount_mismatch` carrying the term). Both are buildable — the
+      schedule and the mismatch delta are independent knobs — and neither is drawn, because a share
+      for them would size a bucket nothing in policy.yaml declares. Adding them is a policy decision
+      about the mix and not an implementation gap.
+
 
 # =============================================================================
 # 9b. Run profiles — the measurements, kept apart from the limitations
@@ -5987,6 +6171,14 @@ required_changes:
       fiscal receipts, where the published form actually defines the line. Nothing about the
       invoice changed — no invoice archetype exists, and whether a Ukrainian invoice prints a
       payment status at all is itself disputed.
+    progress: >
+      VERSION 28 SETTLED THE NEIGHBOURING QUESTION AND NOT THIS ONE, which is worth stating because
+      the two look alike from the field list. The invoice now prints a PAYMENT TERM and carries
+      `instalment_amount` — how the seller proposes to be paid — and that is what `partially_paid`
+      rests on. A PAYMENT STATUS, a record that money moved, is still not printed and still not
+      labelled: 👁 0 of 2 open invoices carry one and the reason is structural. This entry stays
+      open for the non-UA jurisdictions whose forms do print one, and the verdict it was once
+      thought to block no longer depends on it.
     blocked_on: decision
 
   - id: RC-08
