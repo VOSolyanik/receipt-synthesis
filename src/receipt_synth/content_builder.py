@@ -3223,6 +3223,268 @@ def personal_signatory(rng: random.Random, language: str) -> str:
 
 
 # =============================================================================
+# Non-fiscal sales slip — товарний чек
+# =============================================================================
+#
+# 🔴 THE DOCUMENT THE FISCALITY RULE HAS NEVER HAD A TEST CASE FOR. A verifier is expected to
+# treat a NEGATIVE fiscality signal as overriding every positive one, and until this class landed
+# no document of the corpus carried anything negative to override with: every archetype either
+# printed a full fiscal identity or belonged to a class nobody would look for one on. This one is
+# the hard case — the basket, the arithmetic, the totals block and the column layout are a fiscal
+# receipt's, and 📄 the difference is exactly the two requisites the tax service says such a
+# document omits.
+#
+# 📄 THE FORM IS NOT DEFINED BY LAW and the sources are named where the strings live —
+# `receipt.non_fiscal` in config/fiscal-rules.yaml. What matters here is what follows from them:
+# the seller may not be registered for ПДВ (a payer is obliged to use a register), so no line
+# carries a ПДВ letter and no tax block is printed; and 📄 ст. 9 of the accounting law obliges the
+# document to name the person responsible and carry their signature, which no fiscal receipt does.
+#
+# ⛔ IT PROVES NO PAYMENT, which is policy.yaml's `document_evidence` and not this class's opinion
+# of itself. A claim evidenced by one alone is `not_proof_of_payment` — see
+# `claim_planner.EvidenceIntent.PAYMENT_GAP`, which is what plans such a claim.
+
+
+@dataclass(frozen=True)
+class NonFiscalReceipt:
+    """One товарний чек, complete but not yet rendered.
+
+    `Seller` IS REUSED AND `PrroReceipt` IS NOT, and the split is the sources' rather than a
+    convenience: 📄 the tax service says this document's content is the FISCAL RECEIPT'S FORM less
+    the fiscal number and the fiscal wording, so the party block is literally the receipt's — one
+    identifier line, no «ПН», because its seller cannot be a registered payer. What differs is the
+    fiscal identity, which this class does not have a field for at all. Modelling the difference
+    as `None` on the receipt class would have made "no fiscal number" a value of a document that
+    has one, and every consumer of `PrroReceipt` would then carry a branch for a class it never
+    sees.
+
+    ⛔ NO `vat_row_form`, NO `tax_lines`, NO `acquiring`, NO `qr_payload`, and none of them is an
+    omission: a non-payer's receipt has no tax block to take a form, 📄 a card sale is a settlement
+    operation that obliges the seller to use a register, and 📄 the QR is a requisite of the fiscal
+    form. The absences ARE the archetype.
+    """
+
+    seller: Seller
+    issued_at: datetime
+    title: str
+    receipt_number: str
+    line_items: list[LineItem]
+    total: Decimal
+    # СУМА and ДО СПЛАТИ, exactly as on the fiscal form: 📄 lines 20 and 24, differing by the two
+    # between them. Both adjustments are zero in this version for the reason stated at
+    # `PrroReceipt.amount_due` — the policy says nothing about distributing a discount across
+    # covered and non-covered lines — and the lines are printed all the same, because this
+    # document's form IS that form.
+    discount: Decimal
+    rounding: Decimal
+    amount_in_words: str
+    payment_method: str
+    # 📄 ст. 9 of the law on accounting № 996-XIV: the person responsible for the operation. A sole
+    # trader is that person; a company names an authorized one, as on an invoice.
+    issuer_name: str
+    footer: str
+    decimal_separator: str
+
+    @property
+    def amount_due(self) -> Decimal:
+        """ДО СПЛАТИ — the basket less any discount, plus cash rounding.
+
+        DERIVED for the same reason `PrroReceipt.amount_due` is: two amounts that must agree
+        should not be two stored numbers. It equals `total` while both adjustments are zero, and
+        the consequence for a consumer is the one recorded against that field — while the two
+        coincide the field discriminates nothing and its accuracy is not a metric.
+        """
+        return (self.total - self.discount + self.rounding).quantize(KOPIYKA)
+
+    # -- rendering ------------------------------------------------------------
+
+    def _amount(self, value: Decimal) -> str:
+        rules = jurisdiction("UA")["number_format"]
+        whole, _, fraction = f"{value:.2f}".partition(".")
+        grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
+        return f"{grouped}{self.decimal_separator}{fraction}"
+
+    def render_context(self) -> dict:
+        """Everything the template prints, already formatted."""
+        rules = jurisdiction("UA")
+        block = rules["receipt"]["non_fiscal"]
+        return {
+            "title": self.title,
+            "seller": self.seller,
+            "seller_display": legal_name(self.seller),
+            "date": self.issued_at.strftime(rules["date_format"]),
+            "time": self.issued_at.strftime(rules["time_format"]),
+            "receipt_number": self.receipt_number,
+            "items": [
+                {
+                    "name": item.name,
+                    "qty": f"{item.qty:g}",
+                    "price": self._amount(item.price),
+                    "sum": self._amount((item.qty * item.price).quantize(KOPIYKA)),
+                }
+                for item in self.line_items
+            ],
+            "total": self._amount(self.total),
+            "discount": self._amount(self.discount),
+            "rounding": self._amount(self.rounding),
+            "amount_due": self._amount(self.amount_due),
+            "totals_labels": rules["receipt"]["totals_labels"],
+            "amount_in_words": self.amount_in_words,
+            "payment_method": self.payment_method,
+            "issuer_label": block["issuer_label"],
+            "issuer_name": self.issuer_name,
+            "signature_label": block["signature_label"],
+            "footer": self.footer,
+            # 📄 No QR: it is a requisite of the FISCAL form. The renderer requires the key on
+            # every context, and `None` is how a template says the document carries none.
+            "qr_payload": None,
+        }
+
+    # -- labels ---------------------------------------------------------------
+
+    def ground_truth(
+        self,
+        *,
+        doc_id: str,
+        source_file: str,
+        capture: Capture,
+        field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
+    ) -> DocGroundTruth:
+        """The label record for this slip.
+
+        🔴 THE THREE FISCALITY FLAGS ARE ALL FALSE, AND THEY ARE THE POINT OF THE RECORD. A
+        consumer classifying on a fiscal marker must find none here, on a page that otherwise
+        looks like a fiscal receipt line for line. `payer` is `None`: 📄 the form this document
+        follows has no buyer field, and the person who paid was standing at the counter.
+
+        ⛔ NOTHING RECORDS THE NEGATIVE MARKER ITSELF. There is no such field on `DocGroundTruth`,
+        and adding one is RC-08 in config/labelling-schema.yaml — still an open decision, because
+        what this document carries is a positive TITLE plus an ABSENCE of requisites, which a
+        field shaped as "marker text and its position" cannot hold. The absence is real ground
+        truth and it is expressed by the three flags below rather than invented as a string.
+        """
+        return DocGroundTruth(
+            doc_id=doc_id,
+            source_file=source_file,
+            doc_type=DocType.NON_FISCAL_RECEIPT,
+            language="uk",
+            currency="UAH",
+            amount=self.total,
+            amount_due=self.amount_due,
+            date=self.issued_at.date(),
+            counterparty=self.seller.name,
+            line_items=self.line_items,
+            has_qr=False,
+            qr_is_fiscal=False,
+            has_fiscal_number=False,
+            capture=capture,
+            field_bboxes=field_bboxes,
+            reference_text=reference_text,
+            content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
+        )
+
+
+def build_non_fiscal_receipt(
+    rng: random.Random,
+    *,
+    category_id: str,
+    issued_at: datetime,
+    vendor: dict,
+    identity: PartyIdentity,
+    address: str = "м. Київ",
+    covered_only: bool = True,
+    coverage_target: Decimal | None = None,
+    item_count: int | None = None,
+) -> NonFiscalReceipt:
+    """Build one товарний чек.
+
+    THE BASKET IS THE RECEIPT'S AND THE INVOICE'S — `_draw_basket`, same knobs, same meaning —
+    because coverage is a property of what was bought and not of the class that lists it.
+
+    🔴 THE SELLER MUST NOT BE REGISTERED FOR ПДВ, and this refuses rather than printing one that
+    is. 📄 A registered payer is obliged to use a cash register, so a seller who issues this
+    document is a non-payer; a payer issuing one would be a page whose own requisites say it
+    should not exist, and every VAT decision below — no «ПН» line, no letter on any line, no tax
+    block — would then contradict the vendor record behind it. The caller chooses the vendor
+    (`assembler._pick_vendor`), so the constraint belongs at that choice and this is the guard
+    that keeps it from being silently skipped.
+
+    `identity` carries the seller's identification code, drawn once for the claim, exactly as on
+    the other classes. A claim evidenced by this document alone has no second page to agree with —
+    the parameter is required all the same, so that ONE mechanism decides who a seller is.
+    """
+    if vendor_is_vat_payer(vendor):
+        raise ValueError(
+            f"vendor {vendor['name']!r} is registered for ПДВ, and 📄 a registered payer is "
+            "obliged to use a cash register — so it cannot be the seller on a товарний чек. "
+            "Choose a non-payer vendor for this archetype; see `assembler._pick_vendor`."
+        )
+
+    rules = jurisdiction("UA")
+    receipt_rules = rules["receipt"]
+    block = receipt_rules["non_fiscal"]
+
+    items = _draw_basket(
+        rng,
+        document="a sales slip",
+        category_id=category_id,
+        vendor=vendor,
+        # The seller is a non-payer by the guard above, so no line carries a ПДВ letter and the
+        # page prints no tax block. One statement, not two: the flag is not read from the vendor
+        # again here, because the guard has already settled what it can be.
+        vat_payer=False,
+        covered_only=covered_only,
+        coverage_target=coverage_target,
+        item_count=item_count,
+    )
+    total = line_items_total(items)
+
+    is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
+    id_code_rules = rules["identifiers"]["rnokpp" if is_sole_trader else "edrpou"]
+    seller = Seller(
+        name=vendor["name"],
+        legal_form=vendor["legal_form"],
+        address=address,
+        vat_payer=False,
+        tax_code=identity.tax_code,
+        tax_code_label=id_code_rules["label"],
+        # 📄 A ПДВ payer is obliged to use a register, so there is no «ПН» line to print at all.
+        # `None` here is the same statement the guard above makes, carried onto the page.
+        vat_number=None,
+        vat_number_label=rules["identifiers"]["vat_number"]["label"],
+    )
+
+    return NonFiscalReceipt(
+        seller=seller,
+        issued_at=issued_at,
+        title=block["title"],
+        receipt_number=_draw_from_pattern(rng, block["number"]["pattern"]),
+        line_items=items,
+        total=total,
+        discount=Decimal(0),
+        rounding=Decimal(0),
+        amount_in_words=amount_in_words_uk(total),
+        # 🔴 CASH, AND IT IS NOT A COSMETIC CHOICE. 📄 A card sale is a settlement operation that
+        # obliges the seller to use a register, so a slip issued without one records cash. This is
+        # the first archetype of the corpus to print «ГОТІВКА» — the second entry of
+        # `payment_method_labels`, which was unreachable until this class landed — and the value
+        # is read from config rather than written here.
+        payment_method=rules["acquiring_block"]["payment_method_labels"][1],
+        # 📄 ст. 9 № 996-XIV. A sole trader signs in their own name; a company names an authorized
+        # person, drawn the same way an invoice's signatory is.
+        issuer_name=(
+            vendor["name"] if is_sole_trader else personal_signatory(rng, rules["language"])
+        ),
+        footer=receipt_rules["footer"],
+        decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
+    )
+
+
+# =============================================================================
 # Invariant validators
 # =============================================================================
 

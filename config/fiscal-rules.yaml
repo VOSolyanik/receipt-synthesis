@@ -361,7 +361,48 @@ jurisdictions:
       footer: "ДЯКУЄМО ЗА ПОКУПКУ"
       # A non-fiscal look-alike must carry this line — classification trap
       # (docs/architecture.md#document-archetypes, templates 12 and 13).
+      #
+      # ⚠️ TODO — THE DESCRIPTION OF THIS CONSTANT IS AWAITING THE AUTHOR'S DECISION, and it is
+      # NOT the shipped товарний чек below. The narrowing under consideration is that the wording
+      # belongs to a ПРРО SERVICE document (a cash movement), while what identifies a SALES slip
+      # is a positive self-identifying title together with the ABSENCE of the fiscal requisites.
+      # 👁 The one explicit Ukrainian denial this project has observed — «! НЕ ФІСКАЛЬНИЙ !» — is
+      # on a «СЛУЖБОВИЙ ДОКУМЕНТ», and ⛔ no public source found shows this string on a sales
+      # document. The decision is the author's and is pending in their own notes, outside this
+      # repository; RC-08 in config/labelling-schema.yaml is its in-repo half. Nothing here is
+      # narrowed in advance of it: the value stands as written, `non_fiscal` below prints what IS
+      # evidenced, and NO ARCHETYPE PRINTS THIS STRING.
       non_fiscal_marker: "НЕ ФІСКАЛЬНИЙ ЧЕК"
+
+      # ТОВАРНИЙ ЧЕК — the sales slip issued without a cash register, and the wording it carries
+      # instead of the marker above.
+      #
+      # 📄 THE FORM IS NOT DEFINED BY LAW, which the tax service states itself, so this block is a
+      # convention rather than a form. What the tax service does state (БЗ 109.10) is a MINIMUM:
+      # the document carries the wording «Товарний чек» and otherwise satisfies п. 2 розд. II of
+      # the Положення про форму та зміст розрахункових документів (наказ Мінфіну № 13 від
+      # 21.01.2016) — the fiscal receipt's own form — EXCEPT the fiscal number of the register and
+      # the wording «ФІСКАЛЬНИЙ ЧЕК». That exception is why the archetype's whole difference from
+      # a fiscal receipt is a set of requisites left out.
+      #
+      # 📄 A SECOND AND INDEPENDENT SOURCE decides the two foot lines: a товарний чек is a primary
+      # accounting document, so ст. 9 of the law on accounting (№ 996-XIV) requires it to name the
+      # person responsible for the operation and to carry that person's signature. A fiscal
+      # receipt carries neither, so these two lines are where this document is MORE than the
+      # fiscal one rather than less.
+      #
+      # ⚠️ THE STRINGS MOVED HERE FROM `tools/render_mockups.py` WHEN THE ARCHETYPE WAS CONNECTED,
+      # which is what that script's own comment said would happen: they are printed by a template
+      # a run now renders, so they are jurisdiction wording like every other value in this file.
+      non_fiscal:
+        title: "ТОВАРНИЙ ЧЕК"
+        issuer_label: "Видав:"
+        signature_label: "Підпис"
+        # 👁 A hand-kept book of товарні чеки is numbered sequentially, so the number is short and
+        # counts documents. It is deliberately NOT `receipt_number.alphanumeric` above: that shape
+        # is a ПРРО's own eleven-character identifier, and a document issued without a ПРРО cannot
+        # have carried one.
+        number: { pattern: "[0-9]{4}" }
       # The paper widths a Ukrainian thermal roll comes in. One template per width, and the
       # stylesheet of each states its own width in pixels: the test suite checks that every
       # width a template declares is one of these, so a template at a width no roll is sold
@@ -399,7 +440,12 @@ jurisdictions:
         - { key: card_masked,   label: "ЕПЗ",            pattern: "[0-9]{4}X{8}[0-9]{4}" }
         - { key: auth_code,     label: "Код авт.:",      pattern: "[0-9]{6}" }
         - { key: rrn,           label: "RRN:",           pattern: "[0-9]{12}" }
-      # ⚠️ Second value unreachable — see the note on `operation` above.
+      # ⚠️ BOTH VALUES ARE REACHABLE NOW, and the second one arrived with a document class rather
+      # than with a draw — which is what the note on `operation` above predicted: «ГОТІВКА» is not
+      # a relabelling of a card receipt, because 👁 a cash receipt carries no acquiring block at
+      # all. `content_builder.build_non_fiscal_receipt` prints it, on the reasoning that 📄 a card
+      # sale is a settlement operation obliging the seller to use a register, so a slip issued
+      # without one records cash. Every FISCAL receipt still prints the first value only.
       payment_method_labels: ["БЕЗГОТІВКОВА", "ГОТІВКА"]
 
     # =========================================================================
