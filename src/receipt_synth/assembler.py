@@ -42,6 +42,7 @@ from receipt_synth.content_builder import (
     PartyIdentity,
     build_bank_statement,
     build_invoice,
+    build_non_fiscal_receipt,
     build_payment_confirmation,
     build_prro_receipt,
     draw_party_identity,
@@ -277,7 +278,8 @@ def _draw_documentable_persona(
 
 
 def _pick_vendor(
-    rng: random.Random, country: Country, category: str, *, mixed: bool
+    rng: random.Random, country: Country, category: str, *, mixed: bool,
+    vat_payer: bool | None = None,
 ) -> dict:
     """A vendor that can issue the receipt this plan needs.
 
@@ -286,6 +288,11 @@ def _pick_vendor(
     nutrition practice sells consultations and lab tests and nothing else. Choosing one of
     those for a mixed plan would fail inside the builder, one stage away from the choice
     that caused it. The filter preserves file order, so the draw stays reproducible.
+
+    🔴 `vat_payer` IS THE SECOND SUCH FILTER AND IT IS ABOUT WHO MAY ISSUE A CLASS AT ALL. 📄 A
+    registered ПДВ payer is obliged to use a cash register, so the seller on a товарний чек is a
+    non-payer and `content_builder.build_non_fiscal_receipt` refuses any other. `None` means the
+    plan does not care, which is every other claim, and the draw is then exactly what it was.
 
     Returns a RESOLVED vendor: a sole trader's name is drawn here, once, and the same
     instance is then carried to every document of the claim. Called from the claim loop and
@@ -297,11 +304,19 @@ def _pick_vendor(
         raise ValueError(f"config/vendors.json lists no vendor for {category!r} in {country.value}")
 
     candidates = [v for v in vendors if vendor_can_carry(v, category, mixed=mixed)]
+    if vat_payer is not None:
+        candidates = [v for v in candidates if bool(v["vat_payer"]) is vat_payer]
     if not candidates:
         raise ValueError(
             f"no vendor for {category!r} in {country.value} sells what a "
-            f"{'mixed' if mixed else 'fully covered'} basket needs — check the profiles in "
-            "config/vendors.json against the item buckets of config/policy.yaml"
+            f"{'mixed' if mixed else 'fully covered'} basket needs"
+            + (
+                ""
+                if vat_payer is None
+                else f", among the sellers whose `vat_payer` is {vat_payer}"
+            )
+            + " — check the profiles in config/vendors.json against the item buckets of "
+            "config/policy.yaml"
         )
     return resolve_vendor(rng, rng.choice(candidates), country.value)
 
@@ -331,6 +346,10 @@ def _pick_vendor(
 # The middle case is what the invoice added. It is a real relation rather than a convenient one: a
 # document that proves the payment IS the payment, so its payer is present by construction; a
 # document that does not prove payment is addressed to somebody and must name them.
+#
+# 🔴 AND THE MIDDLE CASE NO LONGER HOLDS FOR EVERY SUBJECT-ONLY CLASS — see `_NAMES_THE_BUYER`.
+# A товарний чек proves no payment and names nobody, so "addressed to somebody" turned out to be a
+# property of the INVOICE rather than of the evidence row it was read off.
 _BUILDERS = {
     "ua_prro_receipt": build_prro_receipt,
     "ua_prro_receipt_58mm": build_prro_receipt,
@@ -338,7 +357,20 @@ _BUILDERS = {
     "ua_bank_payment_confirmation": build_payment_confirmation,
     "ua_bank_statement": build_bank_statement,
     "ua_invoice": build_invoice,
+    "ua_non_fiscal_receipt": build_non_fiscal_receipt,
 }
+
+# WHICH CLASSES NAME THE CLAIMANT ON THE PAGE, and it is keyed by document class because the
+# question is one of FORM rather than of evidence. The predicate used to be "proves the subject and
+# not the payment", which was right while the invoice was the only such class: 📄 an offer to pay
+# has to say to whom it is made.
+#
+# 📄 A товарний чек has no buyer field. The tax service's own rule is that its content is the
+# FISCAL RECEIPT'S FORM less two requisites, and that form names no buyer — the payer is standing
+# at the counter. Handing the builder a buyer would print a line no source puts on the document,
+# and inventing a requisite is the one thing this repository never does with a form it has not
+# observed.
+_NAMES_THE_BUYER: frozenset[DocType] = frozenset({DocType.INVOICE})
 
 
 def _write_png(path: Path, image: np.ndarray) -> None:
@@ -444,17 +476,22 @@ def _build_document(
             "coverage_target": plan.coverage_target,
             "item_count": plan.item_count,
         }
-        # A SUBJECT DOCUMENT THAT DOES NOT PROVE PAYMENT IS ADDRESSED TO SOMEBODY, and has to name
-        # them: an invoice is an offer to pay. A receipt proves its own payment, so the payer is
-        # present at the till and no buyer is named — 👁 a fiscal receipt has no buyer field.
-        if not evidence.proves_payment:
+        # TWO INDEPENDENT QUESTIONS ABOUT ONE DOCUMENT, and they were a single if/else while the
+        # answers happened to coincide. A class may name the claimant, or take the capture
+        # channel, or neither — the slip is the class that does neither, and folding the two back
+        # together would give it a buyer field no source puts on the form.
+        if archetype.doc_type in _NAMES_THE_BUYER:
+            # AN OFFER TO PAY HAS TO SAY TO WHOM IT IS MADE. Keyed by class rather than by
+            # evidence — see `_NAMES_THE_BUYER`, which is where the change of predicate is
+            # explained.
             basket |= {"buyer_name": persona.full_name, "buyer_tax_id": persona.tax_id}
-        else:
+        if evidence.proves_payment:
             # 🔴 THE CAPTURE CHANNEL REACHES THE BUILDER, not only the degrader. 👁 The VAT summary
             # row of a fiscal receipt takes one form on paper and either of two electronically, so
             # the MEDIUM a document will be captured on decides a requisite that is printed while
             # the document is built. Passed to the class that has the observed variation and to no
-            # other: nothing analogous has been observed on the invoice.
+            # other: nothing analogous has been observed on the invoice, and a non-payer's slip
+            # has no VAT row to vary at all.
             basket |= {"capture": capture}
         document = _BUILDERS[slug](rng, **basket)
     else:
@@ -626,6 +663,20 @@ def generate_dataset(
                     persona.location.country,
                     plan.category,
                     mixed=plan.coverage_target is not None,
+                    # 🔴 ONE ARCHETYPE CONSTRAINS WHO CAN HAVE SOLD THE GOODS, and the constraint
+                    # is the claim's rather than the document's: the vendor is drawn once here for
+                    # every document of the claim, so a claim carrying a товарний чек has to be
+                    # given a seller that could have issued one. 📄 A registered ПДВ payer is
+                    # obliged to use a cash register. Asked of the plan and not of the builder,
+                    # which only refuses.
+                    vat_payer=(
+                        False
+                        if any(
+                            document.archetype.doc_type is DocType.NON_FISCAL_RECEIPT
+                            for document in plan.documents
+                        )
+                        else None
+                    ),
                 )
                 # And WHO THAT VENDOR IS ON PAPER, drawn here for the same reason and in the same
                 # place. The name was fixed per claim and the code, the account and the bank were

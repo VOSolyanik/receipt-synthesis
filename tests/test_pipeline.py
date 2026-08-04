@@ -277,30 +277,23 @@ def test_a_category_the_persona_does_not_hold_is_refused():
         )
 
 
-@pytest.mark.parametrize(
-    "verdict",
-    [
-        Verdict.NOT_PROOF_OF_PAYMENT,
-        Verdict.PARTIALLY_PAID,
-    ],
-)
+@pytest.mark.parametrize("verdict", [Verdict.PARTIALLY_PAID])
 def test_verdicts_no_archetype_can_carry_are_refused_not_faked(verdict):
     """Explicit over silent. A planner that accepted one of these and produced an ordinary
-    basket would write a wrong label rather than fail. The message has to say what each
-    actually needs, because the reason differs: `not_proof_of_payment` needs a document type
-    that establishes no payment, and `partially_paid` needs document types that do not exist at
-    all.
+    basket would write a wrong label rather than fail. The message has to say what the verdict
+    actually needs, not merely that it is unavailable.
 
-    ⚠️ `insufficient_evidence` LEFT THIS LIST when its two cross-check causes became drawable, and
-    `rejected` HAS NOW LEFT IT TOO: its period route is drawn, and its other route — a basket the
-    category covers none of — is recorded in `_UNREALIZABLE_ROUTES` rather than disappearing with
-    the entry. A verdict being realizable and every route to it being realizable are different
-    statements, and the second is the one a reader of a corpus needs.
+    ⚠️ THE LIST IS DOWN TO ONE MEMBER AND STAYS PARAMETRIZED. `insufficient_evidence` left it when
+    its two cross-check causes became drawable, `rejected` when its period route did, and
+    `not_proof_of_payment` when `EvidenceIntent.PAYMENT_GAP` let a claim be planned with a subject
+    document and nothing beside it. A single-member parametrization is a list about to grow or
+    shrink again, and collapsing it would make the next change edit the shape of the test rather
+    than its data.
 
-    `policy_engine` can already label ONE of the two: `not_proof_of_payment` is decided from the
-    document types a claim carries, so only the planner is missing. `partially_paid` has a
-    `_UNREALIZABLE_REASONS` key and nothing else, because the field an invoice would have to carry
-    to be partly settled does not exist — for that one, neither side is built."""
+    `partially_paid` is what is left, and BOTH SIDES of it are missing rather than one: the field a
+    document would have to carry to be partly settled does not exist, so neither the planner nor
+    an archetype can produce one. That is the difference from the three that left — for each of
+    them `policy_engine` could already label the case, and only the planner was missing."""
     with pytest.raises(NotImplementedError) as raised:
         plan_claim(
             random.Random(1), persona=persona(), claim_id="c1",
@@ -325,11 +318,9 @@ def test_the_planner_realizes_exactly_the_verdicts_the_engine_can_be_asked_for()
         Verdict.PARTIALLY_COVERED,
         Verdict.INSUFFICIENT_EVIDENCE,
         Verdict.REJECTED,
-    }
-    assert set(unrealizable_verdicts()) == {
         Verdict.NOT_PROOF_OF_PAYMENT,
-        Verdict.PARTIALLY_PAID,
     }
+    assert set(unrealizable_verdicts()) == {Verdict.PARTIALLY_PAID}
     assert set(claim_planner._UNREALIZABLE_ROUTES) == {"rejected/zero_coverage"}, (
         "the routes a realizable verdict cannot be reached by are declared here; an entry added or "
         "closed without this list moving is a corpus property nobody wrote down"
@@ -396,19 +387,21 @@ def test_a_realizable_verdict_with_no_share_cannot_be_drawn_from():
 
 
 def test_the_drawn_mix_is_the_target_mix_renormalized_over_the_realizable_subset():
-    """verdict_mix gives covered 0.40, partially_covered 0.20, insufficient_evidence 0.10 and
-    rejected 0.10 to the four that can be built; the two that cannot carry 0.10 each.
-    Renormalized over the four:
+    """verdict_mix gives covered 0.40, partially_covered 0.20, insufficient_evidence 0.10,
+    rejected 0.10 and not_proof_of_payment 0.10 to the five that can be built; partially_paid,
+    which cannot, carries 0.10. Renormalized over the five:
 
-        covered                0.40 / 0.80 = 0.500
-        partially_covered      0.20 / 0.80 = 0.250
-        insufficient_evidence  0.10 / 0.80 = 0.125
-        rejected               0.10 / 0.80 = 0.125
+        covered                0.40 / 0.90 = 0.444
+        partially_covered      0.20 / 0.90 = 0.222
+        insufficient_evidence  0.10 / 0.90 = 0.111
+        rejected               0.10 / 0.90 = 0.111
+        not_proof_of_payment   0.10 / 0.90 = 0.111
 
-    ⚠️ THE DENOMINATOR IS UNCHANGED AND ITS MEMBERS ARE NOT. `rejected` became realizable and was
-    paid for out of `covered`, so the subset still sums to 0.80 while the first row moved ten
-    points; a reader checking this table against an older corpus is checking two different
-    distributions with one total.
+    ⚠️ THE DENOMINATOR MOVED WITHOUT ANY SHARE MOVING. `not_proof_of_payment` has carried 0.10
+    since the file was written and became REALIZABLE here, so the subset grew from 0.80 to 0.90
+    and every other verdict is now drawn slightly rarer at an unchanged declared share. That is
+    the conditioning this table exists to make visible, and it is why policy.yaml's
+    `insufficient_evidence_causes_min_run_size` moved from 75 to 85 in the same revision.
 
     Over 4000 draws each realized share should sit near its renormalized target. The window is
     wide (±0.04) on purpose: this asserts the weights are the policy's, not that a
@@ -420,7 +413,7 @@ def test_the_drawn_mix_is_the_target_mix_renormalized_over_the_realizable_subset
     mix = verdict_mix()
     total = sum(mix[verdict] for verdict in REALIZABLE_VERDICTS)
 
-    assert total == pytest.approx(0.8), "the realizable shares no longer sum to what this asserts"
+    assert total == pytest.approx(0.9), "the realizable shares no longer sum to what this asserts"
     for verdict in REALIZABLE_VERDICTS:
         share = draws.count(verdict) / len(draws)
         assert abs(share - mix[verdict] / total) < 0.04, verdict
@@ -742,6 +735,178 @@ def test_a_rejected_payment_falls_on_both_sides_of_the_benefit_period():
     assert [d for d in dates if d > end], f"no payment after {end}: {sorted(dates)[-5:]}"
 
 
+def test_not_proof_of_payment_is_planned_in_a_run_large_enough_to_require_it():
+    """The verdict `verdict_mix` has always given a share to has to be one the planner aims at.
+
+    ⚠️ THE SHARE DID NOT MOVE AND THE BUCKET WAS EMPTY, which is the failure mode this size is
+    chosen against: 0.10 of the mix has been declared since the file was written, every report
+    printed the number, and nothing filled it. Nothing about a run said so except the balance
+    report's "NOT GENERATED IN THIS RUN" line.
+
+    Sized from the policy rather than picked, exactly as the `rejected` test above is.
+    """
+    size = _run_size_for(_drawn_at(Verdict.NOT_PROOF_OF_PAYMENT))
+    plans = _plans_from_many_personas(size)
+    assert len(plans) >= size
+
+    aimed = [plan for plan in plans if plan.verdict is Verdict.NOT_PROOF_OF_PAYMENT]
+    assert aimed, (
+        f"no claim aimed at `not_proof_of_payment` in {len(plans)} planned claims, where its "
+        "share in verdict_mix makes absence a one-in-a-thousand event"
+    )
+    for plan in aimed:
+        assert plan.cause is None, (
+            f"{plan.claim_id} carries the cause {plan.cause!r}; this verdict has one slot and one "
+            "way to fail it, so `imperfection` is empty and a plan must not name one"
+        )
+        assert len(plan.documents) == 1, (
+            f"{plan.claim_id} plans {len(plan.documents)} documents; the claim is a subject "
+            "document and nothing beside it"
+        )
+        evidence = evidence_of(plan.documents[0].archetype)
+        assert evidence == Evidence(True, False), (
+            f"{plan.claim_id} is evidenced by {plan.documents[0].archetype.slug}, which proves "
+            f"{evidence} — a document proving the payment leaves nothing for this verdict"
+        )
+
+
+def test_the_non_fiscal_slip_is_reached_by_the_draw_and_only_through_this_verdict():
+    """🔴 THE ARCHETYPE THIS TASK EXISTS FOR, ASSERTED ON BOTH SIDES.
+
+    It must be REACHED — a registered archetype the draw never selects is a template with a test
+    suite and no corpus, which is what it was for as long as it was a mock-up. And it must be
+    reached ONLY as the whole evidence of a `not_proof_of_payment` claim: nothing settles a
+    товарний чек, so a pair built from one would assert a settlement relation no observation
+    supports. See `claim_planner._SETTLED_BY_A_PAYMENT`.
+
+    The size is that of the verdict that carries it, halved for the draw between the two
+    subject-only archetypes an eligible category offers.
+    """
+    slug = "ua_non_fiscal_receipt"
+    assert slug in ARCHETYPES, "the archetype is not registered — this test asserts nothing"
+
+    plans = _plans_from_many_personas(
+        _run_size_for(_drawn_at(Verdict.NOT_PROOF_OF_PAYMENT) * 0.5)
+    )
+    carrying = [
+        plan for plan in plans
+        if any(document.archetype.slug == slug for document in plan.documents)
+    ]
+    assert carrying, f"{slug} is registered and no plan of this run draws it"
+    for plan in carrying:
+        assert plan.verdict is Verdict.NOT_PROOF_OF_PAYMENT, (
+            f"{plan.claim_id} carries {slug} under the verdict {plan.verdict.value}"
+        )
+        assert len(plan.documents) == 1, f"{plan.claim_id} pairs {slug} with another document"
+
+
+def test_the_subject_half_of_a_pair_is_always_a_document_a_payment_can_settle():
+    """The same rule from the other end, and over the SHAPE rather than over one archetype: every
+    two-document plan's subject is of a class `_SETTLED_BY_A_PAYMENT` names.
+
+    🔴 IT IS THE ASSERTION THAT WOULD FAIL FIRST IF THE PAIR BRANCH WENT BACK TO DRAWING FROM
+    EVERY SUBJECT-ONLY ARCHETYPE, which is what it did before this class landed and what the
+    obvious reading of `document_evidence` still suggests. The pair would then print a payment
+    purpose citing nothing, on about half the split claims of six categories.
+    """
+    unsettleable = [
+        archetype
+        for archetype in ARCHETYPES.values()
+        if evidence_of(archetype) == Evidence(True, False)
+        and archetype.doc_type not in claim_planner._SETTLED_BY_A_PAYMENT
+    ]
+    assert unsettleable, (
+        "every registered subject-only archetype can be settled by a payment, so this test "
+        "cannot distinguish the narrowing from its absence"
+    )
+
+    plans = _plans_from_many_personas(_claims_for_certainty())
+    pairs = [plan for plan in plans if len(plan.documents) == 2]
+    assert pairs, "no plan of this run carries two documents"
+
+    for plan in pairs:
+        subject = plan.subject_document.archetype
+        assert subject.doc_type in claim_planner._SETTLED_BY_A_PAYMENT, (
+            f"{plan.claim_id} pairs a payment with {subject.slug}, which no payment settles"
+        )
+
+
+def test_the_payment_gap_is_planned_for_exactly_the_verdict_that_needs_it():
+    """The structural half, claim by claim: a plan carries `PAYMENT_GAP` if and only if its verdict
+    is `not_proof_of_payment`.
+
+    Both directions fail differently, and neither is visible in a count. A gap planned for another
+    verdict would drop that claim's payment document and the engine would answer
+    `not_proof_of_payment` while the plan named something else; the verdict planned without the gap
+    would come back `covered`, and the corpus would promise a bucket it does not contain.
+
+    ⚠️ AND IT IS THE OTHER GAP'S MIRROR IMAGE. `EVIDENCE_GAP` is the subject gap, asserted the same
+    way against `subject_not_evidenced` above. Two members of one enum with opposite meanings are
+    exactly the pair a later reader will confuse, so each is pinned to its own verdict.
+    """
+    plans = _plans_from_many_personas(_run_size_for(_drawn_at(Verdict.NOT_PROOF_OF_PAYMENT)))
+    gap = claim_planner.EvidenceIntent.PAYMENT_GAP
+
+    for plan in plans:
+        assert (plan.intent is gap) == (plan.verdict is Verdict.NOT_PROOF_OF_PAYMENT), (
+            f"{plan.claim_id}: intent {plan.intent} on a {plan.verdict.value} claim"
+        )
+    assert any(plan.intent is gap for plan in plans), "no plan is a payment gap"
+    assert any(plan.intent is not gap for plan in plans), "every plan is a payment gap"
+
+
+def test_a_cause_named_for_not_proof_of_payment_is_refused():
+    """One slot of `document_evidence`, one way to fail it, so `imperfection` is empty on every
+    such claim and a caller naming a cause has misread the verdict. Refused rather than dropped:
+    a cause silently ignored would be a plan whose record says something the label never will."""
+    with pytest.raises(ValueError, match="carries no cause"):
+        plan_claim(
+            random.Random(1), persona=persona(), claim_id="c1", ledger=Ledger(),
+            verdict=Verdict.NOT_PROOF_OF_PAYMENT, cause=SUBJECT_NOT_EVIDENCED,
+        )
+
+
+def test_a_category_documented_by_a_receipt_alone_cannot_realize_not_proof_of_payment():
+    """🔴 THE NARROWING THAT EXCLUDES NOTHING IN THE LIVE REGISTRY, exercised against a hand-built
+    one — which is the only way to exercise it and the reason it is written at all.
+
+    A fiscal receipt proves its own payment, so a category documented by receipts alone leaves no
+    gap for this verdict: every claim it can produce carries a payment document. Every Ukrainian
+    category also carries the invoice today, so `plannable_categories` filters nothing out of the
+    live registry and a test against it would assert the absence of an effect.
+
+    WITHOUT THE FILTER such a category would be drawn and then refused inside `_select_documents`,
+    mid-run, on whichever claim happened to draw it — the failure landing a stage from its cause.
+    """
+    receipts = {
+        slug: archetype
+        for slug, archetype in ARCHETYPES.items()
+        if evidence_of(archetype) == Evidence(True, True)
+    }
+    assert receipts, "no self-sufficient archetype is registered — this test asserts nothing"
+    category_id = next(iter(next(iter(receipts.values())).categories))
+
+    holder = generate_persona(random.Random(3), persona_id="pX", country=Country.UA)
+    holder = holder.model_copy(update={"benefit_categories": [category_id]})
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claim_planner, "ARCHETYPES", receipts)
+        assert plannable_categories(holder, Ledger()) == [category_id], (
+            "the narrowed registry cannot document the category at all, so the assertion below "
+            "would hold for the wrong reason"
+        )
+        assert plannable_categories(holder, Ledger(), Verdict.NOT_PROOF_OF_PAYMENT) == []
+        assert Verdict.NOT_PROOF_OF_PAYMENT not in realizable_verdicts_for(holder, Ledger())
+        # And the refusal one stage on, in the words of the branch that would have raised.
+        with pytest.raises(ValueError, match="states the subject alone"):
+            _select_documents(
+                random.Random(1),
+                list(receipts.values()),
+                datetime(2026, 6, 15, 12, 0),
+                intent=claim_planner.EvidenceIntent.PAYMENT_GAP,
+            )
+
+
 def test_the_route_to_rejected_the_planner_cannot_build_is_refused_by_name():
     """`rejected` has two routes and one mechanism, so a caller naming the other one has to be
     told which it is rather than handed an ordinary out-of-period claim under its name.
@@ -841,8 +1006,18 @@ def test_a_persona_holding_only_a_receipt_category_cannot_realize_the_disagreeme
     # `rejected` IS realizable for this persona, and the contrast is the point: it is the one
     # verdict whose mechanism is a DATE, so it asks nothing of the shape of the evidence and a
     # self-sufficient receipt realizes it as readily as a pair does.
+    #
+    # AND SO IS `not_proof_of_payment`, WHICH IS A DIFFERENT CONTRAST AND A SHARPER ONE. It DOES
+    # ask something of the shape of the evidence — a subject document with no payment beside it —
+    # and this category satisfies that not because it has a receipt but because it also has the
+    # invoice and the товарний чек. The receipt is useless to it: a document that proves its own
+    # payment leaves no gap. So the verdict is here on the strength of the OTHER archetypes of the
+    # same category, which is exactly what `plannable_categories` narrows on.
     assert set(realizable_verdicts_for(holder, Ledger())) == {
-        Verdict.COVERED, Verdict.PARTIALLY_COVERED, Verdict.REJECTED
+        Verdict.COVERED,
+        Verdict.PARTIALLY_COVERED,
+        Verdict.REJECTED,
+        Verdict.NOT_PROOF_OF_PAYMENT,
     }
 
 
@@ -1502,6 +1677,62 @@ def test_an_insufficient_evidence_claim_pays_nothing_and_spends_no_balance(multi
         assert VerdictBasis.ACCOUNT_STATE not in claim.verdict_basis, claim.claim_id
 
 
+def test_a_claim_evidenced_by_a_subject_alone_is_labelled_as_one(multi_claim_dataset):
+    """🔴 THE OTHER GAP, READ OFF THE LABEL A CONSUMER RECEIVES: a claim carrying a document that
+    says what was bought and nothing that says the money moved. It is the case rule RC-08 rests on
+    — an employee submits what they have, and the policy says it is not proof of payment.
+
+    Checked on what landed on disk rather than on the plan: one document, of a type policy.yaml
+    says proves no payment, `not_proof_of_payment` with an EMPTY `imperfection` (one slot, one way
+    to fail it), nothing reimbursed, `linked` false — and a `covered_fraction` that is a real
+    number rather than `null`, which is the sharpest contrast with the subject gap. Such a claim
+    HAS line items: the basket is ordinary and typically wholly covered, and none of it is payable.
+
+    ⚠️ EXISTENCE IS NOT ASSERTED AT THIS SIZE, and the reason is the same one the payment-alone
+    test gives: at ~32 built claims a zero is ordinary sampling. That the planner draws them is
+    asserted at a size derived from the mix, in
+    `test_not_proof_of_payment_is_planned_in_a_run_large_enough_to_require_it`; that the ENGINE
+    labels one correctly is asserted per document type in
+    `tests/test_claim_evidence.py::test_every_type_that_proves_no_payment_reaches_the_same_verdict_alone`.
+    What only a run can add is that the two meet.
+    """
+    result, _ = multi_claim_dataset
+    by_id = {document.doc_id: document for document in result.documents}
+
+    unpaid = [
+        claim for claim in result.claims
+        if not any(
+            document_evidence(by_id[doc_id].doc_type).proves_payment
+            for doc_id in claim.documents
+        )
+    ]
+    if len(result.claims) >= insufficient_evidence_causes_min_run_size():
+        assert unpaid, (
+            f"no claim of this {len(result.claims)}-claim run is evidenced by a subject document "
+            "alone, at or above the run size policy.yaml calls large enough for a zero to mean "
+            "something"
+        )
+
+    for claim in unpaid:
+        assert len(claim.documents) == 1, claim.claim_id
+        assert claim.verdict is Verdict.NOT_PROOF_OF_PAYMENT, claim.claim_id
+        assert claim.imperfection == [], claim.claim_id
+        assert claim.reimbursable_amount == 0, claim.claim_id
+        assert claim.linked is False, claim.claim_id
+        assert claim.verdict_basis == [VerdictBasis.DOCUMENTS], claim.claim_id
+        document = by_id[claim.documents[0]]
+        assert document.line_items, (
+            f"{document.doc_id} states what was bought and lists nothing"
+        )
+        assert claim.covered_fraction is not None, (
+            f"{claim.claim_id} has line items and no coverage fraction"
+        )
+        assert document.has_fiscal_number is False, (
+            f"{document.doc_id} proves no payment and carries a fiscal number"
+        )
+        assert "no document proves payment" in " ".join(claim.policy_trace)
+
+
 def test_labels_state_the_invariants_that_were_built(dataset):
     """The end-to-end statement: what the ground truth says is what content_builder
     guaranteed, carried unchanged through rendering and degradation."""
@@ -1615,8 +1846,30 @@ def test_every_claim_of_a_persona_is_in_date_order(multi_claim_dataset):
     purpose, and it reimburses nothing, so it takes no place in the ledger this order exists to
     keep honest. Dropping it is not a weakening — the claims that consume a balance are still
     required to be ordered by the date they consume it on.
+
+    🔴 AND A `not_proof_of_payment` CLAIM HAS NO SUCH DATE AT ALL, which is a stronger statement
+    than being out of the sequence: it carries no document of a payment-proving type, so there is
+    nothing to read a payment date OFF. It is dropped by that property rather than by its verdict
+    — the sequence is over payment dates and it has none — and the drop is asserted to be exactly
+    those claims below, so a claim that lost its payment document for some other reason cannot
+    slip out of the ordering unnoticed.
     """
     result, _ = multi_claim_dataset
+    without_a_payment = [
+        claim
+        for claim, documents in documents_of(result)
+        if not any(document_evidence(d.doc_type).proves_payment for d in documents)
+    ]
+    assert without_a_payment, (
+        "no claim of this run lacks a payment document, so the exclusion below removes nothing "
+        "and this test asserts the ordering of a set nobody narrowed"
+    )
+    for claim in without_a_payment:
+        assert claim.verdict is Verdict.NOT_PROOF_OF_PAYMENT, (
+            f"{claim.claim_id} has no payment document and is labelled {claim.verdict.value}"
+        )
+
+    excluded = {claim.claim_id for claim in without_a_payment}
     for persona_record in result.personas:
         dates = [
             max(
@@ -1627,6 +1880,7 @@ def test_every_claim_of_a_persona_is_in_date_order(multi_claim_dataset):
             for claim, documents in documents_of(result)
             if claim.persona_id == persona_record.persona_id
             and claim.verdict is not Verdict.REJECTED
+            and claim.claim_id not in excluded
         ]
         assert dates == sorted(dates)
 
@@ -1684,7 +1938,16 @@ def test_the_limit_flag_is_recomputable_from_the_dataset_alone(multi_claim_datas
         # the same one: a claim outside the window consumes none of a balance that belongs to the
         # window. That neutrality is what lets the planner displace such a claim's date out of the
         # ascending order the other tests check.
-        if claim.verdict in (Verdict.INSUFFICIENT_EVIDENCE, Verdict.REJECTED):
+        # 🔴 A `not_proof_of_payment` CLAIM IS THE THIRD OF THAT KIND AND REACHES ZERO BY A THIRD
+        # route: it carries no payment document at all, so nothing on it says the money the lines
+        # add up to ever moved. The other two have a payment whose relation to the purchase fails
+        # a check. The ledger claim is identical for all three and is the part this test is about
+        # — a claim that pays nothing consumes nothing.
+        if claim.verdict in (
+            Verdict.INSUFFICIENT_EVIDENCE,
+            Verdict.REJECTED,
+            Verdict.NOT_PROOF_OF_PAYMENT,
+        ):
             assert claim.reimbursable_amount == 0
             assert "limit_exhausted" not in claim.imperfection
             continue
@@ -1796,9 +2059,10 @@ def test_the_dataset_labels_are_reproducible_from_the_documents_alone(multi_clai
 
 
 def test_the_balance_report_names_the_verdicts_it_could_not_generate(multi_claim_dataset):
-    """A report that renormalized silently would print a tidy table over 70% of the target
-    mix and look balanced. Naming the missing 30% is the point of the report at this
-    stage."""
+    """A report that renormalized silently would print a tidy table over 90% of the target
+    mix and look balanced. Naming the missing 10% is the point of the report at this
+    stage — and the SMALLER that figure gets, the more a silent renormalization would look
+    like the whole truth."""
     result, _ = multi_claim_dataset
     report = balance_report(result)
 
@@ -1806,7 +2070,9 @@ def test_the_balance_report_names_the_verdicts_it_could_not_generate(multi_claim
     for verdict in unrealizable_verdicts():
         assert verdict.value in report
     assert "CONDITIONAL" in report
-    assert "20.0% of the target mix is absent" in report
+    # 10.0% now that `not_proof_of_payment` is realized: `partially_paid` is the only member of
+    # the mix left absent, and it carries 0.10.
+    assert "10.0% of the target mix is absent" in report
     for verdict in REALIZABLE_VERDICTS:
         assert verdict.value in report
     assert "mixed_items" in report and "limit_exhausted" in report
@@ -1840,7 +2106,11 @@ def test_a_verdict_with_no_share_is_named_and_does_not_enter_the_arithmetic(
 
     assert "partially_paid (no share declared yet)" in report
     assert "partially_paid (0.0%)" not in report
-    assert "20.0% of the target mix is absent" in report
+    # 0.0%, and it is the interesting number rather than a degenerate one: `partially_paid` is the
+    # only absent member of the mix and the patch removes its share, so what the share-carrying
+    # absent verdicts account for is nothing at all — which the report must still print as a LOWER
+    # BOUND rather than as "the mix is fully covered".
+    assert "0.0% of the target mix is absent" in report
     assert "LOWER BOUND" in report
     assert "no share for partially_paid" in report
 

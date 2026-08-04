@@ -17,7 +17,7 @@ It also decides whether a claim's evidence is COMPLETE — see `EvidenceIntent`.
 claim that establishes only one of the two facts is a thing this generator has to do, and
 it is done by naming the intent, never by letting a document quietly fail to turn up.
 
-Two of the six verdicts are still refused rather than faked — see `_UNREALIZABLE_REASONS`
+One of the six verdicts is still refused rather than faked — see `_UNREALIZABLE_REASONS`
 — and one ROUTE to a realizable one is, which is a different statement and has its own
 table, `_UNREALIZABLE_ROUTES`.
 """
@@ -231,7 +231,79 @@ ARCHETYPES: dict[str, Archetype] = {
             "hobby",
         ),
     ),
+    # 🔴 THE FIFTH DOCUMENT CLASS, AND THE ONE THAT LOOKS LIKE THE FIRST. A товарний чек prints a
+    # basket, the same four totals, the same columns and the same arithmetic as a fiscal receipt,
+    # and 📄 differs from it by exactly the two requisites the tax service says such a document
+    # omits — the fiscal number of the register and the wording «ФІСКАЛЬНИЙ ЧЕК». So it is the
+    # first archetype whose classification cannot be reached from the layout at all.
+    #
+    # 🔴 IT IS A SUBJECT-CLASS DOCUMENT, registered as what it IS. policy.yaml's
+    # `document_evidence` gives `non_fiscal_receipt` `proves_subject: true, proves_payment: false`,
+    # and this entry says nothing else — an archetype registered as a payment class because an
+    # employee SUBMITS it in place of a payment proof would contradict the evidence table and
+    # relabel every claim carrying one. What the employee believes is not a property of the
+    # document; it is the SHAPE OF THE CLAIM, and it lives in the planner as
+    # `EvidenceIntent.PAYMENT_GAP`.
+    #
+    # SIX CATEGORIES OF SEVEN, AND THE MISSING ONE IS A CONSEQUENCE OF WHO MAY ISSUE THE DOCUMENT.
+    # 📄 A ПДВ payer is obliged to use a cash register, so the seller of a slip is a non-payer —
+    # `content_builder.build_non_fiscal_receipt` refuses any other — and `medical_insurance` is
+    # served in config/vendors.json by insurers alone, every one of them registered. The other six
+    # each have a non-payer vendor. Checked against vendors.json by a test rather than trusted
+    # here, so a vendor list edited on one side cannot leave this tuple asserting the other.
+    "ua_non_fiscal_receipt": Archetype(
+        slug="ua_non_fiscal_receipt",
+        doc_type=DocType.NON_FISCAL_RECEIPT,
+        country=Country.UA,
+        language="uk",
+        categories=(
+            "language_courses",
+            "professional_development",
+            "sport",
+            "mental_health",
+            "vitamins_nutrition",
+            "hobby",
+        ),
+    ),
 }
+
+
+# 🔴 WHICH SUBJECT CLASSES A PAYMENT DOCUMENT CAN SETTLE, and therefore which ones may be the
+# subject half of a SPLIT PAIR. It exists because the registry now holds two subject-only classes
+# that are not interchangeable, and `_select_documents` would otherwise draw between them.
+#
+# 📄 An invoice is an OFFER TO PAY: it is issued, it names an obligation, and a payment settles it
+# later. 👁 That is also what a payment purpose names — an invoice or a delivery note — and it is
+# how the pair is linked on the page: `content_builder.Invoice.reference` is the only
+# `DocumentReference` any class produces, and the confirmation's purpose cites it.
+#
+# ⛔ A товарний чек SETTLES NOTHING AND IS CITED BY NOTHING. It is handed over when the goods are,
+# it states no obligation, and no observation in this project shows a payment purpose naming one.
+# A pair built from it would print a purpose citing an empty reference and would assert a
+# settlement relation nothing evidences. It reaches a claim as the WHOLE of that claim's evidence
+# instead — see `EvidenceIntent.PAYMENT_GAP`.
+#
+# ⚠️ `act` AND `order_screenshot` ARE ABSENT because they have no archetype. An act of services
+# rendered is settled by a transfer and would belong here the day one is written; listing a class
+# nothing can build would be a decision nothing exercises.
+_SETTLED_BY_A_PAYMENT: frozenset[DocType] = frozenset({DocType.INVOICE})
+
+
+def _pairable_subjects(candidates: list[Archetype]) -> list[Archetype]:
+    """The subject-only archetypes that may be paired with a payment document.
+
+    ONE PREDICATE, TWO CALLERS, and that is the whole reason it is a function:
+    `can_assemble_evidence` answers whether a claim can be built and `_select_documents` builds
+    it, so a subject class admitted by the first and refused by the second would plan a claim the
+    builder then rejects — the failure landing a stage away from its cause, which is the thing
+    this module keeps not doing.
+    """
+    return [
+        archetype
+        for archetype in candidates
+        if evidence_of(archetype) == Evidence(True, False)
+        and archetype.doc_type in _SETTLED_BY_A_PAYMENT
+    ]
 
 
 class EvidenceIntent(Enum):
@@ -247,6 +319,19 @@ class EvidenceIntent(Enum):
     Two documents shaped the same way can therefore mean different things, and a reader of a plan
     can tell which: a claim whose evidence is short by accident is a bug this module still raises
     on, and a claim whose evidence is short on purpose says so in a field.
+
+    🔴 THERE ARE TWO GAPS AND THEY ARE OPPOSITE, one per fact of `document_evidence`. Neither is a
+    weaker form of the other and neither may absorb the other: `EVIDENCE_GAP` is a payment with no
+    subject beside it (`insufficient_evidence` / `subject_not_evidenced`), `PAYMENT_GAP` is a
+    subject with no payment beside it (`not_proof_of_payment`). One employee attached the transfer
+    and forgot to say what it bought; the other attached the thing they bought and never showed
+    that money moved.
+
+    ⚠️ THE NAMES ARE NOT SYMMETRIC AND THE MEMBERS ARE. `EVIDENCE_GAP` is the SUBJECT gap and was
+    named before a second gap existed; renaming it now would reach config/policy.yaml,
+    config/labelling-schema.yaml, docs/architecture.md and this module's callers, for a rename
+    rather than a change of behaviour. So the asymmetry is recorded here instead, where a reader
+    who has only the names to go on will look.
     """
 
     #: Both facts. Every claim was this until the gap below was named.
@@ -256,6 +341,11 @@ class EvidenceIntent(Enum):
     #: derives `insufficient_evidence` with the cause `subject_not_evidenced` from the documents
     #: that were built, exactly as it does for every other claim.
     EVIDENCE_GAP = "evidence_gap"
+    #: The MONEY-MOVED slot left open on purpose: a document that states what was bought and
+    #: nothing that attests a payment — a bare invoice, a товарний чек. The planner asserts no
+    #: label here either; `policy_engine` reads the document types and answers
+    #: `not_proof_of_payment`, with no cause, there being one slot and one way to fail it.
+    PAYMENT_GAP = "payment_gap"
 
 
 # --- what can be realized -----------------------------------------------------
@@ -286,6 +376,18 @@ REALIZABLE_VERDICTS: tuple[Verdict, ...] = (
     # out-of-period one, which is a property of the corpus a consumer has to be told rather than
     # left to infer.
     Verdict.REJECTED,
+    # 🔴 THE FIFTH, AND IT NEEDED NO NEW MECHANISM — only the OTHER HALF of one that existed.
+    # `EvidenceIntent` already let a claim be planned short of a fact on purpose; this verdict is
+    # the same idea with the slots exchanged (`PAYMENT_GAP`), and it became realizable the moment
+    # a claim could carry a subject document with nothing beside it. TWO ARCHETYPES REALIZE IT —
+    # a bare invoice and a товарний чек — and the second is why the corpus finally contains a
+    # document that looks fiscal and is not.
+    #
+    # ⛔ AMOUNTS, BASKETS AND DATES ARE NOT CONSULTED, here or in the engine. The verdict is a
+    # property of the document TYPES a claim carries, so a claim planned for it is an ORDINARY
+    # claim minus its payment document: an ordinary covered basket, an ordinary date inside the
+    # period, and `covered_fraction` typically 1.0 beside a reimbursable amount of zero.
+    Verdict.NOT_PROOF_OF_PAYMENT,
 )
 
 # WHY A ROUTE TO A REALIZABLE VERDICT NEEDS ITS OWN TABLE. `_UNREALIZABLE_REASONS` below is keyed
@@ -314,18 +416,6 @@ _UNREALIZABLE_ROUTES: dict[str, str] = {
 }
 
 _UNREALIZABLE_REASONS: dict[Verdict, str] = {
-    Verdict.NOT_PROOF_OF_PAYMENT: (
-        "is the MONEY-MOVED slot of `document_evidence` left unestablished, and needs a claim "
-        "every document of which is a `proves_payment: false` type in policy.yaml — an invoice, "
-        "an act, a sales slip. `policy_engine.resolve_evidence` labels such a claim today, and "
-        "WHAT IS MISSING CHANGED WHEN THE INVOICE ARCHETYPE LANDED: an archetype of such a type "
-        "now exists, so the gap is no longer the template. What does not exist is a planner that "
-        "deliberately plans an INCOMPLETE claim — `_select_documents` assembles both facts or "
-        "refuses, because the two verdicts this planner draws both need complete evidence, and "
-        "`documentable_categories` reports a category it cannot complete as not documentable "
-        "rather than letting such a plan be made. The document type is still the whole mechanism: "
-        "amounts, baskets and dates are not consulted"
-    ),
     Verdict.PARTIALLY_PAID: (
         "needs a document showing PART of an amount settled, and the statement archetype now "
         "registered does not narrow this: a statement row states the amount that moved, and a "
@@ -336,6 +426,14 @@ _UNREALIZABLE_REASONS: dict[Verdict, str] = {
         "not that field: it is a receipt's ДО СПЛАТИ, the basket total less a discount plus cash "
         "rounding, and it says nothing about how much of an obligation is still open"
     ),
+    # ⚠️ `NOT_PROOF_OF_PAYMENT` LEFT THIS TABLE WHOLE, ROUTES AND ALL, which is why nothing of its
+    # entry moved to `_UNREALIZABLE_ROUTES` the way `rejected`'s did. It has ONE route — a claim
+    # every document of which is a `proves_payment: false` type — and that route is now planned by
+    # `EvidenceIntent.PAYMENT_GAP` and built from two archetypes. What its old entry said is
+    # nonetheless worth keeping in one line, because it is the sentence a reader will look for:
+    # the mechanism was never the template, it was a planner that would deliberately plan an
+    # INCOMPLETE claim, and naming the intent is what supplied it.
+    #
     # ⚠️ `REJECTED` LEFT THIS TABLE AND ONE OF ITS TWO ROUTES DID NOT. The verdict is realizable:
     # `_payment_outside_period` dates a claim's payment outside policy.yaml's window and the engine
     # labels it `rejected`, cause `outside_period`. The route by WHAT WAS BOUGHT — a wholly
@@ -595,9 +693,14 @@ def can_assemble_evidence(candidates: list[Archetype]) -> bool:
     question. They are now different questions, and answering the first while meaning the second
     would plan a claim `_select_documents` then refuses — a failure landing a stage away from its
     cause.
+
+    ⚠️ AND NOT EVERY SUBJECT ARCHETYPE COUNTS TOWARDS THE PAIR — see `_pairable_subjects`, which
+    is the same predicate `_select_documents` builds from. A category served by a товарний чек and
+    a payment document would satisfy "a subject exists and a payment exists" and still not be
+    completable, because nothing settles a sales slip.
     """
     both = [a for a in candidates if all(evidence_of(a))]
-    subjects = [a for a in candidates if evidence_of(a) == Evidence(True, False)]
+    subjects = _pairable_subjects(candidates)
     payments = [a for a in candidates if evidence_of(a) == Evidence(False, True)]
     return bool(both) or bool(subjects and payments)
 
@@ -653,10 +756,25 @@ def plannable_categories(
     use. Widening this means drawing the cause first, which is a reordering of the seed stream and
     a decision nobody has needed to take.
 
+    `not_proof_of_payment` NARROWS THE OTHER WAY, and the two narrowings are not versions of one
+    rule. It is realized by a claim carrying a SUBJECT DOCUMENT ALONE, so it needs a category some
+    subject-only archetype covers — the opposite requirement to the pair rule above, which is
+    about two documents being able to disagree. A category documented by a fiscal receipt and
+    nothing else is complete, plannable for three verdicts, and cannot realize this one: the
+    receipt proves its own payment, so there is no gap to leave.
+
+    ⚠️ THE SECOND NARROWING EXCLUDES NOTHING TODAY, and it is written anyway. Every Ukrainian
+    category carries the invoice archetype, so every documentable one already has a subject-only
+    document; the filter earns its place the day a category is documented by a receipt alone,
+    which the registry has held before and will again as jurisdictions land. Without it that
+    category would be drawn here and refused inside `_select_documents` — the failure landing a
+    stage from its cause, which is what this whole function exists to prevent. It is exercised by
+    a test against a hand-built registry rather than by the live one.
+
     WHY NOT NARROW GLOBALLY. Because `covered` and `partially_covered` are realizable in BOTH
     shapes: a receipt category is perfectly plannable for them, and dropping it from every claim
     would remove the only `fiscal_receipt` documents the corpus has, to satisfy a constraint that
-    belongs to one verdict out of three. The narrowing follows the verdict because the CONSTRAINT
+    belongs to one verdict out of four. The narrowing follows the verdict because the CONSTRAINT
     follows the verdict — a global filter would encode one verdict's requirement as a property of
     the persona.
     """
@@ -665,16 +783,25 @@ def plannable_categories(
         for category in documentable_categories(persona)
         if ledger.remaining(persona.persona_id, category) > 0
     ]
-    if verdict is not Verdict.INSUFFICIENT_EVIDENCE:
-        return open_balance
-    return [
-        category
-        for category in open_balance
-        if not any(
-            all(evidence_of(archetype))
-            for archetype in archetypes_for(persona.location.country, category)
-        )
-    ]
+    if verdict is Verdict.INSUFFICIENT_EVIDENCE:
+        return [
+            category
+            for category in open_balance
+            if not any(
+                all(evidence_of(archetype))
+                for archetype in archetypes_for(persona.location.country, category)
+            )
+        ]
+    if verdict is Verdict.NOT_PROOF_OF_PAYMENT:
+        return [
+            category
+            for category in open_balance
+            if any(
+                evidence_of(archetype) == Evidence(True, False)
+                for archetype in archetypes_for(persona.location.country, category)
+            )
+        ]
+    return open_balance
 
 
 def realizable_verdicts_for(persona: Persona, ledger: Ledger) -> tuple[Verdict, ...]:
@@ -768,7 +895,7 @@ def _select_documents(
 
     A reimbursement needs to know what was bought and that it was paid for
     (`document_evidence` in policy.yaml), and the two need not come from the same
-    document. THREE SHAPES ARE BUILT. Two of them are decided by what the registry offers,
+    document. FOUR SHAPES ARE BUILT. Two of them are decided by what the registry offers,
     in this order:
 
     1. **One document that proves both** — a fiscal receipt. Preferred wherever one is
@@ -789,7 +916,12 @@ def _select_documents(
     distinguishable from an ordinary one by nothing except the thing being labelled. That is what
     makes it a usable negative: had the flag also changed the gap, a consumer could learn the gap.
 
-    🔴 `intent` IS THE THIRD SHAPE, AND IT IS THE ONE THAT IS NOT ABOUT WHICH ARCHETYPES EXIST.
+    ⚠️ THE SUBJECT OF A PAIR IS NARROWER THAN "AN ARCHETYPE THAT PROVES THE SUBJECT" — see
+    `_pairable_subjects`. A payment settles an obligation, and a class that states none is not
+    half of a pair however well it states what was bought.
+
+    🔴 `intent` IS THE THIRD AND FOURTH SHAPES, AND THEY ARE THE ONES THAT ARE NOT ABOUT WHICH
+    ARCHETYPES EXIST.
     `EvidenceIntent.EVIDENCE_GAP` asks for a PAYMENT DOCUMENT ALONE — the claim then states that
     money moved and never what it bought, which `policy_engine` labels `insufficient_evidence` with
     the cause `subject_not_evidenced`. It is a separate branch rather than a fallback for the same
@@ -798,10 +930,14 @@ def _select_documents(
     A payment-only archetype is required even so — the gap is in the SUBJECT, and a claim proving
     neither fact is a different label nobody asked for.
 
-    ⛔ IT DOES NOT DRAW A SELF-CONTAINED DOCUMENT. A fiscal receipt proves the subject too, so a
-    claim carrying one has no gap to label; only the `proves_subject: false` payment classes can
-    realize this cause, and both registered ones do — a confirmation and a statement are equally
-    silent about what was bought.
+    `EvidenceIntent.PAYMENT_GAP` asks for the OPPOSITE ONE — a SUBJECT DOCUMENT ALONE, so that the
+    claim states what was bought and never that money moved, which `policy_engine` labels
+    `not_proof_of_payment` with no cause at all. Same construction, other slot.
+
+    ⛔ NEITHER DRAWS A SELF-CONTAINED DOCUMENT. A fiscal receipt proves both facts, so a claim
+    carrying one has no gap of either kind to label: only the `proves_subject: false` payment
+    classes can realize the first, and only the `proves_payment: false` subject classes the
+    second.
 
     Where neither shape can be assembled the planner refuses. It does not build a claim
     out of whichever archetypes exist and leave the engine to discover that half the
@@ -819,11 +955,27 @@ def _select_documents(
             )
         return (DocumentPlan(archetype=rng.choice(payments), issued_at=issued_at),)
 
+    if intent is EvidenceIntent.PAYMENT_GAP:
+        # 🔴 EVERY SUBJECT-ONLY ARCHETYPE IS ELIGIBLE HERE, INCLUDING THE ONES NO PAYMENT CAN
+        # SETTLE, and that is the difference from the pair branch below rather than an oversight.
+        # The claim has no payment document to relate this one to, so `_SETTLED_BY_A_PAYMENT` —
+        # which is about a RELATION between two documents — has nothing to say about it. It is
+        # what lets a товарний чек reach the corpus at all.
+        unsettled_subjects = [a for a in candidates if evidence_of(a) == Evidence(True, False)]
+        if not unsettled_subjects:
+            raise ValueError(
+                "a payment gap is a claim stating what was bought and never that money moved, "
+                "and no registered archetype here states the subject alone: "
+                f"{sorted(a.slug for a in candidates)}. A self-contained receipt proves its own "
+                "payment, so a claim carrying one has no such gap to label."
+            )
+        return (DocumentPlan(archetype=rng.choice(unsettled_subjects), issued_at=issued_at),)
+
     both = [a for a in candidates if all(evidence_of(a))]
     if both:
         return (DocumentPlan(archetype=rng.choice(both), issued_at=issued_at),)
 
-    subjects = [a for a in candidates if evidence_of(a) == Evidence(True, False)]
+    subjects = _pairable_subjects(candidates)
     if subjects and payments:
         # Drawn before the archetypes so that adding a template does not shift the dates
         # of a run: the lead is a property of the claim, the templates are a property of
@@ -991,6 +1143,20 @@ def plan_claim(
         # no balance and cannot change what a later claim of the same persona has left. The order
         # matters because cumulative limits bind in it; a claim outside the period binds nothing.
         issued_at = _payment_outside_period(rng, issued_at)
+    elif verdict is Verdict.NOT_PROOF_OF_PAYMENT:
+        # 🔴 THE WHOLE OF THE MECHANISM IS THE SHAPE OF THE EVIDENCE, and it is named rather than
+        # arrived at: the claim carries a document that states what was bought and NOTHING that
+        # attests a payment. Everything else about the plan is ordinary — the basket is drawn
+        # covered, the date sits inside the period — because the engine decides this verdict from
+        # the document types before it reads either.
+        if cause is not None:
+            raise ValueError(
+                f"`not_proof_of_payment` carries no cause and {cause!r} was named. There is one "
+                "slot of `document_evidence` behind this verdict — that money moved — and one way "
+                "to fail it, so there is nothing for a cause to distinguish; see "
+                "`policy_engine.evaluate_claim`, which returns it with an empty `imperfection`."
+            )
+        intent = EvidenceIntent.PAYMENT_GAP
     elif cause is not None:
         raise ValueError(
             f"a cause belongs to a partially_covered, an insufficient_evidence or a rejected "

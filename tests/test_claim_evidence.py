@@ -1089,9 +1089,9 @@ def test_the_vendor_is_chosen_once_per_claim_however_many_documents_it_has(tmp_p
     calls: list[str] = []
     original = assembler._pick_vendor
 
-    def counting(rng, country, category, *, mixed):
+    def counting(rng, country, category, *, mixed, vat_payer=None):
         calls.append(category)
-        return original(rng, country, category, mixed=mixed)
+        return original(rng, country, category, mixed=mixed, vat_payer=vat_payer)
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(assembler, "_pick_vendor", counting)

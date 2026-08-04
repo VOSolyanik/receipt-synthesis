@@ -416,6 +416,17 @@ limits:
 verdict_mix:
   covered: 0.40
   partially_covered: 0.20
+  # 🔴 THE SHARE DID NOT MOVE AND THE VERDICT DID: this entry has read 0.10 since the file was
+  # written, sizing a bucket nothing filled. `claim_planner` now plans a claim whose only document
+  # states what was bought and never that money moved — a bare invoice, or the товарний чек the
+  # `ua_non_fiscal_receipt` archetype prints — and the engine reads the document types and answers
+  # this verdict. So the number is unchanged and what it sizes is real for the first time.
+  #
+  # ⚠️ WHAT THIS COSTS EVERY OTHER SHARE is one line below, at
+  # `insufficient_evidence_causes_min_run_size`: a fifth member in the realizable subset makes the
+  # denominator 0.90 instead of 0.80, so every other verdict is drawn slightly RARER than before
+  # while its declared share is untouched. That is the renormalization this file has always
+  # described and the reason the run-size guideline is derived rather than picked.
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
   partially_paid: 0.10
@@ -447,13 +458,16 @@ verdict_mix:
   # deliberately over-represents the harder ones, so `covered` is the padding here while every
   # other share sizes a mechanism under test.
   #
-  # 🔴 AND THE REALIZABLE SUBSET STILL SUMS TO 0.80, which is what keeps the derivation under
-  # `insufficient_evidence_causes_min_run_size` below correct: `covered` 0.40 +
-  # `partially_covered` 0.20 + `insufficient_evidence` 0.10 + `rejected` 0.10 is the same total
-  # the three realizable members had before, so `insufficient_evidence` is still drawn on 12.5%
-  # of built claims and the guideline of 75 does not move. That is a consequence of taking
-  # exactly this share from exactly this member. An edit that moves either number has to redo
-  # that derivation rather than assume it survived.
+  # 🔴 AND THE REALIZABLE SUBSET SUMMED TO 0.80 WHEN THIS SHARE ARRIVED, which is what kept the
+  # derivation under `insufficient_evidence_causes_min_run_size` correct at the time: `covered`
+  # 0.40 + `partially_covered` 0.20 + `insufficient_evidence` 0.10 + `rejected` 0.10 was the same
+  # total the three realizable members had before, so `insufficient_evidence` went on being drawn
+  # on 12.5% of built claims. ⚠️ IT SUMS TO 0.90 NOW — `not_proof_of_payment` joined the subset
+  # without a share moving — so that rate is 11.1% and the guideline is 85 rather than 75. The
+  # paragraph is kept as written and corrected here rather than rewritten, because the two facts
+  # are separate: the share was paid for out of `covered`, and the DENOMINATOR later changed for a
+  # reason that has nothing to do with this member. An edit that moves either number has to redo
+  # the derivation rather than assume it survived.
   rejected: 0.10
 
 # Why a claim ends up partially covered. Splits the `partially_covered` bucket
@@ -539,29 +553,29 @@ insufficient_evidence_causes:
 
 # THE RUN SIZE AT WHICH THE NON-ZERO REQUIREMENT ABOVE BINDS, derived from the actual draw
 # probabilities rather than picked. `verdict_mix` renormalizes over the realizable subset —
-# `covered` 0.40, `partially_covered` 0.20, `insufficient_evidence` 0.10, `rejected` 0.10 — so
-# `insufficient_evidence` is drawn on 0.10 / (0.40 + 0.20 + 0.10 + 0.10) = 12.5% of built claims
-# (this is the same renormalization the balance report prints as "target, of the realizable
-# subset"). `insufficient_evidence_causes` above then splits that three ways, so a single built
-# claim lands on the RAREST cause with probability 0.125 * 0.33 = 0.04125.
-#
-# ⚠️ THE MEMBERS OF THAT SUBSET CHANGED AND THE RATE DID NOT, which is the only reason this
-# number survived `rejected` becoming realizable: the 0.10 that verdict now carries was taken
-# from `covered`, so the subset sums to 0.80 as it did with three members. See the derivation
-# beside `rejected` in `verdict_mix` above.
+# `covered` 0.40, `partially_covered` 0.20, `insufficient_evidence` 0.10, `rejected` 0.10,
+# `not_proof_of_payment` 0.10 — so `insufficient_evidence` is drawn on
+# 0.10 / (0.40 + 0.20 + 0.10 + 0.10 + 0.10) = 11.1% of built claims (this is the same
+# renormalization the balance report prints as "target, of the realizable subset").
+# `insufficient_evidence_causes` above then splits that three ways, so a single built claim lands
+# on the RAREST cause with probability 0.111 * 0.33 = 0.0367.
 #
 # For a run of N built claims, the probability that a cause drawn at rate p is realized at
-# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.04125)^N >= 0.95 for the smallest N gives
-# N >= ln(0.05) / ln(1 - 0.04125) ~= 71.1, i.e. 72 built claims — rounded up here to 75, a
-# number worth naming rather than a fraction of one. At 75 built claims or more, a zero count
+# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.0367)^N >= 0.95 for the smallest N gives
+# N >= ln(0.05) / ln(1 - 0.0367) ~= 80.2, i.e. 81 built claims — rounded up here to 85, a
+# number worth naming rather than a fraction of one. At 85 built claims or more, a zero count
 # for any cause is unlikely enough (<5%) to report as a defect rather than as sampling
 # noise; below it, a zero count is unremarkable and the balance report says so.
 #
-# ⚠️ IT MOVED FROM 50 WHEN THE THIRD CAUSE GAINED A SHARE, and the guideline got STRICTER
-# although nothing about the two cross-checks changed: the same 12.5% now feeds three buckets
-# instead of two, so each is rarer and a run has to be larger before an empty one means
-# anything. A figure quoted against the old guideline was correct for a two-cause draw.
-insufficient_evidence_causes_min_run_size: 75
+# ⚠️ IT MOVED FROM 50 TO 75 WHEN THE THIRD CAUSE GAINED A SHARE, and from 75 TO 85 WHEN
+# `not_proof_of_payment` BECAME REALIZABLE — and the second move is the instructive one, because
+# NOTHING ABOUT `insufficient_evidence` OR ITS CAUSES CHANGED. A fifth member entered the
+# realizable subset, so the denominator of the renormalization went from 0.80 to 0.90 and every
+# other verdict is drawn slightly rarer at an unchanged declared share. A guideline derived from
+# a share alone would have missed it; this one is derived from the DRAW, which is why it moves
+# when a verdict elsewhere in the file gains a mechanism. A figure quoted against either older
+# guideline was correct for the subset of its day.
+insufficient_evidence_causes_min_run_size: 85
 
 # What each document type proves. A claim is reimbursable only when BOTH facts
 # are established — what was bought, and that it was paid for — possibly across
