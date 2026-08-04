@@ -108,7 +108,7 @@ pairs is not wrong.
 
 | field | invoice | payment_confirmation | bank_statement | state |
 | --- | --- | --- | --- | --- |
-| invoice number | in the title, «Рахунок на оплату № N» | inside `payment_purpose` | inside the labelled row's `payment_purpose` | ③ **resolvable** — **was ②** |
+| invoice number | in the title, «Рахунок на оплату № N» | inside `payment_purpose` | inside the labelled row's `payment_purpose` | ③ **resolvable** — **was ②**; since contract v33 both ends are also labelled (`document_code` on the invoice, `cites_document_no` on the payment), and the `subject` axis compares them — on a `subject_mismatch` claim they deliberately differ |
 | invoice date | in the title, **written in words** («від 13 січня 2026 р.») | inside `payment_purpose`, **as digits** (`13.01.2026`) | same as the confirmation | ③ **resolvable** — **was ②** |
 | delivery-note (ВН) number | — | — | inside some rows' `payment_purpose` | **deliberately refers outside the claim**, below |
 | agreement number | `agreement` | — | — | not cross-document |
@@ -136,7 +136,7 @@ Three things make the invoice reference a genuine ③ rather than another ①:
 | amount in words | `amount_in_words` | `amount_in_words`, on some documents | — | ① where both print it |
 | currency | «грн» in the count line | — | «валюта UAH/980» in the account header | ① — one value in the corpus, so it distinguishes nothing |
 | date | issue date | operation date | labelled row's operation date | **a relation, not an equality**: the subject is dated on or before the payment, and a claim planned for `payment_precedes_subject` inverts exactly that |
-| subject / line items | `line_items` | — | — | **asymmetric by definition**: this is why the invoice proves the subject and the payment classes do not |
+| subject / line items | `line_items` | — | — | **asymmetric by definition**: this is why the invoice proves the subject and the payment classes do not. The `subject` axis of contract v33 does not change this — it compares the CITATION, a document number, never the content of a basket |
 
 Two notes on `amount`, because it is the field most likely to be mistaken for a solved ③:
 
@@ -275,13 +275,20 @@ iteration. The fix goes there, in one pass, with everything else that moves a pr
 > regenerated corpus will not, and the gate on `cites_subject_document` below lifts when a
 > regenerated run confirms the count at zero, not before.
 
-🔴 **And it gates the contract field this page asks for.** The proposed `cites_subject_document`
+🔴 **And it gated the contract field this page asks for.** The proposed `cites_subject_document`
 flag exists so that a linker's recall can be measured against the pairs where a citation was there to
-find. Introduced today, it would return `false` for these 54 and thereby **certify them as
-legitimately non-citing** — the defect would disappear inside the exception, and the denominator
-whose honesty is the flag's entire purpose would be 55% contaminated in its absence half. **The flag
-must not ship before the 54 are repaired**, or it legalizes them silently. That condition is written
-into the field's specification, not left here.
+find. Introduced before the repair, it would have returned `false` for these 54 and thereby
+**certified them as legitimately non-citing** — the defect would have disappeared inside the
+exception, and the denominator whose honesty is the flag's entire purpose would have been 55%
+contaminated in its absence half.
+
+> **SHIPPED, SATISFYING THE GATE, in contract version 33** — as `cites_document_no`, a narrower
+> and stronger form: the рахунок number the purpose names rather than a boolean. The gate's
+> condition holds by construction rather than by confirmation: the field exists only in labels a
+> post-repair generator writes, so no corpus can carry the field beside the 54 — a version-33
+> label set and the contaminated pool cannot co-occur. The field is also one end of the `subject`
+> axis of `cross_document_agreement`, whose negative (`subject_mismatch`) is a citation that
+> names the WRONG рахунок while everything else agrees.
 
 ---
 
@@ -303,5 +310,6 @@ Named here rather than left for a reader to notice:
   carries no pointer to the payment, and no real invoice would — it is issued first.
 * **the 54 self-transfer purposes above.** Measured and recorded here; since repaired in the
   generator (see the boxed note in the previous section), which no run this page cites reflects.
-  The `cites_subject_document` field stays blocked until a REGENERATED corpus confirms the
-  count at zero — the repair being committed and the corpus being clean are different facts.
+  The citation field has since shipped as `cites_document_no` (contract version 33) — the gate is
+  satisfied by construction, per the second boxed note, because the field exists only in labels a
+  post-repair generator writes; the runs this page cites still predate both.
