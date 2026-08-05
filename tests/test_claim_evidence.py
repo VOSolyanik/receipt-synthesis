@@ -36,6 +36,7 @@ from pathlib import Path
 
 import pytest
 
+from receipt_synth import claim_planner, policy_engine
 from receipt_synth.claim_planner import (
     Archetype,
     ClaimPlan,
@@ -45,19 +46,27 @@ from receipt_synth.claim_planner import (
     evidence_of,
     plan_claim,
 )
+from receipt_synth.config import load_policy
 from receipt_synth.content_builder import PartyIdentity
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
+    COUNTERPARTY_MISMATCH,
     OUTSIDE_PERIOD,
+    PARTIAL_PAYMENT_MARKER_FIELDS,
     PAYMENT_PRECEDES_SUBJECT,
     SUBJECT_NOT_EVIDENCED,
+    AgreementAxis,
     ClaimInput,
     Ledger,
     PolicyGapError,
+    active_period,
+    cross_document_agreement,
     document_evidence,
     evaluate_claim,
     evaluate_claims,
+    partial_payment_marker_fields,
+    partial_payment_outside_the_period,
     resolve_evidence,
 )
 from receipt_synth.schemas import (
@@ -99,12 +108,23 @@ def doc(
     items: list[LineItem] | None = None,
     currency: str = "UAH",
     direction: Direction | None = None,
+    instalment_amount: str | None = None,
+    counterparty: str = "Vendor",
 ) -> DocGroundTruth:
     """One document label.
 
     `amount` is stated independently of `items` on purpose: a payment confirmation carries
     an amount and no lines, and the disagreement cases below need the two to be settable
     apart.
+
+    `instalment_amount` is the printed marker of a partial settlement — what one part of this
+    document's obligation comes to, where the document says it is settled in parts. `None` on
+    every ordinary document, which is what makes the mismatch cases below still mismatch.
+
+    `counterparty` DEFAULTS TO ONE VALUE FOR EVERY DOCUMENT, which is what an honest claim looks
+    like: the invoice and the payment name one seller. The parameter exists so a pair can be built
+    that does not — see the counterparty section below — and every other test in this file inherits
+    the agreement rather than restating it.
     """
     return DocGroundTruth(
         doc_id=doc_id,
@@ -113,8 +133,9 @@ def doc(
         language="uk",
         currency=currency,
         amount=Decimal(amount),
+        instalment_amount=None if instalment_amount is None else Decimal(instalment_amount),
         date=when,
-        counterparty="Vendor",
+        counterparty=counterparty,
         direction=direction,
         line_items=items or [],
         has_qr=True,
@@ -515,6 +536,391 @@ def test_documents_stating_different_amounts_are_insufficient_evidence():
     )
 
 
+# ------------------------------------------ a payment that settles one part --
+#
+# 🔴 TWO CLAIMS WITH THE SAME PAIR OF NUMBERS AND DIFFERENT VERDICTS. Every case below is an
+# invoice of 1200.00 beside a payment of less, and what decides the label is whether the INVOICE
+# SAYS the obligation is settled in parts. The arithmetic is identical throughout on purpose:
+# these tests are what stops `partially_paid` from being implemented as "the payment is smaller",
+# which would relabel every low-side `amount_mismatch` and cost the corpus a negative it already
+# has. config/policy.yaml, `partial_payment`, states the rule.
+
+
+def test_a_payment_settling_one_instalment_is_partially_paid():
+    """The lawful pair: an obligation of 1200.00 the invoice says is settled in parts of 300.00,
+    and a payment of exactly 300.00.
+
+    `covered_fraction` is still 1.0 — every line of the invoice is covered, which is a fact about
+    the lines and says nothing about how much has been paid — and `reimbursable` is 0.00, because
+    policy.yaml has not decided how much of a partly settled obligation is payable.
+
+    NO CAUSE, for the reason `not_proof_of_payment` carries none: one mechanism, one way to reach
+    it, nothing for a cause to distinguish.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00")
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.PARTIALLY_PAID
+    assert result.imperfection == ()
+    assert result.covered_fraction == Decimal(1)
+    assert result.reimbursable == Decimal("0.00")
+    assert result.policy_trace[-1] == (
+        "partial settlement: c1_d1 states 1200.00 UAH settled in parts of 300.00, "
+        "and payment c1_d2 states 300.00"
+    )
+
+
+def test_a_smaller_payment_without_the_marker_is_not_partially_paid():
+    """🔴 THE DISCRIMINATOR, AND THE TEST THIS WHOLE BRANCH IS ON PROBATION FOR. The same two
+    amounts as the case above — 1200.00 against 300.00 — with the instalment term absent from the
+    invoice. The claim states no arrangement to pay in parts, so what it shows is a payment for an
+    amount its subject document does not name: `insufficient_evidence`, cause `amount_mismatch`,
+    exactly as before this verdict existed.
+
+    A `partially_paid` implemented as "the payment is smaller" passes every other test in this
+    section and fails this one. That is the whole of why it is here: the mismatch cause is a
+    negative the corpus already contains, and a rule that swallowed it would leave the dataset
+    with fewer distinctions than it had.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")])
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00")
+
+    assert invoice.instalment_amount is None, "the marker is what this test removes"
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.verdict is not Verdict.PARTIALLY_PAID
+    assert result.imperfection == (AMOUNT_MISMATCH,)
+
+
+def test_a_payment_matching_no_part_of_a_stated_arrangement_is_a_mismatch():
+    """The marker has to AGREE with the payment, not merely be present. An invoice settled in
+    parts of 300.00 beside a payment of 250.00 is a payment for some third amount — the mismatch
+    case again — and a rule that read only the presence of the term would label it a lawful
+    instalment of an arrangement it does not fit."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="250.00")
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.imperfection == (AMOUNT_MISMATCH,)
+
+
+def test_an_instalment_paid_before_its_invoice_is_still_insufficient_evidence():
+    """The amount check is skipped for a partial settlement; the DATE check is not. A payment that
+    precedes what it settles is an impossible order whether it pays a part or the whole, so the
+    cause survives and the verdict with it — `partially_paid` describes a claim whose documents
+    agree, and these do not."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", when=date(2026, 6, 10),
+                  items=[item("1200.00")], instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00", when=date(2026, 6, 1))
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.imperfection == (PAYMENT_PRECEDES_SUBJECT,)
+    assert AMOUNT_MISMATCH not in result.imperfection, (
+        "the pair agrees about the amount — the part is what the invoice says it is"
+    )
+
+
+def test_a_partial_settlement_paid_outside_the_period_is_rejected():
+    """🔴 THE ONE CLAIM TWO BRANCHES BOTH DESCRIBE, and policy.yaml decides which wins:
+    `partial_payment.outside_the_period` says `rejected`, and this pins it.
+
+    THE PRECEDENCE IS THE POINT, not the arithmetic. Both facts are proven, the pair agrees, and
+    the invoice's term is printed — so `partially_paid` is true of the documents — while the
+    payment fell outside the benefit window, so the plan does not cover the expense at all. The
+    period question is prior: it asks whether the plan covers this claim, and `partially_paid` is
+    a statement about a claim the plan does cover.
+
+    ⚠️ NO GENERATED CLAIM REACHES IT. `claim_planner` names a schedule for a `partially_paid` plan
+    and displaces the payment for a `rejected` one, never both, so this case exists in the
+    consumer's world and not in the corpus. It is pinned here precisely because nothing else would
+    catch a change to it: an engine that answered `partially_paid` would produce a corpus
+    indistinguishable from this one.
+    """
+    outside = date(2025, 6, 15)
+    start, end = active_period()
+    assert not start <= outside <= end, "the date is inside the window — this proves nothing"
+
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", when=date(2025, 6, 1),
+                  items=[item("1200.00")], instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00", when=outside)
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.verdict is not Verdict.PARTIALLY_PAID
+    assert result.imperfection == (OUTSIDE_PERIOD,)
+    assert partial_payment_outside_the_period() is Verdict.REJECTED, (
+        "policy.yaml declares the other precedence; this test pins the engine to the file"
+    )
+
+
+def test_an_engine_ordered_against_the_declared_precedence_refuses_to_label():
+    """The drift above, made to happen. The branch ORDER in `evaluate_claim` is this engine's
+    answer to the precedence question, so a file declaring the other answer must stop the run
+    rather than be silently overruled — a consumer reading that file would label such a claim
+    `partially_paid` and score this dataset's `rejected` as a miss.
+
+    Patched on the POLICY side because that is the side a consumer vendors."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", when=date(2025, 6, 1),
+                  items=[item("1200.00")], instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00", when=date(2025, 6, 15))
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            "receipt_synth.policy_engine.partial_payment_outside_the_period",
+            lambda: Verdict.PARTIALLY_PAID,
+        )
+        with pytest.raises(PolicyGapError, match="outside_the_period"):
+            evaluate([invoice, payment])
+
+
+def test_a_part_equal_to_the_whole_is_not_a_partial_settlement():
+    """A "part" that comes to the whole obligation settles it, and a claim whose payment settles
+    its invoice in full is an ordinary claim. Asserted because the guard is one comparison a
+    reading of "the marker is present" would drop, and the resulting corpus would carry
+    `partially_paid` on claims that were paid in full."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="1200.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00")
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.COVERED
+    assert result.reimbursable == Decimal("1200.00")
+
+
+def test_a_partly_settled_claim_consumes_no_balance():
+    """It pays out nothing, so it must leave the annual limit where it found it — otherwise a
+    later claim of the same persona would be labelled against a balance this one never spent.
+
+    The absolute the assertion is against is 12000 written out — the `vitamins_nutrition` limit
+    this module's header records — rather than a figure read back through the code that spends it.
+    """
+    ledger = Ledger()
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00")
+
+    result = evaluate([invoice, payment], ledger=ledger)
+    ledger.record("p001", "vitamins_nutrition", result.reimbursable)
+
+    assert result.verdict is Verdict.PARTIALLY_PAID
+    assert ledger.spent("p001", "vitamins_nutrition") == Decimal("0.00")
+    assert ledger.remaining("p001", "vitamins_nutrition") == Decimal(12000)
+
+
+def test_the_marker_the_engine_reads_is_the_one_the_policy_declares():
+    """🔴 A CONSUMER BUILDS ITS OWN ENGINE FROM policy.yaml. If this module's marker and the
+    file's ever differ, the two engines label the same claim differently while each is correct
+    about the field it read — the most expensive class of disagreement this repository has, because
+    it looks like a measurement problem.
+
+    Both directions are asserted: the names agree, and every name is a real field of the label
+    record rather than a string nothing carries.
+    """
+    assert partial_payment_marker_fields() == PARTIAL_PAYMENT_MARKER_FIELDS
+    assert PARTIAL_PAYMENT_MARKER_FIELDS, "an empty marker would make every pair a mismatch"
+    for name in PARTIAL_PAYMENT_MARKER_FIELDS:
+        assert name in DocGroundTruth.model_fields, f"{name} is not a label field"
+
+
+def test_an_engine_reading_a_marker_the_policy_does_not_declare_refuses_to_label():
+    """The drift above, made to happen. Patched on the POLICY side because that is the side a
+    consumer vendors: an engine that went on labelling against a field the file no longer names
+    would produce ground truth nobody can reproduce from the published spec."""
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  instalment_amount="300.00")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            "receipt_synth.policy_engine.partial_payment_marker_fields", lambda: ("amount_due",)
+        )
+        with pytest.raises(PolicyGapError, match="amount_due"):
+            evaluate([invoice, payment])
+
+
+# ------------------------------- the axes are a policy parameter, not a list in the code --
+#
+# 🔴 WHAT THESE TESTS ARE ABOUT, and it is not the counterparty. `cross_document_agreement` in
+# policy.yaml declares WHICH fields the two documents of a claim must agree on and WHAT it costs
+# them not to; the engine reads that block. So the assertions below come in pairs — the axis
+# declared and the same claim labelled, the axis withdrawn and the same claim passing — because a
+# check that fires whatever the file says would be a check the file does not control.
+#
+# ⚠️ THE VARIANTS ARE BUILT HERE AND HANDED TO THE ENGINE. config/policy.yaml is never edited to
+# make one of these pass: it is the file the rest of this suite reads its expectations from, and a
+# test that moved it would be proving a property of its own edit. `policy_variant` patches the one
+# function the engine reads the file through, so the accessor's own parsing and guards run on the
+# variant exactly as they run on the file.
+
+
+def policy_variant(patch, axes: list[dict]) -> None:
+    """Hand `policy_engine` a policy identical to the shipped one but for its axis list."""
+    variant = {**load_policy(), "cross_document_agreement": axes}
+    patch.setattr(policy_engine, "load_policy", lambda: variant)
+
+
+AMOUNT_AXIS = {"axis": "amount", "verdict": "insufficient_evidence", "cause": AMOUNT_MISMATCH}
+COUNTERPARTY_AXIS = {
+    "axis": "counterparty",
+    "verdict": "insufficient_evidence",
+    "cause": COUNTERPARTY_MISMATCH,
+}
+
+
+def a_pair_naming_two_parties() -> list[DocGroundTruth]:
+    """An invoice from one party beside a payment to another, and ORDINARY IN EVERY OTHER RESPECT:
+    the amounts agree to the kopiyka, both dates are inside the period and in order, and every line
+    of the basket is covered. So a claim built from it is `covered` on every axis but this one,
+    which is what makes it usable as the input to both directions below."""
+    return [
+        doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+            counterparty="Аптека АНЦ"),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1200.00", counterparty="Подорожник"),
+    ]
+
+
+def test_a_payment_made_to_another_party_is_insufficient_evidence():
+    """🔴 THE LINKAGE SLOT BROKEN BY WHO RATHER THAN BY HOW MUCH. Both documents are flawless and
+    they agree about the money and the dates; the invoice was issued by one seller and the money
+    went to another, so nothing establishes that THIS payment paid for THIS obligation.
+
+    `covered_fraction` is still 1.0 — every line of the invoice is covered, which is a fact about
+    the lines and is true whatever the payment names — and nothing is reimbursed.
+    """
+    result = evaluate(a_pair_naming_two_parties())
+
+    assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert result.imperfection == (COUNTERPARTY_MISMATCH,)
+    assert result.covered_fraction == Decimal(1)
+    assert result.reimbursable == Decimal("0.00")
+    assert result.verdict_basis == (VerdictBasis.DOCUMENTS,), "both names are on the images"
+    assert result.policy_trace[-1] == (
+        "documents disagree: c1_d1 (invoice) names 'Аптека АНЦ', "
+        "payment c1_d2 names 'Подорожник'"
+    )
+
+
+def test_the_same_pair_passes_when_the_policy_declares_no_counterparty_axis():
+    """THE OTHER DIRECTION, AND THE ONE THAT MAKES THE FIRST MEAN SOMETHING. The identical
+    documents, evaluated against a policy whose axis list is amount alone: nothing compares the two
+    names, so the claim is an ordinary covered one.
+
+    It fails if the comparison is reached by any route but the declared list — a leftover `if`, a
+    predicate applied because it exists — which is exactly the state this block was lifted out of.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [AMOUNT_AXIS])
+        result = evaluate(a_pair_naming_two_parties())
+
+    assert result.verdict is Verdict.COVERED
+    assert result.imperfection == ()
+    assert not any("names" in line for line in result.policy_trace), result.policy_trace
+
+
+def test_the_verdict_a_disagreement_earns_is_read_from_the_policy():
+    """The OUTCOME is a parameter too, not only the axis. The same pair, against a policy that
+    declares the same axis with a different label, comes back carrying that label.
+
+    ⚠️ NOBODY WOULD WRITE THIS POLICY, and it is not offered as one: a broken linkage is
+    `insufficient_evidence` for the reason `cross_document_agreement` gives, and the shipped file
+    says so. What this asserts is only that the engine takes the label FROM THE FILE — an engine
+    that returned a constant would pass every other test in this section and fail this one.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [{**COUNTERPARTY_AXIS, "verdict": "rejected"}])
+        result = evaluate(a_pair_naming_two_parties())
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == (COUNTERPARTY_MISMATCH,)
+
+
+def test_an_axis_the_engine_cannot_compare_is_refused_rather_than_ignored():
+    """The asymmetry `cross_document_agreement` is built on. A declared axis nothing performs would
+    let every claim that fails it be labelled as though its documents agreed — a silently wrong
+    ground truth — so it raises where the file is read, naming what the engine can compare."""
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(
+            patch,
+            [{"axis": "payment_form", "verdict": "insufficient_evidence", "cause": "whatever"}],
+        )
+        with pytest.raises(PolicyGapError, match="payment_form"):
+            evaluate(a_pair_naming_two_parties())
+
+
+def test_an_axis_declared_twice_is_refused():
+    """A duplicate would put one cause into `imperfection` twice, and — if the two entries named
+    different verdicts — make the label depend on which was read first."""
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [COUNTERPARTY_AXIS, COUNTERPARTY_AXIS])
+        with pytest.raises(PolicyGapError, match="twice"):
+            evaluate(a_pair_naming_two_parties())
+
+
+def test_two_failed_axes_declaring_different_verdicts_are_refused():
+    """A claim may fail several axes at once, and policy.yaml states no precedence between the
+    labels they declare. Picking either would be the engine deciding a policy question, and a
+    consumer's engine picking the other would label the same claim differently.
+
+    ⚠️ UNREACHABLE AGAINST THE SHIPPED FILE, where every axis declares `insufficient_evidence`, and
+    asserted against a variant for that reason.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  counterparty="Аптека АНЦ")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1000.00",
+                  counterparty="Подорожник")
+
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [AMOUNT_AXIS, {**COUNTERPARTY_AXIS, "verdict": "rejected"}])
+        with pytest.raises(PolicyGapError, match="no precedence|different verdicts"):
+            evaluate([invoice, payment])
+
+
+def test_the_axes_are_applied_in_the_order_the_policy_declares_them():
+    """`imperfection` follows the file, not the order the predicates happen to be written in. A
+    claim failing two axes is reported the same way every run, and the way is the policy's.
+
+    Asserted on a REVERSED variant rather than on the shipped order alone: against the file's own
+    order the two are indistinguishable from a hardcoded sequence.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
+                  counterparty="Аптека АНЦ")
+    payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1000.00",
+                  counterparty="Подорожник")
+
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [AMOUNT_AXIS, COUNTERPARTY_AXIS])
+        forwards = evaluate([invoice, payment])
+    with pytest.MonkeyPatch.context() as patch:
+        policy_variant(patch, [COUNTERPARTY_AXIS, AMOUNT_AXIS])
+        backwards = evaluate([invoice, payment])
+
+    assert forwards.imperfection == (AMOUNT_MISMATCH, COUNTERPARTY_MISMATCH)
+    assert backwards.imperfection == (COUNTERPARTY_MISMATCH, AMOUNT_MISMATCH)
+
+
+def test_the_shipped_policy_declares_the_axes_this_suite_was_written_against():
+    """Pin `cross_document_agreement` as the tests above read it, the way this file pins
+    `document_evidence` at its head: a change to the block has to fail here rather than quietly
+    making a section assert something that no longer follows from the policy."""
+    assert cross_document_agreement() == (
+        AgreementAxis("amount", Verdict.INSUFFICIENT_EVIDENCE, AMOUNT_MISMATCH),
+        AgreementAxis("date_order", Verdict.INSUFFICIENT_EVIDENCE, PAYMENT_PRECEDES_SUBJECT),
+        AgreementAxis("counterparty", Verdict.INSUFFICIENT_EVIDENCE, COUNTERPARTY_MISMATCH),
+    )
+
+
 def test_a_disagreement_is_not_a_flag_on_a_coverage_verdict():
     """The corruption E exists to close, stated as the assertion that would fail if the
     cause were hung off a coverage-determined verdict: a claim whose documents contradict
@@ -855,6 +1261,146 @@ def test_a_plan_whose_documents_would_both_carry_a_basket_is_refused():
         _ = plan.subject_document
 
 
+def test_the_same_candidates_build_a_pair_or_a_gap_depending_only_on_the_intent():
+    """🔴 THE POINT OF `EvidenceIntent`, ASSERTED WHERE THE TWO CANNOT BE CONFUSED: one archetype
+    list, two calls, two shapes. A payment document alone is what the cause `subject_not_evidenced`
+    needs, and it must be REACHED BY ASKING — not by a subject archetype failing to turn up, which
+    is what the refusal one test below still means.
+
+    Both calls are made against the same `PAIR_REGISTRY` candidates, so nothing about the registry
+    can explain the difference. Were the gap a fallback, the default call would have produced it
+    too and this would fail on the first assertion.
+    """
+    candidates = list(PAIR_REGISTRY.values())
+    issued_at = datetime(2026, 6, 15, 12, 0)
+
+    complete = claim_planner._select_documents(random.Random(3), candidates, issued_at)
+    assert {evidence_of(d.archetype) for d in complete} == {(True, False), (False, True)}
+
+    gap = claim_planner._select_documents(
+        random.Random(3), candidates, issued_at,
+        intent=claim_planner.EvidenceIntent.EVIDENCE_GAP,
+    )
+    assert len(gap) == 1, [d.archetype.slug for d in gap]
+    assert evidence_of(gap[0].archetype) == (False, True), (
+        "a gap claim proves the payment and not the subject; a self-contained document would "
+        "leave nothing for the cause to be about"
+    )
+    assert gap[0].issued_at == issued_at, "the claim is dated by its proof of payment"
+
+
+def test_an_evidence_gap_needs_a_payment_archetype_and_says_so_when_there_is_none():
+    """The gap is in the SUBJECT and nowhere else. Asked for one where only a subject archetype is
+    registered, the planner refuses instead of returning an invoice on its own — that claim proves
+    no payment at all, which is `not_proof_of_payment`, a different verdict nobody asked for here.
+    """
+    with pytest.raises(ValueError, match="proves the payment alone"):
+        claim_planner._select_documents(
+            random.Random(3),
+            [PAIR_REGISTRY["ua_invoice"]],
+            datetime(2026, 6, 15, 12, 0),
+            intent=claim_planner.EvidenceIntent.EVIDENCE_GAP,
+        )
+
+
+def test_a_subject_not_evidenced_claim_is_planned_as_a_payment_and_nothing_else():
+    """The plan the cause needs, built through `plan_claim` rather than through the selector, so
+    that the route from a drawn cause to a shape is what is pinned.
+
+    The category is one the registry CAN document completely — `PAIR_REGISTRY` holds an invoice —
+    which is the whole distinction: the subject document is available and is deliberately not
+    planned. A gap that only occurred where nothing else was possible would be a shortage wearing
+    the name of a decision.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claim_planner, "ARCHETYPES", PAIR_REGISTRY)
+        plan = claim_planner.plan_claim(
+            random.Random(3), persona=_persona(), claim_id="c1",
+            category="vitamins_nutrition", ledger=Ledger(),
+            verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=SUBJECT_NOT_EVIDENCED,
+        )
+
+    assert plan.intent is claim_planner.EvidenceIntent.EVIDENCE_GAP
+    assert [d.archetype.slug for d in plan.documents] == ["ua_transfer"]
+    assert plan.issued_at == plan.documents[0].issued_at
+    # Nothing was sized for a basket: there is no document to carry one.
+    assert plan.coverage_target is None
+    assert plan.item_count is None
+
+
+def test_a_rejected_plan_is_refused_by_the_engine_on_the_period_and_on_nothing_else():
+    """The loop closed: the planner's displaced date, read back by the oracle that labels it.
+
+    The two halves were tested apart — the engine's period check on hand-built documents further
+    up this file, the planner's draw in tests/test_pipeline.py — and each can be right while the
+    pair is wrong. A plan that displaced the SUBJECT document's date instead of the payment's, or
+    that displaced by a fortnight into a window edge, would satisfy both halves and produce a
+    `covered` claim under a `rejected` target.
+
+    🔴 EVERY LINE OF THE BASKET IS COVERED HERE, deliberately: `covered_fraction` comes back 1.0
+    and the verdict is still `rejected`, which is the whole of the distinction the two routes to
+    that verdict draw. Nothing about this claim is unestablished and nothing about it is
+    non-covered — the policy does not cover it because of WHEN the money moved.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claim_planner, "ARCHETYPES", PAIR_REGISTRY)
+        plan = claim_planner.plan_claim(
+            random.Random(3), persona=_persona(), claim_id="c1",
+            category="vitamins_nutrition", ledger=Ledger(), verdict=Verdict.REJECTED,
+        )
+
+    start, end = active_period()
+    assert plan.cause == OUTSIDE_PERIOD
+    assert not start <= plan.issued_at.date() <= end, plan.issued_at
+
+    subject, payment = plan.documents
+    assert plan.issued_at == payment.issued_at, "the claim is dated by its proof of payment"
+
+    result = evaluate([
+        doc("c1_d1", DocType.INVOICE, amount="600.00", when=subject.issued_at.date(),
+            items=[item("600.00")]),
+        doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="600.00",
+            when=payment.issued_at.date()),
+    ])
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == (OUTSIDE_PERIOD,)
+    assert result.covered_fraction == Decimal(1)
+    assert result.reimbursable == Decimal("0.00")
+    assert any("falls outside" in line for line in result.policy_trace)
+
+
+def test_a_gap_claim_refuses_its_subject_document_by_naming_the_intent():
+    """Two refusals, one method, and they must not read alike. A COMPLETE plan with no carrier is
+    inconsistent — something went missing — while a gap plan has none by design, and a caller told
+    "0 documents state what was bought" would go looking for a template rather than at its own
+    assumption that every claim has a subject.
+    """
+    transfer = PAIR_REGISTRY["ua_transfer"]
+    gap = ClaimPlan(
+        claim_id="c1", persona_id="p001", category="vitamins_nutrition",
+        verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=SUBJECT_NOT_EVIDENCED,
+        intent=claim_planner.EvidenceIntent.EVIDENCE_GAP,
+        issued_at=datetime(2026, 6, 15, 12, 0),
+        documents=(DocumentPlan(archetype=transfer, issued_at=datetime(2026, 6, 15, 12, 0)),),
+    )
+    with pytest.raises(ValueError, match="ON PURPOSE") as deliberate:
+        _ = gap.subject_document
+
+    # The same documents WITHOUT the intent are a plan that lost its subject, and that message is
+    # the other one. Asserted as a pair: a single message serving both cases is the defect.
+    accidental = ClaimPlan(
+        claim_id="c2", persona_id="p001", category="vitamins_nutrition",
+        verdict=Verdict.COVERED, issued_at=datetime(2026, 6, 15, 12, 0),
+        documents=gap.documents,
+    )
+    with pytest.raises(ValueError, match="sized once") as lost:
+        _ = accidental.subject_document
+
+    assert "ON PURPOSE" not in str(lost.value)
+    assert "plans 0 documents" not in str(deliberate.value)
+
+
 def test_a_registry_that_cannot_establish_both_facts_is_refused():
     """An invoice archetype and nothing that proves payment. `covered` and
     `partially_covered` both need complete evidence, so building the claim anyway would
@@ -941,15 +1487,33 @@ def test_the_vendor_is_chosen_once_per_claim_however_many_documents_it_has(tmp_p
     two different sellers on two documents of one purchase. Counted here through a real
     run, so that the guarantee is a property of the loop and not of a call the loop
     happens not to make yet.
+
+    🔴 THE STUB MIRRORS THE LIVE SIGNATURE KEYWORD FOR KEYWORD, AND THAT IS LOAD-BEARING RATHER
+    THAN TIDINESS. `assembler._payee_the_payment_names` passes `excluding_name=` on every claim
+    planned as `counterparty_mismatch`, so a stub one parameter short raises `TypeError` the
+    moment the seed stream shifts such a claim into this profile — it was green by seed luck
+    alone. Verified rather than assumed: at seed 2, same personas and claims, the run plans one
+    such claim, and the short stub failed there with "counting() got an unexpected keyword
+    argument 'excluding_name'".
+
+    ⚠️ AND THAT SECOND DRAW IS NOT COUNTED, because it is not the call this test is about. It
+    asks for a party the claim's own vendor is NOT — a deliberate second seller for the
+    payment document — while what is asserted here is that the claim's OWN vendor is drawn
+    once. Counting both would make the assertion below fail at seed 2 for a call that is
+    correct.
     """
     from receipt_synth import assembler
 
     calls: list[str] = []
     original = assembler._pick_vendor
 
-    def counting(rng, country, category, *, mixed):
-        calls.append(category)
-        return original(rng, country, category, mixed=mixed)
+    def counting(rng, country, category, *, mixed, vat_payer=None, excluding_name=None):
+        if excluding_name is None:
+            calls.append(category)
+        return original(
+            rng, country, category, mixed=mixed, vat_payer=vat_payer,
+            excluding_name=excluding_name,
+        )
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(assembler, "_pick_vendor", counting)

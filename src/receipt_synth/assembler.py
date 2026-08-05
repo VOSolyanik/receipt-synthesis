@@ -27,6 +27,7 @@ from receipt_synth import __version__
 from receipt_synth.claim_planner import (
     ARCHETYPES,
     REALIZABLE_VERDICTS,
+    STATES_AN_INSTALMENT_TERM,
     ClaimPlan,
     DocumentPlan,
     documentable_categories,
@@ -42,6 +43,7 @@ from receipt_synth.content_builder import (
     PartyIdentity,
     build_bank_statement,
     build_invoice,
+    build_non_fiscal_receipt,
     build_payment_confirmation,
     build_prro_receipt,
     draw_party_identity,
@@ -52,6 +54,7 @@ from receipt_synth.degrader import clipped_edges, degrade
 from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
+    COUNTERPARTY_MISMATCH,
     Ledger,
     evaluate_claim,
     insufficient_evidence_causes,
@@ -277,7 +280,8 @@ def _draw_documentable_persona(
 
 
 def _pick_vendor(
-    rng: random.Random, country: Country, category: str, *, mixed: bool
+    rng: random.Random, country: Country, category: str, *, mixed: bool,
+    vat_payer: bool | None = None, excluding_name: str | None = None,
 ) -> dict:
     """A vendor that can issue the receipt this plan needs.
 
@@ -286,6 +290,21 @@ def _pick_vendor(
     nutrition practice sells consultations and lab tests and nothing else. Choosing one of
     those for a mixed plan would fail inside the builder, one stage away from the choice
     that caused it. The filter preserves file order, so the draw stays reproducible.
+
+    🔴 `vat_payer` IS THE SECOND SUCH FILTER AND IT IS ABOUT WHO MAY ISSUE A CLASS AT ALL. 📄 A
+    registered ПДВ payer is obliged to use a cash register, so the seller on a товарний чек is a
+    non-payer and `content_builder.build_non_fiscal_receipt` refuses any other. `None` means the
+    plan does not care, which is every other claim, and the draw is then exactly what it was.
+
+    🔴 `excluding_name` IS THE THIRD, AND IT IS THE ONLY ONE ABOUT A SELLER'S IDENTITY RATHER THAN
+    ITS TRADE. It exists for one caller — `_payee_the_payment_names`, which needs a party the
+    claim's own vendor is NOT — and it is a filter on the pool rather than a redraw, so the number
+    of values taken from `rng` does not depend on which vendor came out first.
+
+    ⚠️ IT MATCHES ON THE STORED NAME, so it removes every entry that TRADES UNDER THAT MARK and
+    cannot remove a sole trader whose name has not been drawn yet: an entry with no `name` is a
+    person whose name `resolve_vendor` draws below. The caller compares the resolved names and
+    draws again on the collision, which is what closes that gap.
 
     Returns a RESOLVED vendor: a sole trader's name is drawn here, once, and the same
     instance is then carried to every document of the claim. Called from the claim loop and
@@ -297,11 +316,26 @@ def _pick_vendor(
         raise ValueError(f"config/vendors.json lists no vendor for {category!r} in {country.value}")
 
     candidates = [v for v in vendors if vendor_can_carry(v, category, mixed=mixed)]
+    if vat_payer is not None:
+        candidates = [v for v in candidates if bool(v["vat_payer"]) is vat_payer]
+    if excluding_name is not None:
+        candidates = [v for v in candidates if v.get("name") != excluding_name]
     if not candidates:
         raise ValueError(
             f"no vendor for {category!r} in {country.value} sells what a "
-            f"{'mixed' if mixed else 'fully covered'} basket needs — check the profiles in "
-            "config/vendors.json against the item buckets of config/policy.yaml"
+            f"{'mixed' if mixed else 'fully covered'} basket needs"
+            + (
+                ""
+                if vat_payer is None
+                else f", among the sellers whose `vat_payer` is {vat_payer}"
+            )
+            + (
+                ""
+                if excluding_name is None
+                else f", other than {excluding_name!r}"
+            )
+            + " — check the profiles in config/vendors.json against the item buckets of "
+            "config/policy.yaml"
         )
     return resolve_vendor(rng, rng.choice(candidates), country.value)
 
@@ -331,6 +365,10 @@ def _pick_vendor(
 # The middle case is what the invoice added. It is a real relation rather than a convenient one: a
 # document that proves the payment IS the payment, so its payer is present by construction; a
 # document that does not prove payment is addressed to somebody and must name them.
+#
+# 🔴 AND THE MIDDLE CASE NO LONGER HOLDS FOR EVERY SUBJECT-ONLY CLASS — see `_NAMES_THE_BUYER`.
+# A товарний чек proves no payment and names nobody, so "addressed to somebody" turned out to be a
+# property of the INVOICE rather than of the evidence row it was read off.
 _BUILDERS = {
     "ua_prro_receipt": build_prro_receipt,
     "ua_prro_receipt_58mm": build_prro_receipt,
@@ -338,7 +376,20 @@ _BUILDERS = {
     "ua_bank_payment_confirmation": build_payment_confirmation,
     "ua_bank_statement": build_bank_statement,
     "ua_invoice": build_invoice,
+    "ua_non_fiscal_receipt": build_non_fiscal_receipt,
 }
+
+# WHICH CLASSES NAME THE CLAIMANT ON THE PAGE, and it is keyed by document class because the
+# question is one of FORM rather than of evidence. The predicate used to be "proves the subject and
+# not the payment", which was right while the invoice was the only such class: 📄 an offer to pay
+# has to say to whom it is made.
+#
+# 📄 A товарний чек has no buyer field. The tax service's own rule is that its content is the
+# FISCAL RECEIPT'S FORM less two requisites, and that form names no buyer — the payer is standing
+# at the counter. Handing the builder a buyer would print a line no source puts on the document,
+# and inventing a requisite is the one thing this repository never does with a form it has not
+# observed.
+_NAMES_THE_BUYER: frozenset[DocType] = frozenset({DocType.INVOICE})
 
 
 def _write_png(path: Path, image: np.ndarray) -> None:
@@ -388,12 +439,17 @@ def _build_document(
     to the payment class and ignored by the subject class, which cites nothing — an invoice is
     issued before there is a payment to point at.
 
-    `vendor` is passed in rather than chosen here. It is the claim's vendor instance, and
-    every document of the claim has to name the same seller — while a sole trader's name
-    was a stored constant that held by the nature of the type, and a drawn name can differ,
-    so it is now a constraint somebody has to keep.
+    `vendor` is passed in rather than chosen here. It is the party THIS DOCUMENT names, and on
+    every claim but one it is the claim's single vendor instance: the documents of one purchase
+    name one seller — while a sole trader's name was a stored constant that held by the nature of
+    the type, and a drawn name can differ, so it is now a constraint somebody has to keep.
 
-    `identity` is that seller's code, account and bank, drawn once for the claim beside the vendor.
+    ⚠️ THE ONE EXCEPTION IS A CLAIM PLANNED AS `counterparty_mismatch`, whose payment document is
+    handed a SECOND party on purpose (`_payee_the_payment_names`). That is the negative itself, and
+    it is decided in the claim loop rather than here: this function is told whom to print, and a
+    document that chose its own party would make the defect a property of the builder.
+
+    `identity` is that party's code, account and bank, drawn once beside the vendor it belongs to.
     The `vendor` constraint was solved for the NAME alone, and every other identifier of one seller
     went on being drawn per document — 587 pairs of the delivered corpus, 587 disagreements. See
     `content_builder.PartyIdentity` and docs/cross-document-fields.md.
@@ -444,17 +500,36 @@ def _build_document(
             "coverage_target": plan.coverage_target,
             "item_count": plan.item_count,
         }
-        # A SUBJECT DOCUMENT THAT DOES NOT PROVE PAYMENT IS ADDRESSED TO SOMEBODY, and has to name
-        # them: an invoice is an offer to pay. A receipt proves its own payment, so the payer is
-        # present at the till and no buyer is named — 👁 a fiscal receipt has no buyer field.
-        if not evidence.proves_payment:
+        # TWO INDEPENDENT QUESTIONS ABOUT ONE DOCUMENT, and they were a single if/else while the
+        # answers happened to coincide. A class may name the claimant, or take the capture
+        # channel, or neither — the slip is the class that does neither, and folding the two back
+        # together would give it a buyer field no source puts on the form.
+        if plan.schedule is not None:
+            # 🔴 THE PLAN DECIDES WHAT THE PAGE STATES, and the builder is only told. A schedule
+            # handed to a class that cannot print the term would produce an ordinary invoice, the
+            # payment would be sized to an instalment nothing on the page names, and the engine
+            # would label the claim `insufficient_evidence` with the cause `amount_mismatch` — a
+            # wrong label rather than a failure. `claim_planner` selects the subject for exactly
+            # this, so reaching the refusal means the two have come apart.
+            if archetype.doc_type not in STATES_AN_INSTALMENT_TERM:
+                raise ValueError(
+                    f"{slug!r} is the subject of a claim planned to be settled in parts, and its "
+                    f"class {archetype.doc_type.value!r} states no instalment term — see "
+                    "`claim_planner.STATES_AN_INSTALMENT_TERM`"
+                )
+            basket |= {"schedule": plan.schedule}
+        if archetype.doc_type in _NAMES_THE_BUYER:
+            # AN OFFER TO PAY HAS TO SAY TO WHOM IT IS MADE. Keyed by class rather than by
+            # evidence — see `_NAMES_THE_BUYER`, which is where the change of predicate is
+            # explained.
             basket |= {"buyer_name": persona.full_name, "buyer_tax_id": persona.tax_id}
-        else:
+        if evidence.proves_payment:
             # 🔴 THE CAPTURE CHANNEL REACHES THE BUILDER, not only the degrader. 👁 The VAT summary
             # row of a fiscal receipt takes one form on paper and either of two electronically, so
             # the MEDIUM a document will be captured on decides a requisite that is printed while
             # the document is built. Passed to the class that has the observed variation and to no
-            # other: nothing analogous has been observed on the invoice.
+            # other: nothing analogous has been observed on the invoice, and a non-payer's slip
+            # has no VAT row to vary at all.
             basket |= {"capture": capture}
         document = _BUILDERS[slug](rng, **basket)
     else:
@@ -531,14 +606,97 @@ def _build_document(
     )
 
 
+# How many times `_payee_the_payment_names` may draw before it gives up. The filter inside
+# `_pick_vendor` already removes every STORED name, so a redraw is only ever needed when a sole
+# trader's drawn personal name collides with the claim's own — Faker's uk_UA name space makes that
+# a one-in-many-thousands event, and eight draws put the residual beyond anything a corpus reaches.
+# Bounded rather than a `while True`: a pool that cannot satisfy the plan has to fail with a
+# sentence, not spin.
+_PAYEE_DRAW_ATTEMPTS = 8
+
+
+def _payee_the_payment_names(
+    rng: random.Random, plan: ClaimPlan, vendor: dict, country: Country
+) -> dict:
+    """Which party the PAYMENT document of this claim names.
+
+    THE CLAIM'S OWN VENDOR ON AN ORDINARY CLAIM, which is what makes a pair one transaction: an
+    invoice and the payment settling it name one seller, and every identifier of that seller is
+    drawn once for the claim (see `_build_document` and `content_builder.PartyIdentity`).
+
+    🔴 A DIFFERENT PARTY WHEN THE PLAN ASKED FOR ONE — the sibling of `_amount_the_payment_states`
+    below, on the other axis of `cross_document_agreement`. A claim planned as
+    `insufficient_evidence` with the cause `counterparty_mismatch` is realized here and nowhere
+    else: the label was chosen first and the documents are built to make it true. Nothing else
+    about such a claim differs — the amounts agree to the kopiyka, the dates are in order, the
+    basket is ordinary — because a consumer that could tell the claim apart by anything but the
+    party would be learning something other than the defect.
+
+    🔴 DRAWN FROM THE SAME CATEGORY, and that is a decision rather than convenience. A payment to
+    some unrelated business would be discriminable by the KIND of party as well as by its name — a
+    gym invoice settled by a payment to a pharmacy — and the negative would then be easier than the
+    one it stands for. The realistic case is a claimant paying the wrong provider OF THE SAME KIND,
+    and it is also the harder one.
+
+    ⛔ THE PAYMENT'S PURPOSE STILL CITES THE CLAIM'S OWN INVOICE, and that is left alone
+    deliberately: 👁 a purpose line names an invoice, and a payment that went to the wrong provider
+    while quoting the right invoice number is what the mistake actually looks like. Cutting the
+    citation would make the claim discriminable by a missing reference rather than by the party.
+
+    ⚠️ AND THE INVOICE'S PARTY MAY APPEAR ON A STATEMENT'S OTHER ROWS. `build_bank_statement` takes
+    the claim's PAYEE out of the pool its ordinary rows draw from, and this claim's payee is the
+    mismatched one — so a decoy row naming the invoice's seller is possible. It does not soften the
+    negative: an ordinary row's amount avoids the labelled one and its purpose cites a document
+    outside the claim, so no row of the page shows THIS invoice settled by its own party.
+
+    The engine still decides. Nothing here asserts the label: if the two names ever came out equal
+    the pair would agree, the claim would come back `covered`, and `_drift_lines` would report the
+    target and the label disagreeing — which is why the equality is checked in the draw rather than
+    assumed after it.
+    """
+    if plan.cause != COUNTERPARTY_MISMATCH:
+        return vendor
+    unbuildable = (
+        f"claim {plan.claim_id} is planned as {COUNTERPARTY_MISMATCH!r}: its payment has to name a "
+        f"party its subject document does not, and no second seller for {plan.category!r} in "
+        f"{country.value} could be drawn"
+    )
+    for _ in range(_PAYEE_DRAW_ATTEMPTS):
+        try:
+            other = _pick_vendor(
+                rng, country, plan.category, mixed=False, excluding_name=vendor["name"]
+            )
+        except ValueError as no_second_seller:
+            # RE-RAISED WITH THE CAUSE NAMED. `_pick_vendor` refuses in the language of a vendor
+            # pool — it does not know what the claim was planned as — and a reader meeting that
+            # sentence alone would go looking for a basket problem rather than at the category
+            # needing two sellers for this cause.
+            raise ValueError(
+                f"{unbuildable}: the category needs at least two sellers in config/vendors.json"
+            ) from no_second_seller
+        if other["name"] != vendor["name"]:
+            return other
+    raise ValueError(
+        f"{unbuildable} in {_PAYEE_DRAW_ATTEMPTS} attempts — every draw returned a sole trader "
+        "whose name collided with the claim's own, which the pool filter cannot prevent"
+    )
+
+
 def _amount_the_payment_states(
-    rng: random.Random, plan: ClaimPlan, subject_amount: Decimal
+    rng: random.Random, plan: ClaimPlan, subject: DocGroundTruth
 ) -> Decimal:
-    """What the payment document of this claim should state, given the subject's amount.
+    """What the payment document of this claim should state, given the subject document.
 
     THE SAME AMOUNT ON AN ORDINARY CLAIM, which is what makes a pair one transaction:
     `policy_engine._cross_checks` compares the two EXACTLY, and there is no tolerance anywhere in
     this repository.
+
+    🔴 ONE INSTALMENT WHEN THE CLAIM IS PLANNED AS `partially_paid`, AND THE FIGURE IS READ OFF THE
+    BUILT DOCUMENT rather than computed here. The invoice divided its own total by the schedule and
+    PRINTED the result; recomputing it would be a second implementation of the division, and the
+    two would round apart on the first total that does not divide evenly — leaving the payment
+    disagreeing with the term beside it by a kopiyka, which the engine labels `amount_mismatch`.
+    That is why this function takes the whole subject record and not its amount.
 
     🔴 A DIFFERENT AMOUNT WHEN THE PLAN ASKED FOR ONE. A claim planned as `insufficient_evidence`
     with the cause `amount_mismatch` is realized here and nowhere else: the label was chosen first
@@ -552,6 +710,18 @@ def _amount_the_payment_states(
     anybody assuming they agree — which is why the floor is in the configured range rather than in
     an assertion here.
     """
+    subject_amount = subject.amount
+    if plan.schedule is not None:
+        if subject.instalment_amount is None:
+            raise ValueError(
+                f"claim {plan.claim_id} is planned to be settled in parts on the "
+                f"{plan.schedule!r} schedule, and its subject document {subject.doc_id} prints no "
+                "instalment term. The payment would state a part nothing on the page names, and "
+                "the engine would label the claim `insufficient_evidence` with the cause "
+                "`amount_mismatch` — see `policy_engine._settles_one_instalment`"
+            )
+        return subject.instalment_amount
+
     if plan.cause != AMOUNT_MISMATCH:
         return subject_amount
 
@@ -626,6 +796,20 @@ def generate_dataset(
                     persona.location.country,
                     plan.category,
                     mixed=plan.coverage_target is not None,
+                    # 🔴 ONE ARCHETYPE CONSTRAINS WHO CAN HAVE SOLD THE GOODS, and the constraint
+                    # is the claim's rather than the document's: the vendor is drawn once here for
+                    # every document of the claim, so a claim carrying a товарний чек has to be
+                    # given a seller that could have issued one. 📄 A registered ПДВ payer is
+                    # obliged to use a cash register. Asked of the plan and not of the builder,
+                    # which only refuses.
+                    vat_payer=(
+                        False
+                        if any(
+                            document.archetype.doc_type is DocType.NON_FISCAL_RECEIPT
+                            for document in plan.documents
+                        )
+                        else None
+                    ),
                 )
                 # And WHO THAT VENDOR IS ON PAPER, drawn here for the same reason and in the same
                 # place. The name was fixed per claim and the code, the account and the bank were
@@ -633,6 +817,18 @@ def generate_dataset(
                 # — on every pair of the delivered corpus. The constraint was known; it had been
                 # applied to one field.
                 identity = draw_party_identity(rng, vendor, persona.location.country.value)
+                # WHOM THE PAYMENT DOCUMENT NAMES, which is the same seller on every claim but
+                # one. A claim planned as `counterparty_mismatch` names a SECOND party here — the
+                # invoice was issued by one seller and the money went to another — and that party
+                # gets its own identity, because a payee is one party on paper: a second name
+                # beside the first one's account and tax code would be a document nothing
+                # describes. Drawn from the same generator, so the run stays determined by `--seed`.
+                payee = _payee_the_payment_names(rng, plan, vendor, persona.location.country)
+                payee_identity = (
+                    identity
+                    if payee is vendor
+                    else draw_party_identity(rng, payee, persona.location.country.value)
+                )
                 # A claim is a list of documents, and since the invoice archetype landed it may
                 # genuinely hold two. A LOOP RATHER THAN A COMPREHENSION, because the documents are
                 # no longer independent: the subject document fixes the claim's amount and the
@@ -647,21 +843,26 @@ def generate_dataset(
                 settles: Decimal | None = None
                 cites: DocumentReference | None = None
                 for doc_index, document_plan in enumerate(plan.documents, start=1):
+                    # WHICH PARTY THIS DOCUMENT NAMES, decided by what it establishes and read from
+                    # policy.yaml like every other role in this loop. The two are the same object
+                    # on every claim but a `counterparty_mismatch` one, so this dispatch changes
+                    # nothing about the rest of the corpus.
+                    states_subject = evidence_of(document_plan.archetype).proves_subject
                     document, reference = _build_document(
                         rng,
                         persona=persona,
                         plan=plan,
                         document_plan=document_plan,
-                        vendor=vendor,
-                        identity=identity,
+                        vendor=vendor if states_subject else payee,
+                        identity=identity if states_subject else payee_identity,
                         doc_id=f"{plan.claim_id}_d{doc_index}",
                         renderer=renderer,
                         out_dir=out_dir,
                         settles=settles,
                         cites=cites,
                     )
-                    if evidence_of(document_plan.archetype).proves_subject:
-                        settles = _amount_the_payment_states(rng, plan, document.amount)
+                    if states_subject:
+                        settles = _amount_the_payment_states(rng, plan, document)
                         # What the payment document will cite. It travels beside `settles` because
                         # it is the same kind of fact — a property of the claim that the subject
                         # document decides and the payment document has to be told.
@@ -732,16 +933,19 @@ def generate_dataset(
 def balance_report(dataset: Dataset) -> str:
     """The realized verdict distribution against `verdict_mix` — and what is missing from it.
 
-    Deliberately not a tidy table. Only two of the six verdicts in `verdict_mix` can be
-    built yet, so the draw is renormalized over those two and the realized shares are
-    conditional on that subset. A report that renormalized silently would print a
-    balanced-looking dataset while a third of the target mix was absent, which is worse
+    Deliberately not a tidy table. Not every verdict in `verdict_mix` can be built — the
+    count is `claim_planner.REALIZABLE_VERDICTS` rather than a number stated here, because it
+    has moved three times — so the draw is renormalized over those that can, and the realized
+    shares are conditional on that subset. A report that renormalized silently would print a
+    balanced-looking dataset while a fifth of the target mix was absent, which is worse
     than printing nothing: it answers the question nobody would then think to ask.
 
-    One of those six carries no share yet — `verdict_mix` may declare a member as `null`,
-    and `rejected` is one today. Such a member is named without a percentage and excluded
+    A member may also carry NO SHARE — `verdict_mix` may declare one as `null`, and every
+    member carries a number today. Such a member is named without a percentage and excluded
     from every sum, and the absent fraction is then reported as a lower bound: it is what
-    the share-carrying verdicts account for, not the whole of what is missing.
+    the share-carrying verdicts account for, not the whole of what is missing. The branch
+    stays because the next verdict declared before its mechanism exists arrives that way, and
+    it is exercised by a test against a patched mix.
 
     🔴 TWO MARKER VOCABULARIES, AND THEY MUST NOT MERGE. The report says two different kinds of
     thing and a reader has to be able to tell them apart at a glance:
@@ -1102,19 +1306,58 @@ def _cause_lines(dataset: Dataset) -> list[str]:
     return lines
 
 
+def _absence_probability(cause_share: float, run_size: int) -> float:
+    """P(a cause declared at `cause_share` of its verdict is realized ZERO times in `run_size`
+    built claims), under the declared shares.
+
+    🔴 THE SAME ARITHMETIC policy.yaml DERIVES `insufficient_evidence_causes_min_run_size` BY, and
+    that is the whole reason it exists here rather than a sentence someone wrote once: a cause is
+    drawn at `verdict_mix[insufficient_evidence]` renormalized over the realizable subset, times
+    its own share of that bucket, and is absent from N independent draws with probability
+    (1 − p)^N. The guideline is the smallest N putting that below 5%. Computing it per row means
+    the report's finding and the file's threshold can never disagree — a run at the guideline says
+    "a 5% event", and one at twice it says so too, with the right number.
+
+    ⚠️ IT IS THE DECLARED RATE AND NOT THE REALIZED ONE, deliberately and like the guideline. The
+    draw is narrowed per persona (`claim_planner.realizable_verdicts_for`), so the rate a
+    particular run actually drew at is lower and unknown to this function. A figure computed from
+    what a run realized would answer "was this run unlucky given what it did", which is the
+    question the count itself already answers.
+
+    A verdict declared with NO share contributes nothing to the denominator — the same treatment
+    `balance_report` gives it — and a rate of zero returns 1.0 rather than dividing by it: a cause
+    nothing can draw is absent with certainty, which is a true statement and not an error.
+    """
+    mix = verdict_mix()
+    declared = [share for share in mix.values() if share is not None]
+    subset = sum(
+        share
+        for verdict, share in mix.items()
+        if verdict in REALIZABLE_VERDICTS and share is not None
+    )
+    verdict_share = mix.get(Verdict.INSUFFICIENT_EVIDENCE)
+    if not declared or not subset or verdict_share is None:
+        return 1.0
+    rate = (verdict_share / subset) * cause_share
+    return (1 - rate) ** run_size if 0 < rate < 1 else 1.0
+
+
 def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     """`insufficient_evidence` by cause, and WHAT THE CORPUS DOES NOT CONTAIN.
 
     A second cause block rather than a generalization of the one above, because the two verdicts
     differ in the thing that matters here: `partially_covered`'s causes can occur together on one
     claim and are counted per claim for that reason, while these are mutually exclusive by
-    construction — a pair either disagrees about the amount or is dated backwards, and the planner
-    draws one.
+    construction — a claim either carries no subject document at all, or carries a pair that
+    disagrees about the amount, or one dated backwards, or one naming a different party, and the
+    planner draws one of the four.
 
-    🔴 THE THIRD CAUSE IS NAMED THOUGH IT NEVER OCCURS. `subject_not_evidenced` reaches this verdict
-    too and carries no share in policy.yaml, because nothing can plan a deliberately incomplete
-    claim. A report listing only what happened would let a reader take two causes for the whole
-    vocabulary, which is the reading `known_limitations` KL-07 exists to prevent.
+    🔴 EVERY CAUSE IS NOW DRAWN, so this block no longer prints any of them as an absence.
+    `subject_not_evidenced` carries a share in policy.yaml since the planner gained
+    `EvidenceIntent.EVIDENCE_GAP`, and `counterparty_mismatch` since the payment could be made to a
+    seller the subject document does not name (`_payee_the_payment_names`) — which means the loop
+    below reports both, including the zero that says a mechanism stopped working, a finding the
+    hand-written line it replaced could not have made.
 
     A cause realizing zero is flagged two different ways depending on run size, because the two
     readings are not the same finding — and, per the marker convention above the report, a
@@ -1124,6 +1367,15 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     beside it) — below that size a zero is unremarkable, at or above it a zero is worth
     investigating as a defect. `run_size` is built claims, matching what the guideline was
     derived against: the per-claim probability of drawing either cause at all.
+
+    🔴 EACH FINDING PRINTS THE PROBABILITY IT RESTS ON, AND THE ONE ABOVE THE GUIDELINE USED TO
+    OVERSTATE ITS CASE. It read "LIKELY A DESIGN/MECHANISM DEFECT", which asserts better than even
+    odds — while the guideline is derived at the 95% level, so a zero AT the guideline is a ~5%
+    event and "likely" is off by an order of magnitude in the direction that costs an investigation.
+    The number is now computed per row from the declared shares, by the same arithmetic the
+    guideline itself is derived by, and printed beside the finding: a reader calibrates against a
+    figure instead of against an adjective, and the two can no longer drift apart, one living in
+    policy.yaml and the other in an f-string here.
     """
     shares = insufficient_evidence_causes()
     counts = Counter(
@@ -1137,18 +1389,21 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     min_run_size = insufficient_evidence_causes_min_run_size()
 
     lines = [
-        f"insufficient_evidence by cause — {total} claim(s); the two cross-check causes are "
-        "mutually exclusive"
+        f"insufficient_evidence by cause — {total} claim(s); the {len(shares)} causes are "
+        "mutually exclusive by construction"
     ]
     for cause, share in shares.items():
         count = counts[cause]
         row = f"  {cause:<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
         if count == 0:
+            odds = _absence_probability(share, run_size)
             row += (
-                f"   RUN TOO SMALL — {run_size} built claim(s) < guideline {min_run_size}"
+                f"   RUN TOO SMALL — {run_size} built claim(s) < guideline {min_run_size}; "
+                f"a zero is a {odds:.0%} event here, which the sample explains"
                 if run_size < min_run_size
-                else f"   LIKELY A DESIGN/MECHANISM DEFECT — {run_size} built claim(s), "
-                     f"at or above guideline {min_run_size}"
+                else f"   INVESTIGATE THE MECHANISM — {run_size} built claim(s), at or above "
+                     f"guideline {min_run_size}; a zero is a {odds:.1%} event under the declared "
+                     "shares, so the sample no longer explains it"
             )
         lines.append(row)
     for cause in sorted(set(counts) - set(shares)):
@@ -1156,13 +1411,6 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
             f"  {cause:<26} {counts[cause]:>4}  {_share(counts[cause], total):>6}"
             "   !! realized with no share declared for it in policy.yaml"
         )
-    lines.append(
-        f"  {'subject_not_evidenced':<26} {counts['subject_not_evidenced']:>4}"
-        "         NOT DRAWN — policy.yaml declares no share, because nothing can plan a"
-    )
-    lines.append(
-        "                                          deliberately incomplete claim. See KL-07."
-    )
     return lines
 
 

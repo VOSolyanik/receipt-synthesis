@@ -8,9 +8,9 @@ Most of this directory is the shipped corpus. The rest are **mock-ups**, and thi
 them, because a reader who cannot tell the two apart will read a mock-up as a claim about the
 dataset.
 
-## The six mock-ups at a glance
+## The five mock-ups at a glance
 
-**Six archetypes across seven renderable templates.** Render them all with one command; every
+**Five archetypes across six renderable templates.** Render them all with one command; every
 image lands in the directory given, outside this repository:
 
 ```sh
@@ -22,17 +22,7 @@ purpose — move with the seed; the fixed ones are marked.
 
 ---
 
-**1 · `ua_non_fiscal_receipt`** — a товарний чек: a sales slip issued without a cash register.
-* **File:** `ua_non_fiscal_receipt.png` · 640 × ~665 px, an 80 mm till roll.
-* **Makes measurable:** **RC-08.** The consuming system's rule is that a negative fiscality marker
-  overrides every positive signal, and no document in the corpus prints one — so the rule has
-  never had a test document. This is it.
-* **Look for:** «ТОВАРНИЙ ЧЕК» standing in the slot where «ФІСКАЛЬНИЙ ЧЕК» sits on a real fiscal
-  receipt, and then for what is **missing** — no ФН, no ЗН, no QR, no register maker, no online
-  marker. Worth opening beside any `ua_prro_receipt` from the production run: the basket, the
-  arithmetic and the columns are identical, and the fiscal identity is the whole difference.
-
-**2 · `ua_bank_app_transaction`** — one operation as a banking application shows it.
+**1 · `ua_bank_app_transaction`** — one operation as a banking application shows it.
 * **File:** `ua_bank_app_transaction.png` · 1170 × 2532 px, a phone screen at 3×.
 * **Makes measurable:** the **strongest negative example for the payment class** — it looks like
   proof of payment and carries none of the requisites by which proof of payment is recognized.
@@ -41,7 +31,7 @@ purpose — move with the seed; the fixed ones are marked.
   number, an authorization code, an RRN, a stamp, a signature, a purpose: **none of them is
   there.** The category chip also disagrees with what was bought, on purpose.
 
-**3 · `ua_bank_receipt_in_app`** — the same payment confirmation, captured inside the app.
+**2 · `ua_bank_receipt_in_app`** — the same payment confirmation, captured inside the app.
 * **Files:** `ua_bank_receipt_in_app.png` · 1170 × 2532 px, **beside** `ua_bank_payment_confirmation.png`
   · 794 × 1123 px — the A4 twin. **The pair is the artifact; look at both.**
 * **Makes measurable:** that **the medium does not change the ground truth.** One document, two
@@ -50,7 +40,7 @@ purpose — move with the seed; the fixed ones are marked.
   Then the screen heading «Квитанція № …» sitting over a document whose own heading reads
   «Платіжна інструкція» — same number, two wordings, and not staged.
 
-**4 · `eu_platform_receipt`** and **5 · `ua_platform_receipt`** — a platform receipt, in English
+**3 · `eu_platform_receipt`** and **4 · `ua_platform_receipt`** — a platform receipt, in English
 and EUR, and the same class in Ukrainian and UAH.
 * **Files:** `eu_platform_receipt.png` and `ua_platform_receipt.png` · both 794 × 1123 px, fixed.
 * **Makes measurable:** the **currency and language dimensions**, which the corpus does not
@@ -63,7 +53,7 @@ and EUR, and the same class in Ukrainian and UAH.
   opposite ways — `397.05` against `5 713,03`. Nothing on either page states a rate: the
   conversion this pair implies is **nowhere on paper**, and that is deliberate.
 
-**6 · `ua_insurance_contract`** — a three-page voluntary health insurance contract.
+**5 · `ua_insurance_contract`** — a three-page voluntary health insurance contract.
 * **File:** `ua_insurance_contract.png` · 794 × 3401 px, fixed — three A4 sheets in one image.
 * **Makes measurable:** **«one page = one document», broken in one direction** — one document
   across several pages. Every other archetype here renders exactly one page, so a file-splitting
@@ -73,7 +63,7 @@ and EUR, and the same class in Ukrainian and UAH.
   begin mid-numbering. Also the salience trap: the largest figure is the **sum insured**, and the
   money that moved is the **premium** two rows below, roughly forty times smaller.
 
-**7 · `ua_claim_bundle`** — an invoice and the bank confirmation that settled it, in one file.
+**6 · `ua_claim_bundle`** — an invoice and the bank confirmation that settled it, in one file.
 * **Files:** `ua_claim_bundle.png` · 794 × 2262 px, **beside** `ua_claim_bundle.page1_invoice.png`
   and `ua_claim_bundle.page2_confirmation.png` — the file, and the two documents it is made of.
 * **Makes measurable:** **«one page = one document», broken in the other direction** — two
@@ -91,18 +81,18 @@ and EUR, and the same class in Ukrainian and UAH.
 
 ### What this branch deliberately does not contain
 
-**No labels and no bounding boxes** — not one `data-field` attribute in any of the seven
+**No labels and no bounding boxes** — not one `data-field` attribute in any of the six
 templates, so `field_bboxes` comes back empty by construction and no JSON is written beside any
 image. **No connection to the dataset** — nothing is registered in `ARCHETYPES`, no builder exists
-in `_BUILDERS`, and no run of any size contains one of these documents. **No change to the
-contract or to any configuration** — `config/` and `src/` are untouched across the whole branch,
-the labelling schema's version is not raised, and the two places where a mock-up prints wording
-that diverges from a configured constant (`non_fiscal_marker`, in both the UA and the EU blocks)
-leave that constant exactly as it is. Every one of these is a boundary the branch was given, not
-an unfinished edge: the field names would have to come from the contract, two of the seven sit on
-the far side of contract questions that are still open (RC-08 and RC-14), and connecting anything
-before the production measurement would change what that measurement means. **Nothing here is
-waiting to be found; it is waiting to be decided.**
+in `_BUILDERS`, and no run of any size contains one of these documents.
+
+⚠️ **THAT WAS TRUE OF SEVEN TEMPLATES AND IS TRUE OF SIX.** `ua_non_fiscal_receipt` has been
+**connected**: it is registered, it has a builder, it carries `data-field` attributes, its
+Ukrainian strings moved into `config/fiscal-rules.yaml`, and a run contains one wherever a claim
+was planned as `not_proof_of_payment`. What it demonstrated as a mock-up is unchanged and is kept
+below, because the finding — that the negative marker is not the string the contract assumes — is
+what RC-08 still turns on. The connection did **not** decide RC-08: no field records a marker, and
+the absence is carried by `has_fiscal_number` / `has_qr` / `qr_is_fiscal` instead.
 
 ## Shipped
 
@@ -112,6 +102,7 @@ waiting to be found; it is waiting to be decided.**
 | `ua_bank_payment_confirmation` | `payment_confirmation` |
 | `ua_bank_statement` | `bank_statement` |
 | `ua_invoice` | `invoice` |
+| `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
 | `ua_fiscal_receipt.jinja` + `.css` | the body and the till-roll rules the three receipts share |
 
 Each is registered in `claim_planner.ARCHETYPES`, has a builder in `assembler._BUILDERS`, marks
@@ -121,7 +112,6 @@ every extractable element with `data-field="<name>"`, and reaches a dataset.
 
 | Template | What it is |
 |---|---|
-| `ua_non_fiscal_receipt` | товарний чек — a sales slip issued without a cash register |
 | `ua_bank_app_transaction` | one operation as a banking application shows it |
 | `ua_bank_receipt_in_app` | `ua_bank_payment_confirmation`, captured inside that application |
 | `ua_phone_chrome.jinja` + `.css` | the status bar, tab bar and back arrow those two share |
@@ -146,9 +136,9 @@ every file in this directory.
 **No labels and no bounding boxes, deliberately.** Not one `data-field` attribute appears in any
 of these files — so `RenderedDocument.field_bboxes` comes back empty by construction and the
 render script writes no JSON beside the images. The field names would have to come from the
-labelling contract, and for two of the seven the contract's relevant field is still an open
-question (RC-08). Naming fields here would be inventing that answer in markup, where nothing
-reviews it. **Labels and boxes arrive with the connection, not with the layout.**
+labelling contract. Naming fields here would be inventing that answer in markup, where nothing
+reviews it. **Labels and boxes arrive with the connection, not with the layout** — which is
+exactly what happened to `ua_non_fiscal_receipt` when it was connected.
 
 **Nothing in `config/` changed.** Not the labelling contract, not the policy, not the fiscal
 rules, not the vendor lists. Where a mock-up needs a Ukrainian string that config does not carry,
@@ -157,20 +147,32 @@ once the archetype is connected.
 
 ### Why they are not connected
 
-The production run measures four document classes. Adding layout variety **before** that
+The first production run measured four document classes. Adding layout variety **before** that
 measurement would change what the measurement means: macro-F1 would move, and nobody could say
 whether the classifier or the corpus had changed. Measure, then add, then measure again — and the
 difference becomes a result about robustness to layout rather than a confound.
 
+⚠️ **`ua_non_fiscal_receipt` was connected after that measurement and deliberately**, because it
+is not layout variety: it is the only document that makes a RULE testable — a negative fiscality
+signal overriding positive ones — and the rule has no test case without it. The reasoning above is
+unchanged and still governs the five templates left here; a figure measured before the class
+existed is a figure about a corpus of four classes, which is what every profile in
+`config/labelling-schema.yaml` says of itself.
+
 ---
 
-## `ua_non_fiscal_receipt` — the document the fiscality rule has never had
+## `ua_non_fiscal_receipt` — the document the fiscality rule had never had
+
+**Now shipped.** The section is kept whole because the sources, the finding and the narrowings
+below are what the archetype was built from and what RC-08 still turns on — none of them changed
+when it was connected. Where the text says "mock-up", read "this page": the layout it describes is
+the layout a run renders.
 
 The consuming system's rule is that a **negative** fiscality marker overrides every positive
 signal a document carries, however many. This repository implements the precedence structurally,
-and **no document in the corpus prints such a marker** — the contract says so itself, at RC-08:
-*"no archetype prints one yet"*. The central argument for trusting the system has no test
-document. This is that document.
+and until this archetype was connected **no document in the corpus carried anything negative to
+override with** — the contract says so itself, at RC-08: *"no archetype prints one yet"*. The
+central argument for trusting the system had no test document. This is that document.
 
 ### Sources, counted honestly
 
@@ -248,8 +250,8 @@ Whether the contract should carry that instead is the author's decision, not thi
 
 * **One variety of two.** The printed slip is modelled; the **handwritten** товарний чек on a
   pre-printed pad — the other real variety, and a different image problem entirely — is not.
-* **One paper width.** 80 mm only; the 58 mm roll is a second template when this is connected,
-  exactly as the fiscal class already splits.
+* **One paper width.** 80 mm only; the 58 mm roll would be a second template, exactly as the
+  fiscal class already splits — and it is a real narrowing now that runs contain this class.
 * **The position of the title** at the foot follows from *"the same content as the form, minus two
   items"*, not from a sample. It is the weakest claim on the page.
 * **No layout diversity between issuers of such slips**, of which nothing is known publicly.

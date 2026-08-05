@@ -1,16 +1,22 @@
 {#
   Ukrainian NON-FISCAL sales slip — товарний чек, issued without a cash register.
 
-  ⚠️ A MOCK-UP. It is not registered in `ARCHETYPES`, no builder produces it, no run contains
-  it, and it carries NO `data-field` attributes — so the renderer collects no bounding box from
-  it and nothing here becomes a label. That absence is a decision and not an unfinished edge:
-  the field names would have to come from the labelling contract, and the contract's marker
-  field is still open (RC-08). See templates/README.md.
+  SHIPPED. It is registered in `ARCHETYPES` as `ua_non_fiscal_receipt`, built by
+  `content_builder.build_non_fiscal_receipt`, and a run contains one wherever a claim was
+  planned as `not_proof_of_payment`. Every element a consumer would extract carries
+  data-field="<name>", exactly as the fiscal body does.
+
+  ⛔ AND NO FIELD NAMES THE NEGATIVE MARKER, which is a decision rather than an omission left
+  over from the mock-up. What this page carries is a positive TITLE plus an ABSENCE of fiscal
+  requisites, and the contract's marker field is shaped as "marker text with its position in
+  the text" — a shape an absence cannot fill. That is RC-08 in config/labelling-schema.yaml,
+  and it is open. The absence is still ground truth: it is recorded as `has_fiscal_number`,
+  `has_qr` and `qr_is_fiscal`, all false, on a page that otherwise reads like a fiscal receipt.
 
   WHAT THIS DOCUMENT IS FOR. The consuming system's rule is that a NEGATIVE fiscality marker
-  overrides every positive fiscality signal a document carries. Nothing in this repository
-  prints such a marker, so the rule has no test document — the whole argument rests on a class
-  the corpus does not contain. This page is that document.
+  overrides every positive fiscality signal a document carries. Until this archetype was
+  connected nothing in the corpus carried anything negative to override with, so the rule had
+  no test document — the whole argument rested on a class the corpus did not contain.
 
   WHAT THE SOURCES ACTUALLY SAY, AND WHY THIS PAGE LOOKS THE WAY IT DOES.
 
@@ -73,10 +79,10 @@
      the identification code «ІД» stands alone. That is an inference from who may issue this
      document at all, not an observation of one. #}
   <header class="block centered">
-    <div class="seller-name">{{ seller_display }}</div>
-    <div>{{ seller.address }}</div>
+    <div class="seller-name" data-field="seller_name">{{ seller_display }}</div>
+    <div data-field="seller_address">{{ seller.address }}</div>
     {% if seller.tax_code %}
-    <div>{{ seller.tax_code_label }} <span>{{ seller.tax_code }}</span></div>
+    <div>{{ seller.tax_code_label }} <span data-field="seller_tax_code">{{ seller.tax_code }}</span></div>
     {% endif %}
   </header>
 
@@ -88,10 +94,14 @@
   <section class="block">
     {% for item in items %}
     <div class="item">
-      <div class="item-name">{{ item.name }}</div>
+      <div class="item-name" data-field="item_{{ loop.index0 }}_name">{{ item.name }}</div>
       <div class="row">
-        <span class="item-qty">{{ item.qty }} &times; {{ item.price }}</span>
-        <span class="item-sum">{{ item.sum }}</span>
+        <span class="item-qty">{#
+          #}<span data-field="item_{{ loop.index0 }}_qty">{{ item.qty }}</span>
+          &times;
+          <span data-field="item_{{ loop.index0 }}_price">{{ item.price }}</span>
+        </span>
+        <span class="item-sum" data-field="item_{{ loop.index0 }}_sum">{{ item.sum }}</span>
       </div>
     </div>
     {% endfor %}
@@ -105,19 +115,19 @@
   <section class="block">
     <div class="row total">
       <span>{{ totals_labels.total }}</span>
-      <span>{{ total }}</span>
+      <span data-field="total">{{ total }}</span>
     </div>
     <div class="row">
       <span>{{ totals_labels.discount }}</span>
-      <span>{{ discount }}</span>
+      <span data-field="discount">{{ discount }}</span>
     </div>
     <div class="row">
       <span>{{ totals_labels.rounding }}</span>
-      <span>{{ rounding }}</span>
+      <span data-field="rounding">{{ rounding }}</span>
     </div>
     <div class="row total">
       <span>{{ totals_labels.amount_due }}</span>
-      <span>{{ amount_due }}</span>
+      <span data-field="amount_due">{{ amount_due }}</span>
     </div>
   </section>
 
@@ -125,8 +135,8 @@
 
   <section class="block">
     <div class="row">
-      <span>{{ payment_method }}</span>
-      <span>{{ amount_due }}</span>
+      <span data-field="payment_method">{{ payment_method }}</span>
+      <span data-field="paid_amount">{{ amount_due }}</span>
     </div>
   </section>
 
@@ -134,7 +144,7 @@
 
   <section class="block">
     <div class="caption">Сума прописом:</div>
-    <div>{{ amount_in_words }}</div>
+    <div data-field="amount_in_words">{{ amount_in_words }}</div>
   </section>
 
   <div class="rule"></div>
@@ -153,22 +163,22 @@
      a QR means a document is fiscal. This repository holds the opposite: bank confirmations
      carry marketing QRs and a decoded payload is the only thing that says anything. #}
   <footer class="block centered">
-    <div>ЧЕК № <span>{{ receipt_number }}</span></div>
+    <div>ЧЕК № <span data-field="receipt_number">{{ receipt_number }}</span></div>
     <div>
-      <span>{{ date }}</span>
-      <span>{{ time }}</span>
+      <span data-field="date">{{ date }}</span>
+      <span data-field="time">{{ time }}</span>
     </div>
-    <div class="fiscal-title">{{ title }}</div>
+    <div class="fiscal-title" data-field="title">{{ title }}</div>
 
     {# 📄 ст. 9 of the accounting law № 996-XIV: a primary document names the person responsible
        for the operation and carries their signature. A fiscal receipt carries neither, so these
        two lines are where this document is MORE than the fiscal one rather than less. The
        signature rule is printed with no ink on it — the slip is signed by hand after printing. #}
-    <div class="issued-by">{{ issuer_label }} <span>{{ issuer_name }}</span></div>
+    <div class="issued-by">{{ issuer_label }} <span data-field="issuer_name">{{ issuer_name }}</span></div>
     <div class="sign-line"></div>
     <div class="caption">{{ signature_label }}</div>
 
-    <div class="thanks">{{ footer }}</div>
+    <div class="thanks" data-field="footer_text">{{ footer }}</div>
   </footer>
 
 </div>

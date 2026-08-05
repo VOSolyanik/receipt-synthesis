@@ -60,6 +60,200 @@
 #
 # None is a loader: nothing in the pipeline calls them, and `src/` still reads nothing here.
 
+# Bumped to 28 by THE LAST VERDICT ENTERING THE DATA, and by the printed field that let it. The
+# dataset's six labels are all emitted for the first time. FIVE consequences, and the first two
+# would otherwise be read as defects.
+#
+#   🔴 RIDING THIS VERSION, AND STATED APART BECAUSE IT IS A DIFFERENT CHANGE: THE CROSS-CHECKS
+#   BECAME A DECLARED LIST, AND THERE ARE THREE OF THEM. `config/policy.yaml` gained
+#   `cross_document_agreement` — the axes on which a claim's documents must agree, each with the
+#   VERDICT and the CAUSE a failure earns — and `policy_engine` reads it instead of holding its own
+#   list. A consumer's engine is built from that block; an axis withdrawn there is a check neither
+#   engine performs, and one added there is a label a consumer starts receiving. 🔴 AN I-2 EVENT
+#   for the same reason every policy edit is: the file is vendored downstream under a sha256 lock.
+#
+#   🔴 AND THE THIRD AXIS IS A NEW `imperfection` CAUSE, DRAWN AND BUILT: `counterparty_mismatch` —
+#   an invoice issued by one party beside a payment made to another. A CONSUMER CANNOT DERIVE IT
+#   FROM THE AMOUNTS OR THE DATES, which agree exactly on such a claim; the only field that differs
+#   is `counterparty`. A scorecard whose cause vocabulary is closed meets a value it does not know.
+#   See `claim_evidence.cross_checks.counterparty` and the vocabulary under `imperfection`.
+#
+#   ⚠️ AND IT COST THE OTHER THREE CAUSES A THIRD OF THEIR SHARE EACH. `insufficient_evidence_causes`
+#   splits evenly over the causes that can be built, so four of them read 0.25 where three read
+#   0.34/0.33/0.33, and `insufficient_evidence_causes_min_run_size` MOVED FROM 90 TO 119 — the first
+#   time that number has moved for a reason inside this verdict rather than because another verdict
+#   became realizable. A per-cause count measured on a corpus generated before this revision is
+#   conditional on a three-way split and does not compare with one taken after it.
+#
+#   🔴 ONE NEW LABEL FIELD, `instalment_amount`, AND IT IS SCOREABLE — unlike `amount_due`, which
+#   the entry beside it still refuses to have scored. It is what one PART of a document's amount
+#   comes to where the document says the obligation is settled in parts, `null` everywhere else,
+#   and it differs from `amount` by construction wherever it is populated. See
+#   `document_label.fields.instalment_amount`.
+#
+#   🔴 `partially_paid` IS NOW EMITTED, and A CONSUMER CANNOT DERIVE IT FROM THE AMOUNTS. An
+#   invoice of 1200.00 beside a payment of 300.00 is `partially_paid` when the invoice PRINTS the
+#   instalment term and `insufficient_evidence` / `amount_mismatch` when it does not — the same
+#   two numbers, two labels. A scorecard comparing a payment against `amount` alone scores every
+#   such claim as a mismatch. `verdicts.partially_paid` carries the three conditions and
+#   `partial_payment` in policy.yaml carries the rule an engine is built from.
+#
+#   🔴 THE INVOICE PRINTS A LINE IT DID NOT PRINT, and it is the first line of this dataset a
+#   verdict rests on: «Умови оплати: оплата частинами …, черговий платіж: …», with a box keyed
+#   `instalment_amount`. A consumer pinning a key set for the archetype meets a new key — the same
+#   lesson as version 7's `discount` and `rounding`. THE CLASS STILL PRINTS NO PAYMENT STATUS:
+#   a term of an offer is not a record that money moved, and `document_types.invoice` states the
+#   distinction where a reader will look for the contradiction. ⚠️ The wording is NOT observed —
+#   neither open invoice carried such a term — and is declared as a divergence there.
+#
+#   🔴 AND ONE PRECEDENCE IS SETTLED THAT NO CORPUS CAN SHOW A CONSUMER. A payment settling a
+#   printed instalment that ALSO falls outside `period` is `rejected`, not `partially_paid` —
+#   two rules describe that claim and a consumer implementing them in the other order would score
+#   this dataset's label as a miss. No generated claim exercises it (the planner never gives one
+#   claim both mechanisms), so it is stated rather than demonstrated: policy.yaml's
+#   `partial_payment.outside_the_period` and `verdicts.partially_paid.outside_the_period_is_rejected`.
+#
+#   `config/policy.yaml` CHANGED WITHOUT A SHARE MOVING, for the second version running.
+#   `verdict_mix.partially_paid` has read 0.10 since the file was written and now sizes a bucket
+#   that fills; what moved is `insufficient_evidence_causes_min_run_size`, FROM 85 TO 90, because
+#   the realizable subset is now the WHOLE mix — the renormalization denominator is 1.00 instead of
+#   0.90, and every other verdict is drawn slightly rarer at an unchanged declared share. 🔴 AN I-2
+#   EVENT: the file is vendored downstream under a sha256 lock.
+#
+#   ⚠️ AND TWO PROSE CORRECTIONS CARRIED IN THE SAME REVISION, RIDING THIS NUMBER RATHER THAN
+#   MINTING ONE OF THEIR OWN — by the precedent version 26 set, the rule at `version` being about
+#   what a consumer diffing two vendored copies must be able to see, and a copy of 28 stating both
+#   correctly. Neither changes a label. FIRST, `verdicts.insufficient_evidence.note` still read
+#   "No dataset contains this verdict" beside the `status: emitted` and the `emitted:` key of its
+#   own entry, so that entry contradicted itself for two revisions; the sentence is withdrawn and
+#   kept in the past tense at the key. SECOND, `sources.reference_run` closed by claiming that
+#   "every other `emitted` statement is about a shape that occurs on every run", which stopped
+#   being true when `rejected`, `partially_paid` and `instalment_amount` became one-in-ten
+#   buckets — the run those three were verified against is now recorded there, the way version
+#   27's exception was.
+#
+#   ⚠️ EVERY REFERENCE-RUN FIGURE IN `known_limitations` PREDATES THIS VERSION and each names its
+#   own run. A block reporting that `partially_paid` is not drawn is a true statement about the run
+#   it names and a false one about this generator; the shares of any such run are also conditional
+#   on a realizable subset that no longer excludes anything. They are left as the record of their
+#   run rather than rewritten, which is this file's rule for them.
+#
+# Bumped to 27 by A DOCUMENT CLASS AND A VERDICT ENTERING THE DATA TOGETHER. NO LABEL RECORD
+# GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHAT A CONSUMER RECEIVES:
+# a fifth document class, and the last of the three evidence verdicts that had never been emitted.
+# SIX consequences.
+#
+#   🔴 `non_fiscal_receipt` IS NOW A CLASS OF THE DATASET. `templates/ua_non_fiscal_receipt` — a
+#   товарний чек, the sales slip issued without a cash register — is registered, built and
+#   rendered. Its label record is an ordinary one: a basket, a total, `amount_due`, a
+#   counterparty, and `has_fiscal_number`, `has_qr`, `qr_is_fiscal` all FALSE on a page that
+#   otherwise reads like a fiscal receipt line for line. A consumer whose classifier vocabulary
+#   has four target classes now meets a fifth — see `document_types.non_fiscal_receipt`, whose
+#   `classifier_role` is still `undecided` and is no longer hypothetical.
+#
+#   🔴 `not_proof_of_payment` IS NOW EMITTED. A claim may carry ONE document that states what was
+#   bought and nothing that attests a payment — a bare invoice, or that slip — and it is labelled
+#   `not_proof_of_payment` with an EMPTY `imperfection`: one slot of `document_evidence`, one way
+#   to fail it. Five of the six verdicts are now in the data; only `partially_paid` is not.
+#
+#   🔴 AND SUCH A CLAIM'S `covered_fraction` IS A REAL NUMBER, TYPICALLY 1.0, beside a
+#   `reimbursable_amount` of 0.00. It is the mirror image of the subject gap version 25 added,
+#   where the fraction is `null` because there are no lines at all. A consumer that learned
+#   "nothing reimbursed ⇒ nothing covered" from either has it backwards on the other.
+#
+#   `config/policy.yaml` CHANGED WITHOUT A SHARE MOVING. `verdict_mix.not_proof_of_payment` has
+#   read 0.10 since the file was written and now sizes a bucket that fills; what moved is
+#   `insufficient_evidence_causes_min_run_size`, FROM 75 TO 85, because a fifth realizable member
+#   makes the renormalization denominator 0.90 instead of 0.80 and every other verdict is drawn
+#   slightly rarer at an unchanged declared share. 🔴 THIS IS AN I-2 EVENT: the file is vendored
+#   under a sha lock, so a consumer holding an earlier copy is holding a different file. Its
+#   `version` stays at 1 under the standing rule — the sha IS its identity.
+#
+#   THE DRAW SHIFTED. A fifth verdict in the draw changes what every seed produces from the first
+#   claim onward, so any figure measured on an earlier run — a per-class F1, a document-class mix —
+#   is a figure about a different corpus. The profiles in `run_profiles` are records of the runs
+#   they name and their counts are left untouched; two of their notes said `non_fiscal_receipt`
+#   "has no archetype", which was true when they were taken and is now written in the past tense.
+#
+#   ONE NEW `known_limitations` ENTRY, KL-14: the slip occurs in exactly one claim shape — alone —
+#   so its CLASS predicts the verdict on this corpus, which is a shortcut the world does not have.
+#   And RC-08 is AMENDED rather than closed: archetypes that carry a negative fiscality signal now
+#   exist, the field that would record one still does not, and what this archetype carries is an
+#   ABSENCE that the proposed field's shape cannot hold.
+#
+# Bumped to 26 by A VERDICT OF THE ENUM ENTERING THE DATA FOR THE FIRST TIME. NO LABEL RECORD
+# GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHICH LABELS A CONSUMER
+# RECEIVES, and one of them is a verdict every earlier dataset promised and none contained. FIVE
+# consequences, the last of them a CORRECTION to what an earlier version said rather than a change
+# to what this one does.
+#
+#   🔴 `rejected` IS NOW EMITTED, THROUGH ONE OF ITS TWO ROUTES. A claim's PAYMENT may fall
+#   outside `period` in config/policy.yaml — in the benefit year before or after it, on either
+#   side — and it is labelled `rejected` with the cause `outside_period`. `imperfection` now has
+#   all six of its causes in the data. A consumer that treated `rejected` as a verdict it would
+#   never be scored on is now scored on it.
+#
+#   🔴 AND THE SHAPE OF SUCH A CLAIM CONTRADICTS THE OBVIOUS READING OF THE VERDICT: its evidence
+#   is complete, its basket is an ordinary covered basket, so `covered_fraction` is typically 1.0
+#   while `reimbursable_amount` is 0.00. A consumer that learned "rejected means nothing was
+#   covered" — the other route, which no dataset contains — has it backwards for every instance
+#   here. `known_limitations` KL-07 is rewritten around exactly this asymmetry: the verdict is
+#   fully predicted by a date comparison on this corpus, which is a shortcut the data teaches.
+#
+#   `config/policy.yaml` GAINED A SHARE — `verdict_mix.rejected: 0.10`, which read `null` — and
+#   `covered` FELL FROM 0.50 TO 0.40 to pay for it. The realizable subset still sums to 0.80, so
+#   every other verdict's conditional rate and `insufficient_evidence_causes_min_run_size` are
+#   unchanged. NO MEMBER OF THE MIX CARRIES `null` NOW; the rule for one is unchanged for the next
+#   verdict declared before its mechanism exists. 🔴 THIS IS AN I-2 EVENT: the file is vendored
+#   under a sha lock, so a consumer holding an earlier copy is holding a different file. Its
+#   `version` stays at 1 under the standing rule — the sha IS its identity.
+#
+#   THE DRAW SHIFTED. A fourth verdict in the draw changes what every seed produces from the first
+#   claim onward, so any figure measured on an earlier run — a per-class F1, a document-class mix —
+#   is a figure about a different corpus. The profiles in `run_profiles` are records of the runs
+#   they name and are left untouched; each carries the generator version it was measured at, and
+#   each counts `rejected` as zero, correctly for its own run.
+#
+#   ⚠️ AND A CORRECTION CARRIED IN THE SAME REVISION: `verdicts.insufficient_evidence.status` read
+#   `forward_contract` — this file's word for NOT PRESENT IN THE DATASET — while that verdict has
+#   been emitted since version 13, through the cross-check causes, and through all three of its
+#   causes since version 25. The word is now `emitted` and the history is at the key. It rides
+#   this number rather than minting its own because the rule at `version` is about what a
+#   consumer diffing two vendored copies must be able to see: a copy of 26 states this correctly,
+#   and a consumer diffing 25 against 26 reads it here. A consumer that had already scored
+#   against `insufficient_evidence` was right to; one that skipped it on the strength of the
+#   status was under-prepared, and no label it received was ever described wrongly.
+#
+# Bumped to 25 by A CAUSE OF THE `imperfection` VOCABULARY ENTERING THE DATA FOR THE FIRST TIME.
+# NO LABEL RECORD GAINED OR LOST A KEY AND NO COMPARISON RULE CHANGED — what changes is WHICH LABELS
+# A CONSUMER RECEIVES, and one of them is a shape no previous dataset contained. FOUR consequences.
+#
+#   🔴 `subject_not_evidenced` IS NOW REALIZED. A claim may carry ONE payment document and nothing
+#   that states what was bought — a bare transfer or a bare statement row — and it is labelled
+#   `insufficient_evidence` with that cause. Every earlier version of this dataset reached the
+#   verdict only through the two CROSS-CHECK causes, i.e. always with two documents present, so a
+#   consumer that had learned "this verdict means the pair disagrees" now meets the case where there
+#   is no pair. `known_limitations` KL-07 is rewritten accordingly and is no longer about this cause.
+#
+#   🔴 A CLAIM MAY NOW HAVE NO LINE ITEM AT ALL, so `covered_fraction` IS `null` ON REAL CLAIMS OF A
+#   RUN rather than only in principle. The field became nullable at version 5 and nothing produced
+#   one; a consumer that treated `null` as `0` — or that let a JSON reader coerce it — scores such a
+#   claim as fully non-covered, which is the label of a `rejected` claim and a different verdict.
+#   `null` says there was nothing to compute a fraction from.
+#
+#   `config/policy.yaml` GAINED A SHARE — `insufficient_evidence_causes.subject_not_evidenced`,
+#   thirds to the nearest hundredth — and its `insufficient_evidence_causes_min_run_size` MOVED FROM
+#   50 TO 75, because the same 12.5% of claims now feeds three buckets instead of two and a run must
+#   be larger before an empty bucket means anything. 🔴 THIS IS AN I-2 EVENT: the file is vendored
+#   under a sha lock, so a consumer holding an earlier copy is holding a different file. Its
+#   `version` stays at 1 under the standing rule — the sha IS its identity.
+#
+#   THE DRAW SHIFTED. A third cause in the same bucket changes what every seed produces from the
+#   first `insufficient_evidence` claim onward, so any figure measured on an earlier run — a
+#   per-class F1, a document-class mix — is a figure about a different corpus. The profiles in
+#   `run_profiles` are records of the runs they name and are left untouched; each carries the
+#   generator version it was measured at.
+#
 # Bumped to 24 by A RECORDED COMMAND BECOMING RUNNABLE AGAIN. NO LABEL RECORD GAINED OR LOST A KEY,
 # NO COMPARISON RULE CHANGED, NO COUNT IN ANY PROFILE MOVED, AND THE DRAW DID NOT MOVE: `src/` reads
 # nothing here, and what changed in `src/` is the ABSENCE of a default rather than a value.
@@ -737,7 +931,7 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 24
+version: 28
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -800,6 +994,35 @@ sources:
     `status: emitted` STATEMENT TURNS ON THE FRACTION'S VALUE: `split` declares the vocabulary
     `[train, validation]` and nothing here asserts a count or a side. A half is what the flag
     defaulted to while these statements were last re-checked.
+
+    🔴 TWO STATEMENTS OF VERSION 27 WERE VERIFIED AGAINST A LARGER RUN, AND HAD TO BE. That run
+    builds eight claims, and both `verdicts.not_proof_of_payment` and
+    `document_types.non_fiscal_receipt` describe a bucket drawn at about one claim in nine — so a
+    run of eight contains neither more often than not, and this one contains neither. Verifying an
+    `emitted` status against a run that cannot be expected to hold an instance would be recording a
+    check that did not happen. Both were verified against
+    `generate-dataset --seed 20260803 --personas 12 --claims-per-persona 3 --split 0.5`, which
+    built 36 claims, 7 of them `not_proof_of_payment` and 4 of those evidenced by a
+    `non_fiscal_receipt`; the label of one such document was read field by field against its
+    rendered image.
+
+    🔴 AND THE VERSION 28 STATEMENTS WERE VERIFIED AGAINST THE SAME LARGER RUN, THE EXCEPTION
+    HAVING BECOME THE RULE FOR NEGATIVES. `verdicts.rejected`, `verdicts.partially_paid` and
+    `document_label.fields.instalment_amount` each describe a bucket the mix draws at about one
+    claim in ten, so the default handle's eight claims cannot be expected to hold one, and an
+    `emitted` status verified against such a run would be recording a check that did not happen.
+    All three were re-checked against
+    `generate-dataset --seed 20260803 --personas 12 --claims-per-persona 3 --split 0.5`, the run
+    of 36 claims named above: it contains 6 `partially_paid` claims and 2 `rejected` ones (both
+    with the cause `outside_period`), and `instalment_amount` is populated on the invoice of each
+    of the 6 and on no other document of the run.
+
+    ⚠️ SO THE SENTENCE THAT USED TO CLOSE THIS ENTRY IS GONE. It read "the handle above stays the
+    file's default because every other `emitted` statement is about a shape that occurs on every
+    run", which was true while version 27's pair was the sole exception and false from version 26
+    onward, when a negative verdict was first drawn at a tenth of the mix. The handle stays the
+    default because it is the cheapest run that re-checks the SHAPES a label record has; a
+    statement about a BUCKET names the run that contains one, beside itself.
   consumer: >
     The neighbouring product requirements document — its extraction fields per document
     type and its entity model, its classifier classes and metric, its extraction
@@ -1538,9 +1761,15 @@ document_types:
         by a line printed on the invoice itself.
 
         THE CONSEQUENCE FOR THE ORACLE, and it is the one that matters: no verdict in this
-        repository rests on anything printed on an invoice about payment, because nothing is printed
-        and nothing is labelled. An oracle deriving proof of payment from a printed word would be
-        reading the answer off the thing under test.
+        repository rests on anything printed on an invoice about PAYMENT HAVING HAPPENED, because
+        nothing of the kind is printed and nothing of the kind is labelled. An oracle deriving
+        proof of payment from a printed word would be reading the answer off the thing under test.
+
+        ⚠️ SINCE VERSION 28 A VERDICT DOES REST ON A LINE OF THIS CLASS, and the sentence above is
+        worded to stay exactly true beside it. `the_instalment_term` below states how the seller
+        proposes to be PAID IN PARTS — a condition of the offer, settled before any money exists —
+        and `partially_paid` turns on its presence. Whether money moved is still decided from the
+        PAYMENT document's type, as on every other claim.
 
     prd_required_fields:
       - prd: total
@@ -1660,6 +1889,38 @@ document_types:
       `fiscal_receipt` whose label carries a basket, which is exactly why the two are the two that
       can be a claim's subject document.
 
+    the_instalment_term:
+      status: emitted
+      emitted_since: version 28
+      printed_box: instalment_amount
+      label_field: instalment_amount
+      note: >
+        🔴 A SECOND PAYMENT TERM ON THIS CLASS, AND THE ONLY LINE OF THIS DATASET A VERDICT RESTS
+        ON. Some invoices now print «Умови оплати: оплата частинами {щоквартально | щомісяця |
+        щопівроку}, черговий платіж: {сума}» — the obligation is settled in equal parts and this is
+        what one part comes to. The amount carries its own box and its own label field,
+        `instalment_amount`; the adverb is printed and not labelled.
+
+        🔴 WHY IT DOES NOT CONTRADICT `the_class_is_an_offer_to_pay` ABOVE, which a reader will
+        check first. A PAYMENT TERM IS NOT A PAYMENT STATUS. A status is a RECORD that money moved
+        — «Оплачено» — and this class still prints none, for the structural reason that block
+        gives. A term is a CONDITION OF THE OFFER: it says how the seller proposes to be paid, and
+        it is fixed when the invoice is drawn up, before there is any payment to record. The
+        `validity` line is already such a term. Nothing on this page says any money has moved, and
+        `proves_payment` stays `false`.
+
+        WHAT A CONSUMER DOES WITH IT: an invoice whose `instalment_amount` is non-null states an
+        obligation SETTLED IN PARTS, so a payment document beside it stating that part — and not
+        the total — is a correct pair rather than a contradiction. `verdicts.partially_paid` and
+        `partial_payment` in policy.yaml carry the rule. A consumer that compares a payment against
+        `amount` alone will score every such claim as a mismatch.
+
+        ⚠️ NOT OBSERVED, AND DECLARED AS A DIVERGENCE FOR THAT REASON. Neither of the two open
+        invoices behind this class carried an instalment term — both were payable in one — so the
+        wording is derived from general knowledge of the document rather than transcribed from one.
+        What IS carried over is the shape: a left-aligned line in the block below the totals, where
+        the validity line sits. See KL-15.
+
   act:
     classifier_role: other
     status: forward_contract
@@ -1677,7 +1938,26 @@ document_types:
 
   non_fiscal_receipt:
     classifier_role: undecided
-    status: forward_contract
+    status: emitted
+    emitted_since: >
+      VERSION 27, AND IT IS THE FIRST CLASS OF THIS DATASET WHOSE LAYOUT DOES NOT IDENTIFY IT.
+      📄 The State Tax Service's rule (БЗ 109.10) is that a товарний чек carries the wording
+      «Товарний чек» and otherwise satisfies the fiscal receipt's own form EXCEPT the fiscal number
+      of the register and the wording «ФІСКАЛЬНИЙ ЧЕК» — so the basket, the four amount lines, the
+      columns and the arithmetic are a fiscal receipt's, and the whole difference is a set of
+      requisites left out. A classifier that recognizes a receipt by its shape recognizes this one
+      too, and is wrong.
+
+      WHAT ITS LABEL RECORD CARRIES: `doc_type: non_fiscal_receipt`, a basket in `line_items`,
+      `amount` and `amount_due` (equal, as on a fiscal receipt — see that field), `counterparty`
+      the seller, `date`, and `payer: null` — 📄 the form it follows names no buyer, the person who
+      paid having been at the counter. `vat_letter` is `null` on every line and there is no VAT
+      row: 📄 a registered ПДВ payer is obliged to use a cash register, so the seller of such a
+      slip is a non-payer, and `vat_row_form` is `null` for the same reason.
+
+      🔴 THE THREE FISCALITY FLAGS ARE ALL `false`, AND THEY ARE WHAT THE ABSENCE IS RECORDED AS:
+      `has_fiscal_number`, `has_qr`, `qr_is_fiscal`. No field records the negative marker itself —
+      see RC-08, amended in this version rather than closed by this archetype.
     undecided: >
       The consumer's `other` class is defined as "everything else", which mechanically
       absorbs this type — but the requirement's `other` row says such a document gets
@@ -2425,6 +2705,36 @@ document_label:
           be net in the first and gross in the second. The two cannot both hold in a
           VAT-inclusive jurisdiction, and this file cannot reconcile them. Raised as a
           question for the requirement, not as a generator change.
+
+    - name: instalment_amount
+      type: number or null
+      required: false
+      normalize: money
+      status: emitted
+      meaning: >
+        WHAT ONE PART OF THIS DOCUMENT'S AMOUNT COMES TO, where the document states that its
+        obligation is settled in equal parts — «черговий платіж» on an invoice printing an
+        instalment term. `null` on every other document, which is every class but `invoice` and
+        most invoices. `amount` stays the WHOLE obligation.
+      not_a_payment_status: >
+        🔴 IT RECORDS NOTHING ABOUT MONEY HAVING MOVED. It is a term of an offer — how the seller
+        proposes to be paid — fixed when the document is drawn up. Reading it as "this much has
+        been paid" inverts it: nothing on the page says any part has been settled, and the payment
+        document beside the claim is what says money moved, exactly as on every other claim.
+      a_verdict_rests_on_it: >
+        🔴 THE ONLY LABEL FIELD OF THIS DATASET WHOSE PRESENCE DECIDES A VERDICT. A payment equal to
+        this value, on a claim whose subject document carries it, is `partially_paid`; the same two
+        amounts with this field `null` are `insufficient_evidence` with the cause `amount_mismatch`.
+        The arithmetic is identical in both — "the payment is smaller" is true of each — so a
+        consumer scoring a payment against `amount` alone will score every partly settled claim as
+        a mismatch. `partial_payment` in config/policy.yaml states the rule in the order an
+        implementer applies it, and `policy_engine` pins its own reading against that block.
+      scoreable: >
+        UNLIKE `amount_due` BELOW, THIS FIELD DISCRIMINATES AND ITS ACCURACY IS A REAL MEASUREMENT.
+        It differs from `amount` by construction wherever it is populated — every declared schedule
+        divides an obligation into at least two parts — so a system echoing the total scores zero on
+        it rather than perfectly. It is `null` on most documents, so a per-class figure belongs on
+        the invoice slice; see KL-15 for what a run contains.
 
     - name: amount_due
       type: number or null
@@ -3271,7 +3581,7 @@ verdicts:
       on one claim.
 
   not_proof_of_payment:
-    status: forward_contract
+    status: emitted
     means: >
       THE SLOT: that MONEY MOVED. This verdict is what the claim gets when that one fact of
       `document_evidence` is not established, and it is decided from the DOCUMENT TYPE — every
@@ -3286,11 +3596,19 @@ verdicts:
       All three sources read it this way: policy.yaml's `document_evidence`, the verdict table
       in docs/architecture.md, and the consumer's own definition, whose canonical example is an
       invoice reading "Zapłacono: 0,00".
-    derived_but_not_built: >
-      `policy_engine.evaluate_claim` NOW LABELS THIS CASE: a claim none of whose documents is a
-      payment-proving type comes back `not_proof_of_payment` with an empty `imperfection`. No
-      archetype produces such a document, so the verdict still reaches no dataset and the
-      status above stays `forward_contract`.
+    derived_and_now_built: >
+      BOTH HALVES EXIST AS OF VERSION 27, and the key is renamed because its old name
+      (`derived_but_not_built`) described a state that has ended. `policy_engine.evaluate_claim`
+      labels the case — a claim none of whose documents is a payment-proving type comes back
+      `not_proof_of_payment` with an empty `imperfection` — and `claim_planner` now BUILDS one:
+      `EvidenceIntent.PAYMENT_GAP` plans a claim carrying a subject document and nothing beside it.
+
+      ⚠️ WHAT WAS MISSING WAS NEVER THE TEMPLATE, and that is worth keeping because it is the
+      lesson rather than the history. An archetype of a `proves_payment: false` type had existed
+      since the invoice landed; what did not exist was a planner that would deliberately plan an
+      INCOMPLETE claim, and naming the intent is what supplied it. TWO archetypes realize the
+      verdict now — a bare invoice and a товарний чек — and KL-14 records what follows from the
+      second occurring in no other claim shape.
     why_this_was_once_unreachable: >
       HISTORY, kept because it has gone wrong twice. This verdict used to be written as what it
       was NOT, and under that construction it lost its own territory: policy.yaml's `coverage`
@@ -3355,19 +3673,46 @@ verdicts:
       claim.
 
   insufficient_evidence:
-    status: forward_contract
+    status: emitted
+    emitted: >
+      YES, THROUGH ALL THREE OF ITS CAUSES, AND THE WORD IS A CORRECTION RATHER THAN NEWS. This
+      verdict has been in the data since the planner gained it as a target — first through the
+      two cross-check causes, then through `subject_not_evidenced` when
+      `claim_planner.EvidenceIntent.EVIDENCE_GAP` made a deliberately incomplete claim plannable
+      — and the status key was not moved with it. It read `forward_contract`, which this file
+      defines as NOT PRESENT IN THE DATASET, so the contract understated what a consumer receives
+      for two revisions.
+
+      A CONSUMER THAT BELIEVED IT WAS UNDER-PREPARED, NEVER MIS-PREPARED: no field, cause or
+      comparison rule was described wrongly, and every claim carrying this verdict was already
+      shaped as the keys below say. What the wrong word cost was the decision to score against
+      it. The counts per cause are in the run profiles.
+
+      🔴 A FOURTH CAUSE IS NOW DRAWN AND BUILT. `counterparty_mismatch` — an invoice issued by one
+      seller beside a payment made to another — carries a share in `insufficient_evidence_causes`
+      and is realized by `assembler`, which draws the SECOND party the payment names. All four
+      causes are therefore emitted, and the shares of the other three fell from a third each to a
+      quarter each: a corpus generated before this revision contains none of the fourth, and its
+      per-cause counts are conditional on a three-way split.
     means: >
       THE SLOTS: that a PURCHASE WAS MADE, and that the payment and the purchase are ONE
       TRANSACTION. This verdict is what the claim gets when either of those two facts of
-      `document_evidence` is not established, and `imperfection` says which — THREE CAUSES over
+      `document_evidence` is not established, and `imperfection` says which — FOUR CAUSES over
       two slots:
 
         WHAT WAS BOUGHT is not established — no document of the claim is of a type that states
         it, so that slot has no document at all. Cause `subject_not_evidenced`. A bare transfer.
 
         ONE TRANSACTION is not established — a subject document and its payment both exist and
-        fail a cross-check: the amounts differ (`amount_mismatch`), or the payment is dated
-        before the document it settles (`payment_precedes_subject`).
+        fail a cross-check: the amounts differ (`amount_mismatch`), the payment is dated
+        before the document it settles (`payment_precedes_subject`), or the two name different
+        parties (`counterparty_mismatch`).
+
+      🔴 THE SECOND LIST IS AS LONG AS config/policy.yaml MAKES IT. `cross_document_agreement`
+      there declares which axes a pair is compared on and what a failure earns; a cause of this
+      slot is the `cause` of one axis, so withdrawing an axis withdraws a cause a consumer can
+      receive and adding one adds it. The vocabulary under `imperfection` is where each is
+      defined; that block is where the set is decided.
 
       Those two slots are the whole of this verdict. Which slot is unestablished is read off the
       claim's own documents; no comparison with any other verdict is involved in reaching it.
@@ -3394,20 +3739,76 @@ verdicts:
       every number derived from the verdict would be computed off evidence that does not
       hold together.
     note: >
-      The policy engine labels all three causes correctly; what is missing is a planner path
-      that produces a claim carrying only half its evidence, which needs archetypes that do
-      not exist. No dataset contains this verdict.
+      WITHDRAWN IN VERSION 28, AND KEPT IN THE PAST TENSE RATHER THAN DELETED, because it is the
+      sentence a consumer diffing an earlier copy will come looking for. It read: "The policy
+      engine labels all three causes correctly; what is missing is a planner path that produces a
+      claim carrying only half its evidence, which needs archetypes that do not exist. No dataset
+      contains this verdict."
+
+      EVERY CLAUSE OF IT IS FALSE NOW, AND THE LAST ONE CONTRADICTED ITS OWN ENTRY. The planner
+      path is `claim_planner.EvidenceIntent`, the archetypes exist, the causes are four rather
+      than three, and this verdict has been emitted since version 13 — which `status: emitted` and
+      the `emitted:` key above have said since version 26, while this sentence went on denying it
+      two revisions longer. A consumer reading the entry top to bottom found the two halves
+      disagreeing and no way to tell which held. The entry now agrees with itself.
 
   partially_paid:
-    status: forward_contract
-    means: payment was made in installments and only part of the amount has been settled
+    status: emitted
+    emitted_since: version 28
+    means: >
+      THE OBLIGATION IS SETTLED IN PARTS AND THIS PAYMENT IS ONE OF THEM. The claim's subject
+      document states that its amount is paid in equal parts and what one part comes to
+      (`instalment_amount`), and the payment document beside it states exactly that part. Nothing
+      about such a claim is unestablished: both facts of `document_evidence` are proven, the two
+      documents describe one transaction, and what is true of the claim is that part of the amount
+      has been paid.
+
+      NO CAUSE in `imperfection`. One mechanism, one way to reach it — the same shape as
+      `not_proof_of_payment`.
     consumer_counterpart: partially_paid
-    depends_on: >
-      The invoice payment-status and amount-due fields, which no model field carries. See
-      `document_types.invoice` and RC-07.
+    how_it_is_told_from_amount_mismatch: >
+      🔴 THE TWO ARE THE SAME PAIR OF NUMBERS AND MUST NOT BE THE SAME LABEL. An invoice of 1200.00
+      beside a payment of 300.00 is this verdict when the invoice PRINTS the instalment term, and
+      `insufficient_evidence` / `amount_mismatch` when it does not. A consumer deriving either from
+      the inequality alone will get both wrong in one direction or the other, whichever it picks.
+
+      THREE CONDITIONS, all readable from the images: the subject document carries
+      `instalment_amount`; the payment equals it; and it is smaller than the subject's `amount`. A
+      payment matching NO part of a stated arrangement is a payment for some third amount, i.e. the
+      mismatch case again. `partial_payment` in config/policy.yaml states this for an engine built
+      from that file, which is where a consumer should read it rather than from this summary.
+    what_it_pays_out: >
+      NOTHING, in this version, and by policy rather than by omission. The plan reimburses against
+      the obligation the subject document states and only part of it has been settled; how much of a
+      partly settled obligation is payable is a decision policy.yaml has not taken. So
+      `reimbursable_amount` is 0.00 and the claim consumes no annual balance. `covered_fraction` is
+      still reported: it is a property of the line items, and they are all on the invoice.
+    the_date_check_still_applies: >
+      A partial settlement dated BEFORE the invoice it settles is `insufficient_evidence` with the
+      cause `payment_precedes_subject`, not this verdict. An impossible order is an impossible order
+      whether the payment covers a part or the whole; only the AMOUNT cross-check is exempted.
+    outside_the_period_is_rejected: >
+      🔴 THE ONE CLAIM TWO RULES BOTH DESCRIBE, AND A CONSUMER MUST NOT DECIDE IT FOR ITSELF. A
+      payment that settles a printed instalment AND falls outside `period` in policy.yaml is
+      `rejected` with the cause `outside_period` — never this verdict. Both readings are faithful
+      to a file that did not say, which is why policy.yaml now says:
+      `partial_payment.outside_the_period`, with the reasoning beside it.
+
+      WHY THAT WAY. The verdicts fall in two tiers. The EVIDENCE verdicts come first, because a
+      claim that has not established what it is about cannot be assessed against a policy at all.
+      The POLICY verdicts presuppose that every slot IS established, and among them the period is
+      prior: it answers whether the plan covers this expense, and it answers no on an axis nothing
+      about the settlement can change. This verdict is a statement about a claim the plan DOES
+      cover — one awaiting the rest of its instalments — and saying it of an expense outside the
+      window would describe a settlement the plan is not party to.
+
+      ⚠️ NO CLAIM OF THIS DATASET EXERCISES IT, at any run size. `claim_planner` gives a payment
+      schedule to a `partially_paid` claim and displaces the payment of a `rejected` one, and never
+      both. So a consumer meets this rule before the corpus does — which is the reason it is
+      written down rather than left to the order two branches happen to be in.
 
   rejected:
-    status: forward_contract
+    status: emitted
     means: >
       The documents establish everything they need to, and the policy plainly does not cover
       the claim. TWO MECHANISMS, answering the same question on different axes — by WHAT was
@@ -3469,23 +3870,33 @@ verdicts:
         The consumer's catch-all for a guard firing. A runtime outcome, not a label; see
         `verdict_decision_mapping`.
     emitted: >
-      NOT YET, BY EITHER MECHANISM. `policy_engine` labels both today and no dataset produced
-      so far contains this verdict: `content_builder` always draws at least one covered line,
-      and `claim_planner._draw_date_in_period` draws every date inside the window.
+      YES, BY ONE OF THE TWO MECHANISMS, AND THE OTHER STILL BY NEITHER. Every `rejected` claim
+      in a dataset is one whose PAYMENT FELL OUTSIDE THE BENEFIT PERIOD, carrying the cause
+      `outside_period`: `claim_planner` displaces such a claim's payment by a whole period, into
+      the adjacent benefit year, on either side of the window. Its documents are otherwise
+      ordinary and its basket is an ordinary covered basket, so `covered_fraction` on such a
+      claim is typically 1.0 and `reimbursable_amount` is 0.00 — a combination no other verdict
+      produces.
 
-      The scope of that is the DRAWN path, not every path. `plan_claim`'s `issued_at` is a
-      public parameter with no guard on the period, so a caller naming an out-of-window date
-      gets a plan the engine labels `rejected` — which is why the claim above is about what
-      the generator draws rather than about what it can be made to produce.
-      `claim_planner._UNREALIZABLE_REASONS` records what each mechanism waits for.
+      ⛔ THE OTHER ROUTE IS NOT IN THE DATA. `rejected` by WHAT WAS BOUGHT — a covered fraction
+      of zero — is labelled by `policy_engine` and built by nothing: `content_builder` always
+      draws at least one covered line. A consumer must therefore not learn "`rejected` means the
+      payment date is outside the window", true though it is of every claim here; see
+      `known_limitations` KL-07, and `claim_planner._UNREALIZABLE_ROUTES` for what the route
+      waits for.
     share: >
-      `verdict_mix` in policy.yaml declares this member with NO SHARE — `null`, which the
-      loader returns as `None` and never as 0. Acquiring a second mechanism did not change
-      that: the share is decided together with whichever mechanism first builds such a claim,
-      and a number set before then would size a bucket nothing can fill. A consumer reading
-      `verdict_mix` as weights must treat an undeclared share as absent rather than as zero,
-      and the assembler's balance report therefore reports the absent fraction of the mix as
-      a LOWER BOUND.
+      `verdict_mix` in policy.yaml declares 0.10 for this member since the revision that made it
+      buildable. It read `null` before — a share, unlike a weight of 0, that the loader returns
+      as `None` and that a consumer had to treat as absent rather than as zero. NO MEMBER OF THE
+      MIX CARRIES `null` TODAY, and the rule about one is unchanged for whichever verdict is next
+      declared before its mechanism exists: an undeclared share is absent, not zero, and the
+      balance report reports the absent fraction of the mix as a LOWER BOUND when one appears.
+
+      🔴 THE SHARE CAME OUT OF `covered`, WHICH FELL 0.50 TO 0.40, so the realizable subset still
+      sums to 0.80 and the conditional rate of every other realizable verdict is unchanged. A
+      consumer comparing a corpus generated before this revision with one generated after will
+      find `covered` down by about ten points of the whole and the rest of the table where it
+      was.
 
 # The two enums, side by side. Stated as a table because the alternative is a consumer
 # comparing verdict strings and scoring every correct decision as wrong — the exact failure
@@ -3701,15 +4112,34 @@ claim_evidence:
     status: emitted
     note: >
       Applied to a split pair only; a self-contained document cannot disagree with itself
-      about which payment settled it. Failing either is `insufficient_evidence` with the
+      about which payment settled it. Failing one is `insufficient_evidence` with the
       cause in `imperfection` — NOT a flag on a coverage-determined verdict, which would
       let a claim whose documents contradict each other come out `covered`.
+
+      🔴 WHICH CHECKS ARE APPLIED IS DECLARED IN config/policy.yaml, under
+      `cross_document_agreement`, and is no longer a list inside the engine. Each entry names the
+      AXIS and the OUTCOME — the verdict and the cause a failure earns — so a consumer building its
+      own engine reads both from the same file the labels were derived from, and an axis withdrawn
+      there is a check neither engine performs. The three below are what that block declares today;
+      the block is the authority and this section describes it.
     amount: >
       The subject document and its payment state the same amount, compared to two decimal
-      places. Cause `amount_mismatch`.
+      places. Cause `amount_mismatch`. Axis `amount`.
     order: >
       The payment is not dated BEFORE the document it settles. Strictly before: paying an
-      invoice on the day it is issued is ordinary. Cause `payment_precedes_subject`.
+      invoice on the day it is issued is ordinary. Cause `payment_precedes_subject`. Axis
+      `date_order`.
+    counterparty: >
+      The subject document and its payment name THE SAME PARTY — an invoice issued by one seller
+      beside a payment made to another does not establish that this money settled that obligation,
+      however well the amounts and the dates agree. Cause `counterparty_mismatch`. Axis
+      `counterparty`.
+
+      COMPARED ON THE `counterparty` LABEL FIELD, raw, which carries the BARE trading name on every
+      class (`normalization.party_name` makes that form authoritative, so the comparison needs no
+      normalization of its own). ⛔ THE COUNTERPARTY'S TAX NUMBER IS NOT COMPARED, and cannot be:
+      no label field of any class carries it. That is the consumer cross-check named in
+      `claim_label.linked` and it stays unperformed for want of a field, not for want of a rule.
     not_checked_here: >
       Whether a document's own stated `amount` equals the sum of its own line items. That
       is a DOCUMENT invariant, owned by `content_builder.validate_line_item_sum`,
@@ -3867,11 +4297,13 @@ claim_label:
         information at TYPE level in policy.yaml's `document_evidence` and records nothing
         per document. See RC-15.
       partly_closed: >
-        TWO of the consumer's cross-checks are now PERFORMED, though still not recorded per
-        document: amount agreement and date order between a subject document and the payment
-        that settles it. A claim failing either is `insufficient_evidence` with the cause in
-        `imperfection` — see `claim_evidence.cross_checks`. Counterparty tax number, payment
-        form and contract party against payee are not performed, because no generator field
+        THREE of the consumer's cross-checks are now PERFORMED, though still not recorded per
+        document: amount agreement, date order, and THE PARTY — an invoice issued by one seller
+        beside a payment made to another — between a subject document and the payment that settles
+        it. A claim failing one is `insufficient_evidence` with the cause in `imperfection` — see
+        `claim_evidence.cross_checks`. ⚠️ THE PARTY CHECK IS ON THE NAME AND NOT ON THE TAX NUMBER,
+        which is a different cell of the requirement's table: the counterparty's tax number,
+        the payment form and the contract party are still not compared, because no generator field
         carries any of them (see `document_types.payment_confirmation`).
 
     - name: imperfection
@@ -3890,10 +4322,15 @@ claim_label:
         limit_exhausted: the annual balance ran out — NOT VISIBLE IN THE IMAGE
         # Causes of `insufficient_evidence`, one per slot it owns: the WHAT-WAS-BOUGHT slot and
         # the ONE-TRANSACTION slot (see `verdict_notes.definitions_name_their_own_slot`).
-        # POLICY.YAML NAMES NONE OF THESE: it declares a cause vocabulary only where shares are
-        # being declared, and no share of a dataset is sized by them. The names are
-        # `policy_engine`'s, exported as module constants, and this file is where they are
-        # contracted.
+        # POLICY.YAML NAMES ALL THREE — under `insufficient_evidence_causes`, which exists to
+        # give them SHARES of that verdict's bucket, exactly as `partially_covered_causes` does
+        # above. That is a DRAW and not a vocabulary: `policy_engine` derives a cause from a
+        # claim's documents without consulting a share, so a cause whose share was removed would
+        # still be returned and still reach a label. The names are `policy_engine`'s, exported as
+        # module constants, and THIS FILE is where the vocabulary is contracted.
+        # ⛔ `outside_period` below has no share OF ITS OWN, and needs none: `rejected` has two
+        # routes and only one is buildable, so a per-route split would be the number 1.0 written
+        # down. The VERDICT carries a share since this revision — see `verdicts.rejected.share`.
         subject_not_evidenced: >
           The WHAT-WAS-BOUGHT slot: no document of the claim is of a type that states it — a
           bare transfer. That slot has no document at all.
@@ -3905,6 +4342,17 @@ claim_label:
           The ONE-TRANSACTION slot again: the payment is dated before the document it settles,
           an impossible order. Checked between the two documents of a pair, not against the
           benefit period, which is a different rule with a different verdict.
+        counterparty_mismatch: >
+          The ONE-TRANSACTION slot a third time, and the first cause of it that is not about a
+          number: the subject document was issued by one party and the payment was made to
+          another, so the money that left the account settled some other obligation. Both
+          documents may be flawless and the amounts and dates may agree exactly.
+
+          🔴 A CONSUMER CANNOT DERIVE IT FROM THE AMOUNTS OR THE DATES — the only field that
+          differs is `counterparty`, and comparing it across a claim's documents is the whole of
+          the check. See `claim_evidence.cross_checks.counterparty`, and
+          `cross_document_agreement` in policy.yaml, which is where the axis and this cause are
+          declared together.
         # The one cause of `rejected`, and the only one that verdict needs: its other
         # mechanism, a basket the category covers none of, is the whole of what the verdict
         # already says.
@@ -4480,63 +4928,73 @@ known_limitations:
       is declared here rather than fixed alongside the archetype that exposed it.
 
   - id: KL-07
-    name: one cause of `insufficient_evidence` is in the vocabulary and never in the data
-    predictor: none — a coverage gap in the cause vocabulary
-    hurts: [evaluation]
+    name: one of the two routes to `rejected` is never realized, so the date predicts the verdict
+    predictor: >
+      the payment date — outside the benefit period on every `rejected` claim and on no other
+    hurts: [evaluation, training]
     subset: >
-      🔴 `subject_not_evidenced` IS NEVER REALIZED. `imperfection` has a vocabulary of six causes
-      and this corpus now contains four. The two CROSS-CHECK causes became drawable when the
-      planner gained `insufficient_evidence` as a target — see `when_it_appeared` — and the third
-      route to that verdict did not: a claim that establishes a movement of money and never what it
-      bought needs DELIBERATELY INCOMPLETE evidence, which `_select_documents` refuses by
-      construction and `ClaimPlan.subject_document` raises on.
+      🔴 EVERY `rejected` CLAIM IS AN OUT-OF-PERIOD ONE. That verdict has two routes and the corpus
+      contains one: by WHEN it was paid, cause `outside_period`. The other — by WHAT WAS BOUGHT, a
+      basket the claimed category covers none of, carrying NO cause — is labelled by
+      `policy_engine` and built by nothing, because `content_builder` always draws at least one
+      covered line (`claim_planner._UNREALIZABLE_ROUTES`).
 
-      A consumer stratifying by VERDICT still cannot see this: `insufficient_evidence` is present in
-      the corpus now, so its share says nothing about which of its three mechanisms produced it.
-      `outside_period` is likewise absent, its verdict `rejected` having no share yet.
+      So the verdict is FULLY PREDICTED BY A DATE COMPARISON on this corpus, and a system that
+      never reads a line item can score perfectly on it. That is a shortcut the data teaches, not
+      merely a gap in it, which is why this entry hurts training as well as evaluation.
+
+      ⚠️ THIS ENTRY USED TO BE ABOUT A MISSING CAUSE, and both of the gaps it described have since
+      closed: `subject_not_evidenced` when the planner gained
+      `claim_planner.EvidenceIntent.EVIDENCE_GAP`, and `outside_period` when it learned to displace
+      a claim's payment out of the benefit period. ALL SIX CAUSES OF `imperfection` NOW OCCUR. What
+      survives is one step narrower than a cause: a route that carries no cause at all, and is
+      therefore invisible to a consumer stratifying by `imperfection`.
     how_a_consumer_detects_it: >
-      `subject_not_evidenced` is in the `imperfection` vocabulary and can never be in the data: a
-      claim that establishes a movement of money and never what it bought needs DELIBERATELY
-      INCOMPLETE evidence, which `_select_documents` refuses and `ClaimPlan.subject_document` raises
-      on. Zero by construction rather than by outcome. A consumer stratifying by VERDICT cannot see
-      it, because `insufficient_evidence` IS present — its share says nothing about which of its
-      three mechanisms produced it. `outside_period` is likewise absent, its verdict carrying no
-      share yet. The counts per cause are in the profile.
+      Take every claim labelled `rejected` and compare its payment date against `period` in
+      config/policy.yaml: all of them fall outside it, and all of them carry `outside_period` in
+      `imperfection`. The complement — a `rejected` claim with an EMPTY `imperfection`, whose
+      `covered_fraction` is 0 and whose lines are all non-covered — does not occur at any run size,
+      because nothing builds it; a scorecard row for that case is unmeasured rather than perfect.
+      Reading the other way round is the trap: `covered_fraction` on a `rejected` claim of this
+      corpus is typically 1.0, so a consumer that learned "rejected means nothing was covered" from
+      the policy will find the data disagreeing with it in every instance.
     see_profile: run_profiles
     when_it_appeared: >
-      THE FIGURES MOVED FOR A MECHANISM, NOT FOR A SEED. On the 12-persona run all three causes of
-      this verdict were zero, and the reason was that the planner could not aim at the verdict at
-      all: `insufficient_evidence` was not in `REALIZABLE_VERDICTS`, the payment document was handed
-      the subject's amount, and the subject was always dated first. The commit that made the two
-      cross-checks drawable is what moved them off zero; nothing about the third changed, and its
-      figure is zero for the reason it has always been zero.
+      WHEN THE PLANNER GAINED THE PERIOD ROUTE AND NOT THE COVERAGE ONE. Before that revision the
+      verdict itself was absent from every dataset and this entry described the absence of its
+      cause; a profile measured earlier — every profile in `run_profiles` — counts `rejected` as
+      zero and five causes rather than six, correctly for the run it names. The asymmetry recorded
+      here is what the revision created: a verdict that is now present through exactly one of its
+      two mechanisms.
     consequence: >
-      Evaluation of a system's ability to notice a MISSING SUBJECT DOCUMENT is unmeasured here. The
-      two cross-checks are measured. A consumer must not read the presence of `insufficient_evidence`
-      in the corpus as evidence that all three of its routes are exercised.
+      A per-verdict figure for `rejected` measured on this corpus is a figure about the PERIOD
+      RULE and about nothing else. It does not evidence that a system can refuse a claim whose
+      basket the policy excludes, and it must not be quoted as one. A consumer building an
+      evaluation of category-coverage refusals has to source it elsewhere until the route is built.
     how_to_stratify: >
-      By `imperfection` membership, never by verdict — the four realized causes sit under two
-      verdicts, and one verdict carries two of them.
+      By `imperfection` membership within the verdict: `outside_period` present is the whole of the
+      `rejected` bucket here, and `rejected` with an empty `imperfection` is the empty stratum
+      whose denominator is zero by construction rather than by outcome.
     fixed_by: >
-      A PLANNER THAT PLANS INCOMPLETE EVIDENCE. `_select_documents` would have to return a payment
-      document with no subject beside it, and `ClaimPlan.subject_document` would have to tolerate
-      zero carriers instead of raising. That is a change to the claim model rather than to a share
-      or a template, which is why config/policy.yaml declares no share for the cause — the same
-      reasoning that leaves `rejected` without one in `verdict_mix`.
+      A BASKET BUILDER THAT CAN DRAW NO COVERED LINE. `content_builder` draws at least one covered
+      line for every claim, which is what makes a covered fraction of zero unreachable; opening the
+      route means changing that builder and giving the planner a way to ask for it, in the way
+      `EvidenceIntent` gave it a way to ask for missing evidence. The engine needs nothing: it has
+      labelled the case since `verdict_for` was written.
 
   - id: KL-08
     name: the cross-check causes can never occur on a fiscal receipt
     predictor: doc_type — a document class fully determines that two causes are absent from it
     hurts: [evaluation]
     subset: >
-      🔴 EVERY `fiscal_receipt` IN THE CORPUS IS THE WHOLE OF ITS CLAIM, so neither cross-check
+      🔴 EVERY `fiscal_receipt` IN THE CORPUS IS THE WHOLE OF ITS CLAIM, so no cross-check
       cause can ever be observed on one. A cross-check compares a claim's SUBJECT document with its
       PAYMENT document, and a receipt is both — a self-sufficient document has nothing to disagree
       with. The planner makes this exact: `_select_documents` prefers a single document proving both
       facts wherever one is registered, and the three fiscal receipts are registered for the one
       category that has them.
     how_a_consumer_detects_it: >
-      EVERY `fiscal_receipt` is the whole of its claim, so neither cross-check cause can occur on
+      EVERY `fiscal_receipt` is the whole of its claim, so no cross-check cause can occur on
       one: a cross-check compares a claim's subject document with its payment document, and a
       self-sufficient document has nothing to disagree with. `_select_documents` prefers a single
       both-proving document wherever one is registered, which makes this exact rather than likely.
@@ -4746,6 +5204,108 @@ known_limitations:
       fix it is the generator quietly balancing the sides: a report that cannot show an unbalanced
       partition is a report that says nothing about balance.
 
+  - id: KL-14
+    name: the sales slip occurs in exactly one claim shape, so its class predicts the verdict
+    predictor: >
+      doc_type — a claim containing a `non_fiscal_receipt` is `not_proof_of_payment` on this
+      corpus, without any other field being read
+    hurts: [training, evaluation]
+    subset: >
+      🔴 EVERY `non_fiscal_receipt` IN THE CORPUS IS THE WHOLE OF ITS CLAIM. The planner draws one
+      only as the evidence of a `not_proof_of_payment` claim
+      (`claim_planner.EvidenceIntent.PAYMENT_GAP`) and never as the subject half of a pair, because
+      nothing settles a sales slip: 👁 a payment purpose names an invoice or a delivery note, and
+      the invoice is the only class this generator gives a citable reference. So the CLASS and the
+      VERDICT are in one-to-one correspondence in this direction, and a system that learns "a
+      товарний чек means not proof of payment" scores perfectly here while having learnt a
+      regularity of the corpus rather than the rule.
+
+      ⚠️ THE OTHER DIRECTION DOES NOT HOLD, and that is what keeps the entry from being the whole
+      verdict: a `not_proof_of_payment` claim may equally carry a bare INVOICE, which also appears
+      in ordinary paired claims. So the verdict does not predict the class, and a consumer reading
+      this entry as "the two are interchangeable" has it half right in the expensive direction.
+
+      ⛔ IT IS NOT A LABELLING ERROR. The verdict really is decided from the document types — that
+      is what `document_evidence` says — so the correspondence is sound on every claim. What is
+      missing is the OTHER shape the world has: a slip submitted alongside a genuine payment
+      document, where the claim is complete and the slip is merely the subject. Nothing in this
+      corpus contains one.
+    how_a_consumer_detects_it: >
+      Group claims by the document classes they carry: every claim whose `documents` include a
+      `non_fiscal_receipt` has exactly one document and the verdict `not_proof_of_payment`. The
+      complement — a `non_fiscal_receipt` beside a `payment_confirmation` or a `bank_statement` —
+      has a denominator of zero at any run size, so a scorecard row for it is unmeasured rather
+      than perfect.
+    see_profile: run_profiles
+    when_it_appeared: >
+      WITH THE CLASS ITSELF, in contract version 27. Every profile measured earlier counts
+      `non_fiscal_receipt` as absent, correctly for the run it names.
+    consequence: >
+      A per-class figure for `non_fiscal_receipt` measured here is a figure about a document that
+      is always alone. It evidences that a system can recognize the class and refuse the claim; it
+      does not evidence that the system reads the slip as EVIDENCE OF THE SUBJECT when a payment
+      document is beside it, which is the same document doing a different job.
+    how_to_stratify: >
+      By the SET of document classes on a claim rather than by `doc_type` per document. That is the
+      grouping in which this limitation is visible at all — per document, the class simply occurs;
+      per claim, it occurs in one shape only.
+    fixed_by: >
+      A DECISION ABOUT WHAT SETTLES A SALES SLIP, not a planner change on its own. Pairing one with
+      a payment document means asserting a settlement relation no observation in this project
+      supports, and the payment's purpose line would cite an invoice that does not exist. The
+      honest route is an observation of how such a claim is actually filed; until then the
+      one-shape corpus is the accurate one and this entry is its declaration.
+
+  - id: KL-15
+    name: the instalment term predicts `partially_paid`, in both directions
+    predictor: >
+      `instalment_amount` non-null on a claim's subject document — the verdict follows from that
+      one field without any amount being compared
+    hurts: [training, evaluation]
+    subset: >
+      🔴 EVERY INVOICE THAT PRINTS AN INSTALMENT TERM IS THE SUBJECT OF A `partially_paid` CLAIM,
+      AND EVERY `partially_paid` CLAIM CARRIES ONE. The planner names a payment schedule for that
+      verdict and for no other (`claim_planner.plan_claim`), so the correspondence is exact in both
+      directions — unlike KL-14, whose other direction does not hold. A system that learns "the term
+      is printed ⇒ partially paid" scores perfectly here while never having compared the payment
+      against the part.
+
+      ⛔ IT IS NOT A LABELLING ERROR, AND THE RULE IS NOT THE SHORTCUT. The verdict requires the
+      payment to EQUAL the printed part and the part to be smaller than the whole; the corpus simply
+      contains no claim where the term is printed and one of those fails. Two shapes the world has
+      are therefore absent: an instalment invoice paid in full, and an instalment invoice paid an
+      amount matching no part of it. The second is `amount_mismatch` and the corpus has plenty of
+      it — but always on an invoice with NO term, so the discriminating comparison is never the
+      thing that decides.
+
+      ⚠️ AND THE WORDING ITSELF IS UNOBSERVED. Neither open invoice behind this class carried an
+      instalment term, so the line is derived from general knowledge of the document rather than
+      transcribed. A system trained here learns THIS phrasing; a real instalment invoice may word
+      the same term differently, and nothing in this corpus would show that.
+    how_a_consumer_detects_it: >
+      Cross-tabulate `instalment_amount is not null` on the subject document against the claim
+      verdict. Both off-diagonal cells are empty at any run size, so a scorecard row for either is
+      unmeasured rather than perfect.
+    see_profile: run_profiles
+    when_it_appeared: >
+      WITH THE FIELD ITSELF, in contract version 28. Every profile measured earlier counts
+      `partially_paid` as absent, correctly for the run it names.
+    consequence: >
+      A per-class figure for `partially_paid` measured here evidences that a system can SPOT the
+      term. It does not evidence that the system checks the payment against it, which is the half
+      of the rule that separates this verdict from `amount_mismatch` — and that is the half a
+      consumer's own engine has to implement from `partial_payment` in policy.yaml.
+    how_to_stratify: >
+      By the presence of the term on the subject document rather than by the verdict. That is the
+      grouping in which the missing cells are visible; by verdict, each class simply looks complete.
+    fixed_by: >
+      TWO PLANNER SHAPES THAT DO NOT EXIST YET, not a change to the rule: an instalment invoice
+      whose payment settles the WHOLE amount (an ordinary claim carrying the term), and one whose
+      payment matches no part of it (`amount_mismatch` carrying the term). Both are buildable — the
+      schedule and the mismatch delta are independent knobs — and neither is drawn, because a share
+      for them would size a bucket nothing in policy.yaml declares. Adding them is a policy decision
+      about the mix and not an implementation gap.
+
 
 # =============================================================================
 # 9b. Run profiles — the measurements, kept apart from the limitations
@@ -4953,8 +5513,10 @@ run_profiles:
           per class, never equal n.
 
           `other` is outside the minimum and reported separately: EMPTY. `act`, `order_screenshot`
-          and `non_fiscal_receipt` have no archetype, so no run of any size contains one. Absence,
-          not a count of zero.
+          and `non_fiscal_receipt` HAD no archetype at the generator version this run was measured
+          at, so no run of any size contained one. Absence, not a count of zero. ⚠️ That is a
+          statement about this run: `non_fiscal_receipt` gained an archetype in contract version 27
+          and later runs contain it.
       split_by_document_class:
         train: {invoice: 291, bank_statement: 146, payment_confirmation: 145, fiscal_receipt: 71}
         validation: {invoice: 296, bank_statement: 148, payment_confirmation: 148, fiscal_receipt: 70}
@@ -5023,8 +5585,12 @@ run_profiles:
           `config/policy.yaml` requires of the RESULT rather than of the share. ⚠️ THE MAJORITY
           CHANGED SIDES between RP-05 and this run — `amount_mismatch` led there at 46.2% and leads
           here at 54.1% — which is what a share near a half looks like under a different draw, and
-          not a change in the generator. `subject_not_evidenced` has no declared share and a
-          consumer must not expect it at any size. See KL-07.
+          not a change in the generator. ⚠️ `subject_not_evidenced` HAD NO DECLARED SHARE AT THE
+          GENERATOR VERSION THIS PROFILE NAMES, and nothing could plan the claim it needs, so its
+          zero here is by construction and correct for this corpus. IT IS NOT ADVICE ABOUT THE
+          GENERATOR: contract version 25 gave the cause a share and a mechanism, and a run made
+          after it contains such claims. See the version 25 entry at the head of this file, and
+          KL-07.
       imperfection_causes:
         limit_exhausted: 209
         mixed_items: 136
@@ -5188,8 +5754,10 @@ run_profiles:
           match the small one would discard data for the look of the table.
 
           `other` is outside the minimum and reported separately: EMPTY. `act`, `order_screenshot`
-          and `non_fiscal_receipt` have no archetype, so no run of any size contains one. Absence,
-          not a count of zero.
+          and `non_fiscal_receipt` HAD no archetype at the generator version this run was measured
+          at, so no run of any size contained one. Absence, not a count of zero. ⚠️ That is a
+          statement about this run: `non_fiscal_receipt` gained an archetype in contract version 27
+          and later runs contain it.
       claim_shapes:
         two_documents: 307
         one_document: 52
@@ -5214,8 +5782,11 @@ run_profiles:
           arrived through one cause would teach one mechanism while the vocabulary promised more.
           Both drawable causes occur and they are mutually exclusive, which is what
           `config/policy.yaml` requires of the RESULT rather than of the share.
-          `subject_not_evidenced` has no declared share — nothing can plan a deliberately incomplete
-          claim — so a consumer must not expect it at any size. See KL-07.
+          ⚠️ `subject_not_evidenced` HAD NO DECLARED SHARE AT THE GENERATOR VERSION THIS PROFILE
+          NAMES — nothing could then plan a deliberately incomplete claim — so its zero here is by
+          construction and correct for this corpus. IT IS NOT ADVICE ABOUT THE GENERATOR: contract
+          version 25 gave the cause a share and a mechanism. See the version 25 entry at the head
+          of this file, and KL-07.
       imperfection_causes:
         limit_exhausted: 107
         mixed_items: 61
@@ -5731,14 +6302,47 @@ required_changes:
       fiscal receipts, where the published form actually defines the line. Nothing about the
       invoice changed — no invoice archetype exists, and whether a Ukrainian invoice prints a
       payment status at all is itself disputed.
+    progress: >
+      VERSION 28 SETTLED THE NEIGHBOURING QUESTION AND NOT THIS ONE, which is worth stating because
+      the two look alike from the field list. The invoice now prints a PAYMENT TERM and carries
+      `instalment_amount` — how the seller proposes to be paid — and that is what `partially_paid`
+      rests on. A PAYMENT STATUS, a record that money moved, is still not printed and still not
+      labelled: 👁 0 of 2 open invoices carry one and the reason is structural. This entry stays
+      open for the non-UA jurisdictions whose forms do print one, and the verdict it was once
+      thought to block no longer depends on it.
     blocked_on: decision
 
   - id: RC-08
     file: src/receipt_synth/schemas.py, templates/
+    progress: the archetype half is done in version 27; the field is not, and its SHAPE is the
+      open question rather than its wording
     change: >
       Record positive and negative fiscality markers with their position in the text.
-      Needs both a field and archetypes that print such a marker.
+
+      DONE: an archetype that carries a negative fiscality signal exists and reaches the corpus.
+      `ua_non_fiscal_receipt` prints a товарний чек — the rule that a negative signal overrides
+      every positive one has a test document for the first time.
+
+      🔴 STILL OPEN, AND NARROWED BY WHAT THAT ARCHETYPE TURNED OUT TO CARRY. The signal on it is
+      NOT the string this file names for Ukraine: ⛔ no public source found shows «НЕ ФІСКАЛЬНИЙ
+      ЧЕК» printed on a SALES document (the one observed Ukrainian denial, «! НЕ ФІСКАЛЬНИЙ !», is
+      on a ПРРО SERVICE document — a cash movement). What the sources evidence is two things: a
+      positive self-identifying TITLE standing where the fiscal wording stands, and an ABSENCE —
+      no fiscal number, no factory serial, no maker, no mode marker, no QR.
+
+      So the field this entry proposes — marker text together with its position in the text —
+      CANNOT HOLD WHAT THIS DOCUMENT CARRIES: an absence has no string and no coordinate, and a
+      generator filling that field would write something that is not on the page. The absence is
+      recorded instead as `has_fiscal_number` / `has_qr` / `qr_is_fiscal`, all false, which is
+      ground truth and is not the field this entry asks for. `receipt.non_fiscal_marker` in
+      config/fiscal-rules.yaml is left exactly as it stands, and NO ARCHETYPE PRINTS IT.
     blocked_on: decision
+    blocked_on_note: >
+      FOR THE SHAPE OF THE FIELD, AND FOR WHETHER THE UKRAINIAN MARKER'S DESCRIPTION SHOULD BE
+      NARROWED TO SERVICE DOCUMENTS. Both are the author's, and neither was decided as a side
+      effect of connecting the archetype. What the evidence would support today is narrower than
+      this entry: a non-fiscal TITLE in the fiscal title's slot, plus the set of fiscal requisites
+      found absent.
 
   - id: RC-09
     file: src/receipt_synth/content_builder.py
@@ -5841,10 +6445,10 @@ required_changes:
       labels has to re-derive the pairing the same way, since `documents` is a flat list of
       ids.
 
-      The requirement's `DocumentLink` also expects the result of named cross-checks. Two of
-      them — amount agreement and date order — are now performed and reported as
-      `imperfection` causes on the claim; the rest need fields that do not exist. See
-      `claim_label.linked.partly_closed`.
+      The requirement's `DocumentLink` also expects the result of named cross-checks. Three of
+      them — amount agreement, date order and the party by NAME — are now performed and reported
+      as `imperfection` causes on the claim; the rest, including the party by TAX NUMBER, need
+      fields that do not exist. See `claim_label.linked.partly_closed`.
     blocked_on: decision
 
   - id: RC-16

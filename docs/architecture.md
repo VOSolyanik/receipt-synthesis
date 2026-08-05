@@ -82,20 +82,43 @@ claim are not simultaneous: an invoice is issued and then settled. The planner k
 both facts a reimbursement rests on are established — what was bought, and that it was paid for — reading
 what each type proves from `document_evidence` in `config/policy.yaml`. Where a single archetype proves both,
 as a fiscal receipt does, the claim has one document; where none does, it takes a subject document and a
-payment document. The registry currently holds four archetypes of two classes: three Ukrainian fiscal receipts, each of which
-proves both facts, and one Ukrainian bank payment confirmation, which proves only that money moved. So every
-claim built today still has exactly one document, drawn from the three receipts — a property of the registry
-and not of a claim, and nothing downstream may depend on it.
+payment document — an invoice and the bank document that settles it. Which shape a category gets is a
+property of the registry and never of a claim, and nothing downstream may depend on either.
 
-**The fourth archetype is registered and no claim uses it, which is a structural fact rather than an
-oversight.** A claim needs both facts; a payment confirmation supplies one; the class that supplies the other
-on its own — an invoice — is not written. `documentable_categories` therefore reports no category as
-documentable through it, so the planner never draws it and no run contains one. It is registered because the
-template, the builder and the label fields are what pairs with an invoice when that archetype lands, and
-because an unregistered archetype is one nothing renders and no test reaches.
+**A claim may also be planned with its evidence deliberately short, and that is a named intent rather than a
+missing document.** `EvidenceIntent.EVIDENCE_GAP` asks for a payment document with nothing beside it, so the
+claim states that money moved and never what it bought; the policy engine reads the label off the document
+types as it does for every other claim and answers `insufficient_evidence`, cause `subject_not_evidenced`. The
+distinction the intent carries is the whole of why it exists: a claim short of a fact because a template was
+absent is a defect the planner still refuses to build, and the two are indistinguishable from the document
+list alone. Nothing here asserts the label — the planner builds the evidence, the engine derives the answer.
+
+**There are two such gaps and they are opposite.** `EvidenceIntent.PAYMENT_GAP` asks for a *subject* document
+with nothing beside it — a bare invoice, or the sales slip `ua_non_fiscal_receipt` prints — so the claim
+states what was bought and never that money moved, and the engine answers `not_proof_of_payment` with no
+cause: one slot of `document_evidence`, one way to fail it. The two intents must not be read as versions of
+one another; each opens a different slot, and the corpus needs both because a system that notices a missing
+receipt need not notice a missing payment.
+
+**A claim may also be planned outside the benefit period, which is the one mechanism that is a date rather
+than a document.** The payment is displaced by a whole period, into the benefit year before or after the
+window — the side is drawn, so a corpus does not teach "late" where the rule says "outside" — and everything
+else about the claim stays ordinary: the evidence is complete, the basket is covered, and the policy engine
+answers `rejected`, cause `outside_period`, off the payment date alone. Only one of the two routes to that
+verdict is built this way; a claim whose basket the category covers *none* of needs a builder that draws no
+covered line, and `claim_planner._UNREALIZABLE_ROUTES` records that it does not.
+
+**And a claim may be planned to be settled in parts, which is the one mechanism that is neither a document
+shape nor a date but a line of PRINT.** The plan names a payment schedule; the invoice states that its
+obligation is paid in equal parts and what one part comes to; the payment document is then sized to exactly
+that part, read off the built invoice rather than recomputed. Everything else about the claim is ordinary —
+a complete pair, a covered basket, a payment inside the period — and the engine answers `partially_paid` off
+the printed term. See [A smaller payment that is not a disagreement](#a-smaller-payment-that-is-not-a-disagreement).
 
 It processes a persona's claims in date order and carries the remaining category balance, so that a claim can
-also become partially covered by exhausting an annual limit rather than by containing a non-covered item.
+also become partially covered by exhausting an annual limit rather than by containing a non-covered item. A
+claim outside the period is outside that order too, and may be: it reimburses nothing, so it consumes no
+balance.
 
 The verdict itself is not computed here. The planner chooses what to build and what answer it is aiming at; a
 separate policy engine reads `config/policy.yaml` and derives the verdict, the covered fraction, the
@@ -378,7 +401,7 @@ not bind is not mentioned, and a claim rejected for its date says so without arg
 | `rejected` | The policy plainly does not cover the claim — nothing bought is covered by the category, or the payment falls outside the active period |
 | `not_proof_of_payment` | It is not established that **money moved**: every document is of a *type* whose `proves_payment` is `false` |
 | `insufficient_evidence` | It is not established **what was bought** (no document states it), or not established that the payment and the purchase are **one transaction** |
-| `partially_paid` | Payment was made in installments; only part has been paid |
+| `partially_paid` | The subject document states that its obligation is settled **in equal parts** and what one part comes to, and the payment settles exactly that part |
 
 The evidence a claim rests on has three slots — that money moved, that a purchase was made, and that the two
 are one transaction — and each row above names **its own slot**. No row is written as "the case that is not one
@@ -419,8 +442,8 @@ receipt listing nothing but medicines is `rejected`, and is not, on any reading,
 **`insufficient_evidence` owns the other two slots.** *What was bought* is unestablished when no document of
 the claim is of a type that states it — a bare transfer, cause `subject_not_evidenced`. *One transaction* is
 unestablished when a subject document and its payment both exist and fail a cross-check, causes
-`amount_mismatch` and `payment_precedes_subject` (see [Evidence](#evidence)). Those two slots are the whole of
-the verdict, and which one failed is read off the claim's own documents.
+`amount_mismatch`, `payment_precedes_subject` and `counterparty_mismatch` (see [Evidence](#evidence)). Those
+two slots are the whole of the verdict, and which one failed is read off the claim's own documents.
 
 ---
 
@@ -481,21 +504,58 @@ it `covered`.
 
 ### Documents that disagree
 
-The two documents of a split pair have to describe *one* transaction. Two cross-checks say whether they do,
-and each is its own defect with its own name:
+The two documents of a split pair have to describe *one* transaction. **On which axes they are compared is a
+policy parameter**, not a list in the engine: `config/policy.yaml` declares them under
+`cross_document_agreement`, each with the verdict and the cause a failure earns, and `policy_engine` reads that
+block. A consumer builds its own engine from the same declaration; an axis withdrawn there is a check neither
+engine performs, and adding a field two documents must agree on is an edit to that block rather than to any
+code. Three are declared today, and each is its own defect with its own name:
 
 - **`amount_mismatch`** — the subject document and its payment state different amounts;
 - **`payment_precedes_subject`** — the payment is dated before the document it settles. Strictly before:
-  paying an invoice on the day it is issued is ordinary.
+  paying an invoice on the day it is issued is ordinary;
+- **`counterparty_mismatch`** — the invoice was issued by one party and the payment was made to another. Both
+  pages may be flawless and the amounts and dates may agree exactly; the money still settled some other
+  obligation. Compared on the `counterparty` field, which carries the bare trading name on every class.
 
-Either makes the claim `insufficient_evidence`. This is the third slot: both other facts are established
+Any of them makes the claim `insufficient_evidence`. This is the third slot: both other facts are established
 separately, and the claim still does not establish that *this* payment paid for *this* subject — a linkage a
 claim has to prove. It is a verdict and not a flag beside a coverage verdict, because a flag would let a claim
 whose documents contradict each other come out `covered`.
 
-These two causes are the linkage slot; the missing **subject** document is the other slot `insufficient_evidence`
+These causes are the linkage slot; the missing **subject** document is the other slot `insufficient_evidence`
 owns. Together they are why the verdict still exists after the period case moved to `rejected`: in all three
 something genuinely *is* unestablished.
+
+### A smaller payment that is not a disagreement
+
+`amount_mismatch` above is *the payment states a different amount*, and one shape of that is not a defect at
+all: an obligation settled **in equal parts**. An annual gym subscription is invoiced for the year and paid
+quarterly, and the payment is then a quarter of the invoice — lawfully.
+
+The two are the same pair of numbers, so the arithmetic cannot separate them. What separates them is a
+**printed marker on the subject document**: an invoice may state its payment term — «Умови оплати: оплата
+частинами щоквартально, черговий платіж: …» — and the amount of that part is labelled `instalment_amount`.
+The rule, stated declaratively in `config/policy.yaml` under `partial_payment` so that a consumer's own engine
+can implement it from the same file:
+
+- the subject document carries `instalment_amount`, **and** the payment equals it, **and** it is smaller than
+  the subject's `amount` → `partially_paid`, with no cause;
+- a discrepancy without that marker → `amount_mismatch`, exactly as before.
+
+A payment matching *no* part of a stated arrangement is a payment for some third amount, i.e. the mismatch
+case again — the marker has to agree with the payment, not merely be present. The date cross-check is
+untouched: a payment dated before the invoice it settles is `payment_precedes_subject` whether it pays a part
+or the whole. And a partial settlement paid **outside the benefit period** is `rejected` with the cause
+`outside_period`, never this verdict — `partial_payment.outside_the_period` in `config/policy.yaml` states
+that precedence, because two rules describe such a claim and two engines reading a file that did not say
+would label it differently. The period asks whether the plan covers the expense at all; `partially_paid` is
+a statement about a claim the plan does cover.
+
+A payment term is **not** a payment status. It says how the seller proposes to be paid and is fixed when the
+invoice is drawn up; nothing on the page says money moved, and whether it did is still decided from the
+payment document's type. Such a claim reimburses nothing and consumes no annual balance: how much of a partly
+settled obligation is payable is a decision the policy has not taken, and the engine will not invent one.
 
 ### What ties a claim's documents together
 
@@ -541,7 +601,7 @@ Twenty-four rows below, sixteen Ukrainian and eight European. Layouts follow the
 conventions of each document class and jurisdiction.
 
 **Rows are not templates one for one.** Row 8 is realized by two templates, one per paper width, so the
-twenty-four rows are twenty-five templates. **Five exist today**, across three document classes:
+twenty-four rows are twenty-five templates. **Seven exist today**, across five document classes:
 
 | Template | Class |
 |---|---|
@@ -549,6 +609,7 @@ twenty-four rows are twenty-five templates. **Five exist today**, across three d
 | `ua_bank_payment_confirmation` | `payment_confirmation` |
 | `ua_bank_statement` | `bank_statement` |
 | `ua_invoice` | `invoice` |
+| `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
 
 The three receipts share one body, `templates/ua_fiscal_receipt.jinja`, and differ in the paper width and in
 the fiscal identity the register prints. That is deliberate and it is also a limit: real registers differ in
@@ -561,7 +622,16 @@ the fields four issuers all carry, and the statement models the **corporate** ac
 of at least three layouts that go by that name. Both limits are declared in `config/labelling-schema.yaml`
 rather than left to be discovered from a score.
 
-**All four classes reach a dataset.** The invoice is what changed that: it states what was bought and proves
+**The sales slip is row 12 of the Ukrainian table below, and it is the one archetype whose classification
+cannot be read off its layout.** A товарний чек is, by the tax service's own rule, the fiscal receipt's form
+less the fiscal number of the register and the wording «ФІСКАЛЬНИЙ ЧЕК» — so the basket, the totals and the
+columns are a fiscal receipt's and the whole difference is a set of requisites left out. It proves what was
+bought and no payment, so a claim carrying one alone is `not_proof_of_payment`: the document an employee
+submits believing it is proof of payment, and the policy saying it is not. Its seller is never registered for
+VAT, a registered payer being obliged to use a cash register, so no line carries a VAT letter and the page has
+no tax block.
+
+**All five classes reach a dataset.** The invoice is what changed that: it states what was bought and proves
 no payment, the exact inverse of the two bank classes, so a claim's evidence can be **split across two
 documents** for the first time. Six of the seven Ukrainian categories are documented by such a pair; the
 seventh, `vitamins_nutrition`, still produces a single fiscal receipt, because the planner prefers one
@@ -581,7 +651,7 @@ reimbursement* above.
 | 9 | Classic hardware cash register receipt (РРО), 80 mm — `ЗН` beside `ФН`, sequential number | `fiscal_receipt` | Register diversity |
 | 10 | Account statement, A4 landscape — **one page, 15–25 operations, one of them labelled** | `bank_statement` | The statement class |
 | 11 | Sole-trader invoice for services | `invoice` | The invoice class |
-| 12 | Sales slip marked "not a fiscal receipt" | trap | Fiscality trap |
+| 12 | Sales slip (товарний чек) — «ТОВАРНИЙ ЧЕК» where the fiscal wording stands, and **no** fiscal number, serial, maker, mode marker or QR | `non_fiscal_receipt` | Fiscality trap; proves the subject, not the payment |
 | 13 | Non-fiscal POS slip — RRN and auth code, no fiscal number | trap | Fiscality trap |
 | 14 | Online marketplace order screenshot | linked | Proves the subject, not the payment |
 | 15 | *withdrawn* — a bank receipt whose payment purpose proves the subject | — | See the note under this table |
@@ -633,7 +703,7 @@ short. Each mechanism is a parameter of `claim_planner`, combined with a target 
 | Category does not match the policy | A purchase outside the claimed category | `rejected` |
 | Payment outside the active period | Money moved before or after the window | `rejected` |
 | Document does not prove payment | Invoice marked "paid: 0"; sales slip; booking confirmation | `not_proof_of_payment` |
-| Paid in installments | Part of the amount settled | `partially_paid` |
+| Paid in installments | The invoice states an instalment term; the payment settles one part | `partially_paid` |
 | Evidence incomplete | No statement of what was bought — a bare transfer | `insufficient_evidence` |
 | Paid through an aggregator | Payee is a payment intermediary, no visible link to the merchant | requires linking |
 | Documents disagree | Payment amount differs from the contract; payment predates the contract | `insufficient_evidence` |

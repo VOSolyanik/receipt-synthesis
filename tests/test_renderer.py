@@ -29,6 +29,7 @@ from receipt_synth.content_builder import (
     PartyIdentity,
     build_bank_statement,
     build_invoice,
+    build_non_fiscal_receipt,
     build_payment_confirmation,
     build_prro_receipt,
     draw_party_identity,
@@ -204,6 +205,24 @@ def make_invoice(seed: int = 20260512, vendor: dict = PAYER):
     )
 
 
+def make_non_fiscal_receipt(seed: int = 20260615, vendor: dict = NON_PAYER):
+    """One товарний чек, for the whole-registry tests below.
+
+    🔴 THE VENDOR DEFAULT IS THE NON-PAYER AND CANNOT BE `PAYER`, unlike every factory above. 📄 A
+    registered ПДВ payer is obliged to use a cash register, so the builder refuses a payer outright
+    — the class's own tests are in test_content_builder.py, and this exists so that every sweep of
+    the registry sweeps this archetype too.
+    """
+    return build_non_fiscal_receipt(
+        random.Random(seed),
+        category_id="vitamins_nutrition",
+        issued_at=datetime(2026, 6, 15, 17, 41, 9),
+        vendor=vendor,
+        identity=identity_for(vendor),
+        address="м. Київ, вул. Хрещатик, 22",
+    )
+
+
 def context_for(slug: str) -> dict:
     """A render context for any registered archetype, built by its document class.
 
@@ -222,6 +241,8 @@ def context_for(slug: str) -> dict:
         return make_statement().render_context()
     if doc_type is DocType.INVOICE:
         return make_invoice().render_context()
+    if doc_type is DocType.NON_FISCAL_RECEIPT:
+        return make_non_fiscal_receipt().render_context()
     raise AssertionError(
         f"{slug} is a {doc_type.value}, and this module has no context for that class — a "
         "registered archetype nothing here can render is one no test below covers"

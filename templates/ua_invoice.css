@@ -218,6 +218,22 @@ body {
   color: #3d444d;
 }
 
+/* The instalment term. Left-aligned prose like the validity line it sits beside — it is a
+   condition of the offer and not a total — while its money value keeps the monospace face every
+   amount on this page is set in, so a reader parses it as a figure rather than as text. */
+.instalment {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.instalment .money {
+  font-family: "Noto Sans Mono", "Noto Sans", monospace;
+  font-weight: 700;
+}
+
 /* -- signature ------------------------------------------------------------- */
 
 .signature {

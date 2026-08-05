@@ -23,10 +23,14 @@ import pytest
 from receipt_synth.assembler import (
     MIN_DOCUMENTS_PER_TARGET_CLASS,
     Dataset,
+    _absence_probability,
     assign_splits,
     balance_report,
 )
-from receipt_synth.policy_engine import insufficient_evidence_causes_min_run_size
+from receipt_synth.policy_engine import (
+    insufficient_evidence_causes,
+    insufficient_evidence_causes_min_run_size,
+)
 from receipt_synth.schemas import (
     Capture,
     ClaimGroundTruth,
@@ -461,10 +465,10 @@ def test_an_unrealized_cause_below_the_guideline_reads_as_run_too_small():
     line = next(ln for ln in report.splitlines() if ln.strip().startswith("amount_mismatch"))
 
     assert f"RUN TOO SMALL — {guideline - 1} built claim(s) < guideline {guideline}" in line
-    assert "DESIGN/MECHANISM DEFECT" not in line
+    assert "INVESTIGATE THE MECHANISM" not in line
 
 
-def test_an_unrealized_cause_at_the_guideline_reads_as_a_likely_defect():
+def test_an_unrealized_cause_at_the_guideline_reads_as_worth_investigating():
     """At or above the guideline the same zero count is worth investigating, and the report says
     so in different words — the two readings must never share a sentence."""
     guideline = insufficient_evidence_causes_min_run_size()
@@ -472,10 +476,43 @@ def test_an_unrealized_cause_at_the_guideline_reads_as_a_likely_defect():
     line = next(ln for ln in report.splitlines() if ln.strip().startswith("amount_mismatch"))
 
     assert (
-        f"LIKELY A DESIGN/MECHANISM DEFECT — {guideline} built claim(s), "
-        f"at or above guideline {guideline}"
+        f"INVESTIGATE THE MECHANISM — {guideline} built claim(s), at or above "
+        f"guideline {guideline}"
     ) in line
     assert "RUN TOO SMALL" not in line
+
+
+def test_the_finding_prints_the_probability_its_own_guideline_is_derived_at():
+    """🔴 THE FINDING USED TO ASSERT MORE THAN THE DERIVATION SUPPORTS. It read "LIKELY A
+    DESIGN/MECHANISM DEFECT", i.e. better than even odds, while policy.yaml derives the guideline
+    at the 95% level — so a zero AT the guideline is a ~5% event and the word was wrong by an
+    order of magnitude, in the direction that costs somebody an investigation.
+
+    Asserted against the ARITHMETIC rather than against the printed string: (1 − p)^N for the
+    rarest declared cause, computed here from policy.yaml on both sides of the comparison — the
+    guideline is the smallest N putting that under 5%, so the run one claim SHORT of it must sit
+    at or above 5% and the guideline itself below. That pair is what pins the number to the
+    threshold; a report that printed a figure drifting from the file would fail one of the two.
+    """
+    guideline = insufficient_evidence_causes_min_run_size()
+    rarest = min(insufficient_evidence_causes().values())
+
+    at_guideline = _absence_probability(rarest, guideline)
+    one_short = _absence_probability(rarest, guideline - 1)
+
+    assert at_guideline < 0.05 <= one_short, (
+        f"guideline {guideline} is not the smallest run size putting the rarest cause's absence "
+        f"below 5%: {one_short:.4f} at {guideline - 1}, {at_guideline:.4f} at {guideline}"
+    )
+
+    report = balance_report(a_run_realizing_one_cause(guideline))
+    line = next(ln for ln in report.splitlines() if ln.strip().startswith("amount_mismatch"))
+    assert f"a zero is a {at_guideline:.1%} event" in line
+
+    # And the sample DOES explain it one claim lower, which is the other half of the sentence.
+    smaller = balance_report(a_run_realizing_one_cause(guideline - 1))
+    line = next(ln for ln in smaller.splitlines() if ln.strip().startswith("amount_mismatch"))
+    assert f"a zero is a {one_short:.0%} event" in line
 
 
 def test_a_realized_cause_carries_no_run_size_finding():

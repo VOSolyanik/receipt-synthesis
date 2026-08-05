@@ -414,25 +414,74 @@ limits:
 # of this generator reads it. It belongs to the evaluation configuration of the
 # consumer, not to the specification of the dataset.
 verdict_mix:
-  covered: 0.50
+  covered: 0.40
   partially_covered: 0.20
+  # 🔴 THE SHARE DID NOT MOVE AND THE VERDICT DID: this entry has read 0.10 since the file was
+  # written, sizing a bucket nothing filled. `claim_planner` now plans a claim whose only document
+  # states what was bought and never that money moved — a bare invoice, or the товарний чек the
+  # `ua_non_fiscal_receipt` archetype prints — and the engine reads the document types and answers
+  # this verdict. So the number is unchanged and what it sizes is real for the first time.
+  #
+  # ⚠️ WHAT THIS COSTS EVERY OTHER SHARE is one line below, at
+  # `insufficient_evidence_causes_min_run_size`: a fifth member in the realizable subset makes the
+  # denominator 0.90 instead of 0.80, so every other verdict is drawn slightly RARER than before
+  # while its declared share is untouched. That is the renormalization this file has always
+  # described and the reason the run-size guideline is derived rather than picked.
   not_proof_of_payment: 0.10
   insufficient_evidence: 0.10
-  partially_paid: 0.10
-  # NO SHARE YET, AND DELIBERATELY SO. `rejected` — the policy plainly does not cover the
-  # claim, by what was bought or by when it was paid — belongs to the vocabulary because two
-  # rules above need a name for it: the `coverage` block, for a covered fraction of zero, and
-  # `period`, for a payment outside the window. What share of the dataset should carry it is a
-  # separate decision, taken together with whichever mechanism first builds such a claim —
-  # a wholly non-covered basket, or a payment dated outside the period. The generator DRAWS
-  # neither yet, so any number here would be a balance decision nobody has made.
+  # 🔴 THE SHARE DID NOT MOVE AND THE VERDICT DID, for the second time in this file and by a
+  # different route. This entry has read 0.10 since the file was written; what it sized was
+  # unbuildable because no archetype PRINTED anything a payment could be part of. The invoice now
+  # states an instalment term — that its obligation is settled in equal parts, and what one part
+  # comes to — so `claim_planner` plans a pair whose payment settles exactly one part and the
+  # engine reads the printed term. See `partial_payment` below for the rule and for why the
+  # arithmetic alone could not have supplied it.
   #
-  # `null`, not 0. A 0 share is itself a decision — "never draw this" — and it behaves like
-  # any other weight: it sums, it renormalizes, and nothing downstream could tell it from a
-  # share somebody chose. `null` is not a weight, so it cannot be summed or drawn with and
-  # every reader of this map has to say what it does with an undecided share. The five
-  # shares above therefore still sum to 1.0, and remain the whole of the declared mix.
-  rejected: null
+  # 🔴 AND WITH IT THE REALIZABLE SUBSET BECOMES THE WHOLE MIX. It summed to 0.90 while this member
+  # was absent from it; it sums to 1.00 now, so every other verdict is drawn slightly RARER than
+  # before at an unchanged declared share, and the balance report's shares stop being conditional
+  # on anything. `insufficient_evidence_causes_min_run_size` below moves from 85 to 90 for that
+  # reason and for no other — the derivation is redone there rather than assumed to have survived.
+  partially_paid: 0.10
+  # 🔴 A SHARE AT LAST, AND IT ARRIVES WITH THE MECHANISM RATHER THAN BEFORE IT. This entry
+  # read `null` while nothing could build such a claim, on the ground that a number set then
+  # would size a bucket nothing fills. One of the two routes to `rejected` is now drawn:
+  # `claim_planner` moves a claim's payment date OUT of `period` above, which the engine
+  # labels `rejected` with the cause `outside_period`. A verdict with a mechanism gets a
+  # share; that is the rule this file has always followed, and the number arrives by the rule.
+  #
+  # ⚠️ ONE ROUTE OF THE TWO, so every `rejected` claim in a corpus is out-of-period. The other
+  # — a basket drawn wholly from the category's `excluded_items`, i.e. a covered fraction of
+  # zero — needs `content_builder` to draw no covered line, and it always draws at least one.
+  # That route is recorded as unbuildable in `claim_planner._UNREALIZABLE_ROUTES` and declared
+  # to consumers as a known limitation in config/labelling-schema.yaml: a reader of this
+  # dataset must not learn "`rejected` means the date is outside the window", because here it
+  # does.
+  #
+  # 0.10, THE SAME AS THE OTHER THREE NEGATIVES, and equal for the reason
+  # `insufficient_evidence_causes` below splits evenly: a skew between them would have to come
+  # from an observation that a claimant files an out-of-window expense more or less often than
+  # a bare transfer, and NO SUCH OBSERVATION EXISTS. Nothing in this repository has measured
+  # one, and inventing a skew would smuggle a claim about the world into a file whose numbers
+  # are decisions about a dataset.
+  #
+  # TAKEN FROM `covered`, WHICH FALLS 0.50 -> 0.40. The mix has to sum to 1.0, so a new share
+  # is a share removed from somewhere, and `covered` is the member to take it from: the
+  # paragraph above says production would be dominated by that class and that this file
+  # deliberately over-represents the harder ones, so `covered` is the padding here while every
+  # other share sizes a mechanism under test.
+  #
+  # 🔴 AND THE REALIZABLE SUBSET SUMMED TO 0.80 WHEN THIS SHARE ARRIVED, which is what kept the
+  # derivation under `insufficient_evidence_causes_min_run_size` correct at the time: `covered`
+  # 0.40 + `partially_covered` 0.20 + `insufficient_evidence` 0.10 + `rejected` 0.10 was the same
+  # total the three realizable members had before, so `insufficient_evidence` went on being drawn
+  # on 12.5% of built claims. ⚠️ IT SUMS TO 0.90 NOW — `not_proof_of_payment` joined the subset
+  # without a share moving — so that rate is 11.1% and the guideline is 85 rather than 75. The
+  # paragraph is kept as written and corrected here rather than rewritten, because the two facts
+  # are separate: the share was paid for out of `covered`, and the DENOMINATOR later changed for a
+  # reason that has nothing to do with this member. An edit that moves either number has to redo
+  # the derivation rather than assume it survived.
+  rejected: 0.10
 
 # Why a claim ends up partially covered. Splits the `partially_covered` bucket
 # above by cause; must sum to 1.0.
@@ -466,36 +515,53 @@ partially_covered_causes:
 # distinction is not the file the number sits in; it is whether the number is a decision
 # about this dataset or a claim about the world. This one is a decision.
 #
-# 🔴 ONLY THE CAUSES THAT CAN BE BUILT CARRY A SHARE. `subject_not_evidenced` — a claim
-# whose documents establish that money moved and never what it bought — has none, for the
-# same reason `rejected` has none in `verdict_mix`: building it needs a claim planned with
-# DELIBERATELY INCOMPLETE evidence, which the planner refuses by construction today, and a
-# share written before a mechanism exists sizes a bucket nothing can fill. It is absent
-# from this map rather than present as `null`, because the two members below are the whole
-# of what is drawn and must sum to 1.0.
+# 🔴 ONLY THE CAUSES THAT CAN BE BUILT CARRY A SHARE, AND ALL THREE OF THEM NOW CAN.
+# `subject_not_evidenced` — a claim whose documents establish that money moved and never
+# what it bought — carried none while nothing could plan a deliberately incomplete claim.
+# The planner now can: it names the intent (`claim_planner.EvidenceIntent.EVIDENCE_GAP`)
+# and selects a payment document with no subject beside it, so the bucket this share sizes
+# is one the generator fills. A cause with a mechanism gets a share; that is the rule this
+# block has always followed, and the entry arrives by the rule rather than by exception.
 #
-# The two that are here are the CROSS-CHECK causes: both need a claim whose subject
-# document and whose payment document are different documents, so both became buildable
-# only when an archetype proving the subject alone was registered. They carry the same
-# `verdict_basis` — a reader of the two images can see either.
+# The other two are the CROSS-CHECK causes: both need a claim whose subject document and
+# whose payment document are different documents, so both became buildable only when an
+# archetype proving the subject alone was registered. All three carry the same
+# `verdict_basis` — a reader of the images can see each of them.
 #
 # 🔴 THE SHARES ARE EQUAL, AND EQUAL FOR A REASON RATHER THAN BY DEFAULT. An unequal split
 # would have to come from an observation — that claimants attach a payment for the wrong
-# amount more often than they attach one dated too early, or the reverse — and NO SUCH
-# OBSERVATION EXISTS. Nothing in this repository has measured either, and inventing a skew
-# would smuggle a claim about the world into a file whose whole point is that these numbers
-# are decisions about a dataset. So the realizable causes split evenly: two of them, half
-# each; three of them, thirds. `partially_covered_causes` above is NOT uniform, and the
-# difference is instructive — its 65/35 sizes the share of the dataset that exercises the
-# cumulative-limit mechanism, which is a decision about how much of a MECHANISM to test.
-# There is no such asymmetry between two cross-checks that cost the same to build.
+# amount more often than they attach one dated too early, or send a bare transfer more
+# often than either, or pay the wrong provider more often than any of them — and NO SUCH
+# OBSERVATION EXISTS. Nothing in this repository has
+# measured any of them, and inventing a skew would smuggle a claim about the world into a
+# file whose whole point is that these numbers are decisions about a dataset. So the
+# realizable causes split evenly: two of them, half each; three of them, thirds; four of
+# them, quarters.
+# `partially_covered_causes` above is NOT uniform, and the difference is instructive — its
+# 65/35 sizes the share of the dataset that exercises the cumulative-limit mechanism, which
+# is a decision about how much of a MECHANISM to test. There is no such asymmetry between
+# four causes that cost the same to build.
+#
+# ⚠️ THE ROUNDING WENT AWAY WITH THE FOURTH CAUSE, and the note is kept because a reader of the
+# git history will find it. Three equal shares cannot be written exactly in two decimal places
+# while the block sums to 1.0, so `subject_not_evidenced` carried the odd hundredth at 0.34.
+# Quarters divide exactly, so every entry now reads the same number and the guideline below is
+# derived from a share that is the true one rather than the smallest of three.
+#
+# 🔴 A FOURTH CAUSE, AND IT ARRIVED WITH ITS MECHANISM RATHER THAN BEFORE IT — the rule this block
+# has always followed. `counterparty_mismatch` is a claim whose invoice was issued by one party
+# and whose payment went to another; `cross_document_agreement` above declares the axis and the
+# engine reads it, and `claim_planner` now aims at the cause while `assembler` draws the SECOND
+# party the payment names. What it costs every other cause is one line below, at
+# `insufficient_evidence_causes_min_run_size`: a fourth share makes the rarest cause rarer, so the
+# run size at which a zero stops being sampling noise rises with it.
 #
 # WHAT IS REQUIRED IS OF THE RESULT, NOT OF THE SHARE: at or above the run size named by
 # `insufficient_evidence_causes_min_run_size` below, every cause here must be NON-ZERO in a
 # generated run. A verdict's share is not a mechanism's share — `verdict_mix` declares
 # `insufficient_evidence: 0.10` and says nothing about which cause realizes it, so ten
 # percent of the corpus arriving through one cause would leave the label vocabulary
-# promising three causes while the data held one. The realized distribution is measured and
+# promising four causes while the data held one. The realized distribution is measured and
 # recorded per run in `known_limitations` in config/labelling-schema.yaml.
 #
 # BELOW THAT SIZE A ZERO COUNT IS EXPECTED BEHAVIOUR, NOT A DEFECT. A run of 36 claims that
@@ -503,24 +569,207 @@ partially_covered_causes:
 # on the low side of a distribution, and the guideline below exists so a reader can tell the
 # two apart instead of every small corpus reading as broken.
 insufficient_evidence_causes:
-  amount_mismatch: 0.50           # the payment states a different amount from the subject
-  payment_precedes_subject: 0.50  # the payment is dated before what it settles
+  subject_not_evidenced: 0.25     # no document of the claim states what was bought
+  amount_mismatch: 0.25           # the payment states a different amount from the subject
+  payment_precedes_subject: 0.25  # the payment is dated before what it settles
+  counterparty_mismatch: 0.25     # the payment names a different party from the subject
 
 # THE RUN SIZE AT WHICH THE NON-ZERO REQUIREMENT ABOVE BINDS, derived from the actual draw
-# probabilities rather than picked. `verdict_mix` renormalizes over the realizable subset —
-# `covered` 0.50, `partially_covered` 0.20, `insufficient_evidence` 0.10 — so
-# `insufficient_evidence` is drawn on 0.10 / (0.50 + 0.20 + 0.10) = 12.5% of built claims (this
-# is the same renormalization the balance report prints as "target, of the realizable
-# subset"). `insufficient_evidence_causes` above then splits that 50/50, so a single built
-# claim lands on either cause with probability 0.125 * 0.50 = 0.0625.
+# probabilities rather than picked. `verdict_mix` renormalizes over the realizable subset, and
+# EVERY MEMBER IS NOW REALIZABLE — `covered` 0.40, `partially_covered` 0.20,
+# `insufficient_evidence` 0.10, `not_proof_of_payment` 0.10, `partially_paid` 0.10, `rejected`
+# 0.10 — so the subset sums to 1.00 and `insufficient_evidence` is drawn on 10.0% of built claims
+# (this is the same renormalization the balance report prints as "target, of the realizable
+# subset", which is now the whole mix). `insufficient_evidence_causes` above then splits that
+# four ways, so a single built claim lands on any one cause with probability
+# 0.100 * 0.25 = 0.025.
 #
 # For a run of N built claims, the probability that a cause drawn at rate p is realized at
-# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.0625)^N >= 0.95 for the smallest N gives
-# N >= ln(0.05) / ln(1 - 0.0625) ~= 46.4, i.e. 47 built claims — rounded up here to 50, a
-# number worth naming rather than a fraction of one. At 50 built claims or more, a zero count
-# for either cause is unlikely enough (<5%) to report as a defect rather than as sampling
+# least once is 1 - (1 - p)^N. Solving 1 - (1 - 0.025)^N >= 0.95 for the smallest N gives
+# N >= ln(0.05) / ln(1 - 0.025) ~= 118.3, i.e. 119 built claims. At 119 built claims or more, a
+# zero count for any cause is unlikely enough (<5%) to report as a defect rather than as sampling
 # noise; below it, a zero count is unremarkable and the balance report says so.
-insufficient_evidence_causes_min_run_size: 50
+#
+# ⚠️ IT MOVED FROM 50 TO 75 WHEN THE THIRD CAUSE GAINED A SHARE, from 75 TO 85 WHEN
+# `not_proof_of_payment` BECAME REALIZABLE, from 85 TO 90 WHEN `partially_paid` DID, and now from
+# 90 TO 119 — and the middle two are the instructive ones, because NOTHING ABOUT
+# `insufficient_evidence` OR ITS CAUSES CHANGED IN EITHER. A member entered the realizable subset,
+# so the denominator of the renormalization rose — 0.80, then 0.90, then 1.00 — and every other
+# verdict was drawn slightly rarer at an unchanged declared share. A guideline derived from a share
+# alone would have missed both; this one is derived from the DRAW. A figure quoted against any
+# older guideline was correct for the subset of its day.
+#
+# 🔴 THE LAST MOVE IS THE FIRST OF THE OTHER KIND, AND THE PARAGRAPH BELOW PREDICTED IT. The
+# denominator cannot rise — it is 1.00 and the enum is fully realizable — so this move comes from
+# the CAUSES: a fourth of them, at 0.25 instead of a third at 0.33, makes the rarest 0.025 instead
+# of 0.033 and the guideline 119 instead of 90. Nothing about `insufficient_evidence`'s own share
+# moved, and the corpus size at which a per-cause zero means something rose by a third all the
+# same. That is the cost of a cause, and it is paid here rather than discovered in a report.
+insufficient_evidence_causes_min_run_size: 119
+
+# ON WHICH AXES THE DOCUMENTS OF ONE CLAIM MUST AGREE, AND WHAT IT COSTS THEM NOT TO.
+#
+# 🔴 THE LIST IS A PARAMETER OF THIS POLICY AND NOT A PROPERTY OF AN ENGINE. It used to be neither:
+# the two comparisons below lived only in `policy_engine`, which meant an axis existed exactly
+# where somebody had written an `if`. A consumer building its own engine from this file could not
+# know which fields it was supposed to compare, and a negative on a new axis cost a code change in
+# both engines rather than a line here. So the axes are DECLARED, in the order they are applied,
+# and the engine reads them: adding a field two documents must agree on is an edit to this block.
+#
+# WHAT AN AXIS IS ABOUT — the LINKAGE slot of `document_evidence` below, which is the third fact a
+# reimbursement rests on and the one no single document can carry. The other two slots ask whether
+# a fact is stated at all; this one asks whether the two documents that state them describe ONE
+# TRANSACTION. An axis is a way for them not to.
+#
+# 🔴 SO THE OUTCOME IS DECLARED PER AXIS RATHER THAN ASSUMED, and today all three declare the same
+# one. `insufficient_evidence` with a named cause is what a broken linkage IS — the claim does not
+# establish that THIS payment paid for THIS subject — and the cause is what tells a consumer WHICH
+# way it broke. The outcome is a parameter all the same, because "which label a disagreement gets"
+# is exactly the kind of question two faithful engines answer differently when a file leaves it
+# unsaid; a `verdict` here must be one of the six of `verdict_mix` above, and an engine reading a
+# seventh is reading a label nothing in this dataset can carry.
+#
+# ⛔ AN AXIS IS NOT A TOLERANCE. Each comparison below is exact — two decimal places on money, a
+# strict inequality on dates, the raw string on a name. A claim whose documents differ at all on a
+# declared axis fails it; there is no near-agreement anywhere in this policy.
+#
+# ⚠️ AND AN AXIS IS ONLY EVER CHECKED ON A SPLIT PAIR. A self-contained document — a fiscal receipt
+# — is its own subject and its own payment, and cannot disagree with itself about which payment
+# settled it. A corpus whose claims are single receipts realizes none of these causes; that is a
+# property of the corpus and not of this block.
+#
+# WHAT A CONSUMER'S OWN ENGINE HAS TO IMPLEMENT, stated so that it can be implemented from this
+# file alone:
+#
+#   for a transaction whose subject and payment are DIFFERENT documents,
+#   for each axis below IN THE ORDER DECLARED:
+#     amount        -> subject.amount != payment.amount, EXCEPT where the pair settles one
+#                      instalment (see `partial_payment` below, which is that exemption)
+#     date_order    -> payment.date < subject.date       (strictly before)
+#     counterparty  -> subject.counterparty != payment.counterparty
+#   every axis that fails contributes its `cause`; the verdict is the `verdict` they declare.
+#
+# 🔴 `counterparty` IS THE AXIS THIS BLOCK WAS WRITTEN FOR, and it is the one a generated corpus
+# could not previously contain: an invoice issued by one party beside a payment made to another.
+# Both documents may be flawless, the amounts may agree to the kopiyka and the dates may be in
+# order — and the claim still does not show that the money that left the account paid THIS
+# obligation, because it went somewhere else. The name is compared as the label carries it: the
+# BARE trading name, which config/labelling-schema.yaml makes authoritative under
+# `normalization.party_name`, so the comparison needs no normalization of its own.
+#
+# ⚠️ THE NAME IS THE WHOLE OF THE COMPARISON, and the tax code beside it is not compared, because
+# no label field carries the counterparty's code on any document class. That is a limitation of the
+# LABEL SHAPE rather than of this rule — declared in config/labelling-schema.yaml — and an axis
+# naming a field the labels do not carry would be a rule no engine could apply.
+#
+# ⛔ WHAT IS NOT AN AXIS: the SUBJECT of the expense. A payment document states no basket at all
+# (`proves_subject: false` below), so there is nothing on it for a subject axis to compare against
+# the document beside it. A claim that leaves what was bought unstated fails a different slot and
+# is `insufficient_evidence` with the cause `subject_not_evidenced`.
+cross_document_agreement:
+  - axis: amount
+    verdict: insufficient_evidence
+    cause: amount_mismatch
+  - axis: date_order
+    verdict: insufficient_evidence
+    cause: payment_precedes_subject
+  - axis: counterparty
+    verdict: insufficient_evidence
+    cause: counterparty_mismatch
+
+# WHEN A PAYMENT SMALLER THAN ITS SUBJECT DOCUMENT IS A PART RATHER THAN A MISMATCH.
+#
+# 🔴 TWO CLAIMS WITH THE SAME PAIR OF NUMBERS AND DIFFERENT VERDICTS, which is why this block
+# exists at all. An invoice for 12000.00 beside a payment of 3000.00 is either
+#
+#   * an obligation settled IN PARTS — an annual gym subscription billed for the year and paid
+#     quarterly — which is `partially_paid`, a lawful claim of which part of the amount has been
+#     paid; or
+#   * a payment that simply states a different amount from the document it is offered as
+#     settling, which is `insufficient_evidence` with the cause `amount_mismatch`: the two
+#     documents do not describe one transaction, so nothing establishes that THIS payment paid
+#     for THIS subject.
+#
+# ⛔ THE DIFFERENCE IS NOT THE ARITHMETIC AND CANNOT BE. "The payment is smaller" is true of both,
+# so a rule reading only the amounts would relabel every `amount_mismatch` whose delta happens to
+# fall on the low side as `partially_paid` — collapsing a negative the corpus already contains
+# into one it is only now gaining, and leaving the dataset with fewer distinctions than it
+# started with. The difference is INTENT, and intent has to be PRINTED to be readable.
+#
+# 🔴 SO THE RULE TURNS ON A MARKER THE SUBJECT DOCUMENT CARRIES: the document states that its
+# obligation is settled in equal parts and what one part comes to. On this generator's Ukrainian
+# invoice that is the payment term «Умови оплати: оплата частинами …, черговий платіж: …»,
+# labelled as `instalment_amount`. A document that carries no such term states one obligation
+# payable in one, and a payment disagreeing with it disagrees.
+#
+# A PAYMENT TERM IS NOT A PAYMENT STATUS, and the distinction is what keeps this rule from
+# reading proof of payment off a printed word. The term says how the seller proposes to be paid
+# and is fixed when the document is drawn up; whether money moved is still decided from the
+# PAYMENT document's type in `document_evidence` below, exactly as on every other claim.
+#
+# WHAT A CONSUMER'S OWN ENGINE HAS TO IMPLEMENT, stated so that it can be implemented from this
+# file alone:
+#
+#   for a transaction whose subject and payment are DIFFERENT documents:
+#     if   subject.instalment_amount is not null
+#     and  payment.amount == subject.instalment_amount
+#     and  subject.instalment_amount <  subject.amount     -> partially_paid
+#     elif payment.amount            != subject.amount     -> insufficient_evidence /
+#                                                             amount_mismatch
+#
+# 🔴 EQUALITY WITH THE PRINTED PART, NOT MERELY "SMALLER THAN THE TOTAL". A document that states
+# its parts and a payment that matches none of them is not a partial settlement of it — it is a
+# payment for some third amount, which is the mismatch case again. The equality is what makes the
+# marker load-bearing rather than decorative: it has to AGREE with the payment, not merely be
+# present.
+#
+# ⚠️ AND IT IS CHECKED ON THE SUBJECT DOCUMENT ONLY. A payment document states what left the
+# account and has no view of the obligation behind it; 👁 a payment purpose names an invoice, not
+# how much of one is left.
+#
+# WHAT SUCH A CLAIM IS PAID OUT: NOTHING, in this version, and that is a policy decision rather
+# than an implementation gap. The plan reimburses against the obligation the subject document
+# states, and only part of that obligation has been settled; how much of a partly settled
+# obligation is payable — the part paid, the whole once completed, nothing until then — is a
+# decision this policy has not taken. `reimbursable_amount` is therefore 0.00 and the ledger is
+# untouched, exactly as for the other verdicts that establish something and pay nothing.
+#
+# 🔴 AND WHAT HAPPENS WHEN A PARTIAL SETTLEMENT IS PAID OUTSIDE THE `period` ABOVE — a question two
+# engines built from this file must not be left to answer differently. The period rule above is
+# stated UNCONDITIONALLY, so a reader implementing it in the order this file declares things would
+# check the window first and answer `rejected`; an implementer following the discrimination above,
+# which lives beside the amount cross-check, could as reasonably answer `partially_paid`. Both
+# would be faithful to the file and they would disagree about a LABEL, which is the most expensive
+# kind of disagreement this project has. So the precedence is decided here rather than left to the
+# order of paragraphs, and `partial_payment.outside_the_period` below is the machine-readable form.
+#
+# `rejected` WINS, AND THE STRUCTURE OF THE VERDICTS IS WHAT DECIDES IT. There are two tiers:
+#
+#   * the EVIDENCE verdicts — `not_proof_of_payment`, `insufficient_evidence` — say that a slot of
+#     `document_evidence` is unestablished. They come first, because a claim that has not
+#     established what it is about cannot be assessed against a policy at all. That is why a
+#     payment dated BEFORE the invoice it settles stays `insufficient_evidence` even when the
+#     amounts agree perfectly: the order is impossible, so there is nothing to score.
+#   * the POLICY verdicts — `rejected`, `partially_paid`, and the coverage ones — presuppose that
+#     every slot IS established, and then say what the plan makes of the claim. Among them,
+#     `rejected` by period comes first because it answers a PRIOR question: whether the plan
+#     covers this expense at all. It does not, on an axis that nothing about the settlement can
+#     change. `partially_paid` is a statement about a claim the plan DOES cover — a lawful claim
+#     awaiting the rest of its instalments — and saying that of an expense outside the benefit
+#     window would describe a settlement the plan is not party to.
+#
+# ⚠️ IT IS UNREACHABLE IN A GENERATED CORPUS TODAY and is specified all the same. `claim_planner`
+# names a payment schedule for a `partially_paid` claim and displaces a payment out of the window
+# for a `rejected` one, and never both, so no claim of this dataset exercises the precedence. A
+# consumer's own engine meets it the first time a real claim does, and a rule that exists only in
+# whichever branch an implementation happened to write first is not a rule.
+partial_payment:
+  # The label field(s) carrying the marker. `policy_engine` pins its own reading against this
+  # list, so the file and the engine cannot drift apart in silence.
+  marker_fields: [instalment_amount]
+  # WHICH VERDICT A PARTIAL SETTLEMENT PAID OUTSIDE `period` GETS. See the paragraphs above for
+  # why: the period question is prior, and `partially_paid` describes a claim the plan covers.
+  outside_the_period: rejected
 
 # What each document type proves. A claim is reimbursable only when BOTH facts
 # are established — what was bought, and that it was paid for — possibly across

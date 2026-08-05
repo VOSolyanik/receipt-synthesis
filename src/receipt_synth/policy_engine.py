@@ -15,7 +15,11 @@ that itself, against `covered_items` and `excluded_items`, and treats the `cover
 input to be trusted. An oracle that could not disagree with the thing it is labelling
 would be a pass-through with a docstring.
 
-Six rules, in the order they are applied:
+Six rules, in the order they are applied — seven branches, rule 4a having been inserted
+BETWEEN two of them rather than appended, because where it sits is what it says. The numbering
+is not renumbered for it: a dozen cross-references in this file and in
+config/labelling-schema.yaml point at these numbers, and shifting them all to place one branch
+would make every one of those references silently wrong in the git history.
 
 1. **Currency.** Limits are expressed in `reporting_currency`, and every archetype this
    generator has emits documents in it. A document in any other currency is therefore a
@@ -34,10 +38,30 @@ Six rules, in the order they are applied:
    The **what-was-bought** slot: no document is of a type that states it →
    `insufficient_evidence`, cause `subject_not_evidenced`.
 3. **The linkage slot**: a subject document and the payment that settles it both exist and
-   have to describe the same purchase — the same amount, and the payment not before the
-   subject. Failing either → `insufficient_evidence`, with the cause named in
-   `imperfection`; the claim does not establish that *this* payment paid for *this*
-   subject.
+   have to describe the same purchase. ON WHICH AXES THEY ARE COMPARED IS READ FROM
+   policy.yaml — `cross_document_agreement` declares them, and today they are the same amount,
+   the payment not before the subject, and the same counterparty. Failing one →
+   `insufficient_evidence`, with the cause named in `imperfection`; the claim does not
+   establish that *this* payment paid for *this* subject. The VERDICT is declared per axis
+   there as well, so the outcome of a disagreement is a policy parameter rather than a
+   constant of this module — see `cross_document_agreement` and `_AXIS_DISAGREEMENTS`, which
+   is the whole of the split: the file decides which fields are compared and what a
+   disagreement costs, this module decides what comparing them means.
+
+   🔴 THE SAME AMOUNT, OR ONE PART OF IT WHERE THE SUBJECT SAYS SO — and this is an EXEMPTION
+   from the amount check rather than a second failure of the slot. A subject document may
+   state that its obligation is settled in equal parts and what one part comes to — an annual
+   subscription billed for the year and paid quarterly — and a payment equal to that part
+   then describes the same transaction as the document beside it, so the linkage holds and
+   this rule finds nothing. The marker has to be PRINTED on the subject document
+   (`instalment_amount`); the arithmetic alone cannot tell the two apart, because "the
+   payment is smaller" is true of a mismatch as well, and a rule reading only the amounts
+   would swallow that cause whole. See `_settles_one_instalment` and `partial_payment` in
+   policy.yaml, which states the rule for a consumer building its own engine from that file.
+
+   WHAT SUCH A CLAIM IS LABELLED is decided further down, at rule 4a, and NOT here: the
+   exemption and the label are separate steps on purpose, so that the period can come between
+   them.
 
    Each slot is decided from the claim's own documents and never by comparison with
    another verdict. That construction is deliberate: while two of these were written as
@@ -60,6 +84,21 @@ Six rules, in the order they are applied:
    seventh enum member meaning "outside period" — was rejected because it would pull a
    share into `verdict_mix` and cost the downstream contract another revision, for no gain
    in precision over a named cause on a verdict that already fits.
+4a. **A transaction exempted by rule 3** — a payment equal to an instalment its subject
+   document prints — is `partially_paid`, with no cause: one mechanism, one way to reach it.
+
+   NUMBERED 4a BECAUSE THE POSITION IS THE RULE. It sits AFTER the period deliberately, so a
+   partial settlement paid outside the window is `rejected` and not this. That precedence is
+   policy.yaml's — `partial_payment.outside_the_period` — and it is stated there rather than
+   left to the order these branches happen to be written in, because a consumer builds its own
+   engine from that file and two faithful engines disagreeing about a LABEL is the most
+   expensive defect this repository has. The reasoning, in one line: the period asks whether
+   the plan covers this expense at all, and `partially_paid` is a statement about a claim the
+   plan does cover.
+
+   ⚠️ AND IT COULD NOT HAVE BEEN FOLDED INTO RULE 3. The exemption there decides whether the
+   documents AGREE; this decides what an agreeing pair is called. Keeping them one step would
+   have put the label before the period with no way to say why.
 5. **The verdict.** STRICT, as the prose of the `coverage` block states it: *any*
    non-covered line makes the claim `partially_covered`, however small — the fraction is
    reported, never used as a tolerance. Everything covered is `covered`, and
@@ -95,7 +134,7 @@ add, because each is its own transaction — that is the same rule, not an excep
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -114,29 +153,43 @@ from receipt_synth.schemas import DocGroundTruth, DocType, LineItem, Verdict, Ve
 MIXED_ITEMS = "mixed_items"
 LIMIT_EXHAUSTED = "limit_exhausted"
 
-# The four causes below are recorded in `imperfection` beside the two above, under the
-# verdicts that are NOT decided by coverage arithmetic — three under `insufficient_evidence`
+# The five causes below are recorded in `imperfection` beside the two above, under the
+# verdicts that are NOT decided by coverage arithmetic — four under `insufficient_evidence`
 # and one under `rejected`. One verdict, several named causes — the shape
 # `partially_covered` already has, and for the same reason: a consumer can know different
 # things about each. A document that is simply absent and two documents that contradict
 # each other are not the same problem.
 #
-# POLICY.YAML NAMES NONE OF THE FOUR. Its only cause vocabulary is
-# `partially_covered_causes`, which exists to declare SHARES of the partially_covered
-# bucket; none of these four has a share, because no share of a dataset is being sized by
-# them. So the names are this module's, they are exported for anyone comparing labels against
-# a vocabulary, and they are recorded in config/labelling-schema.yaml, which is the contract
-# a consumer reads. If policy.yaml ever grows a cause vocabulary of its own, these move
-# there and the constants read it — the same way MIXED_ITEMS reads its own key today.
+# POLICY.YAML NAMES FOUR OF THE FIVE AND SIZES NOTHING BY THE FIFTH. Its cause vocabularies
+# exist to declare SHARES — `partially_covered_causes`, and `insufficient_evidence_causes` since
+# the planner learned to build all four of those — so a cause appears there exactly when a
+# bucket of the dataset is sized by it. `OUTSIDE_PERIOD` is not: `rejected` has two routes, one
+# of them buildable, and a share over a single route would be the number 1.0 written down.
+# THE NAMES ARE STILL THIS MODULE'S EITHER WAY, and a share is not a vocabulary: this engine
+# derives a cause from a claim's documents without consulting one, so a cause whose share was
+# removed would still be returned. They are exported for anyone comparing labels against a
+# vocabulary and recorded in config/labelling-schema.yaml, which is the contract a consumer
+# reads.
 
 # Causes of `insufficient_evidence`, which owns two of the three slots of `document_evidence`
 # (see the module docstring, rules 2 and 3): the WHAT-WAS-BOUGHT slot, unestablished when no
 # document is of a type that states it, and the LINKAGE slot, unestablished when a subject
 # document and its payment both exist and fail a cross-check. Each is read off the claim's own
 # documents.
+#
+# ⚠️ THE LINKAGE CAUSES ARE NAMED HERE AND CHOSEN IN policy.yaml. Each is the `cause` of one axis
+# of `cross_document_agreement`, so the file decides which of them an engine can return at all —
+# an axis withdrawn there is a cause no claim receives. The names stay this module's constants
+# because this module is what writes them into a label.
 SUBJECT_NOT_EVIDENCED = "subject_not_evidenced"
 AMOUNT_MISMATCH = "amount_mismatch"
 PAYMENT_PRECEDES_SUBJECT = "payment_precedes_subject"
+# 🔴 THE THIRD CAUSE OF THE LINKAGE SLOT, and the first that is not about a number: the invoice was
+# issued by one party and the payment went to another. Nothing is missing from such a claim and
+# nothing about it is arithmetically wrong — which is why it belongs to the LINKAGE slot and not to
+# either of the others. See `cross_document_agreement` in policy.yaml, which declares the axis, and
+# the structural table in config/labelling-schema.yaml, which is where the vocabulary is contracted.
+COUNTERPARTY_MISMATCH = "counterparty_mismatch"
 
 # The one cause of `rejected`, and the only one it needs. `rejected` has two mechanisms —
 # a basket the category covers none of, and a payment outside the benefit period — and only
@@ -146,6 +199,14 @@ PAYMENT_PRECEDES_SUBJECT = "payment_precedes_subject"
 # without parsing `policy_trace`. See the module docstring, rules 4 and 5, for why this case
 # is not `insufficient_evidence`.
 OUTSIDE_PERIOD = "outside_period"
+
+# 🔴 THE DOCUMENT FIELDS WHOSE VALUE MAKES A SMALLER PAYMENT A PART RATHER THAN A DISAGREEMENT —
+# the marker of `partially_paid`, declared in policy.yaml under `partial_payment.marker_fields`
+# and repeated here because THIS module reads the attribute by name. Two places holding one fact
+# is how they come apart, so `_settles_one_instalment` compares them on every call rather than
+# trusting that they still agree: a consumer builds its own engine from the file, and an engine
+# reading a field the file does not name would be labelling by a rule nobody can reproduce.
+PARTIAL_PAYMENT_MARKER_FIELDS: tuple[str, ...] = ("instalment_amount",)
 
 
 class PolicyGapError(Exception):
@@ -222,20 +283,47 @@ def partially_covered_causes() -> dict[str, float]:
 def insufficient_evidence_causes() -> dict[str, float]:
     """How the `insufficient_evidence` bucket splits by cause, in declaration order.
 
-    🔴 OVER THE CAUSES THE GENERATOR CAN BUILD, WHICH IS NOT THE WHOLE VOCABULARY. Three causes
-    lead to this verdict — `SUBJECT_NOT_EVIDENCED`, `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT` —
-    and policy.yaml declares shares for the two CROSS-CHECK causes only. The third needs a claim
-    planned with deliberately incomplete evidence, which the planner refuses by construction, and
-    policy.yaml says at the block why a share written before a mechanism exists sizes a bucket
-    nothing can fill.
+    🔴 OVER THE CAUSES THE GENERATOR CAN BUILD, WHICH IS NOT THE SAME QUESTION AS THE VOCABULARY
+    EVEN WHERE THE TWO COINCIDE. Four causes lead to this verdict — `SUBJECT_NOT_EVIDENCED`,
+    `AMOUNT_MISMATCH`, `PAYMENT_PRECEDES_SUBJECT`, `COUNTERPARTY_MISMATCH` — and policy.yaml now
+    declares a share for each, the first having gained a mechanism
+    (`claim_planner.EvidenceIntent.EVIDENCE_GAP`) and the last a second party on the payment
+    (`assembler._payee_the_payment_names`), rather than an exemption.
 
-    So a reader of this map must not take it for the cause vocabulary: `policy_engine` still
-    RETURNS `subject_not_evidenced`, and a claim carrying it is labelled correctly. What the map
-    describes is the DRAW, and the two are different questions — the same distinction `verdict_mix`
-    and `REALIZABLE_VERDICTS` have always had between them.
+    A reader of this map must still not take it for the cause vocabulary. This engine derives a
+    cause from a claim's documents and does not consult these shares at all, so it would go on
+    returning a cause whose share was removed, and a cause it can return is a label a consumer can
+    receive. The vocabulary is contracted in config/labelling-schema.yaml; what the map describes
+    is the DRAW — the same distinction `verdict_mix` and `REALIZABLE_VERDICTS` have always had
+    between them.
     """
     return {str(name): float(share) for name, share in
             load_policy()["insufficient_evidence_causes"].items()}
+
+
+def partial_payment_outside_the_period() -> Verdict:
+    """Which verdict a partial settlement paid outside the benefit period gets.
+
+    A PRECEDENCE, not a preference, and it is read from policy.yaml for the same reason the
+    marker is: a downstream consumer builds its own engine from that file, and the order of two
+    branches is exactly the kind of thing two faithful implementations decide differently. The
+    file's own reasoning is beside the key.
+
+    Returned as a `Verdict` so a value the enum does not name fails here — where the file is
+    being read — rather than three branches later as a label nothing recognizes.
+    """
+    return Verdict(load_policy()["partial_payment"]["outside_the_period"])
+
+
+def partial_payment_marker_fields() -> tuple[str, ...]:
+    """Which document field(s) policy.yaml says carry the partial-payment marker.
+
+    Read rather than assumed for the reason every other rule in this module is read from that
+    file: a downstream consumer builds its own engine from it, and the two engines have to be
+    labelling on the same marker or they will disagree about a VERDICT while both are correct
+    about what they read.
+    """
+    return tuple(str(name) for name in load_policy()["partial_payment"]["marker_fields"])
 
 
 def insufficient_evidence_causes_min_run_size() -> int:
@@ -246,6 +334,72 @@ def insufficient_evidence_causes_min_run_size() -> int:
     not compute or restate it.
     """
     return int(load_policy()["insufficient_evidence_causes_min_run_size"])
+
+
+class AgreementAxis(NamedTuple):
+    """One field the documents of a split pair must agree on, and what it costs them not to.
+
+    `axis` names a COMPARISON this module implements — `_AXIS_DISAGREEMENTS` is the table of
+    them — while `verdict` and `cause` are the OUTCOME policy.yaml assigns to failing it. The
+    split is the whole point: the comparison is code, because comparing two dates is not a policy
+    question; which label the failure earns is policy, because two engines that compared the same
+    fields and answered different verdicts would disagree about a LABEL while both were right
+    about what they read.
+    """
+
+    axis: str
+    verdict: Verdict
+    cause: str
+
+
+def cross_document_agreement() -> tuple[AgreementAxis, ...]:
+    """The axes a claim's documents must agree on, in the order policy.yaml declares them.
+
+    🔴 THE LIST IS THE FILE'S AND THE COMPARISONS ARE THIS MODULE'S, which is what makes an axis a
+    policy parameter rather than an `if` somebody wrote. Adding a field two documents of one claim
+    must agree on is an edit to `cross_document_agreement` in policy.yaml; removing one there stops
+    this engine from checking it, with no code change on either side. That is the property the
+    block exists for, and it is asserted in both directions in tests/test_claim_evidence.py.
+
+    TWO GUARDS, AND THEY ARE NOT SYMMETRIC — deliberately, because the two asymmetries mean
+    different things:
+
+    * an axis DECLARED here that this engine cannot compare is a `PolicyGapError`. The file would
+      be promising a check nothing performs, and the claims it should have caught would come back
+      labelled as if their documents agreed — a silently wrong ground truth, which is the one
+      failure mode this module exists to prevent;
+    * an axis this engine COULD compare and the file does not declare is simply not checked. That
+      is not drift: a consumer building its own engine from the same file also does not check it,
+      so the two agree about every label. What the file omits, nobody compares.
+
+    A DUPLICATE AXIS IS ALSO A GAP. Declaring one twice would put its cause into `imperfection`
+    twice, or — worse, if the two entries named different verdicts — make the label depend on
+    which of the two the engine happened to read first.
+
+    Returned with `verdict` as a `Verdict`, so a label the enum does not name fails here, where
+    the file is being read, rather than several branches later as a value nothing recognizes.
+    """
+    declared: list[AgreementAxis] = []
+    for entry in load_policy()["cross_document_agreement"]:
+        axis = str(entry["axis"])
+        if axis not in _AXIS_DISAGREEMENTS:
+            raise PolicyGapError(
+                f"policy.yaml declares that the documents of a claim must agree on {axis!r} "
+                f"(`cross_document_agreement`), and this engine compares "
+                f"{sorted(_AXIS_DISAGREEMENTS)}. A declared axis nothing performs would let every "
+                "claim that fails it be labelled as though its documents agreed — implement the "
+                "comparison or withdraw the axis."
+            )
+        if any(axis == already.axis for already in declared):
+            raise PolicyGapError(
+                f"policy.yaml declares the axis {axis!r} twice in `cross_document_agreement`. "
+                "A claim failing it would carry its cause twice, and two entries naming different "
+                "verdicts would make the label depend on the order they are read in."
+            )
+        declared.append(
+            AgreementAxis(axis, Verdict(entry["verdict"]), str(entry["cause"]))
+        )
+    return tuple(declared)
 
 
 # =============================================================================
@@ -738,11 +892,137 @@ def _evidence_trace(shape: EvidenceShape) -> str:
     return f"evidence: {count} transaction{'' if count == 1 else 's'} — {'; '.join(parts)}"
 
 
-def _disagreements(shape: EvidenceShape) -> list[tuple[str, str]]:
+def _settles_one_instalment(transaction: Transaction) -> bool:
+    """Whether this payment settles ONE PART of an obligation its subject document says is
+    settled in parts.
+
+    🔴 THE DISCRIMINATOR BETWEEN `partially_paid` AND `amount_mismatch`, and the whole of it. Both
+    are a payment stating less than the subject beside it; what tells them apart is whether the
+    SUBJECT DOCUMENT SAYS SO — see `partial_payment` in policy.yaml, which states the rule for a
+    consumer building its own engine.
+
+    THREE CONDITIONS, AND EACH ONE IS LOAD-BEARING:
+
+    * the subject document PRINTS an instalment amount. Without it there is no intent on the page
+      and a smaller payment is a smaller payment;
+    * the payment EQUALS that instalment. A document stating its parts beside a payment matching
+      none of them is a payment for some third amount, which is the mismatch case again — the
+      marker has to agree with the payment, not merely be present;
+    * the instalment is SMALLER than the whole. A "part" equal to the total settles the whole
+      obligation and is an ordinary claim; the builder cannot produce one (every schedule divides
+      into at least two parts) and the engine does not rely on it not doing so.
+
+    ⛔ NOT CHECKED ON A SELF-CONTAINED DOCUMENT. A receipt is its own payment, so there is no
+    second document for it to settle part of, and its `instalment_amount` is `None` on every class
+    but the invoice anyway. The same shape as `_disagreements`, which is deliberate: both ask what
+    the two documents of one transaction say about each other.
+    """
+    if not transaction.is_split:
+        return False
+    declared = partial_payment_marker_fields()
+    if declared != PARTIAL_PAYMENT_MARKER_FIELDS:
+        raise PolicyGapError(
+            f"policy.yaml declares the partial-payment marker as {list(declared)} while this "
+            f"engine reads {list(PARTIAL_PAYMENT_MARKER_FIELDS)}. A consumer builds its own "
+            "engine from that file, so the two would label the same claim differently while each "
+            "was correct about the field it read. Move both or neither."
+        )
+    instalment = transaction.subject.instalment_amount
+    if instalment is None:
+        return False
+    instalment = instalment.quantize(KOPIYKA)
+    return (
+        transaction.payment.amount.quantize(KOPIYKA) == instalment
+        and instalment < transaction.subject.amount.quantize(KOPIYKA)
+    )
+
+
+def _amount_disagreement(transaction: Transaction) -> str | None:
+    """The `amount` axis: the two documents state the same money, to the kopiyka.
+
+    🔴 A PAIR THAT SETTLES ONE INSTALMENT IS EXEMPT, and the exemption is HERE rather than a
+    finding discarded afterwards — see `_settles_one_instalment`, which is the whole of the
+    discrimination between `partially_paid` and this cause. Nothing else about such a pair is
+    exempt: a payment dated before the invoice it settles is an impossible order whether it pays a
+    part or the whole, so the `date_order` axis still runs and still wins.
+    """
+    if _settles_one_instalment(transaction):
+        return None
+    subject, payment = transaction.subject, transaction.payment
+    if subject.amount.quantize(KOPIYKA) == payment.amount.quantize(KOPIYKA):
+        return None
+    return (
+        f"documents disagree: {subject.doc_id} ({subject.doc_type.value}) states "
+        f"{_money(subject.amount)} {reporting_currency()}, payment "
+        f"{payment.doc_id} states {_money(payment.amount)} {reporting_currency()}"
+    )
+
+
+def _date_order_disagreement(transaction: Transaction) -> str | None:
+    """The `date_order` axis: the payment is not dated before what it settles.
+
+    Strictly before: paying an invoice on the day it is issued is ordinary. This is deliberately
+    NOT folded into the period check — a payment that precedes what it settles is an impossible
+    order, not a date outside a window, and the two have different repairs and different verdicts.
+    """
+    subject, payment = transaction.subject, transaction.payment
+    if payment.date >= subject.date:
+        return None
+    return (
+        f"documents disagree: payment {payment.doc_id} dated {payment.date} "
+        f"precedes {subject.doc_id} dated {subject.date}"
+    )
+
+
+def _counterparty_disagreement(transaction: Transaction) -> str | None:
+    """The `counterparty` axis: the money went to the party that issued the obligation.
+
+    🔴 THE AXIS THAT NEEDS NEITHER DOCUMENT TO BE WRONG. Both pages may be flawless, the amounts
+    may agree to the kopiyka and the dates may be in order — and if the invoice was issued by one
+    party and the payment made to another, nothing establishes that this money settled that
+    obligation. It is the LINKAGE slot exactly as the amount is, on the other of the two things a
+    transaction is: who, rather than how much.
+
+    COMPARED RAW, AND THAT IS NOT A SHORTCUT. `counterparty` carries the BARE trading name on every
+    class of this dataset — config/labelling-schema.yaml makes that form authoritative under
+    `normalization.party_name` — so both sides are already in the one form the contract compares in,
+    and a normalization applied here would be a second implementation of that rule, drifting from it
+    the first time either changed. ⚠️ The consequence is that two spellings of one merchant would
+    read as two merchants; nothing in this generator produces such a pair, because a claim's parties
+    come from config/vendors.json by name.
+    """
+    subject, payment = transaction.subject, transaction.payment
+    if subject.counterparty == payment.counterparty:
+        return None
+    return (
+        f"documents disagree: {subject.doc_id} ({subject.doc_type.value}) names "
+        f"{subject.counterparty!r}, payment {payment.doc_id} names {payment.counterparty!r}"
+    )
+
+
+# WHAT THIS ENGINE CAN COMPARE, keyed by the axis name policy.yaml declares. The FILE decides which
+# of these are applied and in which order (`cross_document_agreement`); this table decides only what
+# each one means. A key here that the file does not name is simply not checked — see
+# `cross_document_agreement`, which is where the asymmetry between the two directions is reasoned
+# out — and a name the file declares that is missing here is a `PolicyGapError` raised at the read.
+_AXIS_DISAGREEMENTS: dict[str, Callable[[Transaction], str | None]] = {
+    "amount": _amount_disagreement,
+    "date_order": _date_order_disagreement,
+    "counterparty": _counterparty_disagreement,
+}
+
+
+def _disagreements(shape: EvidenceShape) -> list[tuple[Verdict, str, str]]:
     """Where the two documents of one transaction fail to describe one transaction.
 
-    Returns (cause, trace line) pairs, in a fixed order so that a claim failing both is
-    reported the same way every run.
+    Returns (verdict, cause, trace line) triples, one per axis a transaction fails, in the order
+    policy.yaml declares the axes in — so a claim failing two of them is reported the same way
+    every run, and the report follows the file rather than the order the branches happen to be
+    written in.
+
+    🔴 THE AXES ARE READ, NOT LISTED. Which fields must agree, and what it costs them not to, is
+    `cross_document_agreement` in policy.yaml; this function applies what it finds there. A
+    consumer builds its own engine from that same block, which is the point of the block.
 
     Only split pairs are checked, and that is not a simplification: a self-contained
     document cannot disagree with itself about which payment settled it. Whether such a
@@ -751,29 +1031,15 @@ def _disagreements(shape: EvidenceShape) -> list[tuple[str, str]]:
     path, and belonging to the fraud archetypes that break it on purpose. Checking it here
     would pre-empt the decision about how those archetypes are labelled.
     """
-    found: list[tuple[str, str]] = []
-    for transaction in shape.transactions:
-        if not transaction.is_split:
-            continue
-        subject, payment = transaction.subject, transaction.payment
-
-        if subject.amount.quantize(KOPIYKA) != payment.amount.quantize(KOPIYKA):
-            found.append((
-                AMOUNT_MISMATCH,
-                f"documents disagree: {subject.doc_id} ({subject.doc_type.value}) states "
-                f"{_money(subject.amount)} {reporting_currency()}, payment "
-                f"{payment.doc_id} states {_money(payment.amount)} {reporting_currency()}",
-            ))
-        # Strictly before: paying an invoice on the day it is issued is ordinary. This is
-        # deliberately NOT folded into the period check — a payment that precedes what it
-        # settles is an impossible order, not a date outside a window, and the two have
-        # different repairs.
-        if payment.date < subject.date:
-            found.append((
-                PAYMENT_PRECEDES_SUBJECT,
-                f"documents disagree: payment {payment.doc_id} dated {payment.date} "
-                f"precedes {subject.doc_id} dated {subject.date}",
-            ))
+    found: list[tuple[Verdict, str, str]] = []
+    for declared in cross_document_agreement():
+        disagrees = _AXIS_DISAGREEMENTS[declared.axis]
+        for transaction in shape.transactions:
+            if not transaction.is_split:
+                continue
+            line = disagrees(transaction)
+            if line is not None:
+                found.append((declared.verdict, declared.cause, line))
     return found
 
 
@@ -874,9 +1140,16 @@ def evaluate_claim(
         states what justified the verdict, and coverage did not. The fraction is still
         reported where there were lines to compute one from, as a fact about those lines.
 
-        Three verdicts reach it, not two: `not_proof_of_payment`, `insufficient_evidence`
-        and — for a payment outside the benefit period — `rejected`. `verdict_basis` is
-        `DOCUMENTS` for all three, because each of the facts above is printed on the image.
+        Four verdicts reach it: `not_proof_of_payment`, `insufficient_evidence`, `rejected` for
+        a payment outside the benefit period, and `partially_paid`. `verdict_basis` is
+        `DOCUMENTS` for all four, because each of the facts above is printed on the image.
+
+        ⚠️ THE FOURTH IS NOT A CLAIM THAT FAILED ANYTHING, and it reaches this helper for what the
+        helper does rather than for what its name suggests. A `partially_paid` claim's documents
+        agree; what it reimburses is nothing, because policy.yaml has not decided how much of a
+        partly settled obligation is payable — see `partial_payment` there. The helper's job is
+        "verdict established from the CONTENT of the documents, paying out nothing", and that is
+        exactly this case.
         """
         return ClaimEvaluation(
             verdict=verdict,
@@ -896,12 +1169,27 @@ def evaluate_claim(
         return refused(Verdict.INSUFFICIENT_EVIDENCE, (SUBJECT_NOT_EVIDENCED,))
     trace.append(_evidence_trace(shape))
 
-    # -- the documents of one transaction have to describe one transaction
+    # -- the documents of one transaction have to describe one transaction, on every axis
+    # policy.yaml declares. The VERDICT comes from the file too — see `cross_document_agreement`.
     disagreements = _disagreements(shape)
     if disagreements:
-        trace.extend(line for _, line in disagreements)
+        verdicts = {verdict for verdict, _, _ in disagreements}
+        if len(verdicts) > 1:
+            # 🔴 POLICY.YAML MAY DECLARE A DIFFERENT OUTCOME PER AXIS, AND SAYS NOTHING ABOUT A
+            # CLAIM THAT FAILS TWO AXES DECLARING DIFFERENT ONES. Picking either would be this
+            # engine deciding a precedence the file does not state, and a consumer's engine
+            # picking the other would label the same claim differently — see
+            # `partial_payment.outside_the_period`, which is what a stated precedence looks like.
+            # Unreachable while every declared axis names one verdict, which is today's file.
+            raise PolicyGapError(
+                "the documents of this claim disagree on axes policy.yaml gives different "
+                f"verdicts: {sorted((cause, verdict.value) for verdict, cause, _ in disagreements)}"
+                ". `cross_document_agreement` states no precedence between them, so there is no "
+                "answer to derive — declare one verdict for both axes, or state which wins."
+            )
+        trace.extend(line for _, _, line in disagreements)
         return refused(
-            Verdict.INSUFFICIENT_EVIDENCE, tuple(cause for cause, _ in disagreements)
+            disagreements[0][0], tuple(cause for _, cause, _ in disagreements)
         )
 
     # -- the period, on the payment date and on no other. `rejected`, not
@@ -910,6 +1198,22 @@ def evaluate_claim(
     start, end = active_period()
     late = [t.payment for t in shape.transactions if not start <= t.payment.date <= end]
     if late:
+        # 🔴 THE ONE CASE WHERE THIS BRANCH AND THE ONE BELOW BOTH APPLY, and policy.yaml decides
+        # which wins. The order these two are written in IS the answer this engine gives, so the
+        # order is checked against the file rather than assumed to still agree with it: a consumer
+        # building its own engine from that file must not be able to reach a different LABEL while
+        # reading the same rules. Flipping the declared precedence is a real edit somebody may
+        # make; it has to move this code too, and this is what says so instead of a comment.
+        if any(_settles_one_instalment(t) for t in shape.transactions):
+            declared = partial_payment_outside_the_period()
+            if declared is not Verdict.REJECTED:
+                raise PolicyGapError(
+                    f"policy.yaml says a partial settlement paid outside the benefit period is "
+                    f"{declared.value!r} (`partial_payment.outside_the_period`), and this engine "
+                    "checks the period first, which answers 'rejected'. The two would label the "
+                    "same claim differently. Move the partial-settlement branch above the period "
+                    "check, or restore the declared precedence."
+                )
         first = min(late, key=lambda document: document.date)
         trace.append(
             f"period: payment {first.doc_id} dated {first.date} falls outside "
@@ -917,6 +1221,37 @@ def evaluate_claim(
         )
         return refused(Verdict.REJECTED, (OUTSIDE_PERIOD,))
     trace.append("period ok")
+
+    # -- one transaction, settled in parts. AFTER THE PERIOD AND BEFORE COVERAGE, which is a
+    # precedence policy.yaml decides and this code follows — `partial_payment.outside_the_period`
+    # there, with the reasoning in the paragraphs above it. In one line: the evidence verdicts come
+    # first because a claim that has established nothing cannot be assessed at all, and among the
+    # POLICY verdicts the period is prior, because it answers whether the plan covers this expense
+    # while `partially_paid` is a statement about a claim the plan does cover.
+    #
+    # 🔴 THE DISCRIMINATION FROM `amount_mismatch` DOES NOT LIVE HERE and is unaffected by this
+    # ordering: it is the exemption inside `_disagreements`, which runs before either branch. What
+    # this branch decides is only what an exempted pair is LABELLED, so moving it past the period
+    # check relabels the out-of-window case and nothing else. See `_settles_one_instalment`.
+    instalments = [t for t in shape.transactions if _settles_one_instalment(t)]
+    if instalments:
+        settlement = instalments[0]
+        subject, payment = settlement.subject, settlement.payment
+        part = subject.instalment_amount
+        if part is None:  # pragma: no cover - `_settles_one_instalment` returns False for one
+            raise AssertionError(
+                f"{subject.doc_id} was read as settling one instalment and carries none; the "
+                "predicate and this branch have come apart"
+            )
+        trace.append(
+            f"partial settlement: {subject.doc_id} states {_money(subject.amount)} "
+            f"{reporting_currency()} settled in parts of {_money(part)}, and payment "
+            f"{payment.doc_id} states {_money(payment.amount)}"
+        )
+        # NO CAUSE, for the reason `not_proof_of_payment` carries none: there is one mechanism
+        # behind this verdict and one way to reach it, so there is nothing for a cause to
+        # distinguish.
+        return refused(Verdict.PARTIALLY_PAID, ())
 
     if total <= 0:
         raise ValueError(f"a claim with a total of {total} has no verdict")

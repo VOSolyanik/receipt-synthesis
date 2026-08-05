@@ -179,6 +179,28 @@
   <div class="validity" data-field="validity">{{ validity }}</div>
   {% endif %}
 
+  {# 🔴 THE INSTALMENT TERM, AND THE ONLY LINE OF THIS DOCUMENT A VERDICT RESTS ON. It states that
+     the obligation is settled in parts and what the next part comes to, which is what makes a
+     payment SMALLER than this invoice a lawful pair — an annual subscription billed for the year
+     and paid quarterly — rather than a payment for the wrong amount.
+
+     ⛔ IT IS NOT A PAYMENT STATUS. It says nothing about money having moved; it is a condition of
+     the offer, fixed when the invoice is drawn up. See the head of this file, and
+     `config/fiscal-rules.yaml`, where the two are told apart. ⚠️ Neither observed invoice carried
+     such a term — both were payable in one — so the wording is derived rather than transcribed,
+     and the divergence is declared in config/labelling-schema.yaml.
+
+     Shaped as a total row — a caption and a money value — so the box hugs the amount rather than
+     the prose around it. The caption is what tells a reader the amount is a PART; the box is what
+     an extractor is measured on, and a box spanning a sentence would score a correct reading of
+     the figure as a miss. #}
+  {% if instalment %}
+  <div class="instalment">
+    <span class="caption">{{ instalment.caption }}</span>
+    <span class="money" data-field="instalment_amount">{{ instalment.amount }}</span>
+  </div>
+  {% endif %}
+
   {# 👁 «Виписав(ла):» with a name and, for a company, a post. 📄 A sole trader signs in their own
      name and states no post. 📄 A stamp is NOT mandatory on this document and none is drawn. #}
   <section class="signature">

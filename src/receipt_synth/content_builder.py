@@ -51,6 +51,7 @@ from receipt_synth.config import (
     invoice_count_range,
     invoice_share,
     jurisdiction,
+    partial_payment_schedules,
     payment_confirmation_money_range,
     payment_confirmation_share,
     payment_purposes,
@@ -1205,6 +1206,78 @@ def _build_mixed_basket(
     return items
 
 
+def _draw_basket(
+    rng: random.Random,
+    *,
+    document: str,
+    category_id: str,
+    vendor: dict,
+    vat_payer: bool,
+    covered_only: bool,
+    coverage_target: Decimal | None,
+    item_count: int | None,
+) -> list[LineItem]:
+    """What a document lists, drawn from the category's own buckets.
+
+    🔴 ONE DRAW FOR EVERY CLASS THAT CARRIES A BASKET, and the reason is a label rather than
+    tidiness: coverage is a property of WHAT WAS BOUGHT and not of the document that lists it,
+    so a receipt and an invoice listing the same purchase must produce the same covered
+    fraction. Two builders drawing baskets two ways would make the verdict depend on which
+    class a claim happened to be given. The three callers said so in three copies of this
+    block before it was extracted; the third copy is what made the duplication worth removing.
+
+    `covered_only` is the label-first knob: the planner has already chosen the verdict, and the
+    builder realizes it. For `covered` the basket is drawn from the category's covered items
+    alone; for `partially_covered` by `mixed_items` the caller clears the flag and states the
+    `coverage_target` the basket should come to.
+
+    `document` names the class in the length message and changes nothing else — "a receipt
+    carries 1 to 20 lines" is what a caller of that builder needs to read, and the bound itself
+    is `MAX_LINE_ITEMS` for every class.
+
+    ⚠️ THE ORDER OF THE DRAWS IS PART OF THE SEED'S MEANING. The line count is taken from `rng`
+    before anything else here, exactly as it was in each copy; moving it would change every
+    document of every existing corpus for a refactor that is meant to change nothing.
+    """
+    count = item_count if item_count is not None else rng.randint(2, 4)
+    if not 1 <= count <= MAX_LINE_ITEMS:
+        raise ValueError(f"{document} carries 1 to {MAX_LINE_ITEMS} lines, not {count}")
+
+    if covered_only:
+        if coverage_target is not None:
+            raise ValueError(
+                "coverage_target describes a mixed basket; covered_only=True already "
+                "means every line is covered"
+            )
+        catalogue = category(category_id)["covered_items"]
+        kinds = sellable_kinds(catalogue, vendor)
+        if not kinds:
+            raise ValueError(
+                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
+                f"category {category_id!r} covers"
+            )
+        return _draw_distinct_items(
+            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
+        )
+
+    if coverage_target is None:
+        raise ValueError(
+            "a mixed basket needs the coverage_target the planner chose — the builder "
+            "realizes a verdict, it does not decide one"
+        )
+    if not Decimal(0) < coverage_target < Decimal(1):
+        raise ValueError(
+            f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
+        )
+    return _build_mixed_basket(
+        rng,
+        category_id=category_id,
+        vendor=vendor,
+        count=count,
+        coverage_target=coverage_target,
+    )
+
+
 def _build_tax_lines(items: list[LineItem], *, vat_payer: bool) -> list[TaxLine]:
     """One row per VAT letter present, in the order the jurisdiction declares them.
 
@@ -1418,43 +1491,16 @@ def build_prro_receipt(
     vat_payer = vendor_is_vat_payer(vendor)
 
     # -- what was bought
-    count = item_count if item_count is not None else rng.randint(2, 4)
-    if not 1 <= count <= MAX_LINE_ITEMS:
-        raise ValueError(f"a receipt carries 1 to {MAX_LINE_ITEMS} lines, not {count}")
-
-    if covered_only:
-        if coverage_target is not None:
-            raise ValueError(
-                "coverage_target describes a mixed basket; covered_only=True already "
-                "means every line is covered"
-            )
-        catalogue = category(category_id)["covered_items"]
-        kinds = sellable_kinds(catalogue, vendor)
-        if not kinds:
-            raise ValueError(
-                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
-                f"category {category_id!r} covers"
-            )
-        items = _draw_distinct_items(
-            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
-        )
-    else:
-        if coverage_target is None:
-            raise ValueError(
-                "a mixed basket needs the coverage_target the planner chose — the builder "
-                "realizes a verdict, it does not decide one"
-            )
-        if not Decimal(0) < coverage_target < Decimal(1):
-            raise ValueError(
-                f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
-            )
-        items = _build_mixed_basket(
-            rng,
-            category_id=category_id,
-            vendor=vendor,
-            count=count,
-            coverage_target=coverage_target,
-        )
+    items = _draw_basket(
+        rng,
+        document="a receipt",
+        category_id=category_id,
+        vendor=vendor,
+        vat_payer=vat_payer,
+        covered_only=covered_only,
+        coverage_target=coverage_target,
+        item_count=item_count,
+    )
     total = line_items_total(items)
 
     # -- who sold it
@@ -2835,6 +2881,14 @@ class Invoice:
       config/labelling-schema.yaml rather than satisfied. Nothing in this repository lets a verdict
       rest on such a line, which is the guard that matters: an oracle reading proof of payment off a
       printed word would be deriving the answer from the thing under test.
+
+      🔴 `schedule` IS NOT THAT LINE AND MUST NOT BE READ AS ONE. It states a PAYMENT TERM — that
+      the obligation is settled in equal parts, and what one part comes to — which is a condition
+      of the offer, settled when the invoice is drawn up and before any money exists to record.
+      The guard above survives intact: a verdict does rest on the term's presence, but the term
+      says only how the seller proposes to be paid, and whether money actually moved is still
+      decided from the PAYMENT document's type, exactly as it is on every other claim. Nothing on
+      this page becomes proof of payment.
     * **NO `amount_due`.** 👁 1/1 has a single total block. «ДО СПЛАТИ» is 📄 line 24 of the fiscal
       receipt form, where it differs from «СУМА» by the discount and the rounding. An invoice has
       one total and nothing for a second field to differ from.
@@ -2865,6 +2919,13 @@ class Invoice:
     agreement: str | None
     # 📄 The recommended alternative to a payment status — how long the offer stands.
     validity: str | None
+    # WHICH INSTALMENT SCHEDULE THIS OBLIGATION IS SETTLED ON — a key of
+    # `config.partial_payment_schedules`, or `None` for an invoice payable in one. The COUNT is not
+    # stored beside it: two values that must agree should not be two values, and the count is a
+    # lookup away. The page prints the schedule's Ukrainian adverb and the amount of one part; it
+    # never prints the count, so no label carries it either — a labelled value unreadable from the
+    # image is the thing this class refuses everywhere else.
+    schedule: str | None
     signatory_name: str
     signatory_post: str | None
     bank_code: str
@@ -2875,6 +2936,27 @@ class Invoice:
         """Σ over the line items. DERIVED rather than stored: an invoice states one total, and two
         numbers that must agree should not be two numbers."""
         return line_items_total(self.line_items)
+
+    @property
+    def instalment_amount(self) -> Decimal | None:
+        """What ONE PART of this obligation comes to, or `None` for an invoice payable in one.
+
+        DERIVED from the total and the schedule for the reason `total` itself is derived: an
+        invoice states one obligation, and a part of it that could disagree with the whole would be
+        a second number saying the same thing. Rounded to the kopiyka half-up, the rule every
+        amount in this repository is normalized under.
+
+        ⚠️ THE PARTS NEED NOT SUM BACK TO THE TOTAL, and the page never claims they do. A total of
+        1000.00 in three parts prints 333.33, and three of those come to 999.99; the invoice states
+        the amount of the NEXT payment, not a schedule of every one, so there is no printed
+        arithmetic for the missing kopiyka to contradict. Deciding where a remainder is carried is
+        a commercial term nothing here observes.
+        """
+        if self.schedule is None:
+            return None
+        return (self.total / partial_payment_schedules()[self.schedule]).quantize(
+            KOPIYKA, rounding=ROUND_HALF_UP
+        )
 
     @property
     def reference(self) -> DocumentReference:
@@ -2914,6 +2996,16 @@ class Invoice:
             # 📄 A seller that is not registered prices without ПДВ, so the two money columns lose
             # the suffix. The status is the vendor's, exactly as on a receipt.
             columns["price"], columns["sum"] = columns["price_no_vat"], columns["sum_no_vat"]
+        # The instalment term, composed here rather than in Jinja: the template prints a caption
+        # and a money value or nothing at all, and whether this invoice states one is a property
+        # of the document. `instalment_amount` is not None exactly when `schedule` is not.
+        part = self.instalment_amount
+        instalment = None if part is None else {
+            "caption": block["instalment_caption_format"].format(
+                period=block["instalment_periods"][self.schedule]
+            ),
+            "amount": self._amount(part),
+        }
         return {
             "attention_line": block["attention_line"],
             "title": block["title_format"].format(number=self.number, date=self._long_date()),
@@ -2949,6 +3041,7 @@ class Invoice:
             "amount_in_words": amount_in_words_uk(self.total),
             "vat_in_words": amount_in_words_uk(self.vat_total) if self.vat_payer else None,
             "validity": self.validity,
+            "instalment": instalment,
             "signature_labels": block["signature"],
             "signatory_name": self.signatory_name,
             "signatory_post": self.signatory_post,
@@ -2972,11 +3065,15 @@ class Invoice:
     ) -> DocGroundTruth:
         """The label record for this invoice.
 
-        `amount` is the total and there is no second money field: no `amount_due`, no `fee`, no
-        `total_charged`. `counterparty` is the SUPPLIER — the party opposite the claimant, as on
-        every class — and `payer` is the buyer, which is the claimant.
+        `amount` is the total. The only other money field an invoice can carry is
+        `instalment_amount`, and it is populated exactly when the page prints the instalment term:
+        no `amount_due`, no `fee`, no `total_charged`. `counterparty` is the SUPPLIER — the party
+        opposite the claimant, as on every class — and `payer` is the buyer, which is the claimant.
 
         NOTHING RECORDS WHETHER IT WAS PAID, and that is the point of the class rather than a gap.
+        `instalment_amount` is not that record either — see the field's own entry in `schemas.py`
+        and the `schedule` bullet above: it says what one part of the obligation is, not that any
+        part of it has been settled.
         `has_fiscal_number` and `qr_is_fiscal` are `False` because an invoice is not a fiscal
         document at all; a consumer classifying on a fiscal marker must not find one here.
         """
@@ -2987,6 +3084,7 @@ class Invoice:
             language="uk",
             currency="UAH",
             amount=self.total,
+            instalment_amount=self.instalment_amount,
             date=self.issued_at.date(),
             counterparty=self.supplier.name,
             payer=self.buyer.name,
@@ -3033,15 +3131,14 @@ def build_invoice(
     covered_only: bool = True,
     coverage_target: Decimal | None = None,
     item_count: int | None = None,
+    schedule: str | None = None,
     country: str = "UA",
 ) -> Invoice:
     """Build one Ukrainian рахунок на оплату.
 
-    THE BASKET IS DRAWN EXACTLY AS A RECEIPT'S IS — same knobs, same meaning, and deliberately the
-    same helpers: `covered_only` for a `covered` claim, `coverage_target` for a mixed one. Coverage
-    is a property of what was bought and not of the document that lists it, so an invoice and a
-    receipt listing the same basket must produce the same covered fraction. Two builders drawing
-    baskets two ways would make the verdict depend on which document class a claim happened to get.
+    THE BASKET IS DRAWN EXACTLY AS A RECEIPT'S IS — same knobs, same meaning, and since the third
+    basket-carrying class landed the same FUNCTION: `_draw_basket`, whose docstring carries the
+    reasoning. `covered_only` for a `covered` claim, `coverage_target` for a mixed one.
 
     `identity` is the SUPPLIER's `PartyIdentity` — its code, its account and the bank holding it —
     drawn once for the claim so that the payment document settling this invoice names the same
@@ -3052,49 +3149,34 @@ def build_invoice(
     invoice addressed to anybody else would evidence nothing about the persona filing the claim.
     This is where an invoice differs structurally from a receipt: a till receipt names no buyer
     because the payer is standing at the till, while an offer to pay has to say to whom it is made.
+
+    🔴 `schedule` IS NAMED BY THE PLAN AND NEVER DRAWN HERE, unlike every other optional requisite
+    of this class. The others are variation — an agreement line, a telephone, a validity — and a
+    builder may draw them because no label depends on which way they come out. This one decides
+    whether the page carries the marker `policy_engine` reads to tell `partially_paid` from
+    `amount_mismatch`, so drawing it would let the builder choose a claim's verdict. It is a
+    keyword of `claim_planner.ClaimPlan`, and `None` is the ordinary invoice payable in one.
     """
     rules = jurisdiction(country)
     block = rules["invoice"]
+    if schedule is not None and schedule not in partial_payment_schedules():
+        raise ValueError(
+            f"config/generation.yaml declares no payment schedule {schedule!r}; it has "
+            f"{sorted(partial_payment_schedules())}"
+        )
     vat_payer = vendor_is_vat_payer(vendor)
 
-    # -- what was bought. The receipt's own helpers, called with the receipt's own arguments.
-    count = item_count if item_count is not None else rng.randint(2, 4)
-    if not 1 <= count <= MAX_LINE_ITEMS:
-        raise ValueError(f"an invoice carries 1 to {MAX_LINE_ITEMS} lines, not {count}")
-
-    if covered_only:
-        if coverage_target is not None:
-            raise ValueError(
-                "coverage_target describes a mixed basket; covered_only=True already means "
-                "every line is covered"
-            )
-        catalogue = category(category_id)["covered_items"]
-        kinds = sellable_kinds(catalogue, vendor)
-        if not kinds:
-            raise ValueError(
-                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
-                f"category {category_id!r} covers"
-            )
-        items = _draw_distinct_items(
-            rng, kinds, catalogue, count, covered=True, vat_payer=vat_payer
-        )
-    else:
-        if coverage_target is None:
-            raise ValueError(
-                "a mixed basket needs the coverage_target the planner chose — the builder "
-                "realizes a verdict, it does not decide one"
-            )
-        if not Decimal(0) < coverage_target < Decimal(1):
-            raise ValueError(
-                f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
-            )
-        items = _build_mixed_basket(
-            rng,
-            category_id=category_id,
-            vendor=vendor,
-            count=count,
-            coverage_target=coverage_target,
-        )
+    # -- what was bought. The receipt's own draw, called with the receipt's own arguments.
+    items = _draw_basket(
+        rng,
+        document="an invoice",
+        category_id=category_id,
+        vendor=vendor,
+        vat_payer=vat_payer,
+        covered_only=covered_only,
+        coverage_target=coverage_target,
+        item_count=item_count,
+    )
 
     # -- the tax, computed from the letters and THEN the letters dropped. ⛔ The observed table has
     # no per-line letter column, so a label carrying one would be unreadable from the image; the
@@ -3167,6 +3249,7 @@ def build_invoice(
         unit=block["units"]["service" if _sells_services(vendor) else "goods"],
         agreement=agreement,
         validity=validity,
+        schedule=schedule,
         signatory_name=signatory_name,
         signatory_post=(
             None if is_sole_trader else rng.choice(block["signature"]["posts"])
@@ -3204,6 +3287,268 @@ def personal_signatory(rng: random.Random, language: str) -> str:
     printed name; see `personal_names` in config/generation.yaml.
     """
     return sole_trader_name(rng, "UA" if language == "uk" else language.upper())
+
+
+# =============================================================================
+# Non-fiscal sales slip — товарний чек
+# =============================================================================
+#
+# 🔴 THE DOCUMENT THE FISCALITY RULE HAS NEVER HAD A TEST CASE FOR. A verifier is expected to
+# treat a NEGATIVE fiscality signal as overriding every positive one, and until this class landed
+# no document of the corpus carried anything negative to override with: every archetype either
+# printed a full fiscal identity or belonged to a class nobody would look for one on. This one is
+# the hard case — the basket, the arithmetic, the totals block and the column layout are a fiscal
+# receipt's, and 📄 the difference is exactly the two requisites the tax service says such a
+# document omits.
+#
+# 📄 THE FORM IS NOT DEFINED BY LAW and the sources are named where the strings live —
+# `receipt.non_fiscal` in config/fiscal-rules.yaml. What matters here is what follows from them:
+# the seller may not be registered for ПДВ (a payer is obliged to use a register), so no line
+# carries a ПДВ letter and no tax block is printed; and 📄 ст. 9 of the accounting law obliges the
+# document to name the person responsible and carry their signature, which no fiscal receipt does.
+#
+# ⛔ IT PROVES NO PAYMENT, which is policy.yaml's `document_evidence` and not this class's opinion
+# of itself. A claim evidenced by one alone is `not_proof_of_payment` — see
+# `claim_planner.EvidenceIntent.PAYMENT_GAP`, which is what plans such a claim.
+
+
+@dataclass(frozen=True)
+class NonFiscalReceipt:
+    """One товарний чек, complete but not yet rendered.
+
+    `Seller` IS REUSED AND `PrroReceipt` IS NOT, and the split is the sources' rather than a
+    convenience: 📄 the tax service says this document's content is the FISCAL RECEIPT'S FORM less
+    the fiscal number and the fiscal wording, so the party block is literally the receipt's — one
+    identifier line, no «ПН», because its seller cannot be a registered payer. What differs is the
+    fiscal identity, which this class does not have a field for at all. Modelling the difference
+    as `None` on the receipt class would have made "no fiscal number" a value of a document that
+    has one, and every consumer of `PrroReceipt` would then carry a branch for a class it never
+    sees.
+
+    ⛔ NO `vat_row_form`, NO `tax_lines`, NO `acquiring`, NO `qr_payload`, and none of them is an
+    omission: a non-payer's receipt has no tax block to take a form, 📄 a card sale is a settlement
+    operation that obliges the seller to use a register, and 📄 the QR is a requisite of the fiscal
+    form. The absences ARE the archetype.
+    """
+
+    seller: Seller
+    issued_at: datetime
+    title: str
+    receipt_number: str
+    line_items: list[LineItem]
+    total: Decimal
+    # СУМА and ДО СПЛАТИ, exactly as on the fiscal form: 📄 lines 20 and 24, differing by the two
+    # between them. Both adjustments are zero in this version for the reason stated at
+    # `PrroReceipt.amount_due` — the policy says nothing about distributing a discount across
+    # covered and non-covered lines — and the lines are printed all the same, because this
+    # document's form IS that form.
+    discount: Decimal
+    rounding: Decimal
+    amount_in_words: str
+    payment_method: str
+    # 📄 ст. 9 of the law on accounting № 996-XIV: the person responsible for the operation. A sole
+    # trader is that person; a company names an authorized one, as on an invoice.
+    issuer_name: str
+    footer: str
+    decimal_separator: str
+
+    @property
+    def amount_due(self) -> Decimal:
+        """ДО СПЛАТИ — the basket less any discount, plus cash rounding.
+
+        DERIVED for the same reason `PrroReceipt.amount_due` is: two amounts that must agree
+        should not be two stored numbers. It equals `total` while both adjustments are zero, and
+        the consequence for a consumer is the one recorded against that field — while the two
+        coincide the field discriminates nothing and its accuracy is not a metric.
+        """
+        return (self.total - self.discount + self.rounding).quantize(KOPIYKA)
+
+    # -- rendering ------------------------------------------------------------
+
+    def _amount(self, value: Decimal) -> str:
+        rules = jurisdiction("UA")["number_format"]
+        whole, _, fraction = f"{value:.2f}".partition(".")
+        grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
+        return f"{grouped}{self.decimal_separator}{fraction}"
+
+    def render_context(self) -> dict:
+        """Everything the template prints, already formatted."""
+        rules = jurisdiction("UA")
+        block = rules["receipt"]["non_fiscal"]
+        return {
+            "title": self.title,
+            "seller": self.seller,
+            "seller_display": legal_name(self.seller),
+            "date": self.issued_at.strftime(rules["date_format"]),
+            "time": self.issued_at.strftime(rules["time_format"]),
+            "receipt_number": self.receipt_number,
+            "items": [
+                {
+                    "name": item.name,
+                    "qty": f"{item.qty:g}",
+                    "price": self._amount(item.price),
+                    "sum": self._amount((item.qty * item.price).quantize(KOPIYKA)),
+                }
+                for item in self.line_items
+            ],
+            "total": self._amount(self.total),
+            "discount": self._amount(self.discount),
+            "rounding": self._amount(self.rounding),
+            "amount_due": self._amount(self.amount_due),
+            "totals_labels": rules["receipt"]["totals_labels"],
+            "amount_in_words": self.amount_in_words,
+            "payment_method": self.payment_method,
+            "issuer_label": block["issuer_label"],
+            "issuer_name": self.issuer_name,
+            "signature_label": block["signature_label"],
+            "footer": self.footer,
+            # 📄 No QR: it is a requisite of the FISCAL form. The renderer requires the key on
+            # every context, and `None` is how a template says the document carries none.
+            "qr_payload": None,
+        }
+
+    # -- labels ---------------------------------------------------------------
+
+    def ground_truth(
+        self,
+        *,
+        doc_id: str,
+        source_file: str,
+        capture: Capture,
+        field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
+    ) -> DocGroundTruth:
+        """The label record for this slip.
+
+        🔴 THE THREE FISCALITY FLAGS ARE ALL FALSE, AND THEY ARE THE POINT OF THE RECORD. A
+        consumer classifying on a fiscal marker must find none here, on a page that otherwise
+        looks like a fiscal receipt line for line. `payer` is `None`: 📄 the form this document
+        follows has no buyer field, and the person who paid was standing at the counter.
+
+        ⛔ NOTHING RECORDS THE NEGATIVE MARKER ITSELF. There is no such field on `DocGroundTruth`,
+        and adding one is RC-08 in config/labelling-schema.yaml — still an open decision, because
+        what this document carries is a positive TITLE plus an ABSENCE of requisites, which a
+        field shaped as "marker text and its position" cannot hold. The absence is real ground
+        truth and it is expressed by the three flags below rather than invented as a string.
+        """
+        return DocGroundTruth(
+            doc_id=doc_id,
+            source_file=source_file,
+            doc_type=DocType.NON_FISCAL_RECEIPT,
+            language="uk",
+            currency="UAH",
+            amount=self.total,
+            amount_due=self.amount_due,
+            date=self.issued_at.date(),
+            counterparty=self.seller.name,
+            line_items=self.line_items,
+            has_qr=False,
+            qr_is_fiscal=False,
+            has_fiscal_number=False,
+            capture=capture,
+            field_bboxes=field_bboxes,
+            reference_text=reference_text,
+            content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
+        )
+
+
+def build_non_fiscal_receipt(
+    rng: random.Random,
+    *,
+    category_id: str,
+    issued_at: datetime,
+    vendor: dict,
+    identity: PartyIdentity,
+    address: str = "м. Київ",
+    covered_only: bool = True,
+    coverage_target: Decimal | None = None,
+    item_count: int | None = None,
+) -> NonFiscalReceipt:
+    """Build one товарний чек.
+
+    THE BASKET IS THE RECEIPT'S AND THE INVOICE'S — `_draw_basket`, same knobs, same meaning —
+    because coverage is a property of what was bought and not of the class that lists it.
+
+    🔴 THE SELLER MUST NOT BE REGISTERED FOR ПДВ, and this refuses rather than printing one that
+    is. 📄 A registered payer is obliged to use a cash register, so a seller who issues this
+    document is a non-payer; a payer issuing one would be a page whose own requisites say it
+    should not exist, and every VAT decision below — no «ПН» line, no letter on any line, no tax
+    block — would then contradict the vendor record behind it. The caller chooses the vendor
+    (`assembler._pick_vendor`), so the constraint belongs at that choice and this is the guard
+    that keeps it from being silently skipped.
+
+    `identity` carries the seller's identification code, drawn once for the claim, exactly as on
+    the other classes. A claim evidenced by this document alone has no second page to agree with —
+    the parameter is required all the same, so that ONE mechanism decides who a seller is.
+    """
+    if vendor_is_vat_payer(vendor):
+        raise ValueError(
+            f"vendor {vendor['name']!r} is registered for ПДВ, and 📄 a registered payer is "
+            "obliged to use a cash register — so it cannot be the seller on a товарний чек. "
+            "Choose a non-payer vendor for this archetype; see `assembler._pick_vendor`."
+        )
+
+    rules = jurisdiction("UA")
+    receipt_rules = rules["receipt"]
+    block = receipt_rules["non_fiscal"]
+
+    items = _draw_basket(
+        rng,
+        document="a sales slip",
+        category_id=category_id,
+        vendor=vendor,
+        # The seller is a non-payer by the guard above, so no line carries a ПДВ letter and the
+        # page prints no tax block. One statement, not two: the flag is not read from the vendor
+        # again here, because the guard has already settled what it can be.
+        vat_payer=False,
+        covered_only=covered_only,
+        coverage_target=coverage_target,
+        item_count=item_count,
+    )
+    total = line_items_total(items)
+
+    is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
+    id_code_rules = rules["identifiers"]["rnokpp" if is_sole_trader else "edrpou"]
+    seller = Seller(
+        name=vendor["name"],
+        legal_form=vendor["legal_form"],
+        address=address,
+        vat_payer=False,
+        tax_code=identity.tax_code,
+        tax_code_label=id_code_rules["label"],
+        # 📄 A ПДВ payer is obliged to use a register, so there is no «ПН» line to print at all.
+        # `None` here is the same statement the guard above makes, carried onto the page.
+        vat_number=None,
+        vat_number_label=rules["identifiers"]["vat_number"]["label"],
+    )
+
+    return NonFiscalReceipt(
+        seller=seller,
+        issued_at=issued_at,
+        title=block["title"],
+        receipt_number=_draw_from_pattern(rng, block["number"]["pattern"]),
+        line_items=items,
+        total=total,
+        discount=Decimal(0),
+        rounding=Decimal(0),
+        amount_in_words=amount_in_words_uk(total),
+        # 🔴 CASH, AND IT IS NOT A COSMETIC CHOICE. 📄 A card sale is a settlement operation that
+        # obliges the seller to use a register, so a slip issued without one records cash. This is
+        # the first archetype of the corpus to print «ГОТІВКА» — the second entry of
+        # `payment_method_labels`, which was unreachable until this class landed — and the value
+        # is read from config rather than written here.
+        payment_method=rules["acquiring_block"]["payment_method_labels"][1],
+        # 📄 ст. 9 № 996-XIV. A sole trader signs in their own name; a company names an authorized
+        # person, drawn the same way an invoice's signatory is.
+        issuer_name=(
+            vendor["name"] if is_sole_trader else personal_signatory(rng, rules["language"])
+        ),
+        footer=receipt_rules["footer"],
+        decimal_separator=rng.choice(rules["number_format"]["decimal_separator_variants"]),
+    )
 
 
 # =============================================================================

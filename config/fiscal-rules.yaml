@@ -361,7 +361,48 @@ jurisdictions:
       footer: "ДЯКУЄМО ЗА ПОКУПКУ"
       # A non-fiscal look-alike must carry this line — classification trap
       # (docs/architecture.md#document-archetypes, templates 12 and 13).
+      #
+      # ⚠️ TODO — THE DESCRIPTION OF THIS CONSTANT IS AWAITING THE AUTHOR'S DECISION, and it is
+      # NOT the shipped товарний чек below. The narrowing under consideration is that the wording
+      # belongs to a ПРРО SERVICE document (a cash movement), while what identifies a SALES slip
+      # is a positive self-identifying title together with the ABSENCE of the fiscal requisites.
+      # 👁 The one explicit Ukrainian denial this project has observed — «! НЕ ФІСКАЛЬНИЙ !» — is
+      # on a «СЛУЖБОВИЙ ДОКУМЕНТ», and ⛔ no public source found shows this string on a sales
+      # document. The decision is the author's and is pending in their own notes, outside this
+      # repository; RC-08 in config/labelling-schema.yaml is its in-repo half. Nothing here is
+      # narrowed in advance of it: the value stands as written, `non_fiscal` below prints what IS
+      # evidenced, and NO ARCHETYPE PRINTS THIS STRING.
       non_fiscal_marker: "НЕ ФІСКАЛЬНИЙ ЧЕК"
+
+      # ТОВАРНИЙ ЧЕК — the sales slip issued without a cash register, and the wording it carries
+      # instead of the marker above.
+      #
+      # 📄 THE FORM IS NOT DEFINED BY LAW, which the tax service states itself, so this block is a
+      # convention rather than a form. What the tax service does state (БЗ 109.10) is a MINIMUM:
+      # the document carries the wording «Товарний чек» and otherwise satisfies п. 2 розд. II of
+      # the Положення про форму та зміст розрахункових документів (наказ Мінфіну № 13 від
+      # 21.01.2016) — the fiscal receipt's own form — EXCEPT the fiscal number of the register and
+      # the wording «ФІСКАЛЬНИЙ ЧЕК». That exception is why the archetype's whole difference from
+      # a fiscal receipt is a set of requisites left out.
+      #
+      # 📄 A SECOND AND INDEPENDENT SOURCE decides the two foot lines: a товарний чек is a primary
+      # accounting document, so ст. 9 of the law on accounting (№ 996-XIV) requires it to name the
+      # person responsible for the operation and to carry that person's signature. A fiscal
+      # receipt carries neither, so these two lines are where this document is MORE than the
+      # fiscal one rather than less.
+      #
+      # ⚠️ THE STRINGS MOVED HERE FROM `tools/render_mockups.py` WHEN THE ARCHETYPE WAS CONNECTED,
+      # which is what that script's own comment said would happen: they are printed by a template
+      # a run now renders, so they are jurisdiction wording like every other value in this file.
+      non_fiscal:
+        title: "ТОВАРНИЙ ЧЕК"
+        issuer_label: "Видав:"
+        signature_label: "Підпис"
+        # 👁 A hand-kept book of товарні чеки is numbered sequentially, so the number is short and
+        # counts documents. It is deliberately NOT `receipt_number.alphanumeric` above: that shape
+        # is a ПРРО's own eleven-character identifier, and a document issued without a ПРРО cannot
+        # have carried one.
+        number: { pattern: "[0-9]{4}" }
       # The paper widths a Ukrainian thermal roll comes in. One template per width, and the
       # stylesheet of each states its own width in pixels: the test suite checks that every
       # width a template declares is one of these, so a template at a width no roll is sold
@@ -399,7 +440,12 @@ jurisdictions:
         - { key: card_masked,   label: "ЕПЗ",            pattern: "[0-9]{4}X{8}[0-9]{4}" }
         - { key: auth_code,     label: "Код авт.:",      pattern: "[0-9]{6}" }
         - { key: rrn,           label: "RRN:",           pattern: "[0-9]{12}" }
-      # ⚠️ Second value unreachable — see the note on `operation` above.
+      # ⚠️ BOTH VALUES ARE REACHABLE NOW, and the second one arrived with a document class rather
+      # than with a draw — which is what the note on `operation` above predicted: «ГОТІВКА» is not
+      # a relabelling of a card receipt, because 👁 a cash receipt carries no acquiring block at
+      # all. `content_builder.build_non_fiscal_receipt` prints it, on the reasoning that 📄 a card
+      # sale is a settlement operation obliging the seller to use a register, so a slip issued
+      # without one records cash. Every FISCAL receipt still prints the first value only.
       payment_method_labels: ["БЕЗГОТІВКОВА", "ГОТІВКА"]
 
     # =========================================================================
@@ -664,6 +710,13 @@ jurisdictions:
       # block. «ДО СПЛАТИ» is 📄 line 24 of the FISCAL RECEIPT form, where it differs from «СУМА» by
       # the discount and the rounding; an invoice has one total and nothing to differ from.
       #
+      # 🔴 A PAYMENT TERM IS NOT A PAYMENT STATUS, and the whole of `instalment_format` below rests
+      # on the difference. A status is a RECORD that money moved — «Оплачено» — and this document
+      # never carries one, for the reason above. A term is a CONDITION OF THE OFFER: it says how the
+      # seller proposes to be paid, and it is settled when the invoice is drawn up, before any money
+      # exists to record. `validity_format` is already such a term — 📄 the recommended alternative
+      # to a payment status — and the instalment line is the second one.
+      #
       # 📄 THERE IS NO APPROVED FORM for this document, so layout variation is large by
       # construction. This is one arrangement of the requisites every source lists.
 
@@ -776,6 +829,36 @@ jurisdictions:
       # occupies the place a «Оплачено» line would occupy on a Polish faktura, and printing it is
       # this class's positive statement that the document is an OFFER.
       validity_format: "Рахунок дійсний до {date} р."
+
+      # 🔴 THE SECOND PAYMENT TERM, AND THE ONE A VERDICT RESTS ON. It states that the obligation
+      # this invoice raises is settled IN PARTS and what one part comes to: an annual gym
+      # subscription billed for the year and paid quarterly is the working example, and it is what
+      # makes a payment SMALLER than the invoice a lawful pair rather than a contradiction.
+      # `policy_engine` reads it as the marker that tells `partially_paid` from `amount_mismatch`;
+      # config/policy.yaml states that rule.
+      #
+      # ⚠️ NOT OBSERVED IN THIS PROJECT. Neither open invoice carried an instalment term — both were
+      # payable in one — so this wording is derived from general knowledge of the document rather
+      # than from a document in hand, and it is marked as a divergence in
+      # config/labelling-schema.yaml. What IS carried over from the observed pages is the shape: a
+      # single left-aligned line of prose in the block below the totals, exactly where the validity
+      # line sits.
+      #
+      # ⛔ IT NAMES NO AMOUNT ALREADY SETTLED AND NO BALANCE OUTSTANDING. Either would be a record of
+      # what has happened to the money, i.e. the payment status this class does not carry; the
+      # instalment is a term of the offer and is known when the invoice is drawn up.
+      #
+      # A CAPTION AND A MONEY VALUE, like a total row, rather than one sentence with a figure
+      # inside it: the amount carries its own `data-field` box, and a box drawn round a whole
+      # sentence would score a correct reading of the figure as a miss.
+      instalment_caption_format: "Умови оплати: оплата частинами {period}, черговий платіж:"
+      # The Ukrainian adverb per schedule. The schedules themselves — which ones exist and how many
+      # parts each divides an obligation into — are a draw input and live in config/generation.yaml;
+      # this map is what the page PRINTS, which is this file's business.
+      instalment_periods:
+        quarterly: "щоквартально"
+        monthly: "щомісяця"
+        semiannual: "щопівроку"
 
     bank_statement:
       # 👁 ONE CORPORATE CURRENT-ACCOUNT STATEMENT was observed — 4 pages, 89 operations, a
