@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 import pytest
 
-from receipt_synth import degrader
+from receipt_synth import assembler, degrader
 from receipt_synth.schemas import Capture
 
 pytest.importorskip("albumentations")
@@ -28,6 +28,7 @@ from pixel_label_gate import (  # noqa: E402  — `tools/` reaches the path thro
     LEGIBILITY_FLOORS,
     Coverage,
     _ink_template,
+    _labelled,
     _peak_correlation,
     edit_fields,
     edited_text,
@@ -204,6 +205,57 @@ def real_run() -> tuple[list, Coverage]:
 def test_the_shipped_corpus_has_no_findings(real_run):
     findings, _ = real_run
     assert [str(f) for f in findings] == []
+
+
+def test_a_bundled_document_s_field_is_a_labelled_box_and_its_frame_is_not():
+    """🔴 THE DISTINCTION THAT COST THIS GATE A FIFTH OF THE PRODUCTION CORPUS.
+
+    Both names begin `__`, and only one of them is geometry. `__doc_1__amount` is document 1's
+    amount, offset into the composed page — a rectangle that reaches a consumer's label.
+    `__file_region_1__` is where that document sits on the sheet, which `assembler` strips before
+    writing. Filtering on `__doc` took the first with the second, and the first production sweep
+    measured 30 605 boxes of a corpus carrying 37 796 while reporting no shortfall.
+    """
+    kept = _labelled(
+        {
+            "amount": (0, 0, 10, 10),
+            "__doc_1__amount": (0, 20, 10, 10),
+            "__doc_11__amount": (0, 40, 10, 10),
+            "__file_region_1__": (0, 0, 100, 100),
+            "__page_region_1__": (0, 0, 100, 50),
+            "__content_extent__": (0, 0, 100, 100),
+        }
+    )
+
+    assert sorted(kept) == ["__doc_11__amount", "__doc_1__amount", "amount"]
+
+
+def test_the_gate_sees_every_box_the_run_wrote_including_the_bundled_ones():
+    """The denominator, checked against the corpus rather than against itself.
+
+    The bundle share is forced to 1 so that every eligible claim files as ONE composed page: on a
+    run of this size the ordinary 0.25 draws too few bundles for their absence to be visible, which
+    is how the shortfall survived four seeds of sweeping. `boxes_seen` must then equal the
+    `field_bboxes` count of the written labels exactly — not "at least", because the gate exceeding
+    the corpus would mean it is measuring something a consumer never receives.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(assembler, "file_composition_share", lambda name: 1.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            staging = Path(tmp) / "staging"
+            staging.mkdir()
+            _, coverage = scan_run(
+                seed=20260803,
+                personas=2,
+                claims_per_persona=2,
+                out_dir=Path(tmp) / "corpus",
+                staging=staging,
+                evidence=False,
+            )
+
+    written = coverage.unmeasured["run: labelled boxes in the manifest"]
+    assert written > 0, "nothing was written, so this assertion would compare two zeros"
+    assert coverage.boxes_seen == written
 
 
 def test_the_gate_measured_something(real_run):

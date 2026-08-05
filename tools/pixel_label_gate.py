@@ -70,8 +70,14 @@ HOW IT REACHES A REAL RUN. It wraps `assembler.degrade` and `Renderer.render` fo
 one `generate_dataset` call, so the documents it measures are the documents that run produced —
 every archetype, every channel, at their real draw rates — and it adds NOTHING to the shipped
 pipeline: no byte of a corpus changes because this file exists. The wrapping is the fragile part,
-so the gate asserts its own coverage: a run whose observations are fewer than the manifest's
-documents is reported as a broken instrument, not as a clean corpus.
+so the gate asserts its own coverage against the manifest — both the DOCUMENTS observed and the
+LABELLED BOXES seen — and a shortfall in either is reported as a broken instrument rather than as a
+clean corpus.
+
+⚠️ BOTH DENOMINATORS, BECAUSE THE DOCUMENT ONE ALONE CANNOT FAIL THE WAY IT NEEDS TO. A bundled
+file is composed from renders of its own, so a run observes MORE renders than it writes documents:
+the first production sweep reported 1 381 against 1 261 and passed, while measuring 30 605 of the
+corpus's 37 796 labelled boxes. See `_RESERVED`.
 """
 
 from __future__ import annotations
@@ -548,7 +554,19 @@ def _observing(staging: Path) -> Iterator[tuple[list[_Observed], list[dict]]]:
 # Box families the degrader carries alongside the labelled fields — the content extent, the page
 # regions, the bundle's per-document frames. They are geometry rather than printed values, and
 # `assembler` strips them before a label is written.
-_RESERVED = ("__content_extent__", "__page_region", "__file_region", "__doc")
+#
+# 🔴 `__doc_{i}__{name}` IS NOT ONE OF THEM, AND LISTING IT HERE COST THE GATE A FIFTH OF THE
+# CORPUS. It is a labelled FIELD of the i-th document of a bundled file, offset into the composed
+# page — a rectangle that reaches a consumer's label and therefore the exact thing this gate is
+# about. The frames are `__file_region_{i}__`, which the entry above already covers. Measured on
+# the first production sweep: `labelled boxes seen` came back 30 605 against a corpus carrying
+# 37 796, and the 7 191 missing were EXACTLY the boxes of the 240 documents that ship inside a
+# bundle. The survival statement — did the shipped JPEG keep the marks — had never looked at one.
+#
+# ⚠️ AND THE BUNDLE IS NOT A CASE THE REST OF THE CORPUS VOUCHES FOR: it is the one file shape
+# where two documents are composed onto a taller sheet and the channel's geometry and compression
+# act on that, so "the other 81% survived" says nothing about it.
+_RESERVED = ("__content_extent__", "__page_region", "__file_region")
 
 
 def _labelled(boxes: dict[str, BBox]) -> dict[str, BBox]:
@@ -634,9 +652,20 @@ def _file_id(observed_file: dict, documents: list[_Observed]) -> str:
 
 
 def _with_manifest(coverage: Coverage, dataset) -> Coverage:
-    """Attach nothing; check the denominator. A run that observed fewer documents than it wrote is
-    an unhooked instrument, and the caller turns that into a finding."""
+    """Attach nothing; check the denominators. A run that observed fewer documents than it wrote is
+    an unhooked instrument, and the caller turns that into a finding.
+
+    🔴 BOXES ARE CHECKED AS WELL AS DOCUMENTS, AND THE DOCUMENT COUNT IS WHY THAT IS NOT ENOUGH.
+    The first production sweep observed 1 381 renders against 1 261 written documents — MORE, not
+    fewer, because a bundled file is composed from renders of its own — so the document check
+    passed while the gate was measuring 30 605 of the corpus's 37 796 labelled boxes. A denominator
+    that can only be exceeded is a denominator that cannot fail. The count taken here is the one a
+    consumer receives: `field_bboxes` on the written labels.
+    """
     coverage.unmeasured["run: documents in the manifest"] = len(dataset.documents)
+    coverage.unmeasured["run: labelled boxes in the manifest"] = sum(
+        len(document.field_bboxes) for document in dataset.documents
+    )
     return coverage
 
 
@@ -694,9 +723,11 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     written = coverage.unmeasured.pop("run: documents in the manifest", 0)
+    written_boxes = coverage.unmeasured.pop("run: labelled boxes in the manifest", 0)
     print(f"pixel↔label gate — seed {args.seed}")
     print(coverage.report())
     print(f"  documents in the manifest {written}")
+    print(f"  labelled boxes in the manifest {written_boxes}")
     if coverage.documents < written:
         findings.append(
             Finding(
@@ -705,6 +736,16 @@ def main(argv: list[str] | None = None) -> int:
                 "",
                 f"{coverage.documents} document(s) observed against {written} written; the gate "
                 "did not see the whole run and its silence means nothing",
+            )
+        )
+    if coverage.boxes_seen < written_boxes:
+        findings.append(
+            Finding(
+                "instrument_narrowed",
+                "run",
+                "",
+                f"{coverage.boxes_seen} labelled box(es) seen against {written_boxes} written; the "
+                "gate measured part of the corpus and its silence is about that part only",
             )
         )
     if not findings:
