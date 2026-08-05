@@ -101,6 +101,12 @@ class Archetype:
     # the config/vendors.json block that seller draws from where the two differ; `None`
     # means the claimant's own, which is every domestic archetype.
     vendor_pool: str | None = None
+    # 🔴 THE PAGE EXISTS ONLY ON A SCREEN — a banking-app rendering, not a sheet anything could
+    # print — so its capture channel is `screenshot` BY CONSTRUCTION and the class's
+    # `capture_mix` in policy.yaml is never consulted for it. A physical fact of the archetype,
+    # declared where the archetype is, exactly as its paper size is; the tunable shares stay in
+    # policy.yaml, where a label-sizing weight belongs.
+    screen_native: bool = False
 
 
 def evidence_of(archetype: Archetype) -> Evidence:
@@ -108,8 +114,8 @@ def evidence_of(archetype: Archetype) -> Evidence:
     return document_evidence(archetype.doc_type)
 
 
-# The registry the planner selects from. Three entries today, all of them Ukrainian fiscal
-# receipts; the rest register here as their templates land.
+# The registry the planner selects from — eleven archetypes over six document classes today;
+# further ones register here as their templates land.
 #
 # THREE ENTRIES OF ONE DOCUMENT CLASS ARE STILL THREE ARCHETYPES. They carry the same
 # `doc_type`, so they establish the same facts and the planner treats them as interchangeable —
@@ -155,13 +161,11 @@ ARCHETYPES: dict[str, Archetype] = {
     # the two lists are checked against each other by a test, so a category added there cannot
     # silently drop out of this tuple.
     #
-    # ⚠️ NO CLAIM CAN BE ASSEMBLED FROM IT YET, and the reason is structural rather than a
-    # shortcoming of this entry: a claim needs both facts, this archetype supplies one, and the
-    # archetype that supplies the other — an invoice — is not written. `documentable_categories`
-    # therefore reports none of these categories as documentable, which is why registering it
-    # changes no dataset. It is registered all the same: the template, the builder and the label
-    # fields are what a later step pairs with an invoice, and an unregistered archetype is one
-    # nothing renders and no test can reach.
+    # It is the payment half of the dominant pair: the invoice below supplies the subject fact,
+    # and every category this tuple names is documentable through the two together. (Until the
+    # invoice landed, no claim could be assembled from this archetype at all — a claim needs both
+    # facts — and registering it changed no dataset; that early state is recorded in the
+    # contract's version history rather than restated here as if it were current.)
     "ua_bank_payment_confirmation": Archetype(
         slug="ua_bank_payment_confirmation",
         doc_type=DocType.PAYMENT_CONFIRMATION,
@@ -187,10 +191,10 @@ ARCHETYPES: dict[str, Archetype] = {
     # against policy.yaml's categories by a test, so a category added there cannot silently drop
     # out of it.
     #
-    # ⚠️ STILL NO CLAIM, and the reason is unchanged and structural: a claim needs both facts, this
-    # supplies one, and the archetype that supplies the other — an invoice — is not written. Two
-    # payment-proving archetypes are not better than one for that purpose. What it does change is
-    # that `_select_documents` now has a CHOICE of payment archetype for the step that pairs them.
+    # The second payment-proving class of the pair era: `_select_documents` draws the payment
+    # half of a split claim from this archetype and the confirmations, so a statement reaches a
+    # dataset on every run. (It, too, could reach none before the invoice existed — the planner
+    # had a payment fact twice over and no subject fact to pair it with.)
     "ua_bank_statement": Archetype(
         slug="ua_bank_statement",
         doc_type=DocType.BANK_STATEMENT,
@@ -356,6 +360,7 @@ ARCHETYPES: dict[str, Archetype] = {
         doc_type=DocType.PAYMENT_CONFIRMATION,
         country=Country.UA,
         language="uk",
+        screen_native=True,
         categories=(
             "medical_insurance",
             "language_courses",
@@ -371,6 +376,7 @@ ARCHETYPES: dict[str, Archetype] = {
         doc_type=DocType.PAYMENT_CONFIRMATION,
         country=Country.UA,
         language="uk",
+        screen_native=True,
         categories=(
             "medical_insurance",
             "language_courses",

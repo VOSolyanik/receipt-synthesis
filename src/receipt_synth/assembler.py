@@ -30,6 +30,7 @@ from receipt_synth.claim_planner import (
     ARCHETYPES,
     REALIZABLE_VERDICTS,
     STATES_AN_INSTALMENT_TERM,
+    Archetype,
     ClaimPlan,
     DocumentPlan,
     documentable_categories,
@@ -39,6 +40,7 @@ from receipt_synth.claim_planner import (
     why_no_claim,
 )
 from receipt_synth.config import (
+    capture_mix,
     file_composition_share,
     load_vendors,
     mismatch_delta_range,
@@ -142,26 +144,52 @@ SYNTHETIC_DATA_MARKER = (
     "SYNTHETIC TEST DATA - NOT VALID PROOF OF PAYMENT - github.com/VOSolyanik/receipt-synthesis"
 )
 
-# HOW A DOCUMENT REACHED THE VERIFIER — drawn per document, UNIFORMLY over the three channels.
+# HOW A DOCUMENT REACHED THE VERIFIER — drawn per document, from the CLASS'S OWN MIX in
+# config/policy.yaml (`capture_mix`), because a document's carrier follows the medium it is born
+# on: a till roll has no undamaged electronic original to submit, a bank-generated PDF has
+# nothing forcing it through a camera, and a banking-app screen exists only as a screenshot.
 #
-# 🔴 UNIFORM IS A PLACEHOLDER, NOT A MEASUREMENT, and saying so is the whole of the comment. No
-# survey of how real reimbursement evidence arrives was available to this repository, so any other
-# split would be a made-up frequency wearing the authority of a config key. An equal draw claims
-# nothing about the world and makes every channel large enough to measure, which is what a corpus
-# built for evaluation needs from it.
+# 🔴 THE MIX LIVES IN policy.yaml AND NOT HERE, closing the question this comment used to record
+# as open. `capture` is a label, a share that sizes a labelled bucket belongs beside
+# `verdict_mix`, and the uniform in-code draw that stood here was a placeholder claiming nothing
+# about the world — which had a cost the delivered corpus paid: paper receipts arrived as
+# screenshots, app screens arrived as flatbed scans, and every channel figure averaged over
+# combinations that cannot occur. The weights and their arithmetic are at the block itself.
 #
-# 🔴 WHY IT IS IN CODE AND NOT IN A CONFIG FILE, which is a question this repository normally
-# answers the other way. A share that decides what fraction of the corpus carries a given LABEL
-# VALUE sizes a labelled bucket, and config/generation.yaml says in its own words that such a share
-# belongs beside `verdict_mix` in config/policy.yaml — `mismatch.delta_range` is there precisely
-# because it changes no label. `capture` IS a label. So the honest home for a capture mix is
-# policy.yaml, that file is the author's to change, and inventing a home for it in the nearest
-# file that would accept it is how a config split stops meaning anything. Recorded as an open
-# question rather than settled by whoever was passing.
-#
-# The tuple order is part of the seed's meaning: reordering it changes which document gets which
-# channel for a given seed, exactly as reordering any drawn-from list in this repository does.
-CAPTURE_CHANNELS = (Capture.SCREENSHOT, Capture.PHOTO, Capture.SCAN)
+# The tuple below is the DRAW ORDER, not a mix: `draw_capture` walks it with one uniform draw
+# against the class's cumulative weights, so its order is part of the seed's meaning exactly as
+# any drawn-from list's is — reordering it changes which document gets which channel for a given
+# seed. It holds every `Capture` member so that a channel added to the enum without a weight in
+# every class's mix fails loudly at the first draw rather than silently never occurring.
+CAPTURE_DRAW_ORDER = (
+    Capture.SCREENSHOT,
+    Capture.PHOTO,
+    Capture.SCAN,
+    Capture.DIGITAL_PDF,
+)
+
+
+def draw_capture(rng: random.Random, archetype: Archetype) -> Capture:
+    """One capture channel for one document, per the class mix — or none to draw at all.
+
+    ⛔ A SCREEN-NATIVE ARCHETYPE CONSUMES NO RANDOMNESS HERE. Its channel is a fact, not a draw,
+    and burning a uniform for it anyway would be a draw whose value is discarded — the shape this
+    repository reserves for keeping a stream stable, which nothing about a constant needs.
+    """
+    if archetype.screen_native:
+        return Capture.SCREENSHOT
+    mix = capture_mix(archetype.doc_type.value)
+    roll = rng.random()
+    cumulative = 0.0
+    for channel in CAPTURE_DRAW_ORDER:
+        cumulative += mix[channel.value]
+        if roll < cumulative:
+            return channel
+    # Weights sum to 1 (checked at load), so only float rounding can land here: the last
+    # non-zero-weight channel takes the remainder.
+    return next(
+        channel for channel in reversed(CAPTURE_DRAW_ORDER) if mix[channel.value] > 0
+    )
 
 # 🔴 THE MINIMUM NUMBER OF DOCUMENTS A PER-CLASS FIGURE MAY BE QUOTED ON. Below it a per-class
 # accuracy is not a measurement: at p ≈ 0.9 and n = 30 the 95% Wilson interval is about ±0.10, so
@@ -694,7 +722,7 @@ def _render_document(
     # ONE CAPTURE CHANNEL PER DOCUMENT, DECIDED ONCE. It reaches three places — the builder, which
     # prints a requisite that depends on the medium; the degrader, which applies that channel's
     # artefacts; and the label. Two literals for one fact is how they come to disagree.
-    capture = rng.choice(CAPTURE_CHANNELS)
+    capture = draw_capture(rng, archetype)
 
     evidence = evidence_of(archetype)
     if evidence.proves_subject:

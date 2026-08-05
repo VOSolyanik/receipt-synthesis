@@ -100,11 +100,20 @@ class Medium(StrEnum):
 
 
 class Capture(StrEnum):
-    """How the document reached the verifier — see docs/architecture.md#degradation."""
+    """How the document reached the verifier — see docs/architecture.md#degradation.
+
+    🔴 `DIGITAL_PDF` IS THE UNDAMAGED ORIGINAL, and its membership is a deliberate reversal
+    recorded at contract version 35. The enum used to be read as "ways a document was damaged",
+    which kept the undamaged case out by definition; it is read now as what this docstring has
+    always said — ways a document REACHED the verifier — and arriving as the original file is one
+    of them. The degrader applies NOTHING to this channel, which is the channel's meaning, and
+    the consumer's own `medium` vocabulary has carried the value all along (RC-11).
+    """
 
     SCREENSHOT = "screenshot"
     PHOTO = "photo"
     SCAN = "scan"
+    DIGITAL_PDF = "digital_pdf"
 
     @property
     def medium(self) -> Medium:
@@ -128,13 +137,14 @@ class Capture(StrEnum):
             ) from None
 
 
-# What each capture channel captures. A future `digital_pdf` channel belongs on the electronic
-# side; it is not declared here because the channel does not exist, and a map entry for a member
-# of no enum would be a decision nothing can exercise.
+# What each capture channel captures. `digital_pdf` is electronic for the same reason a
+# screenshot is: the document was never ink on paper, so a requisite that varies by medium takes
+# its electronic form.
 _CAPTURE_MEDIA: dict[Capture, Medium] = {
     Capture.SCREENSHOT: Medium.ELECTRONIC,
     Capture.PHOTO: Medium.PAPER,
     Capture.SCAN: Medium.PAPER,
+    Capture.DIGITAL_PDF: Medium.ELECTRONIC,
 }
 
 

@@ -709,7 +709,7 @@ def _built(renderer, slug, document, *, doc_id, staging):
         doc_id=doc_id,
         document=document,
         reference=getattr(document, "reference", None),
-        capture=assembler.CAPTURE_CHANNELS[0],
+        capture=assembler.CAPTURE_DRAW_ORDER[0],
         degrade_seed=5,
         clean=renderer.render(slug, document.render_context(), staging / f"{doc_id}.png"),
     )

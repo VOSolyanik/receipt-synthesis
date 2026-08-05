@@ -756,14 +756,19 @@ short. Each mechanism is a parameter of `claim_planner`, combined with a target 
 
 ## Degradation
 
-Three capture channels, each the artifacts of the device that produced it. A fourth *medium* — a natively
-generated PDF — is the undamaged original and therefore not a channel at all: **four media, three channels.**
+Four capture channels — ways a document *reached* the verifier — each with the artifacts of the device that
+produced it, and one with none: a natively generated PDF is the undamaged original, submitted as generated.
 
 | Channel | Medium | Character |
 |---|---|---|
-| `screenshot` | electronic | Native resolution, mild compression, no geometry — a screen capture is square by construction |
-| `photo` | paper | The page on a surface, a perspective, a few degrees of rotation, uneven light, a cast shadow, motion blur |
-| `scan` | paper | Evenly lit, faint transport streaking, a degree or so of skew |
+| `digital_pdf` | electronic | Nothing — the original file; same pixels, same boxes, asserted by test |
+| `screenshot` | electronic | Native resolution, mild compression, no geometry, no paper grain and no sensor noise — the pixels never crossed a camera |
+| `photo` | paper | The page on a surface, a perspective, a few degrees of rotation, phone compression — always; uneven light, a cast shadow and motion blur at the per-document rates `degradation` in `config/generation.yaml` declares |
+| `scan` | paper | Evenly lit, a degree or so of skew; faint transport streaking at its declared rate |
+
+The heavy artefacts fire at *p* < 1 deliberately: a defect carried by 100% of a channel is a property of the
+corpus's construction rather than evidence about documents, and every figure measured on such a channel is a
+lower bound wearing a measurement's clothes.
 
 Geometric transforms carry the bounding boxes with them, so annotations stay aligned. The label is invariant
 under degradation by construction: nothing about *what the document says* changes when it is photographed
@@ -780,9 +785,13 @@ from them.
 from it. A character error rate against `reference_text` is defined only where the content survived, so **the
 size of that subset per channel is part of the result** — a rate quoted without it is not one.
 
-The mix of channels is **uniform, and that is a placeholder rather than a measurement**: no survey of how real
-reimbursement evidence arrives was available, and a weighted split would be an invented frequency. Any figure
-aggregated over a whole corpus is weighted by that arbitrary marginal, so report per channel.
+The mix of channels is **declared per document class** — `capture_mix` in `config/policy.yaml`, because
+`capture` is a label and a share that sizes a labelled bucket belongs with the labelling policy. The physics
+comes first: a till roll has no undamaged electronic original, a товарний чек has no electronic form at all,
+and a banking-app screen exists only as a screenshot (`Archetype.screen_native`). Within those constraints
+the weights are a dataset-balance decision sized for per-channel measurability, **not a survey** of how real
+reimbursement evidence arrives — none was available. Any figure aggregated over a whole corpus is weighted by
+that declared marginal, so report per channel.
 
 ---
 

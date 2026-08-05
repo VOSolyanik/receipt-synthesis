@@ -862,3 +862,53 @@ document_evidence:
   order_screenshot:     { proves_subject: true,  proves_payment: false }
   non_fiscal_receipt:   { proves_subject: true,  proves_payment: false }
   platform_receipt:     { proves_subject: true,  proves_payment: true  }
+
+# How a document of each type reaches the verifier — the capture-channel mix, per class.
+#
+# 🔴 IT LIVES HERE AND NOT IN generation.yaml BECAUSE `capture` IS A LABEL. A share that decides
+# what fraction of the corpus carries a given label value sizes a labelled bucket, and that is
+# this file's business by generation.yaml's own rule — the assembler drew the channel uniformly
+# in code until this block existed, recording exactly this reasoning as an open question.
+#
+# 🔴 THE MIX FOLLOWS THE MEDIUM THE CLASS IS BORN ON, and that is a physical constraint before it
+# is a frequency claim:
+#
+#   * a till-roll receipt is born on PAPER — there is no undamaged electronic original to submit,
+#     so `digital_pdf` is 0. Its `screenshot` share is the ПРРО e-check viewed on a screen, the
+#     electronic form whose VAT row the builder already prints differently (`vat_row_form`).
+#   * a товарний чек is born on paper AND HAS NO ELECTRONIC FORM AT ALL — it is the document
+#     issued without a register — so both electronic channels are 0, not merely small.
+#   * a bank confirmation, a statement, an invoice and a platform receipt are BORN DIGITAL: the
+#     bank or the seller's software generates a file, and the undamaged original (`digital_pdf`)
+#     and the screenshot are the two carriers that need no printer. Photographing or scanning one
+#     first requires printing it, which happens and is not the ordinary path.
+#
+# ⚠️ WITHIN THOSE CONSTRAINTS THE NUMBERS ARE STILL A DATASET-BALANCE DECISION, NOT A SURVEY —
+# no census of how reimbursement evidence arrives was available, exactly as `verdict_mix` says of
+# itself. What the numbers are sized FOR is measurability at production scale, with the physics
+# above as bounds. Arithmetic at the RP-06 production profile (1315 documents: 587 invoices,
+# 294 statements, 293 confirmations, 141 fiscal receipts):
+#
+#   invoice:              587 × 0.20 (thinnest channel) ≈ 117 documents — every channel measurable
+#   bank_statement:       294 × 0.20 ≈ 59
+#   payment_confirmation: ~60% of 293 draw a free medium (the other ~40% are the two in-app
+#                         renderings, screen-born, screenshot by construction — see
+#                         `claim_planner.Archetype.screen_native`): 176 × 0.20 ≈ 35
+#   fiscal_receipt:       141 × 0.25 ≈ 35
+#
+# each above the 30-document floor `assembler.MIN_DOCUMENTS_PER_TARGET_CLASS` sets for a
+# per-class figure. `non_fiscal_receipt` and `platform_receipt` are minority classes whose
+# per-channel counts are small at any split; their shares state the physics, not a measurable
+# promise.
+#
+# 🔴 SCREEN-NATIVE ARCHETYPES DO NOT READ THIS TABLE. A transaction screen exists only as a
+# screenshot; that is a fact about the archetype, declared on its registration
+# (`screen_native`), not a weight to be tuned here. The mix below is the mix of the class's
+# free-medium archetypes.
+capture_mix:
+  fiscal_receipt:       { screenshot: 0.25, photo: 0.50, scan: 0.25, digital_pdf: 0.00 }
+  non_fiscal_receipt:   { screenshot: 0.00, photo: 0.65, scan: 0.35, digital_pdf: 0.00 }
+  payment_confirmation: { screenshot: 0.25, photo: 0.25, scan: 0.20, digital_pdf: 0.30 }
+  bank_statement:       { screenshot: 0.20, photo: 0.25, scan: 0.25, digital_pdf: 0.30 }
+  invoice:              { screenshot: 0.20, photo: 0.30, scan: 0.25, digital_pdf: 0.25 }
+  platform_receipt:     { screenshot: 0.40, photo: 0.20, scan: 0.10, digital_pdf: 0.30 }

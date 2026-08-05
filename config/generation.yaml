@@ -1042,6 +1042,55 @@ file_composition:
 
 
 # =============================================================================
+# Degradation — how hard each capture channel damages a document
+# =============================================================================
+#
+# The per-effect probabilities of the HEAVY artefacts, read by `degrader._paper_pipeline` and
+# `degrader._geometry`. Each is the chance that one degraded document carries that artefact at
+# all; the effect's own intensity ranges stay in the recipe. Inclusion is drawn from the
+# document's degrade seed, so a run is still byte-reproducible under `--seed`.
+#
+# 🔴 WHY p < 1.0 IS THE POINT AND NOT A SOFTENING. Until this block existed every effect fired on
+# every document of its channel: every photograph carried a cast shadow AND motion blur, every
+# scan carried transport streaks. A corpus where 100% of one channel's documents fail the same
+# way measures the corpus, not the channel — the delivered production run had every one of its
+# 169 photographed invoices with an unreadable legal line, a signature of construction, not of
+# difficulty. A defect at p < 1 is evidence about documents; at p = 1 it is a property of the
+# channel constant.
+#
+# ⚠️ WHAT IS DELIBERATELY NOT MADE EASY. The effects that are the PHYSICS of a channel keep
+# p = 1 in the recipes and do not appear here: a hand-held photo always has paper texture, sensor
+# noise, a perspective, a rotation and phone JPEG; a flatbed scan always has its slight skew and
+# its compression. Intensity ranges are untouched. What this block removes is the certainty of
+# the worst case, not the worst case.
+#
+# THE NUMBERS, with their reasoning — plausible-by-argument, not measured against a corpus of
+# real captures (none is available; the same caveat `degrader._paper_pipeline` has carried since
+# the recipes were written):
+#
+#   photo.shadow_p: 0.5      # a cast shadow needs an occluder between light and page — a hand,
+#                            # a phone edge, a lamp: common, and about a coin-flip, not certain
+#   photo.lighting_p: 0.75   # uneven illumination is the default of a hand-held shot indoors;
+#                            # p < 1 because flat, diffuse light does happen
+#   photo.motion_blur_p: 0.4 # most phone shots of a still page are sharp — OIS and short
+#                            # exposure — so blur is the minority case, not the rule
+#   scan.streak_p: 0.5       # transport streaks are a dirty-roller symptom, not a property of
+#                            # scanning: a clean flatbed produces none
+#
+# Expected share of a channel's documents carrying NO heavy artefact (arithmetic a test pins):
+#   photo: (1-0.5)(1-0.75)(1-0.4) = 0.075  — 7.5% of photos are merely "a phone photo", which is
+#                                            what stops 100% from being the channel's signature
+#   scan:  1-0.5 = 0.5                     — half the scans are clean apart from skew + JPEG
+degradation:
+  photo:
+    shadow_p: 0.5
+    lighting_p: 0.75
+    motion_blur_p: 0.4
+  scan:
+    streak_p: 0.5
+
+
+# =============================================================================
 # Personal names
 # =============================================================================
 #
