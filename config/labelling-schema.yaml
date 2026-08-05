@@ -58,7 +58,10 @@
 #   every `status` is a word of `status_vocabulary`, every `blocked_on` a word of
 #   `blocked_on_vocabulary` (version 22), every `hurts:` a LIST of words of `hurts_vocabulary`
 #   (version 23), each vocabulary's every word carried by something, and
-#   every `generator:` cell of a `prd_required_fields` table a list of real label field names. It
+#   every `generator:` cell of a `prd_required_fields` table a list of real label field names,
+#   every `label_field:` slot under `document_types` a real label field name, and every label
+#   field a verdict is declared to rest on reachable by a consumer's extraction schema
+#   (version 36). It
 #   exists because a HAND-MAINTAINED index diverged from what it indexed eight times while under
 #   active attention, and the repair was to delete the index and keep the checks.
 #
@@ -1135,7 +1138,52 @@
 #
 #   KL-11 is rewritten around the declared mix — its `fixed_by` had named exactly this fix, and
 #   what remains of it is the survey no config block can replace.
-version: 35
+#
+# Version 36 is A FIELD A VERDICT RESTS ON BECOMING REACHABLE — a declaration and a gate, and
+# deliberately nothing else: NO document, NO draw and NO comparison rule changes, no label
+# record gains or loses a key, and ⛔ `config/policy.yaml` IS NOT TOUCHED, so this is NOT an
+# I-2 event.
+#
+#   🔴 THE DEFECT, CONFIRMED LIVE AT THE CONSUMER. Its extraction schema is generated from the
+#   `generator:` column of `prd_required_fields`, and `instalment_amount` stands in no row of
+#   any type's table — so the field was DECLARED (`the_instalment_term`, `status: emitted` since
+#   version 28) and UNREACHABLE: no schema ever asked an extractor for it, and every claim
+#   labelled `partially_paid` scored `insufficient_evidence` / `amount_mismatch` end to end
+#   while the engine held the rule perfectly. The warning existed as PROSE in that block's own
+#   note from the day the field arrived — "a consumer that compares a payment against `amount`
+#   alone will score every such claim as a mismatch" — and nothing made anybody carry it out:
+#   prose ran ahead of any check and stayed ahead for seven versions.
+#
+#   🔴 WHY THE FIX IS NOT A ROW, because a row is the cheap fix and it is a category error:
+#   `prd_required_fields` mirrors the requirement's own field table, and that table's invoice
+#   row asks for the total, the date, the seller plus tax number, and the subject — no
+#   instalment field. The requirement demands the VERDICT (`partially_paid` is critical in its
+#   own acceptance list) without asking for the field the verdict rests on; a fabricated `prd:`
+#   cell would dress a generator concept as a requirement ask, and the requirement's internal
+#   gap — which is the requirement's to close — would disappear instead of staying recorded.
+#
+#   🔴 THE DECLARATION: `label_field:` IS AN INDEXED SLOT. The label fields a consumer's
+#   extraction schema for a document type must contain are the UNION of the type's `generator:`
+#   cells and every `label_field:` value under the type's block whose carrying block is
+#   `status: emitted` — stated at the `document_types` conventions. `instalment_amount` is
+#   thereby derivable as an extractable invoice field FROM DATA, with no prose read.
+#
+#   🔴 AND THE GATE THE PROSE NEVER HAD: `a_verdict_rests_on_it:` is a MARKER KEY — its presence
+#   on a `document_label` field declares that a verdict depends on it — and
+#   tests/test_contract_indexes.py now holds every declared carrier to be reachable through the
+#   union, and every `label_field:` value to be a real `document_label` field. Both checks were
+#   observed RED before being trusted: the `label_field:` line deleted, the gate fails; the
+#   value mistyped, the teeth fail; the marker key renamed away, the gate refuses to pass on an
+#   empty denominator rather than passing over it. ⛔ THE GATE SEES DECLARED DEPENDENCE ONLY:
+#   a verdict-bearing field added without the marker is outside its denominator, which the
+#   marker's own convention states where the next field will be written.
+#
+#   ⚠️ WHAT A CONSUMER MUST DO, and nothing warns it at read time: re-vendor, and change its
+#   schema generator's source from the `generator:` column alone to the declared union. A
+#   consumer that stays on the column keeps a schema that is exactly as blind as before this
+#   version — the contract can now be held to answer where a field is learned from, but it
+#   cannot reach into a generated schema.
+version: 36
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -1272,6 +1320,27 @@ sources:
 # `sources.generator` it names the modules the file was written from, and inside a `divergence`
 # block it is the generator's POSITION, standing against a `consumer:` paragraph. Both are prose
 # a reader reads. Only the table's column is indexed, so only it is data.
+#
+# 🔴 `label_field:` IS AN INDEXED SLOT SINCE VERSION 36, AND WITH `generator:` IT IS THE WHOLE
+# ANSWER TO "WHICH LABEL FIELDS MUST A CONSUMER'S EXTRACTION SCHEMA FOR THIS TYPE CONTAIN": the
+# union of the type's `generator:` cells and every `label_field:` value under the type's block
+# whose carrying block says `status: emitted`. ⛔ A `label_field:` inside a block that is not
+# `emitted` declares nothing yet — it is a forward statement, not a schema member.
+#
+# WHY THE `generator:` COLUMN ALONE WAS NEVER THE FULL ANSWER, found the expensive way:
+# `prd_required_fields` mirrors the requirement's OWN field table, so a label field the
+# requirement never asked for BY NAME has no row there by the table's own convention —
+# `instalment_amount`, a generator concept since version 28, is exactly that. The requirement
+# demands the VERDICT that rests on it (`partially_paid`) without naming the field, so a
+# consumer that generated its schema from the column alone never learned the field existed, and
+# every such claim scored as a mismatch. Adding a row would have fabricated an ask the
+# requirement does not make; the declaration is made in this slot instead, and the requirement's
+# internal gap — a verdict demanded, its field not asked for — stays visible rather than
+# papered over.
+#
+# tests/test_contract_indexes.py holds both halves: every `label_field:` under `document_types`
+# names a real `document_label` field, and every field a verdict is declared to rest on is
+# reachable through the union above.
 
 document_types:
 
@@ -2218,6 +2287,15 @@ document_types:
         `partial_payment` in policy.yaml carry the rule. A consumer that compares a payment against
         `amount` alone will score every such claim as a mismatch.
 
+        ⚠️ AND THAT SENTENCE CAME TRUE, WORD FOR WORD, WHICH IS WHY IT NO LONGER STANDS ALONE.
+        Written at version 28, it was a warning with nothing enforcing it, and the consumer's
+        live schema — generated from the `generator:` column of `prd_required_fields`, where
+        this field has no row to stand in — scored every `partially_paid` claim as a mismatch
+        for seven versions. Since version 36 `label_field:` above is an INDEXED SLOT: it is one
+        of the two places a consumer's extraction schema is derived from (the conventions at
+        `document_types` state the union), and a gate in tests/test_contract_indexes.py goes
+        red if this field ever again becomes unreachable.
+
         ⚠️ NOT OBSERVED, AND DECLARED AS A DIVERGENCE FOR THAT REASON. Neither of the two open
         invoices behind this class carried an instalment term — both were payable in one — so the
         wording is derived from general knowledge of the document rather than transcribed from one.
@@ -2988,6 +3066,15 @@ conformance_vectors:
 #
 # EVERY KEY IS PRESENT IN EVERY RECORD. `required: false` means the VALUE may be null or an
 # empty container, never that the key is missing.
+#
+# 🔴 `a_verdict_rests_on_it:` IS A MARKER KEY SINCE VERSION 36. Its PRESENCE on a field is the
+# declaration that some verdict depends on that field's value or presence, and it is indexed:
+# tests/test_contract_indexes.py holds every field carrying it to be REACHABLE by a consumer's
+# extraction schema — a member of some type's `generator:` cell or of an emitted `label_field:`
+# slot under `document_types`. The key's text stays prose; the presence is the data. ⛔ THE GATE
+# SEES ONLY WHAT IS DECLARED: a future verdict-bearing field added WITHOUT this key is outside
+# the gate's denominator, so the key travels with the verdict, not after it — prose ahead of the
+# check is how `instalment_amount` stayed unreachable for seven versions.
 
 document_label:
   status: emitted

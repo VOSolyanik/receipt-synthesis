@@ -302,3 +302,114 @@ def test_every_generator_name_is_a_real_label_field():
     assert not unknown, (
         f"{len(unknown)} names across {len(rows)} rows are not `document_label` fields: {unknown}"
     )
+
+
+# ----------------------------------------- the extraction-schema union, version 36 --
+#
+# The contract's answer to "which label fields must a consumer's extraction schema for a type
+# contain" is a UNION of two indexed slots: the type's `prd_required_fields[].generator` cells,
+# and every `label_field:` value under the type's block whose carrying block is `status: emitted`.
+# The second half exists because the first alone cannot be complete BY CONVENTION: the prd table
+# mirrors the requirement's own field table, so a label field the requirement never asked for by
+# name — `instalment_amount`, on which `partially_paid` rests — has no row to stand in, and a
+# consumer generating its schema from the column alone never learns the field exists. That is not
+# a hypothesis: it happened, and every `partially_paid` claim scored as a mismatch downstream
+# while a version-28 warning sentence said it would.
+
+
+def _label_field_carriers() -> list[tuple[str, dict]]:
+    """Every dict under `document_types` carrying a `label_field:` key, with its document type.
+
+    A structural walk for the same reason `_slots` is one: the point is to find the slot nobody
+    remembered. Not folded into `_slots` because the gate needs the CARRYING BLOCK — its
+    `status:` decides whether the slot declares a schema member — and `_slots` returns only the
+    path and the value.
+    """
+    found: list[tuple[str, dict]] = []
+
+    def walk(node, doc_type: str) -> None:
+        if isinstance(node, dict):
+            if "label_field" in node:
+                found.append((doc_type, node))
+            for value in node.values():
+                walk(value, doc_type)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value, doc_type)
+
+    for doc_type, block in CONTRACT["document_types"].items():
+        walk(block, doc_type)
+    return found
+
+
+def _reachable_by_an_extraction_schema() -> set[str]:
+    """The union the `document_types` conventions declare: `generator:` cells plus every
+    `label_field:` under an emitted block. ⛔ A `label_field:` inside a non-emitted block
+    declares nothing yet and is deliberately excluded."""
+    reachable = {name for _, row in _prd_rows() for name in row["generator"]}
+    reachable |= {
+        block["label_field"]
+        for _, block in _label_field_carriers()
+        if block.get("status") == "emitted"
+    }
+    return reachable
+
+
+def test_every_label_field_slot_names_a_real_document_label_field():
+    """The teeth on the slot, same as the `generator:` column's: a `label_field:` value that is
+    not a `document_label` field is a typo or a rename that left the slot behind, and the union
+    below would silently offer a consumer a field that resolves to nothing.
+
+    Observed red by mistyping `the_instalment_term.label_field` to `instalment_amoutn` on the
+    committed tree.
+    """
+    carriers = _label_field_carriers()
+    assert carriers, (
+        "no `label_field:` slot found under `document_types` — this test asserts nothing"
+    )
+
+    label_fields = {field["name"] for field in CONTRACT["document_label"]["fields"]}
+    unknown = [
+        f"{doc_type} -> {block['label_field']!r}"
+        for doc_type, block in carriers
+        if block["label_field"] not in label_fields
+    ]
+    assert not unknown, (
+        f"{len(unknown)} of {len(carriers)} `label_field:` slots name no `document_label` "
+        f"field: {unknown}"
+    )
+
+
+def test_every_field_a_verdict_rests_on_is_reachable_by_an_extraction_schema():
+    """🔴 THE GATE THE VERSION-28 PROSE NEVER HAD. A field a verdict depends on but that no
+    indexed slot offers to a consumer is ground truth nobody can be scored against: the label is
+    right, the engine's rule is right, and every claim of the verdict still scores as a failure,
+    because the extractor was never asked for the field. `instalment_amount` spent seven contract
+    versions in exactly that state behind a warning sentence nothing enforced.
+
+    The denominator is DECLARED dependence: the fields of `document_label` carrying the marker
+    key `a_verdict_rests_on_it`. ⛔ A verdict-bearing field added without the marker is outside
+    this gate — the marker's convention at the `document_label` header says the key travels with
+    the verdict, and no walk can derive dependence from prose.
+
+    Observed red on the committed tree in both directions: deleting the
+    `the_instalment_term.label_field` line makes the carrier unreachable and the assertion
+    fails; renaming `a_verdict_rests_on_it` away empties the denominator and the guard above the
+    assertion refuses the pass instead of granting it.
+    """
+    carriers = sorted(
+        field["name"]
+        for field in CONTRACT["document_label"]["fields"]
+        if "a_verdict_rests_on_it" in field
+    )
+    assert carriers, (
+        "no `document_label` field carries `a_verdict_rests_on_it` — this test asserts nothing"
+    )
+
+    unreachable = sorted(set(carriers) - _reachable_by_an_extraction_schema())
+    assert not unreachable, (
+        f"{len(unreachable)} of {len(carriers)} fields a verdict is declared to rest on are "
+        f"offered to a consumer by NO indexed slot (`prd_required_fields[].generator` or an "
+        f"emitted `label_field:`): {unreachable} — the verdict that rests on each is "
+        f"unscoreable by construction"
+    )
