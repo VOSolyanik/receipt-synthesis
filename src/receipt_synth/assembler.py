@@ -487,6 +487,18 @@ _NAMES_THE_BUYER: frozenset[DocType] = frozenset({DocType.INVOICE, DocType.PLATF
 # ("proves the payment") would have handed its builder an argument it has no requisite to spend.
 _CAPTURE_SHAPES_A_REQUISITE: frozenset[DocType] = frozenset({DocType.FISCAL_RECEIPT})
 
+# WHICH CLASSES PRINT A TERM THAT BOUNDS WHEN THE CLAIM MAY BE SETTLED, and so have to be told the
+# date the claim's money moved. 📄 The invoice's «Рахунок дійсний до X р.» is that term and the only
+# one in the corpus: it says how long the offer stands, and a claim whose payment is dated after it
+# prints a page contradicted by its own claim (see `content_builder.build_invoice`, which measured
+# 100 such invoices of 182 before this).
+#
+# 🔴 KEYED BY CLASS AND NOT BY EVIDENCE, for the reason `_NAMES_THE_BUYER` gives: a class either
+# prints such a term or does not, whatever it proves. And handed to the builder rather than decided
+# there — the settlement date is a property of the CLAIM, and a builder that reached for it would be
+# reading a plan it is not given.
+_PRINTS_A_TERM_BOUND_BY_THE_PAYMENT: frozenset[DocType] = frozenset({DocType.INVOICE})
+
 
 def _write_png(path: Path, image: np.ndarray) -> None:
     """Write a BGR image (OpenCV's convention) to `path`, stamped with `SYNTHETIC_DATA_MARKER`.
@@ -773,6 +785,11 @@ def _render_document(
             # evidence — see `_NAMES_THE_BUYER`, which is where the change of predicate is
             # explained.
             basket |= {"buyer_name": persona.full_name, "buyer_tax_id": persona.tax_id}
+        if archetype.doc_type in _PRINTS_A_TERM_BOUND_BY_THE_PAYMENT:
+            # 🔴 `plan.issued_at` AND NOT `document_plan.issued_at`: the claim's date is the date
+            # its money moved (see `ClaimPlan`), while this document's own date is when the offer
+            # was drawn up. The term is about the first and printed on the second.
+            basket |= {"settled_at": plan.issued_at}
         if archetype.doc_type in _CAPTURE_SHAPES_A_REQUISITE:
             # 🔴 THE CAPTURE CHANNEL REACHES THE BUILDER, not only the degrader. 👁 The VAT summary
             # row of a fiscal receipt takes one form on paper and either of two electronically, so

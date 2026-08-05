@@ -26,6 +26,7 @@ happens to emit: prefixes and lengths are read from the configuration.
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
@@ -42,6 +43,7 @@ from receipt_synth.content_builder import (
     resolve_vendor,
     vendor_is_vat_payer,
 )
+from receipt_synth.renderer import Renderer
 from receipt_synth.schemas import Capture, LineItem
 
 ISSUED_AT = datetime(2026, 8, 3, 14, 22, 51)
@@ -383,6 +385,35 @@ def test_amount_due_is_the_total_less_the_discount_plus_the_rounding():
     # receipt can produce one, and pinning it here would assert a tie-breaking rule that
     # nothing in the generator relies on.
     assert replace(receipt, rounding=Decimal("0.036")).amount_due == Decimal("995.04")
+
+
+def test_the_payment_row_states_what_is_payable_and_not_the_basket():
+    """🔴 WHAT IS TENDERED IS «ДО СПЛАТИ», AND THE TWO RECEIPT TEMPLATES DISAGREED ABOUT IT. The
+    fiscal body printed `total` on its «ГОТІВКА»/«КАРТКА» row while the товарний чек printed
+    `amount_due` from the same basket — a difference no render could show and no test could see,
+    because both adjustments are fixed at zero and the two amounts coincide on every document this
+    generator builds. That is exactly the defect a discount draw would ship: a receipt whose payment
+    row states an amount that does not settle its own last line.
+
+    Read off the RENDERED PAGE and on a receipt whose adjustments are set BY HAND — the arithmetic
+    test above is set the same way, and for the same reason: an assertion over two equal numbers
+    would be the tautology this file already had one of.
+    """
+    receipt = replace(
+        build(7, PAYER), total=Decimal("1000.00"),
+        discount=Decimal("5.00"), rounding=Decimal("0.03"),
+    )
+    with Renderer() as renderer:
+        html = renderer.build_html("ua_prro_receipt", receipt.render_context())
+
+    payable = f"995{receipt.decimal_separator}03"
+    basket = f"1\u00a0000{receipt.decimal_separator}00"
+    printed = re.search(r'data-field="paid_amount">([^<]*)<', html)
+    assert printed is not None, "the payment row carries no box named `paid_amount`"
+    assert printed.group(1).strip() == payable, (
+        f"the payment row prints {printed.group(1)!r}; {payable} is payable and {basket} is only "
+        "the basket"
+    )
 
 
 def test_the_total_block_carries_four_separate_values():

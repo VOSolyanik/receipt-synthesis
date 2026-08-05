@@ -1183,7 +1183,31 @@
 #   consumer that stays on the column keeps a schema that is exactly as blind as before this
 #   version — the contract can now be held to answer where a field is learned from, but it
 #   cannot reach into a generated schema.
-version: 36
+# Version 37 is THE FIRST VERSION WITH A PIXEL-SIDE GATE BEHIND IT, and two contradictions the
+# corpus carried without one. ⛔ `config/policy.yaml` IS NOT TOUCHED — no verdict, no cause, no
+# share and no comparison rule moves — so this is NOT an I-2 event. What changes is BYTES OF IMAGES,
+# which is a different kind of change and is stated in each entry.
+#
+#   🔴 THE INSTRUMENT FIRST, because the two defects below were both found by an outside reader's
+#   eye and neither was findable by any check in the repository. Nothing here opened a rendered PNG:
+#   the reference-text gate compares `innerText` against markup, the bbox gate moves a synthetic
+#   rectangle, the render-region gate does box-in-box arithmetic — and a mutation setting every
+#   channel's JPEG quality to 3–5 passed all 1524 tests. `tools/pixel_label_gate.py` now holds every
+#   `field_bboxes` entry to what it promises, through two statements: the pixels inside a box are
+#   that field's own ink (tested by reordering the field's printed characters and re-rendering), and
+#   the capture channel left the marks readable (tested against the same channel with its JPEG step
+#   removed, so geometry cancels). Observed red on the mutation before being trusted: 77 of 193
+#   boxes on the sample that was clean at the shipped quality.
+#
+#   🔴 AN OFFER MAY NO LONGER LAPSE BEFORE THE PAYMENT THAT SETTLES IT — `the_validity_line` under
+#   `document_types.invoice`, which carries the measurement (100 of 182) and the reasoning for
+#   repairing the pages rather than labelling the contradiction. ⚠️ The printed date changes on the
+#   invoices affected; no label field, no box name and no verdict changes.
+#
+#   ⚠️ WHAT A CONSUMER MUST DO: nothing, unless it reads the validity line. If it does, it may now
+#   rely on the guarantee — and if it measured anything on a corpus generated before this version, a
+#   consumer that read this line was scored against pages that contradicted their own claims.
+version: 37
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -2260,6 +2284,38 @@ document_types:
       PRESENT AND LABELLED, unlike on either bank class. This is the only type besides
       `fiscal_receipt` whose label carries a basket, which is exactly why the two are the two that
       can be a claim's subject document.
+
+    the_validity_line:
+      status: emitted
+      emitted_since: version 1
+      printed_box: validity
+      note: >
+        🔴 A PRINTED TERM WITH A BOX AND NO LABEL FIELD, DECLARED BECAUSE A CONSUMER CAN READ IT.
+        📄 Some invoices print «Рахунок дійсний до X р.» — how long the offer stands, the recommended
+        alternative to a payment status on a class that has none. It carries a `field_bboxes` entry
+        named `validity` and NO label field: no verdict of this policy reads it, `cross_document_
+        agreement` declares no axis over it, and none is invented here (see below).
+
+        🔴 WHAT THE CORPUS GUARANTEES ABOUT IT, AND WHY THE GUARANTEE IS THE WHOLE ENTRY. The
+        printed date is NEVER EARLIER THAN THE CLAIM'S PAYMENT DATE. A consumer that learns to read
+        this line and treats a payment after it as a contradiction will therefore never be punished
+        for reading it correctly.
+
+        ⚠️ IT DID NOT HOLD BEFORE THIS VERSION, and the numbers are the reason the guarantee is
+        stated rather than assumed: the date was drawn from the invoice's own issue date while the
+        payment was dated by the planner, the two draws never met, and over eight seeds 100 of the
+        182 invoices that printed the line were paid AFTER it — 27 of them on claims labelled
+        `covered`. Any figure measured on a corpus generated before this version was measured on
+        pages contradicted by their own claims; a consumer that read the line on such a corpus was
+        right and scored wrong.
+
+        ⛔ AND WHY THIS IS NOT A NEW VERDICT CAUSE, which is the other repair and was refused. A
+        lapsed offer is not a benefit-policy question: config/policy.yaml decides coverage by what
+        was bought and when it was PAID, and an axis over a lapsed offer would add a labelled cause
+        with no public grounding and no observation behind its share. The defect was that the corpus
+        contained the contradiction UNLABELLED — 🔴 the rule this repository does hold, that a broken
+        invariant must be an explicit labelled choice and never an accident — and the repair is to
+        stop producing it, in `content_builder.build_invoice`, at no cost to any label.
 
     the_instalment_term:
       status: emitted

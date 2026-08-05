@@ -827,11 +827,20 @@ invoice:
   # recommendation is what supports it. It is printed at a minority rate for that reason, and it is
   # the positive form of this class's central fact — 🔴 that no payment status exists to print.
   validity_share: 0.35
+  # 🔴 A FLOOR ON THE SPAN AND NOT THE WHOLE OF IT, since the printed offer has to still stand on the
+  # day the claim's payment settles it. Where a claim's payment falls later than the drawn window,
+  # `content_builder.build_invoice` prints the settlement's own day instead, so the span reaches the
+  # planner's `_SUBJECT_LEAD_DAYS` (45) on the claims that need it. Measured over eight seeds before
+  # the two numbers were related at all: 100 of the 182 invoices that printed this line were paid
+  # after the date they printed, 27 of them on claims labelled `covered`.
   validity_days_range: [5, 30]
 
   # How long before the payment the invoice is dated is NOT here: it is `_SUBJECT_LEAD_DAYS` in
   # claim_planner, because the gap between an invoice and its settlement is a property of the CLAIM
-  # rather than of the document, and the planner is what dates a claim's documents.
+  # rather than of the document, and the planner is what dates a claim's documents. ⚠️ THE TWO ARE
+  # NOT INDEPENDENT ANY MORE, which is what the note above records: this range and that constant
+  # describe the same interval from two ends, and a change to either has to be read against the
+  # other.
 
   # 👁 1 of 2 prints a telephone number in the supplier block. A number is DRAWN from a published
   # range rather than taken from any document — see `phone_prefixes` below.

@@ -165,7 +165,15 @@
   <section class="block">
     <div class="row">
       <span data-field="payment_method">{{ payment_method }}</span>
-      <span data-field="paid_amount">{{ total }}</span>
+      {# 🔴 «ДО СПЛАТИ» AND NOT «СУМА»: what is tendered is what is payable, which is the basket less
+         the discount plus the cash rounding. This line read `total` until the pixel gate went in,
+         and the two are equal on every document this generator builds only because `discount` and
+         `rounding` are fixed at zero — so the corpus never showed the difference and no test could:
+         the day a discount becomes a draw, a receipt printing `total` here would state a payment
+         that does not settle its own «ДО СПЛАТИ» line, and the товарний чек beside it (which reads
+         `amount_due`) would state a different one from the same basket. Fixed while it costs
+         nothing rather than after a corpus carries it. #}
+      <span data-field="paid_amount">{{ amount_due }}</span>
     </div>
     {% if acquiring %}
     <div>{{ acquiring_labels.acquirer }} <span data-field="acquirer">{{ acquiring.acquirer }}</span></div>

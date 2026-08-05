@@ -395,14 +395,31 @@ def degrade(
     *,
     seed: int,
     capture: Capture = Capture.SCREENSHOT,
+    compress: bool = True,
 ) -> DegradedDocument:
-    """Apply one capture channel to a rendered document and its bounding boxes."""
+    """Apply one capture channel to a rendered document and its bounding boxes.
+
+    🔴 `compress=False` IS THE LEGIBILITY GATE'S REFERENCE AND NOTHING IN THE PIPELINE PASSES IT.
+    It runs the channel the caller asked for with its JPEG step left out — same paper phase, same
+    padding, same perspective, same rotation, same blur, same seed — so that a comparison between
+    the two answers ONE question: what the compression cost the marks inside a labelled box. A
+    reference rendered without the geometry would answer a different question (what the geometry
+    cost), and a reference rendered by another route would measure this module against a second
+    implementation of it. See `tools/pixel_label_gate.py`, which is the only caller.
+
+    ⚠️ THE ASSUMPTION THAT MAKES THE OMISSION SAFE is that `A.ImageCompression` is LAST in every
+    channel's recipe, so dropping it removes no draw any earlier transform depends on and the boxes
+    come out where the shipped run put them. The gate does not take that on trust: it compares the
+    two box sets and reports a mismatch as a defect of its own instrument rather than of the
+    corpus.
+    """
     seed %= _C_INT_MAX
     paper = _paper_pipeline(capture, seed)
     degraded = paper(image) if paper is not None else image
-    moved_image, moved_boxes = carry_boxes(
-        _geometry(capture), degraded, field_bboxes, seed=seed
-    )
+    transforms = _geometry(capture)
+    if not compress:
+        transforms = [t for t in transforms if not isinstance(t, A.ImageCompression)]
+    moved_image, moved_boxes = carry_boxes(transforms, degraded, field_bboxes, seed=seed)
     return DegradedDocument(image=moved_image, field_bboxes=moved_boxes)
 
 

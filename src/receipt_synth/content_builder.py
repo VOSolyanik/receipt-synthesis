@@ -3424,6 +3424,7 @@ def build_invoice(
     coverage_target: Decimal | None = None,
     item_count: int | None = None,
     schedule: str | None = None,
+    settled_at: datetime | None = None,
     country: str = "UA",
 ) -> Invoice:
     """Build one Ukrainian рахунок на оплату.
@@ -3441,6 +3442,18 @@ def build_invoice(
     invoice addressed to anybody else would evidence nothing about the persona filing the claim.
     This is where an invoice differs structurally from a receipt: a till receipt names no buyer
     because the payer is standing at the till, while an offer to pay has to say to whom it is made.
+
+    🔴 `settled_at` IS THE DATE THE CLAIM'S MONEY MOVED, AND IT BOUNDS A PRINTED TERM. The validity
+    line — 📄 «Рахунок дійсний до X р.» — is a CONDITION OF THE OFFER, and an offer settled after it
+    lapsed is not the obligation the payment discharged: a seller reissues a lapsed invoice rather
+    than banking against it. Measured over eight seeds before this parameter existed: of 490
+    invoices, 182 printed the line and 100 of those were paid later than the date they printed — 27
+    of them on claims the label calls `covered`. Nothing in policy.yaml reads the line, so no
+    verdict moved and nothing noticed; a consumer that learned to read it would have rejected those
+    claims and been right, which makes it a defect of this generator rather than noise.
+
+    `None` is for a document with no settlement to respect — a builder called directly, and the
+    mock-ups — and then the drawn window is the whole of the span.
 
     🔴 `schedule` IS NAMED BY THE PLAN AND NEVER DRAWN HERE, unlike every other optional requisite
     of this class. The others are variation — an agreement line, a telephone, a validity — and a
@@ -3520,6 +3533,13 @@ def build_invoice(
     validity = None
     if rng.random() < invoice_share("validity"):
         until = issued_at + timedelta(days=rng.randint(*invoice_count_range("validity_days")))
+        # 🔴 THE OFFER STILL STANDS ON THE DAY IT IS SETTLED, and the drawn window is a FLOOR on the
+        # span rather than the whole of it for exactly that reason. The draw happens first and
+        # unconditionally, so a seed's stream is the same whether or not the claim's payment outruns
+        # the window — the printed date moves, and nothing else about the run does. Compared as a
+        # DATE: the line prints a day, and a payment on the last day of the offer is inside it.
+        if settled_at is not None and settled_at.date() > until.date():
+            until = settled_at
         validity = block["validity_format"].format(date=until.strftime(rules["date_format"]))
 
     # 📄 A sole trader signs in their own name and states no post; a company names the post of the
