@@ -20,11 +20,38 @@ rates:
   USD: 42.00
   GBP: 53.00
 
+# 🔴 THE QUANTIZATION POINT OF A CONVERSION, declared here rather than left as a
+# convention in code. Two sides read this file — the oracle in this repository and any
+# consumer checking labels against its own conversion — and each implements the
+# arithmetic independently. The rate alone does not make their results comparable: two
+# faithful implementations that quantize at different points differ by a rounding unit,
+# and a symmetry check between them then measures the rounding convention rather than
+# the policy. So the point is part of the shared constant, exactly as the rate is.
+#
+# The rule: an amount is summed exactly in the document's own currency first, multiplied
+# by the rate once, and quantized once — to `step`, with `rounding` — at that single
+# point. Sum-then-convert-then-quantize, per document. Nothing re-quantizes a converted
+# amount downstream, and no comparison happens on an unquantized product.
+#
+# `policy_engine` verifies at every conversion that this declaration still names the
+# arithmetic it performs, and refuses to convert if the two have come apart — the same
+# pattern as `partial_payment.marker_fields` in policy.yaml.
+conversion:
+  step: "0.01"        # the minor unit of the reporting currency
+  rounding: half-up
+  order: sum-then-convert-then-quantize
+
 # Optional seeded variation, so that documents issued on different dates within
 # the period do not all convert at exactly the same rate. Deterministic: the
 # jitter is drawn from the run seed and the document date, never from wall time.
 # Disabled by default — enable only if the dataset needs rate variation as a
 # signal.
+#
+# ⛔ THE ORACLE REFUSES TO CONVERT WHILE THIS IS ENABLED. A jittered rate is a function
+# of the run seed, and `policy_engine` receives no seed — its answer is a pure function
+# of (documents, policy). Enabling jitter without teaching the whole pipeline to carry
+# the drawn rate INTO the label would make the applied rate unrecoverable, which is the
+# exact unprovability the `conversion` block above exists to rule out.
 jitter:
   enabled: false
   relative_amplitude: 0.03   # +/- 3% around the base rate

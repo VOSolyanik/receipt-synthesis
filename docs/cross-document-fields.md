@@ -267,6 +267,14 @@ render did"* — surviving in the confirmation's pool, where nothing has drawn i
 which is a change to the corpus, and the corpus is regenerated exactly once at the start of the next
 iteration. The fix goes there, in one pass, with everything else that moves a printed value.
 
+> **REPAIRED IN THE GENERATOR since this was written:** «Переказ власних коштів» is out of the
+> confirmation's purpose pool (`config/generation.yaml`, the ⛔ comment above `purposes` carries the
+> reasoning; `tests/test_payment_confirmation.py` pins the absence). The wording survives only in
+> the statement's `credit_from_self` pool, where the counterparty is the holder and the page agrees
+> with itself. The corpus the figures above describe — RP-06 — still contains the 54; the FIRST
+> regenerated corpus will not, and the gate on `cites_subject_document` below lifts when a
+> regenerated run confirms the count at zero, not before.
+
 🔴 **And it gates the contract field this page asks for.** The proposed `cites_subject_document`
 flag exists so that a linker's recall can be measured against the pairs where a citation was there to
 find. Introduced today, it would return `false` for these 54 and thereby **certify them as
@@ -293,5 +301,7 @@ Named here rather than left for a reader to notice:
   (`bank_identity_audit`), against the fixed name → code table in `config/vendors.json`.
 * **the reference points one way only.** The payment document cites the invoice; the invoice
   carries no pointer to the payment, and no real invoice would — it is issued first.
-* **the 54 self-transfer purposes above.** Measured and recorded, deliberately not repaired here,
-  and blocking the `cites_subject_document` field until they are.
+* **the 54 self-transfer purposes above.** Measured and recorded here; since repaired in the
+  generator (see the boxed note in the previous section), which no run this page cites reflects.
+  The `cites_subject_document` field stays blocked until a REGENERATED corpus confirms the
+  count at zero — the repair being committed and the corpus being clean are different facts.

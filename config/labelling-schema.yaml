@@ -1007,7 +1007,35 @@
 # became genuinely nullable. See `claim_evidence` below. A consumer that vendors this file
 # compares versions before diffing it, so a change of either size under an unchanged number
 # would be a change nobody looked for.
-version: 29
+#
+# Version 30 is the CURRENCY CONVERSION: the oracle converts a foreign-currency document at
+# the rate config/fx-rates.yaml states for the document's date, and the claim label gained
+# `fx_rates` — one record per converted document, carrying the applied rate. The `currency`
+# field's note stops saying the engine refuses; the quantization point of the conversion is
+# declared in fx-rates.yaml (`conversion`), not here, because it belongs to the constant
+# both sides load. KL-17 records the external-validity gap this opens: the corpus converts
+# at STATIC vendored rates, a production system converts at a live rate for the transaction
+# date, and no figure measured here transfers across that difference unexamined.
+#
+# Version 31 is the DOCUMENT CLASS the conversion exists for: `platform_receipt`, with its
+# one archetype `eu_platform_receipt` — English, EUR, both facts of `document_evidence`
+# established by a page carrying no fiscal identity. `DocType` gained the member,
+# policy.yaml's `document_evidence` gained the row, and the `document_types` section below
+# gained the block. `classifier_role` is `undecided`, exactly as for `non_fiscal_receipt`,
+# so the four target classes and the classifier metric's denominator are unchanged.
+#
+# Version 32 is THREE MORE RENDERINGS AND NO NEW TYPE: `ua_platform_receipt` joins its
+# English twin under `platform_receipt` (Ukrainian, UAH, a domestic seller whose requisites
+# and contained-VAT row are ordinary where the EU page disclaims them — one shared body, so
+# the pair is a controlled comparison of the language and currency axes), and the two phone
+# carriers `ua_bank_receipt_in_app` and `ua_bank_app_transaction` join
+# `payment_confirmation` — the framed A4 sheet, labelled by the A4's own ground_truth, and
+# the transaction screen, the class's strongest negative example by lack of requisites.
+# Which rendering a claim draws is `archetype_shares` in config/generation.yaml. The four
+# target classes and the metric's denominator are unchanged; what changed is that a
+# per-class figure now averages over renderings, and the per-archetype notes in
+# `document_types` say how to slice them apart.
+version: 32
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -1287,6 +1315,42 @@ document_types:
         # checks the tuple against policy.yaml so a category added there cannot drop out.
         categories: all
         paper: A4 — 210 × 297 mm, unlike the till rolls the fiscal class is printed on
+      # 🔴 TWO MORE RENDERINGS OF THE SAME CLASS SINCE VERSION 32 — THE PHONE. Neither is a
+      # new document type; both are what the same payment looks like inside the banking
+      # application, and their shares of the payment draw are `archetype_shares` in
+      # config/generation.yaml. A consumer's per-class figures now average over three
+      # renderings, and per-archetype slices need `source_file` names or the box
+      # vocabularies below to tell them apart.
+      - slug: ua_bank_receipt_in_app
+        jurisdiction: UA
+        language: uk
+        categories: all
+        paper: >
+          a phone screen, 1170 × 2532 px — the A4 sheet itself framed inside it. The inner
+          document is built by the SAME builder and labelled by the SAME ground_truth as
+          the A4 archetype (the medium does not change the ground truth, by construction),
+          so every field box of the class is present, in the screen's coordinates, plus
+          the chrome's own `screen_title` — the app's wording for the document, repeating
+          its number over a page whose own heading reads differently. 👁 Observed, not
+          staged.
+      - slug: ua_bank_app_transaction
+        jurisdiction: UA
+        language: uk
+        categories: all
+        paper: >
+          a phone screen, 1170 × 2532 px — the transaction screen, and the strongest
+          negative example for this class by LACK of requisites: ⛔ no document number, no
+          authorization code, no RRN, no stamp, no signature, no amount in words, no
+          payment purpose — every one of them printed by the A4 archetype. Its label
+          fields are accordingly null (`payment_purpose`, `auth_code`, `fee`, `payer`),
+          `direction` is debit (the printed minus), and its box vocabulary is its own:
+          `merchant_descriptor` (the counterparty as the card network carries it —
+          `PREFIX*NAME`, matching no party block of any document beside it, while the
+          label's `counterparty` still carries the bare trade name), `category_chip` (the
+          BANK's category, drawn without reference to the claim and free to disagree with
+          what was bought), `date` (👁 written in words with a time — «2 лютого 2026,
+          13:46» — a form no printed document of this corpus uses), `amount` (signed),
+          `balance`, `payment_method`.
     narrower_than_observed: >
       FOUR WAYS THIS CLASS IS NARROWER THAN WHAT WAS OBSERVED.
 
@@ -2075,6 +2139,66 @@ document_types:
       to manual review as an unrecognized type are different outcomes, and no source names a
       class for this one. Left open.
 
+  platform_receipt:
+    classifier_role: undecided
+    status: emitted
+    emitted_since: >
+      VERSION 31, TOGETHER WITH THE CURRENCY CONVERSION IT EXISTS TO EXERCISE — the first
+      document of this corpus in a second language and a second currency, and the second
+      class after `fiscal_receipt` whose type establishes BOTH facts of policy.yaml's
+      `document_evidence`. An online platform's own receipt for a paid order: the lines
+      say what was bought, the paid caption and the masked card say money moved, and no
+      fiscal identity of any jurisdiction appears anywhere on the page.
+
+      TWO ARCHETYPES SINCE VERSION 32, ONE SHARED BODY. `eu_platform_receipt` — English,
+      EUR, seller drawn from the EU pool of config/vendors.json — and
+      `ua_platform_receipt` — Ukrainian, UAH, a domestic company (its legal name,
+      address, identification code, ПН and the contained-VAT row «У т.ч. ПДВ 20%» are
+      ordinary requisites, each the exact particular the English page's footer licenses
+      ITSELF to omit; ⛔ it prints no not-a-tax-invoice note, no Ukrainian equivalent of
+      the wording having been found in any public source). Both are registered for
+      `professional_development` only (the registry entry carries the blast-radius
+      reasoning), drawn against each other at `archetype_shares` in
+      config/generation.yaml. Claims are single-document either way; the oracle CONVERTS
+      the EUR variant's amounts at the vendored rate of config/fx-rates.yaml, recording
+      what it applied in the claim's `fx_rates` field, and the UAH variant needs no
+      conversion — which is exactly the controlled pair the class exists for: language,
+      currency and tax treatment vary, the layout does not.
+
+      WHAT ITS LABEL RECORD CARRIES: `doc_type: platform_receipt`, `language: en`,
+      `currency: EUR`, a basket in `line_items` (every amount in the document's own
+      currency — nothing on the record is converted), `counterparty` the platform's bare
+      mark, `payer` the buyer the page names, `date`, and the three fiscality flags all
+      `false`. `vat_letter` is `null` on every line and no tax row is printed: 📄 the page
+      declares «This is not a VAT invoice.», and Article 226 of Directive 2006/112/EC is
+      the list of particulars that declaration licenses it to omit — the supplier's
+      address, both parties' VAT identification numbers, the rate and the amount of tax.
+
+      🔴 THE NEGATIVE MARKER IS A STRING WITH A POSITION — `not_a_tax_invoice_note` in
+      `field_bboxes` — which is the other half of RC-08's argument: the Ukrainian slip's
+      marker was an ABSENCE, this one is text with a box, and a field shaped "marker text
+      plus position" fits exactly one of the two.
+    printed_fields:
+      note: >
+        The box vocabulary of the class — the shared body means one list serves both
+        archetypes, the Ukrainian one adding `seller_address`, `seller_tax_code`,
+        `seller_vat_number` and `vat_amount` and dropping `not_a_tax_invoice_note`
+        (pinned by a field-set test): `title`, `seller_name`, `paid_amount`,
+        `currency` (the code beside the paid figure — the corpus prints a currency code
+        beside a number on no other class, one currency having nothing to distinguish),
+        `receipt_number`, `date`, `card_masked`, `buyer_name`, `buyer_country`,
+        `item_<i>_name` / `item_<i>_qty` / `item_<i>_sum` (no per-line price: the page
+        prints quantity and line total only), `subtotal`, `total`,
+        `not_a_tax_invoice_note`. `paid_amount` and `total` are one figure printed twice,
+        as `amount` and `amount_due` are on the receipt classes.
+    undecided: >
+      For the reason the slip's role is: the consumer's `other` absorbs it mechanically
+      and routes the claim to `in_review`, while this class — unlike anything in `other`
+      today — establishes both facts and can carry a fully derivable verdict. Whether the
+      consumer classifies it specifically or reviews it manually is a decision about the
+      consumer's class vocabulary, and no source has taken it. Left open, exactly as for
+      `non_fiscal_receipt`; the four target classes and their denominator are unchanged.
+
 # The consumer's classification metric, stated here because a consumer that computes a
 # different metric than the one being reported has no way to discover the difference from
 # the field lists alone.
@@ -2231,7 +2355,13 @@ normalization:
     currency: >
       Never part of the amount; the `currency` field carries the code, and per `open_enum`
       that code may be one the generator has never emitted.
-    decided_here: half-up rounding. The generator never rounds a comparison, because it never compares.
+    decided_here: >
+      half-up rounding — and since version 30 the generator's oracle does round once
+      itself: a foreign-currency amount is converted and quantized at the single point
+      config/fx-rates.yaml declares (`conversion`: sum-then-convert-then-quantize, step
+      0.01, half-up), which is the same convention this rule names. The declaration lives
+      in that file rather than here because it belongs to the constant both sides load —
+      see the `fx_rates` claim field.
 
   quantity:
     status: emitted
@@ -2802,11 +2932,15 @@ document_label:
       normalize: open_enum
       observed: ["UAH"]
       note: >
-        Every archetype emits `reporting_currency` from policy.yaml, and the policy engine
-        REFUSES a document in anything else rather than converting it — a converted amount
-        would be a number in the ground truth that nothing in the dataset can prove. The
-        consumer converts to a base currency at approval time using the transaction date,
-        which is why the original amount, currency and date are all kept per document.
+        The document's amounts stay in ITS OWN currency — nothing on the record is
+        converted, which is why the original amount, currency and date are all kept per
+        document. Where the currency is not policy.yaml's `reporting_currency`, the policy
+        engine converts FOR THE VERDICT ARITHMETIC ONLY, at the rate config/fx-rates.yaml
+        states for the document's date, and the claim record carries that rate in
+        `fx_rates` — see the claim field, which is where the conversion contract lives. An
+        earlier version of this note said the engine refuses such a document outright;
+        that fell with the decision to convert, and the refusal that remains is narrower:
+        a currency the vendored table has no rate for.
 
     - name: amount
       type: number
@@ -4724,6 +4858,52 @@ claim_label:
           - "annual limit <category id> 9000.00 UAH: 8100.00 already reimbursed, 900.00 remaining"
           - "reimbursable 900.00 UAH of 2400.00 covered — annual limit exhausted"
 
+    - name: fx_rates
+      type: array of object
+      required: true
+      # `money` governs the one member a consumer compares numerically: `rate` serializes
+      # exactly as an amount does, so trailing zeros are lost — 45.00 is written 45.0.
+      # The other members are lookups, not comparisons: `doc_id` and `currency` match
+      # exactly, `on` is an ISO date.
+      normalize: money
+      status: forward_contract
+      answers: WHICH RATE THE ORACLE APPLIED to each document not stated in the reporting currency
+      shape: >
+        One object per converted document: `doc_id` (which document), `currency` (what the
+        rate converts FROM — the target is always policy.yaml's `reporting_currency`),
+        `rate` (reporting-currency units per 1 unit of `currency`, verbatim from
+        config/fx-rates.yaml), `on` (the date the rate was taken at — the document's own
+        date, repeated so the record stands alone). An EMPTY ARRAY means nothing was
+        converted: every document of the claim is already in the reporting currency, and
+        an identity rate on each of them would be noise dressed as information.
+      definition: >
+        The rate itself, not only its result. A converted amount is provable exactly when
+        the label carries the applied rate beside the original amount, currency and date —
+        amount × rate, quantized at the point fx-rates.yaml declares (`conversion`:
+        sum-then-convert-then-quantize, step 0.01, half-up), is then reproducible by
+        anyone holding the same vendored table. The rate is recorded whatever branch the
+        verdict took: a rejected foreign-currency claim still carries it, because a
+        consumer re-deriving any of its amounts needs the same constant the oracle read.
+      the_shared_artifact_is_a_constant_not_a_library: >
+        🔴 THE INDEPENDENCE OF THE LABELLING FROM THE ENGINE EVALUATED AGAINST IT IS NOT
+        COMPROMISED BY THIS FIELD, and the boundary is worth stating because it is easy to
+        blur from either side. What the two sides share is a CONSTANT — the vendored rate
+        table and its declared quantization point, the same class of artifact as the
+        currency code or the field names of this file: if the two sides take different
+        numbers, comparison is meaningless, so vendoring is MANDATORY here. What they must
+        NOT share is INTERPRETATION — each side implements the conversion arithmetic
+        independently from the declaration, exactly as each derives verdicts independently
+        from policy.yaml. A shared conversion LIBRARY would be the two engines being one
+        engine, and the symmetry check between them would measure nothing.
+      derived_not_extractable: >
+        ⚠️ NO CONVERTED AMOUNT IS AN EXTRACTION TARGET. The conversion appears on no
+        document — 👁 no public source shows a platform receipt stating a rate or an
+        equivalent in the buyer's currency — so a per-field score on a converted figure
+        measures nothing about extraction. It is a DERIVED quantity: score it only as
+        arithmetic over (amount, `rate`), never as a field read off pixels. The same trap
+        this file already names for `amount_due`.
+      static_rates_are_a_declared_gap: see KL-17.
+
     - name: split
       type: enum or null
       required: true
@@ -5724,6 +5904,35 @@ known_limitations:
       config file rather than of the system. And take the figure over claims that HAVE a pair: on a
       `subject_not_evidenced` claim there is nothing to cite, so a corpus-wide denominator scores
       that cause as a total linkage failure by construction.
+
+  - id: KL-17
+    name: currency conversion is exercised against static rates, and the world's are live
+    predictor: none — the limitation is about what a measurement transfers to, not about a cue
+    hurts: [evaluation]
+    subset: every claim carrying a document not stated in the reporting currency
+    what_the_corpus_does: >
+      The oracle converts at the rates of config/fx-rates.yaml — STATIC BY DESIGN, as that
+      file's own header says: a live rates API would destroy determinism, and reproducibility
+      outranks realistic drift. Every conversion in the corpus therefore applies a rate that
+      is the same for every transaction date, and the label records it (`fx_rates`).
+    what_the_world_does: >
+      A production system converts at a live rate for the transaction date. Rates drift daily;
+      two documents weeks apart convert at genuinely different figures; the rate applied is an
+      observation about the world, not a vendored constant.
+    consequence: >
+      🔴 A SYSTEM THAT PASSES THE CONVERSION SYMMETRY CHECK HERE HAS SHOWN IT IMPLEMENTS THE
+      DECLARED ARITHMETIC, NOT THAT IT CONVERTS CORRECTLY AGAINST A LIVE SOURCE. What
+      transfers is the mechanism — read the rate for the date, multiply once, quantize at the
+      declared point; what does not transfer is everything a live source adds: retrieval
+      failures, revision of published rates, date-boundary ambiguity (whose midnight?), and
+      the choice of source itself. No figure measured on this corpus speaks to those. The gap
+      is deliberate — the alternative was labels that change with the day they are generated
+      on — and it is recorded here so it is inherited as a decision rather than as a silence.
+    how_a_consumer_detects_it: >
+      Compare `fx_rates[].rate` across documents of different dates: on this corpus they are
+      equal for equal currencies, which is the signature of the static table. Any evaluation
+      of date-sensitive conversion needs data this corpus deliberately does not contain.
+    see_profile: run_profiles
     fixed_by: >
       NOTHING THAT SHOULD BE DONE BY WIDENING THE POOL, and the decision is the author's: 👁 the
       observed purpose lines name a delivery note as well as an invoice, and a corpus in which

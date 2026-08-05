@@ -7,23 +7,22 @@
   markup: `labels`, `currency` and the amounts arrive in the context, and the body contains no
   printed word of either language.
 
-  ⚠️ A MOCK-UP: not registered, no builder, no run, no `data-field` attributes.
+  ✅ SHIPPED: registered in `ARCHETYPES`, built by `content_builder.build_platform_receipt`,
+  labelled with `data-field` boxes collected through the shared body. The paragraphs below
+  record what stood in the way and how it was resolved, because the resolution is load-bearing.
 
-  🔴 WHAT THIS DOCUMENT WOULD DO TO THE ORACLE, stated here because it is the reason the archetype
-  is worth building and the reason it is NOT connected. `policy_engine._check_currency` REFUSES a
-  document whose currency is not `reporting_currency` — it raises, and its own docstring says it
-  deliberately offers no conversion, because "a rate applied here would put a number in the
-  ground truth that nothing in the dataset can prove". That is correct while every archetype
-  emits UAH. The moment this one exists, the refusal stops being a guard against an upstream
-  contradiction and becomes an unmade decision: either the ground truth carries a converted
-  number, or the claim's amount stays in EUR and the limit comparison moves to the consumer.
-  Connecting this template without settling that would turn a raise into a crash on real data.
+  🔴 WHAT THIS DOCUMENT DID TO THE ORACLE — the decision that had to fall before this line
+  could exist. `policy_engine` used to REFUSE a document whose currency is not
+  `reporting_currency`, on the ground that "a rate applied here would put a number in the
+  ground truth that nothing in the dataset can prove". The author resolved it (04.08, variant
+  1): the oracle now CONVERTS at the rate config/fx-rates.yaml states for the document's date,
+  quantized at the point that file declares, and records the applied rate in the claim's
+  `fx_rates` — which is what turns "unprovable" into "derived from a stated input". The
+  refusal that remains is narrower and correct: a currency the vendored table has no rate for.
 
-  ⛔ AND `config/fx-rates.yaml` IS READ BY NOTHING. `config.load_fx_rates` has no caller in
-  `src/`, and the file's own header explains that the rates are static so that conversion stays
-  deterministic — a property of a conversion no code performs. `tools/render_mockups.py` is the
-  first thing in this repository to call it, and even there the converted figure is printed to
-  the console rather than onto the page.
+  ⛔ NO CONVERSION IS PRINTED ON THE PAGE, and that is unchanged: no public source shows such a
+  receipt stating a rate or an equivalent. The conversion lives in the LABEL, where the proof
+  is; the page carries only its own currency, with the code beside every amount.
 
   ⚠️ EUR RATHER THAN USD, and the choice is the repository's vocabulary rather than a preference:
   `Country` in schemas.py holds UA, PL, DE and ES, `config/vendors.json` already keys a block by

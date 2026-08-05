@@ -13,7 +13,7 @@ import random
 import re
 from collections import Counter, defaultdict
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 import cv2
 import numpy as np
@@ -1645,6 +1645,24 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
             assert subject["seller_name"] != payment["seller_name"], claim.claim_id
             readable["seller_name_disagrees_on_purpose"] += 1
             continue
+        # 🔴 THE SECOND DELIBERATE EXCLUSION, COUNTED AND VERIFIED RATHER THAN SKIPPED: a claim
+        # whose payment page is the app's transaction screen prints NO party block at all — that
+        # absence is the archetype's entire argument — so the requisite rows below have nothing
+        # to read on it by design, not by defect. The discriminator is the box vocabulary
+        # (`merchant_descriptor` is printed by that archetype and no other), and the branch
+        # ASSERTS the absence it excuses: a party requisite turning up on such a page would mean
+        # the archetype stopped being the negative example it is registered as.
+        payment_document = max(
+            documents, key=lambda d: document_evidence(d.doc_type).proves_payment
+        )
+        if "merchant_descriptor" in payment_document.field_bboxes:
+            for field in ("seller_name", "seller_tax_code", "seller_account"):
+                assert payment[field] is None, (
+                    f"{claim.claim_id}: the app transaction screen printed {field!r}, and its "
+                    "whole registration rests on printing no party requisite at all"
+                )
+            readable["payment_prints_no_party_block"] += 1
+            continue
         pairs += 1
         for field in ("seller_name", "seller_tax_code", "seller_account", "seller_bank_name"):
             if subject[field] is None or payment[field] is None:
@@ -2062,19 +2080,30 @@ def test_the_limit_flag_is_recomputable_from_the_dataset_alone(multi_claim_datas
         limit = annual_limit(claim.category)
         remaining = limit - spent[key]
         # Over the claim's SUBJECT documents, which is where the line items of a claim
-        # live — see `policy_engine.resolve_evidence`. Every document here proves both
-        # facts, so the two sets coincide; taking them from the evidence table rather than
-        # from every document is what keeps this re-derivation honest when they stop
-        # coinciding.
-        covered = covered_total(
-            claim.category,
-            [
-                line
-                for document in documents
-                if document_evidence(document.doc_type).proves_subject
-                for line in document.line_items
-            ],
-        )
+        # live — see `policy_engine.resolve_evidence`. Taking them from the evidence
+        # table rather than from every document is what keeps this re-derivation honest
+        # when the two sets stop coinciding.
+        #
+        # 🔴 CONVERTED EXACTLY WHERE THE LABEL SAYS A CONVERSION APPLIED, and by the
+        # label's own rate — this loop is the consumer's half of the currency decision. A
+        # document whose doc_id appears in the claim's `fx_rates` has its covered sum
+        # multiplied by that recorded rate and quantized once, at the point
+        # config/fx-rates.yaml declares (sum-then-convert-then-quantize, 0.01, half-up),
+        # implemented HERE rather than imported from the engine: two independent
+        # implementations of one declared constant is what the symmetry claim means. A
+        # KeyError on the rate lookup is itself a finding — a foreign-currency document
+        # whose claim label failed to prove the conversion it underwent.
+        rate_of = {applied.doc_id: applied.rate for applied in claim.fx_rates}
+        covered = Decimal(0)
+        for document in documents:
+            if not document_evidence(document.doc_type).proves_subject:
+                continue
+            doc_covered = covered_total(claim.category, list(document.line_items))
+            if document.currency != "UAH":
+                doc_covered = (doc_covered * rate_of[document.doc_id]).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+            covered += doc_covered
         reimbursed = min(covered, remaining)
 
         # 🔴 A CLAIM WHOSE EVIDENCE IS INSUFFICIENT PAYS NOTHING AND CONSUMES NOTHING, so the

@@ -127,7 +127,7 @@ def unprintable_item_kinds() -> frozenset[str]:
 
 
 @cache
-def price_range(item_kind: str) -> tuple[Decimal, Decimal]:
+def price_range(item_kind: str, currency: str = "UAH") -> tuple[Decimal, Decimal]:
     """The retail price range of an item kind, in whole currency units, bounds included.
 
     WHAT "INCLUDED" MEANS HERE, because one caller disagrees. `high` is inclusive as this
@@ -146,10 +146,33 @@ def price_range(item_kind: str) -> tuple[Decimal, Decimal]:
     Built from decimal text, so the value is exact to the kopiyka; a range stated to more
     places than the currency has is refused rather than rounded, because silently dropping
     a digit of a price is the same class of mistake the scale itself is guarding against.
+
+    🔴 THE CURRENCY SELECTS THE BLOCK, AND THE TWO BLOCKS ARE NOT SYMMETRIC. `UAH` reads
+    `price_ranges`, which carries a `default` because every Ukrainian category draws from
+    it. `EUR` reads `price_ranges_eur`, which deliberately has NO default and covers only
+    the kinds a euro-priced archetype can sell: a kind missing there is a `KeyError`
+    naming the block, not a silent fall-through to a Ukrainian price printed under a euro
+    sign — the two-order-of-magnitude error again, wearing a currency code.
     """
-    block = load_generation()["price_ranges"]
+    blocks = {"UAH": "price_ranges", "EUR": "price_ranges_eur"}
+    if currency not in blocks:
+        raise KeyError(
+            f"no price-range block is defined for currency {currency!r}; "
+            f"config/generation.yaml carries {sorted(blocks.values())}"
+        )
+    block = load_generation()[blocks[currency]]
+    if currency == "UAH":
+        stated = block["ranges"].get(item_kind, block["default"])
+    else:
+        if item_kind not in block["ranges"]:
+            raise KeyError(
+                f"config/generation.yaml `{blocks[currency]}` states no range for "
+                f"{item_kind!r}, and that block has no default on purpose — a "
+                f"{currency} document may only price the kinds the block names"
+            )
+        stated = block["ranges"][item_kind]
     bounds = []
-    for value in block["ranges"].get(item_kind, block["default"]):
+    for value in stated:
         amount = Decimal(str(value))
         if amount != amount.quantize(Decimal("0.01")):
             raise ValueError(
@@ -159,6 +182,22 @@ def price_range(item_kind: str) -> tuple[Decimal, Decimal]:
         bounds.append(amount)
     low, high = bounds
     return low, high
+
+
+def archetype_draw_weights() -> dict[str, float]:
+    """The relative draw weights of archetypes within one pool, keyed by slug.
+
+    From `archetype_shares` in config/generation.yaml, whose comment carries the rule:
+    a pool consults the table only when every one of its members is listed, draws
+    uniformly when none is, and is refused when the listing is partial. That rule is the
+    CALLER'S (`claim_planner._draw_archetype`) — this accessor only reads the numbers.
+
+    ⚠️ Deliberately NOT `@cache`d: every cached accessor in this module returns an
+    immutable value, and this one returns a dict — a fresh one per call, so no caller can
+    edit the configuration every later caller sees.
+    """
+    stated = load_generation().get("archetype_shares", {})
+    return {str(slug): float(weight) for slug, weight in stated.items()}
 
 
 @cache

@@ -508,6 +508,103 @@ price_ranges:
 
 
 # =============================================================================
+# Euro price ranges — the per-jurisdiction block the header above promised
+# =============================================================================
+#
+# The `price_ranges` header says: "Per jurisdiction ranges arrive with the first non-UA
+# archetype". This is that arrival — `eu_platform_receipt` prices its lines from here.
+#
+# ONLY THE KINDS A EURO-PRICED ARCHETYPE CAN SELL, AND DELIBERATELY NO DEFAULT. The UAH
+# block's default exists because every Ukrainian category draws from it; a euro default
+# would let a kind nobody priced in euros fall through to a number that merely looks like
+# a price. `config.price_range` refuses a missing kind here instead. The five kinds below
+# are the union of the two EU vendor profiles (`online_learning_platform`,
+# `general_retailer`) intersected with what `professional_development` names.
+#
+# 🔴 EACH RANGE NESTS INSIDE ITS UAH SIBLING AT THE VENDORED RATE, AND THAT IS ARITHMETIC
+# THE PLANNER LEANS ON, not a stylistic echo. `claim_planner` sizes a limit-exhausting
+# basket with `content_builder.estimated_line_value`, which reads the UAH ranges — it runs
+# before a vendor or an archetype is chosen, so it cannot know the claim will price in
+# euros. The sizing stays conservative exactly as long as a euro line is worth at least
+# its UAH sibling's lower bound: eur_low × 45.00 ≥ uah_low, and eur_high × 45.00 ≤
+# uah_high keeps the basket inside the same plausibility band the category was tuned to.
+# Per kind, at the vendored 45.00 (config/fx-rates.yaml):
+#
+#   online_course       23.00–200.00  → 1 035.00–9 000.00 against [1 000, 9 000]
+#   certification_exam  89.00–266.00  → 4 005.00–11 970.00 against [4 000, 12 000]
+#   professional_book   10.00–33.00   →   450.00–1 485.00 against [450, 1 500]
+#   entertainment_book   5.60–13.00   →   252.00–585.00   against [250, 600]
+#   hardware           334.00–1333.00 → 15 030.00–59 985.00 against [15 000, 60 000]
+#
+# The nesting is pinned by a test (tests/test_platform_receipt.py), so an edit to either
+# side that breaks it goes red instead of quietly making exhausted-limit plans miss.
+#
+# Prices draw in ten-cent steps, as the UAH draw does in ten-kopiyka steps — one grid,
+# two currencies. The .99 retail convention is therefore absent from euro prices; a
+# narrowness of the corpus, accepted for one draw mechanism rather than two.
+price_ranges_eur:
+  currency: EUR
+  ranges:
+    online_course:      ["23.00", "200.00"]
+    certification_exam: ["89.00", "266.00"]
+    professional_book:  ["10.00", "33.00"]
+    entertainment_book: ["5.60", "13.00"]
+    hardware:           ["334.00", "1333.00"]
+
+
+# =============================================================================
+# Archetype draw weights — which rendering a claim's document takes, within one class role
+# =============================================================================
+#
+# 🔴 WHY THIS SIZES NO LABELLED BUCKET AND THEREFORE LIVES HERE. `_select_documents` first
+# decides a claim's SHAPE (self-contained, pair, or a deliberate gap) from the evidence
+# table, and only then picks WHICH archetype renders each slot. The weights below act at
+# that second step: they move no verdict, no cause, no amount and no date — the same claim,
+# the same label, drawn on a different page. A share that sized a labelled bucket would
+# belong beside `verdict_mix` in config/policy.yaml, as `file_composition`'s comment
+# already explains for files.
+#
+# THE RULE: a pool draw consults this table only when EVERY archetype of the pool is
+# listed; a pool with none listed draws uniformly, exactly as before the table existed,
+# and a pool with SOME listed is refused — a half-declared pool is a distribution nobody
+# chose. Weights are relative within the pool actually present.
+#
+# THE PAYMENT POOL: four archetypes, one document type each claim draws one of.
+#   ua_bank_statement 0.50 — the statement keeps the half it has always had, so the TYPE
+#     distribution (`bank_statement` : `payment_confirmation` = 1 : 1 among split pairs)
+#     is exactly what every measured baseline was taken on.
+#   The confirmation family splits the other half 0.30 / 0.12 / 0.08:
+#     ua_bank_payment_confirmation 0.30 — the A4 stays the family's dominant form (60% of
+#       it): it is the rendering every existing figure was measured on, and the two phone
+#       carriers must not silently become the class a consumer was never scored against.
+#     ua_bank_receipt_in_app 0.12 and ua_bank_app_transaction 0.08 — together 40% of the
+#       family, the phone being the domain's dominant capture carrier; the framed receipt
+#       outweighs the bare screen because 👁 the screen is what an employee sends when they
+#       have NOT tapped through to the receipt, and a corpus where the weakest evidence
+#       dominates its own family would overstate the domain's difficulty. ⚠️ ALL FOUR
+#       NUMBERS ARE JUDGEMENTS, not measurements — no public source counts what employees
+#       actually attach — and they are parameters precisely so the author can retune them
+#       without touching code.
+#
+# THE PLATFORM POOL: two archetypes, one class, drawn 0.50 / 0.50 — the pair exists for a
+# controlled comparison of the language and currency axes with the layout held fixed, and
+# equal mass is what maximizes the power of that comparison. Skewing it would need a claim
+# about how often a Ukrainian claimant buys from a foreign platform, which nothing here
+# has measured.
+#
+# ⛔ THE THREE FISCAL RECEIPTS ARE DELIBERATELY ABSENT: their pool draws uniformly, as it
+# always has, and listing them here with equal weights would be a no-op that still moved
+# the draw call onto the weighted path — a behaviour change nothing asked for.
+archetype_shares:
+  ua_bank_statement: 0.50
+  ua_bank_payment_confirmation: 0.30
+  ua_bank_receipt_in_app: 0.12
+  ua_bank_app_transaction: 0.08
+  eu_platform_receipt: 0.50
+  ua_platform_receipt: 0.50
+
+
+# =============================================================================
 # Basket shape
 # =============================================================================
 
@@ -630,13 +727,22 @@ payment_confirmation:
   # PERSON, written by the payer. It is left out rather than modelled — it would put a personal
   # name into a free-text field on a published image for no gain this step needs — and it is
   # named here so the corpus is known to be narrower than the observation.
+  # ⛔ «Переказ власних коштів» WAS IN THIS POOL AND IS DELIBERATELY NOT ANYMORE. Every
+  # confirmation this generator builds pays a NAMED FIRM — the payee block carries the
+  # vendor's name, code and IBAN — and a purpose asserting a transfer between the payer's
+  # own accounts contradicts the page it is printed on. Measured before the repair, on the
+  # production corpus (RP-06): 54 of 261 confirmations printing a purpose carried it, 55%
+  # of the "cites nothing" bucket — see docs/cross-document-fields.md, which blocked the
+  # `cites_subject_document` contract field on exactly these 54. The wording itself is
+  # real and stays where it is coherent: the bank statement's `credit_from_self` pool,
+  # whose counterparty IS the holder. Same defect, same repair as the one that pool's
+  # comment records — a purpose is only as honest as the party block beside it.
   purposes:
     uk:
       - "Оплата згідно рахунку № {invoice_no} від {invoice_date}"
       - "Оплата за послуги згідно рахунку № {invoice_no}"
       - "Поповнення балансу (гарантійний внесок) згідно рахунку № {invoice_no}"
       - "Оплата за товар"
-      - "Переказ власних коштів"
 
   # The value under a "name of the initiating system" caption: 👁 a system named in ordinary
   # words. Generic descriptions of a channel rather than marks, so nothing here names a firm.

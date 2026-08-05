@@ -1,10 +1,12 @@
 {#
   Ukrainian mobile-bank TRANSACTION SCREEN — a screenshot of one operation inside the app.
 
-  ⚠️ A MOCK-UP, on the same terms as the other two in this directory: not registered in
-  `ARCHETYPES`, no builder produces it, no run contains it, and it carries NO `data-field`
-  attributes — so the renderer collects no bounding box from it and nothing here becomes a
-  label. That absence is a decision, not an unfinished edge. See templates/README.md.
+  ✅ SHIPPED: registered in `ARCHETYPES` as a `payment_confirmation`-class archetype, built by
+  `content_builder.build_app_transaction`, and carrying `data-field` boxes on the six values
+  the screen actually states — the descriptor, the bank's category chip, the date in words,
+  the signed amount, the balance and the paying card. The label's `counterparty` still carries
+  the bare trade name, as on every class: the descriptor is what the PAGE prints, and the gap
+  between the two is measured on pixels rather than smuggled into the label.
 
   🔴 WHAT MAKES IT WORTH BUILDING IS EVERYTHING IT DOES NOT CARRY. It is the strongest NEGATIVE
   example this repository can hold for the payment class: it looks like proof of payment to a
@@ -72,22 +74,24 @@
 
   <section class="hero">
     {# 🔴 THE DESCRIPTOR. Not a legal name — see the header comment. #}
-    <div class="merchant">{{ merchant_descriptor }}</div>
+    {# The field spans the TEXT, not the block: these hero divs are full-width and centred,
+       and a box wider than its ink would start outside the measured content extent. #}
+    <div class="merchant"><span data-field="merchant_descriptor">{{ merchant_descriptor }}</span></div>
     {# ⚠️ THE CHIP IS THE BANK'S CATEGORY, AND IT IS DRAWN INDEPENDENTLY OF WHAT WAS BOUGHT —
        deliberately. A bank categorizes by the payment ROUTE, so a purchase settled through a
        utility-payment aggregator lands under utilities whatever the merchant sells. It is
        therefore a third thing on this screen that looks like evidence and is not, and it must
        never be mistaken for a category of config/policy.yaml, which is what a benefit plan
        reimburses. #}
-    <div class="chip">{{ category }}</div>
+    <div class="chip"><span data-field="category_chip">{{ category }}</span></div>
     {# 👁 The date is written out in words with the time beside it, which is how the screen
        states it and NOT how any document in this repository does. A consumer parsing
        «2 лютого 2024, 13:46» needs a different reader than the one that parses 02.02.2024. #}
-    <div class="when">{{ datetime_words }}</div>
+    <div class="when"><span data-field="date">{{ datetime_words }}</span></div>
     {# 👁 The largest element on the screen, and SIGNED. The minus is the direction of the
        operation — money leaving the account — and it is the one thing this screen states that
        the A4 confirmation does not print at all. #}
-    <div class="amount">{{ amount_signed }}</div>
+    <div class="amount"><span data-field="amount">{{ amount_signed }}</span></div>
   </section>
 
   {# The rows under the amount. Each is a property of the ACCOUNT rather than of the purchase,
@@ -102,11 +106,11 @@
     <div class="card">
       <div class="card-row">
         <span class="label">{{ balance_label }}</span>
-        <span class="value">{{ balance }}</span>
+        <span class="value" data-field="balance">{{ balance }}</span>
       </div>
       <div class="card-row">
         <span class="label">{{ payment_method_label }}</span>
-        <span class="value">{{ payment_method }}</span>
+        <span class="value" data-field="payment_method">{{ payment_method }}</span>
       </div>
     </div>
   </section>

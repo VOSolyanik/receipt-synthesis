@@ -35,6 +35,7 @@ from decimal import Decimal
 
 import pytest
 
+from receipt_synth import policy_engine
 from receipt_synth.config import category, load_policy
 from receipt_synth.policy_engine import (
     OUTSIDE_PERIOD,
@@ -49,6 +50,7 @@ from receipt_synth.policy_engine import (
     evaluate_claim,
     evaluate_claims,
     full_threshold,
+    fx_rate,
     reporting_currency,
     resolved_coverage,
     verdict_for,
@@ -519,29 +521,164 @@ def test_the_cheapest_real_article_is_still_absorbed_by_a_numeric_branch():
 
 
 # ---------------------------------------------------------------- currency ----
+#
+# The engine CONVERTS a foreign-currency document — config/fx-rates.yaml at the
+# document's date, quantized at the point that file declares, the applied rate recorded
+# in `ClaimEvaluation.fx`. An earlier revision refused instead; the tests of that refusal
+# were rewritten into these when the decision fell. The constants below are pinned from
+# the vendored table the same way the policy constants are pinned above, so a table edit
+# fails here first and says so.
 
 
-def test_a_document_in_another_currency_is_refused_not_converted():
-    """policy.yaml expresses limits in `reporting_currency`. Every archetype this
-    generator has emits that currency, so a document in anything else means something
-    upstream is wrong — and a converted amount would be a number in the ground truth that
-    nothing in the dataset can prove."""
-    with pytest.raises(ValueError, match="EUR"):
-        evaluate([item("900.00", True)], currency="EUR")
+def test_the_fx_constants_these_tests_were_written_against():
+    assert fx_rate("EUR", on=IN_PERIOD) == Decimal("45.00")
+    assert fx_rate("PLN", on=IN_PERIOD) == Decimal("10.50")
+    assert fx_rate("UAH", on=IN_PERIOD) == Decimal("1.00")
 
 
-def test_the_currency_check_names_the_reporting_currency():
-    with pytest.raises(ValueError, match=reporting_currency()):
-        evaluate([item("900.00", True)], currency="PLN")
+def test_a_eur_claim_is_converted_at_the_vendored_rate_before_the_limit():
+    """Known answer, computed on paper from the vendored table and nothing else:
+    200.00 EUR covered, rate 45.00 → 9000.00 UAH, inside the 12000 UAH limit → covered,
+    reimbursable 9000.00 UAH. The trace must show the crossing, because the label is what
+    proves the conversion."""
+    evaluation = evaluate([item("200.00", True)], currency="EUR")
+    assert evaluation.verdict is Verdict.COVERED
+    assert evaluation.reimbursable == Decimal("9000.00")
+    # `× 45.0`, not `× 45.00`: YAML reads the rate as a float, so its Decimal is the
+    # shortest faithful form. Equality with Decimal("45.00") still holds; only the print
+    # form differs.
+    assert any(
+        "200.00 EUR × 45.0 " in line and "= 9000.00 UAH" in line
+        for line in evaluation.policy_trace
+    ), evaluation.policy_trace
 
 
-def test_a_foreign_currency_document_cannot_consume_a_limit():
-    """The failure this guard exists for: a 900.00 EUR document quietly taking 900.00 out
-    of a 12000 UAH balance, with the trace printing UAH beside numbers that are not."""
+def test_a_foreign_currency_claim_consumes_the_limit_in_reporting_currency():
+    """The inverse of the refusal this replaced: a 900.00 EUR document takes
+    40500.00 UAH out of the balance — not 900.00, which is what a limit comparison
+    without conversion would have taken."""
     ledger = Ledger()
-    with pytest.raises(ValueError):
-        evaluate([item("900.00", True)], currency="EUR", ledger=ledger)
-    assert ledger.remaining("p001", "vitamins_nutrition") == Decimal("12000")
+    evaluation = evaluate([item("900.00", True)], currency="EUR", ledger=ledger)
+    ledger.record("p001", "vitamins_nutrition", evaluation.reimbursable)
+    # 900 × 45.00 = 40500.00 > 12000 → the whole limit is consumed, and the verdict says
+    # the limit bound, from the account state rather than from the documents alone.
+    assert evaluation.verdict is Verdict.PARTIALLY_COVERED
+    assert evaluation.reimbursable == Decimal("12000")
+    assert ledger.remaining("p001", "vitamins_nutrition") == Decimal("0")
+    assert VerdictBasis.ACCOUNT_STATE in evaluation.verdict_basis
+
+
+def test_the_applied_rate_is_recorded_beside_the_document_it_converts():
+    """Condition 1 of the decision: without the rate in the label, the conversion is
+    asserted rather than derived, and the whole design loses its point."""
+    evaluation = evaluate([item("200.00", True)], currency="EUR")
+    assert len(evaluation.fx) == 1
+    applied = evaluation.fx[0]
+    assert applied.doc_id == "d1"
+    assert applied.currency == "EUR"
+    assert applied.rate == Decimal("45.00")
+    assert applied.on == IN_PERIOD
+
+
+def test_a_reporting_currency_claim_records_no_rate():
+    """An identity rate on every UAH document would be noise dressed as information —
+    the empty tuple is what says nothing was converted."""
+    evaluation = evaluate([item("900.00", True)])
+    assert evaluation.fx == ()
+    assert not any("currency:" in line for line in evaluation.policy_trace)
+
+
+def test_the_rate_is_recorded_even_where_the_verdict_never_reads_it():
+    """A rejected EUR claim still carries the applied rate: a consumer re-deriving any of
+    its amounts needs the same constant, whatever branch the verdict took."""
+    evaluation = evaluate(
+        [item("200.00", True)], currency="EUR", when=date(2027, 3, 1)
+    )
+    assert evaluation.verdict is Verdict.REJECTED
+    assert evaluation.imperfection == (OUTSIDE_PERIOD,)
+    assert len(evaluation.fx) == 1
+    assert evaluation.fx[0].rate == Decimal("45.00")
+
+
+def test_the_conversion_quantizes_the_sum_not_the_lines():
+    """The declared point is sum-then-convert-then-quantize. Two lines of 10.01 PLN:
+    sum 20.02 × 10.50 = 210.210 → 210.21 UAH. Converting per line first would round each
+    105.105 up to 105.11 and answer 210.22 — one kopiyka apart, which is exactly the
+    drift the declaration in fx-rates.yaml exists to rule out."""
+    evaluation = evaluate(
+        [item("10.01", True), item("10.01", True)], currency="PLN"
+    )
+    assert evaluation.reimbursable == Decimal("210.21")
+
+
+def test_the_conversion_rounds_half_up_as_declared():
+    """10.01 PLN × 10.50 = 105.105 — a tie at the quantum. half-up answers 105.11;
+    Decimal's default banker's rounding would answer 105.10. The declaration in
+    fx-rates.yaml names half-up, so 105.10 here means the code and the declaration have
+    come apart."""
+    evaluation = evaluate([item("10.01", True)], currency="PLN")
+    assert evaluation.reimbursable == Decimal("105.11")
+
+
+def test_a_currency_the_table_has_no_rate_for_is_refused():
+    """The boundary of the vendored table is still a refusal: converting at a guessed
+    rate would put a number in the ground truth nothing can prove — the objection that
+    used to cover every conversion now covers exactly the unvendored ones."""
+    with pytest.raises(PolicyGapError, match="fx-rates.yaml"):
+        evaluate([item("900.00", True)], currency="CHF")
+
+
+def test_an_enabled_jitter_is_refused_not_absorbed(monkeypatch):
+    """fx-rates.yaml offers seeded rate variation and the engine draws no randomness: a
+    jittered rate would be one the label cannot prove. The guard has to be exercised by
+    faking the config, because the vendored file keeps it disabled."""
+    jittered = {
+        "base": "UAH",
+        "rates": {"UAH": 1.00, "EUR": 45.00},
+        "jitter": {"enabled": True, "relative_amplitude": 0.03},
+        "conversion": {
+            "step": "0.01", "rounding": "half-up",
+            "order": "sum-then-convert-then-quantize",
+        },
+    }
+    monkeypatch.setattr(policy_engine, "load_fx_rates", lambda: jittered)
+    with pytest.raises(PolicyGapError, match="jitter"):
+        evaluate([item("200.00", True)], currency="EUR")
+
+
+def test_a_quantization_the_engine_does_not_perform_is_refused(monkeypatch):
+    """The declaration in fx-rates.yaml and the arithmetic here are two places holding
+    one fact — the `partial_payment.marker_fields` pattern. A declaration naming a point
+    the engine does not quantize at must stop the conversion, not be shadowed by it."""
+    diverged = {
+        "base": "UAH",
+        "rates": {"UAH": 1.00, "EUR": 45.00},
+        "jitter": {"enabled": False, "relative_amplitude": 0.03},
+        "conversion": {
+            "step": "0.01", "rounding": "half-even",
+            "order": "sum-then-convert-then-quantize",
+        },
+    }
+    monkeypatch.setattr(policy_engine, "load_fx_rates", lambda: diverged)
+    with pytest.raises(PolicyGapError, match="half-even"):
+        evaluate([item("200.00", True)], currency="EUR")
+
+
+def test_a_rates_file_in_another_base_currency_is_refused(monkeypatch):
+    """`base` in fx-rates.yaml and `reporting_currency` in policy.yaml are the same fact
+    in two files; a conversion built on a disagreement between them cannot be right."""
+    rebased = {
+        "base": "EUR",
+        "rates": {"UAH": 0.02, "EUR": 1.00},
+        "jitter": {"enabled": False, "relative_amplitude": 0.03},
+        "conversion": {
+            "step": "0.01", "rounding": "half-up",
+            "order": "sum-then-convert-then-quantize",
+        },
+    }
+    monkeypatch.setattr(policy_engine, "load_fx_rates", lambda: rebased)
+    with pytest.raises(PolicyGapError, match="reporting"):
+        evaluate([item("200.00", True)], currency="EUR")
 
 
 # ------------------------------------------------------- cumulative limits ----

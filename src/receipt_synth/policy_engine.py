@@ -21,11 +21,27 @@ is not renumbered for it: a dozen cross-references in this file and in
 config/labelling-schema.yaml point at these numbers, and shifting them all to place one branch
 would make every one of those references silently wrong in the git history.
 
-1. **Currency.** Limits are expressed in `reporting_currency`, and every archetype this
-   generator has emits documents in it. A document in any other currency is therefore a
-   contradiction upstream, not a case to handle: the engine raises. It does not convert,
-   at any rate, from any source — a converted amount would land in the ground truth as a
-   number nothing in the dataset can prove.
+1. **Currency.** Limits are expressed in `reporting_currency`. A document in another
+   currency is CONVERTED — at the rate config/fx-rates.yaml states for the document's
+   date, quantized at the point that file declares, with the applied rate recorded in
+   the claim's label beside the original amount, currency and date. An earlier revision
+   refused instead, on the ground that "a converted amount would land in the ground
+   truth as a number nothing in the dataset can prove" — which is true of a rate taken
+   from nowhere and stops being true here: the rate is a vendored, versioned constant
+   both sides load, and a label that carries it proves the conversion completely. What
+   the engine still refuses is a currency the table has no rate for, and a table whose
+   seeded jitter is enabled — the engine draws no randomness, so a jittered rate would
+   be one it cannot reproduce. See `fx_rate` and `_applied_conversions`.
+
+   Two constraints hold the conversion honest, and both live in the config rather than
+   here. The QUANTIZATION POINT is declared in fx-rates.yaml (`conversion`) and this
+   engine checks the declaration against its own arithmetic on every conversion — a
+   consumer implements the same declared point independently, so a symmetry check
+   between the two engines measures the policy and not a rounding convention. And the
+   documents of ONE CLAIM must share one currency: coverage pools line items across a
+   claim's subject documents and the cross-document axes compare amounts between its
+   documents, and policy.yaml states no rule for doing either across two currencies —
+   such a claim is refused, not guessed at.
 2. **Evidence.** A claim's documents are resolved into transactions against
    `document_evidence` in policy.yaml — see `resolve_evidence`. That table carries TWO
    facts a reimbursement rests on, plus the LINKAGE between them: three slots, and each
@@ -137,10 +153,10 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import NamedTuple
 
-from receipt_synth.config import category, load_policy
+from receipt_synth.config import category, load_fx_rates, load_policy
 from receipt_synth.content_builder import (
     KOPIYKA,
     line_items_total,
@@ -249,6 +265,82 @@ def annual_limit(category_id: str) -> Decimal:
 
 def reporting_currency() -> str:
     return str(load_policy()["reporting_currency"])
+
+
+# What this engine's conversion arithmetic does, mirrored against the declaration in
+# config/fx-rates.yaml on every conversion — the `PARTIAL_PAYMENT_MARKER_FIELDS` pattern.
+# Two places holding one fact is how they come apart, so `_fx_quantization_declared` compares
+# them at the point of use rather than trusting that they still agree: a consumer implements
+# the declared point independently, and an engine quantizing at an undeclared one would be
+# converting by a rule nobody can reproduce.
+_FX_STEP = Decimal("0.01")
+_FX_ROUNDING = "half-up"
+_FX_ORDER = "sum-then-convert-then-quantize"
+
+
+def _fx_quantization_declared() -> None:
+    """Refuse to convert if fx-rates.yaml declares an arithmetic this engine does not do."""
+    declared = load_fx_rates()["conversion"]
+    stated = (str(declared["step"]), str(declared["rounding"]), str(declared["order"]))
+    performed = (str(_FX_STEP), _FX_ROUNDING, _FX_ORDER)
+    if stated != performed:
+        raise PolicyGapError(
+            f"config/fx-rates.yaml declares the conversion as {stated} while this engine "
+            f"performs {performed}. A consumer implements the declared point independently, "
+            "so the two would produce converted amounts a rounding unit apart while each was "
+            "faithful to what it read. Move both or neither."
+        )
+
+
+def fx_rate(currency: str, *, on: date) -> Decimal:
+    """The reporting-currency price of one unit of `currency` on the given date.
+
+    Read from config/fx-rates.yaml — a vendored, versioned CONSTANT, not a live source,
+    and that is the whole reason a conversion built on it is provable: the label carries
+    the applied rate, the file carries where it came from, and a consumer loading the same
+    file reproduces the same number exactly.
+
+    🔴 THE DATE IS PART OF THE CONTRACT, NOT OF TODAY'S TABLE. The rule is "the rate on the
+    transaction date"; the vendored table happens to be date-invariant, so every date maps
+    to the same figure today. The parameter is required anyway, because the signature is
+    what a consumer implements against a table that DOES vary — a live product converts at
+    the transaction date, and an engine written against a dateless lookup would silently
+    take today's rate instead. The gap between this static table and a live source is a
+    declared external-validity limit of the corpus, recorded in
+    config/labelling-schema.yaml, not a detail to discover.
+
+    Two refusals rather than answers:
+
+    * a currency the table has no rate for — converting at a guessed rate would put a
+      number in the ground truth nothing can prove, which is the exact defect the table
+      exists to rule out;
+    * a table whose seeded `jitter` is enabled — a jittered rate is a function of the run
+      seed, and this engine receives no seed: its answer is a pure function of
+      (documents, policy). See the ⛔ note in fx-rates.yaml.
+    """
+    del on  # date-invariant today — see the docstring; the parameter is the contract
+    fx = load_fx_rates()
+    if str(fx["base"]) != reporting_currency():
+        raise PolicyGapError(
+            f"config/fx-rates.yaml expresses rates in {fx['base']!r} while policy.yaml "
+            f"expresses limits in {reporting_currency()!r}. The two files disagree about "
+            "the reporting currency, so no conversion built on them can be right."
+        )
+    if fx["jitter"]["enabled"]:
+        raise PolicyGapError(
+            "config/fx-rates.yaml has `jitter.enabled: true`, and this engine draws no "
+            "randomness — a jittered rate would be one the label cannot prove. Disable the "
+            "jitter, or first teach the pipeline to carry the drawn rate into the label."
+        )
+    rates = fx["rates"]
+    if currency not in rates:
+        raise PolicyGapError(
+            f"config/fx-rates.yaml states no rate for {currency!r}, so an amount in it "
+            "cannot be expressed in the reporting currency. Converting at a guessed rate "
+            "would put a number in the ground truth that nothing in the dataset can prove "
+            "— add the rate to the vendored table instead."
+        )
+    return Decimal(str(rates[currency]))
 
 
 def active_period() -> tuple[date, date]:
@@ -774,6 +866,11 @@ class ClaimEvaluation:
     verdict_basis: tuple[VerdictBasis, ...]
     imperfection: tuple[str, ...]
     policy_trace: tuple[str, ...]
+    # One entry per document not stated in the reporting currency — the rate the oracle
+    # read from config/fx-rates.yaml at that document's date, whatever branch the verdict
+    # took. Empty for an all-reporting-currency claim: nothing was converted, and the
+    # absence says so. See `_applied_conversions`.
+    fx: tuple[AppliedFxRate, ...] = ()
 
     def fraction_as_label(self) -> float | None:
         """`covered_fraction` as it is written to the label file.
@@ -951,10 +1048,14 @@ def _amount_disagreement(transaction: Transaction) -> str | None:
     subject, payment = transaction.subject, transaction.payment
     if subject.amount.quantize(KOPIYKA) == payment.amount.quantize(KOPIYKA):
         return None
+    # Each amount is printed with ITS OWN document's currency. The two are the same
+    # currency — `_one_claim_one_currency` refused the claim otherwise, which is what
+    # licenses the raw comparison above — but the trace line must not assert the
+    # reporting currency beside a number that is stated in another one.
     return (
         f"documents disagree: {subject.doc_id} ({subject.doc_type.value}) states "
-        f"{_money(subject.amount)} {reporting_currency()}, payment "
-        f"{payment.doc_id} states {_money(payment.amount)} {reporting_currency()}"
+        f"{_money(subject.amount)} {subject.currency}, payment "
+        f"{payment.doc_id} states {_money(payment.amount)} {payment.currency}"
     )
 
 
@@ -1043,30 +1144,86 @@ def _disagreements(shape: EvidenceShape) -> list[tuple[Verdict, str, str]]:
     return found
 
 
-def _check_currency(documents: Iterable[DocGroundTruth]) -> None:
-    """Refuse a document whose amounts are not in the currency the limits are stated in.
+class AppliedFxRate(NamedTuple):
+    """One conversion the oracle applied, as it lands in the claim's label.
 
-    Not a limitation and not a stub. Every archetype in this generator issues documents in
-    `reporting_currency`, so a document in anything else means something upstream produced
-    a claim that cannot be scored — a jurisdiction wired to the wrong currency, or a
-    document attached to the wrong persona. The engine raises and says so.
-
-    It deliberately offers no conversion. A rate applied here would put a number in the
-    ground truth that nothing in the dataset can prove, and it would look like a tidy
-    piece of engineering while doing it. Whatever currency a claim's amounts are compared
-    against a limit in, the dataset has to be able to show where that comparison came
-    from.
+    The rate itself, not only its result — beside the original amount, currency and date
+    the document's own record already carries, this is what turns a converted figure from
+    "asserted" into "derived from a stated input": amount × rate, quantized at the point
+    fx-rates.yaml declares, is reproducible by anyone holding the same vendored table.
+    `on` repeats the document's date so the record stands alone — it is the date the rate
+    was taken at, and the lookup key a consumer uses against a table that varies by date.
     """
-    currency = reporting_currency()
+
+    doc_id: str
+    currency: str
+    rate: Decimal
+    on: date
+
+
+def _applied_conversions(
+    documents: Iterable[DocGroundTruth],
+) -> tuple[AppliedFxRate, ...]:
+    """The rate for every document not stated in the reporting currency.
+
+    This replaces a refusal. The engine used to raise here, on the ground that every
+    archetype emitted `reporting_currency` and a converted amount would be a number
+    nothing in the dataset can prove. Both halves of that ground are gone: an archetype
+    now legitimately emits EUR, and the applied rate is recorded in the label, so the
+    conversion is proven by the vendored table rather than taken on trust.
+
+    One rate per foreign document, at the DOCUMENT'S OWN date, whatever branch the claim
+    later takes — a rejected EUR claim still records the rate, because a consumer
+    re-deriving any of its amounts needs the same constant the oracle read. Documents
+    already in the reporting currency get no entry: nothing was converted, and an identity
+    rate on every UAH document would be noise dressed as information.
+    """
+    applied = []
     for document in documents:
-        if document.currency != currency:
-            raise ValueError(
-                f"document {document.doc_id} is denominated in {document.currency}, "
-                f"while annual limits are expressed in {currency} (policy.yaml "
-                "`reporting_currency`). Every archetype this generator has emits "
-                f"{currency}, so this document should not exist; the engine will not "
-                "score it, and will not convert it."
+        if document.currency != reporting_currency():
+            applied.append(
+                AppliedFxRate(
+                    doc_id=document.doc_id,
+                    currency=document.currency,
+                    rate=fx_rate(document.currency, on=document.date),
+                    on=document.date,
+                )
             )
+    if applied:
+        _fx_quantization_declared()
+    return tuple(applied)
+
+
+def _in_reporting(amount: Decimal, *, rate: Decimal) -> Decimal:
+    """One amount expressed in the reporting currency, at the declared quantization point.
+
+    The whole of the arithmetic, so that it exists once: multiply by the rate once,
+    quantize once — to the step, with the rounding, in the order fx-rates.yaml declares
+    and `_fx_quantization_declared` verifies. The exact document-currency sum goes in;
+    nothing downstream re-quantizes what comes out.
+    """
+    return (amount * rate).quantize(_FX_STEP, rounding=ROUND_HALF_UP)
+
+
+def _one_claim_one_currency(documents: Sequence[DocGroundTruth]) -> str:
+    """The single currency a claim's documents are stated in, or a refusal.
+
+    Coverage pools line items across the claim's subject documents, and every
+    cross-document axis compares amounts between its documents. Both assume one currency,
+    and policy.yaml states no rule for either across two — which order to convert and
+    compare in, at whose date — so a mixed-currency claim is refused rather than guessed
+    at. The planner never builds one; the guard is for the path that does not go through
+    the planner.
+    """
+    currencies = sorted({document.currency for document in documents})
+    if len(currencies) > 1:
+        raise PolicyGapError(
+            f"the documents of this claim are stated in {len(currencies)} currencies "
+            f"({', '.join(currencies)}), and policy.yaml states no rule for pooling or "
+            "comparing amounts across two — converting either side at either document's "
+            "date is a choice the file does not make. One claim, one currency."
+        )
+    return currencies[0]
 
 
 def _reimbursable(
@@ -1106,7 +1263,8 @@ def evaluate_claim(
     if not documents:
         raise ValueError("a claim with no documents has nothing to evaluate")
 
-    _check_currency(documents)
+    claim_currency = _one_claim_one_currency(documents)
+    fx = _applied_conversions(documents)
     ledger = ledger or Ledger()
     limit = annual_limit(category)  # raises KeyError for a category the policy lacks
     trace = [f"category={category} ok"]
@@ -1158,6 +1316,7 @@ def evaluate_claim(
             verdict_basis=(VerdictBasis.DOCUMENTS,),
             imperfection=causes,
             policy_trace=tuple(trace),
+            fx=fx,
         )
 
     # -- both facts, or neither verdict. See `resolve_evidence`.
@@ -1243,9 +1402,12 @@ def evaluate_claim(
                 f"{subject.doc_id} was read as settling one instalment and carries none; the "
                 "predicate and this branch have come apart"
             )
+        # The subject document's own currency, not the reporting one: the amounts on this
+        # line are read off that document, and the claim's single currency is guaranteed
+        # by `_one_claim_one_currency` rather than assumed to be the reporting one.
         trace.append(
             f"partial settlement: {subject.doc_id} states {_money(subject.amount)} "
-            f"{reporting_currency()} settled in parts of {_money(part)}, and payment "
+            f"{subject.currency} settled in parts of {_money(part)}, and payment "
             f"{payment.doc_id} states {_money(payment.amount)}"
         )
         # NO CAUSE, for the reason `not_proof_of_payment` carries none: there is one mechanism
@@ -1258,10 +1420,49 @@ def evaluate_claim(
 
     # Before the trace line, so that a claim with no verdict does not get a justification
     # for one.
+    #
+    # The verdict and the fraction are decided in the CLAIM'S OWN currency: both are
+    # ratios of the same line items, so the rate cancels, and converting first would only
+    # add a quantization the ratio does not need.
     verdict = verdict_for(covered, total, every_line_covered=all(answers))
     trace.append(_coverage_trace(answers, covered / total))
+
+    # 🔴 THE CURRENCY BOUNDARY. Everything above this line is stated in the claim's own
+    # currency; everything below — the ledger, the annual limit, `reimbursable` — is
+    # stated in the reporting currency. The covered amount crosses here: converted per
+    # subject document, at that document's date, at the point fx-rates.yaml declares
+    # (sum-then-convert-then-quantize — the document's exact covered sum, times the rate,
+    # quantized once). The trace shows the arithmetic so the label proves the crossing.
+    covered_reporting = covered
+    if claim_currency != reporting_currency():
+        rate_of = {applied.doc_id: applied.rate for applied in fx}
+        cursor = 0
+        pieces = []
+        for document in shape.subject_documents:
+            lines = document.line_items
+            doc_covered = sum(
+                (
+                    item.qty * item.price
+                    for item, is_covered in zip(
+                        lines, answers[cursor : cursor + len(lines)], strict=True
+                    )
+                    if is_covered
+                ),
+                Decimal(0),
+            )
+            cursor += len(lines)
+            piece = _in_reporting(doc_covered, rate=rate_of[document.doc_id])
+            trace.append(
+                f"currency: {document.doc_id} covers {_money(doc_covered)} "
+                f"{claim_currency} × {rate_of[document.doc_id]} (fx-rates.yaml, "
+                f"{document.date}) = {_money(piece)} {reporting_currency()}"
+            )
+            pieces.append(piece)
+        covered_reporting = sum(pieces, Decimal(0))
+
     reimbursable = _reimbursable(
-        persona_id=persona_id, category_id=category, covered=covered, ledger=ledger
+        persona_id=persona_id, category_id=category, covered=covered_reporting,
+        ledger=ledger,
     )
 
     basis = [VerdictBasis.DOCUMENTS]
@@ -1269,7 +1470,7 @@ def evaluate_claim(
     if verdict is Verdict.PARTIALLY_COVERED:
         imperfection.append(MIXED_ITEMS)
 
-    if reimbursable < covered:
+    if reimbursable < covered_reporting:
         verdict = Verdict.PARTIALLY_COVERED
         imperfection.append(LIMIT_EXHAUSTED)
         basis.append(VerdictBasis.ACCOUNT_STATE)
@@ -1280,7 +1481,7 @@ def evaluate_claim(
         )
         trace.append(
             f"reimbursable {_money(reimbursable)} {reporting_currency()} of "
-            f"{_money(covered)} covered — annual limit exhausted"
+            f"{_money(covered_reporting)} covered — annual limit exhausted"
         )
 
     return ClaimEvaluation(
@@ -1290,6 +1491,7 @@ def evaluate_claim(
         verdict_basis=tuple(basis),
         imperfection=tuple(imperfection),
         policy_trace=tuple(trace),
+        fx=fx,
     )
 
 
