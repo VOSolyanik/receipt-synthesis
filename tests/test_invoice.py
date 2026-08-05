@@ -13,17 +13,21 @@ the basket. Nothing was copied out of a run.
 
 from __future__ import annotations
 
+import math
 import random
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 import yaml
 
+from receipt_synth import claim_planner
 from receipt_synth.config import (
     CONFIG_DIR,
     category,
+    invoice_count_range,
+    invoice_share,
     jurisdiction,
     load_policy,
     partial_payment_schedules,
@@ -79,6 +83,7 @@ def make_invoice(
     category_id: str = PAYER_CATEGORY,
     coverage_target: str | None = None,
     schedule: str | None = None,
+    settled_at: datetime | None = None,
 ) -> Invoice:
     rng = random.Random(seed)
     resolved = resolve_vendor(rng, vendor, "UA")
@@ -94,6 +99,7 @@ def make_invoice(
         covered_only=coverage_target is None,
         coverage_target=Decimal(coverage_target) if coverage_target else None,
         schedule=schedule,
+        settled_at=settled_at,
     )
 
 
@@ -354,6 +360,75 @@ def test_a_non_payers_invoice_drops_the_tax_line_and_the_column_suffix(renderer)
     text = printed_text(renderer.build_html(SLUG, non_payer))
     assert BLOCK["totals"]["single_label"] in text
     assert BLOCK["totals"]["vat_label"] not in text
+
+
+def test_a_printed_offer_still_stands_on_the_day_the_claim_settles_it():
+    """🔴 THE PAGE MAY NOT BE CONTRADICTED BY ITS OWN CLAIM. 📄 «Рахунок дійсний до X р.» states how
+    long the offer stands; a payment dated after X settles an offer that had lapsed, which is not a
+    document a seller banks — it reissues the invoice. Nothing in policy.yaml reads the line, so no
+    verdict moved and nothing noticed: measured over eight seeds, 100 of the 182 invoices that
+    printed it were paid later than the date they printed, 27 of them on claims labelled `covered`.
+    A consumer that learned to read the line would have rejected those claims and been right.
+
+    🔴 THE RUN COUNT IS DERIVED FROM THE RATE AT WHICH THE MUTATION SHOWS, not from the rate at
+    which the line appears — the lesson of the subject-mismatch sweep. Dropping the coupling in
+    `build_invoice` produces a VISIBLE violation only when the line is printed AND the claim's
+    payment outruns the drawn window: P(printed) × P(lead > window) with lead uniform on
+    0..`_SUBJECT_LEAD_DAYS` and the window uniform on `validity_days_range`. Both factors are read
+    from config below, so a re-tuned share or range resizes this test instead of quietly weakening
+    it.
+    """
+    lead_days = claim_planner._SUBJECT_LEAD_DAYS
+    low, high = invoice_count_range("validity_days")
+    window = range(low, high + 1)
+    # P(lead > window), averaged over the window's own uniform draw.
+    outruns = sum((lead_days - days) / (lead_days + 1) for days in window) / len(window)
+    visible = invoice_share("validity") * outruns
+    assert visible > 0, "the mutation could never show and this test would be a tautology"
+    # ⚠️ THE RATE ABOVE IS AN AVERAGE OVER THE LEAD, so the sweep has to CONTAIN the whole lead range
+    # or the rate it actually samples is a different one. Measured the hard way: sized at the 13 runs
+    # the rate alone asks for, one lead each, the sweep only ever reached a 12-day lead — under the
+    # smallest drawable window on most of them — and the mutation SURVIVED. The count is therefore
+    # the larger of the two demands.
+    runs = max(
+        math.ceil(math.log(0.05) / math.log(1 - visible)),
+        lead_days + 1,
+    )
+
+    printed = 0
+    for seed in range(runs):
+        # One lead per run, sweeping the planner's whole range, so the claims whose payment outruns
+        # every drawable window are in the sample rather than at the edge of it.
+        lead = timedelta(days=seed % (lead_days + 1))
+        invoice = make_invoice(seed=seed, settled_at=WHEN + lead)
+        line = invoice.render_context()["validity"]
+        if line is None:
+            continue
+        printed += 1
+        until = datetime.strptime(
+            re.search(r"(\d{2}\.\d{2}\.\d{4})", line).group(1), jurisdiction("UA")["date_format"]
+        )
+        assert until.date() >= (WHEN + lead).date(), (
+            f"seed {seed}: the offer printed «{line}» and the claim settled it on "
+            f"{(WHEN + lead).date()}"
+        )
+    assert printed >= 1, f"{runs} runs printed no validity line at all; the sweep saw nothing"
+
+
+def test_an_invoice_with_no_settlement_to_respect_prints_the_drawn_window():
+    """The parameter is optional, and the case is real rather than defensive: a builder called
+    directly, and `tools/render_mockups.py`, have no claim behind them. The drawn window is then the
+    whole of the span — this is the behaviour the coupling above extends, not replaces."""
+    within = [make_invoice(seed=seed).render_context()["validity"] for seed in range(40)]
+    lines = [line for line in within if line is not None]
+    assert lines, "40 runs printed no validity line; the share must have moved"
+    low, high = invoice_count_range("validity_days")
+    for line in lines:
+        until = datetime.strptime(
+            re.search(r"(\d{2}\.\d{2}\.\d{4})", line).group(1), jurisdiction("UA")["date_format"]
+        )
+        # In DAYS: the line prints a calendar day, and the invoice is issued at 10:15.
+        assert low <= (until.date() - WHEN.date()).days <= high
 
 
 def test_the_title_writes_its_date_in_words_and_the_body_in_digits(rendered):
