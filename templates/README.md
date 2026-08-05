@@ -8,9 +8,9 @@ Most of this directory is the shipped corpus. The rest are **mock-ups**, and thi
 them, because a reader who cannot tell the two apart will read a mock-up as a claim about the
 dataset.
 
-## The five mock-ups at a glance
+## The four mock-ups at a glance
 
-**Five archetypes across six renderable templates.** Render them all with one command; every
+**Four archetypes across five renderable templates.** Render them all with one command; every
 image lands in the directory given, outside this repository:
 
 ```sh
@@ -56,43 +56,48 @@ and EUR, and the same class in Ukrainian and UAH.
 **5 · `ua_insurance_contract`** — a three-page voluntary health insurance contract.
 * **File:** `ua_insurance_contract.png` · 794 × 3401 px, fixed — three A4 sheets in one image.
 * **Makes measurable:** **«one page = one document», broken in one direction** — one document
-  across several pages. Every other archetype here renders exactly one page, so a file-splitting
-  step would otherwise score a perfect result against a guarantee.
+  across several pages, so a file-splitting step cannot score a perfect result against a guarantee.
+  ⚠️ **A shipped archetype now breaks it too:** `ua_bank_statement` runs onto a second sheet at the
+  share `bank_statement.two_page_share` declares, which is where the corpus actually gets its
+  multi-page documents. This mock-up remains the *longer* case — three sheets, and continuation
+  pages that carry no requisites at all.
 * **Look for:** the page footers «Сторінка N з 3» beside the document's own number, and pages two
   and three with **no title, no parties and no requisites** — a running head and clauses that
   begin mid-numbering. Also the salience trap: the largest figure is the **sum insured**, and the
   money that moved is the **premium** two rows below, roughly forty times smaller.
 
-**6 · `ua_claim_bundle`** — an invoice and the bank confirmation that settled it, in one file.
-* **Files:** `ua_claim_bundle.png` · 794 × 2262 px, **beside** `ua_claim_bundle.page1_invoice.png`
-  and `ua_claim_bundle.page2_confirmation.png` — the file, and the two documents it is made of.
-* **Makes measurable:** **«one page = one document», broken in the other direction** — two
-  documents in one file. Both directions, or a segmentation figure is not a figure.
-* **Look for:** what marks the boundary between the two documents — **nothing but the grey gap.**
-  No cover page, no continuous pagination, no unifying header. Then the linkage that makes them
-  one claim: the payment purpose names the invoice on the page above it, the amounts match, and
-  the two pages give the same firm one ЄДРПОУ and one IBAN.
-  🔴 **That last part is what this file revealed and what has since been fixed:** the two pages
-  used to name one firm by two different ЄДРПОУ and two different IBANs — the **shipped
-  generator's** behaviour, not the mock-up's. It is written up below, with the old figures kept as
-  the record of what the defect looked like.
+⚠️ **`ua_claim_bundle` used to be the sixth entry here and is now shipped** — no longer rendered by
+the mock-up script, because a run produces the file itself. It is a **composition template**, not
+an archetype: `assembler` renders it wherever a claim's two documents are drawn to arrive as one
+file, at the share `file_composition.bundle_share` declares in `config/generation.yaml`. What it
+demonstrated as a mock-up is kept whole below, including the cross-document defect it revealed.
 
 ---
 
 ### What this branch deliberately does not contain
 
-**No labels and no bounding boxes** — not one `data-field` attribute in any of the six
+**No labels and no bounding boxes** — not one `data-field` attribute in any of the five
 templates, so `field_bboxes` comes back empty by construction and no JSON is written beside any
 image. **No connection to the dataset** — nothing is registered in `ARCHETYPES`, no builder exists
 in `_BUILDERS`, and no run of any size contains one of these documents.
 
-⚠️ **THAT WAS TRUE OF SEVEN TEMPLATES AND IS TRUE OF SIX.** `ua_non_fiscal_receipt` has been
-**connected**: it is registered, it has a builder, it carries `data-field` attributes, its
-Ukrainian strings moved into `config/fiscal-rules.yaml`, and a run contains one wherever a claim
-was planned as `not_proof_of_payment`. What it demonstrated as a mock-up is unchanged and is kept
-below, because the finding — that the negative marker is not the string the contract assumes — is
-what RC-08 still turns on. The connection did **not** decide RC-08: no field records a marker, and
-the absence is carried by `has_fiscal_number` / `has_qr` / `qr_is_fiscal` instead.
+⚠️ **THAT WAS TRUE OF SEVEN TEMPLATES, THEN OF SIX, AND IS TRUE OF FIVE.** Two have been
+**connected**, on different terms, and both are written up below with what they demonstrated kept
+whole.
+
+`ua_non_fiscal_receipt` is registered, has a builder, carries `data-field` attributes, moved its
+Ukrainian strings into `config/fiscal-rules.yaml`, and reaches a run wherever a claim was planned
+as `not_proof_of_payment`. The finding — that the negative marker is not the string the contract
+assumes — is what RC-08 still turns on. The connection did **not** decide RC-08: no field records
+a marker, and the absence is carried by `has_fiscal_number` / `has_qr` / `qr_is_fiscal` instead.
+
+`ua_claim_bundle` is connected as a **composition template** rather than as an archetype, which is
+a different kind of connection and the reason it keeps its empty `data-field` set: it is not a
+document class — nothing plans it, no builder produces it and no label names it — it is the FILE
+two documents of one claim are carried in. `assembler` renders it from the clean renders of those
+documents at the share `file_composition.bundle_share` declares, and each document's own boxes are
+offset into the file's coordinates. A marker here would add a second, empty box under a name a
+document already uses.
 
 ## Shipped
 
@@ -104,9 +109,13 @@ the absence is carried by `has_fiscal_number` / `has_qr` / `qr_is_fiscal` instea
 | `ua_invoice` | `invoice` |
 | `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
 | `ua_fiscal_receipt.jinja` + `.css` | the body and the till-roll rules the three receipts share |
+| `ua_claim_bundle` + `.css` | **not a class** — the FILE two documents of one claim are carried in |
 
-Each is registered in `claim_planner.ARCHETYPES`, has a builder in `assembler._BUILDERS`, marks
-every extractable element with `data-field="<name>"`, and reaches a dataset.
+Each of the archetypes is registered in `claim_planner.ARCHETYPES`, has a builder in
+`assembler._BUILDERS`, marks every extractable element with `data-field="<name>"`, and reaches a
+dataset. ⚠️ **`ua_claim_bundle` is shipped on other terms** — it is a composition template, so it
+has no class, no entry in either registry and no `data-field` of its own; what it embeds are the
+renders of documents that have all three. See its own section below.
 
 ## Mock-ups
 
@@ -119,7 +128,6 @@ every extractable element with `data-field="<name>"`, and reaches a dataset.
 | `ua_platform_receipt` | the same class in Ukrainian and UAH |
 | `platform_receipt.jinja` + `.css` | the body and the page rules the last two share |
 | `ua_insurance_contract` | a three-page insurance contract — one document, several pages |
-| `ua_claim_bundle` | an invoice and the confirmation that settled it — one file, two documents |
 
 Render them with:
 
@@ -556,14 +564,24 @@ answer costs nothing until it is.
 
 ### 🔴 Why a multi-page document at all
 
-**Every archetype in this repository renders exactly one page.** A corpus built from them cannot
-contradict the rule *one page is one document* — so a later step that splits a submitted file into
-logical documents would score a **perfect result on it while never having been tested**. A
-measurement whose ideal is guaranteed by the construction of the data measures the construction,
-not the system.
+**Every archetype in this repository rendered exactly one page** when this mock-up was drawn. A
+corpus built from them cannot contradict the rule *one page is one document* — so a later step that
+splits a submitted file into logical documents would score a **perfect result on it while never
+having been tested**. A measurement whose ideal is guaranteed by the construction of the data
+measures the construction, not the system.
 
 This document is the control. **One document, three pages**, in one file. Without something like
 it in the corpus, a segmentation figure is not a weak result — it is not a result.
+
+⚠️ **THE SENTENCE ABOVE IS NO LONGER TRUE OF THE SHIPPED CORPUS, AND THIS MOCK-UP IS STILL A
+MOCK-UP.** `ua_bank_statement` now runs onto a **second sheet** at the share
+`bank_statement.two_page_share` declares, with `page_count` and `page_regions` per document — so a
+generated corpus does contain multi-page documents, and the rule is falsifiable without this file.
+What that closed is the *measurement* gap, not this archetype's own case: a statement's continuation
+sheet repeats the table it continues, while pages two and three here carry **no title, no parties
+and no requisites at all**, which is the harder cut. This section is kept as written and corrected
+here rather than rewritten, because the two facts are separate — the mock-up's reasoning stands, and
+what has since been built is what changed.
 
 ### ⛔ It is explicitly not evidence, and it cannot be labelled today
 
@@ -653,13 +671,26 @@ is an order of magnitude.
 
 ## `ua_claim_bundle` — one file, two documents
 
+**Now shipped, as a composition template rather than as an archetype.** The section is kept whole
+because the argument, the sources and the defect it exposed are what the file was built from and
+none of them changed when it was connected. Where the text below says "mock-up", read "this file":
+a run now composes it from the clean renders of a claim's own documents, so the pages of it are
+those documents rather than two images written to resemble them. What did change: the two sheets
+are embedded as images at their natural size rather than as frames, each is marked
+`data-region="doc_N"` so the label can say where it is, and the render script no longer draws it.
+
 `ua_insurance_contract` breaks *one page = one document* in one direction: one document across
 three pages. This breaks it in the other. A file-splitting step measured on a corpus holding only
 the first is **still scoring against a guarantee** — every cut it needs to make is a cut it never
 has to refuse. Both directions, or the measurement is not a measurement.
 
-👁 **And it is an observed pattern rather than a hypothesis.** Claimants really do staple the
-documents of one claim into a single PDF before submitting them.
+⚠️ **And the shape is a judgement rather than an observation.** 👁 Zero of the author's own 87
+files holds more than one document, so this template realizes a case the observed set does not
+contain. The argument for it is about the *submission* rather than about the document: a channel
+that takes one file per claim, while a claim needs both a subject document and a payment document,
+makes stitching the two the ordinary way to file it. The practitioner observation counted below is
+that rationale and not an observed artifact. The honest number sits beside the share in
+`config/generation.yaml`, and `config/labelling-schema.yaml` says the same at `file_region`.
 
 ### Sources, counted honestly
 

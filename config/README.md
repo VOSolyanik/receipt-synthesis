@@ -166,7 +166,8 @@ returns `merchant` where the label says `counterparty`.
 It is the only file here that carries **both sides**: what the generator emits today, and what the consumer's
 requirements demand. Where the two disagree it names both and picks neither — a contract that resolved a
 divergence quietly would hide it rather than fix it. Every `src/` change those divergences imply is collected
-in a `required_changes` block at the foot of the file; none has been made.
+in a `required_changes` block at the foot of the file, each carrying a `blocked_on:` word that says whether it
+is mechanical, waiting on a decision, withdrawn or done. Most are still open.
 
 Read the file itself for the field lists and rules. Four things about it belong here:
 

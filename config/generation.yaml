@@ -749,12 +749,41 @@ invoice:
 # document. Neither is a measurement anybody should quote, and where a number could not be
 # derived from one document at all it says so instead of looking derived.
 bank_statement:
-  # 👁 ≈18–20 operations on the first page, 89 over four. ONE PAGE IS GENERATED, and the reason
-  # is not cost: ⛔ a second page was never seen, so whether the header repeats on it is
-  # unestablished, and a repetition invented here would be on every image of the class. Twenty
-  # rows already make "find the relevant transaction" non-trivial, which is the whole task the
-  # class carries — 89 rows would buy nothing but four times the paper.
+  # 👁 ≈18–20 operations on the first page, 89 over four. The bound is what fits under the header
+  # block on one sheet — see `bank_statement.pagination` in config/fiscal-rules.yaml — and it is
+  # the range a statement that stays on ONE page draws from. Twenty rows already make "find the
+  # relevant transaction" non-trivial, which is the whole task the class carries.
   row_count_range: [15, 25]
+
+  # 🔴 HOW OFTEN A STATEMENT RUNS ONTO A SECOND SHEET, and why the case exists at all: until it
+  # did, EVERY document in this corpus was one page, so "one page is one document" was true by
+  # construction and a step that splits a submitted file into logical documents scored a perfect
+  # result on data that could not contradict it. A measurement whose ideal is guaranteed by the
+  # construction of the data measures the construction. 👁 The one observed statement ran to four
+  # pages, so the multi-page form is the ordinary shape of this document rather than an edge case.
+  #
+  # ⛔ NOT A RATE, AND NOTHING MEASURED ONE. How often a PRIVATE PERSON's statement covers enough
+  # operations to paginate depends on the period they pull and how much they spend, and no source
+  # in this repository observes either. This is a DIFFICULTY AND COMPOSITION knob, in the same
+  # class as `mixed_basket.coverage_targets` — which is why it is here and not in
+  # config/policy.yaml: it sizes no verdict bucket and no label depends on its value.
+  #
+  # 0.15 IS CHOSEN FROM TWO BOUNDS RATHER THAN PICKED. Below it, a run of a few hundred claims
+  # holds too few paginated statements for a per-page segmentation figure to mean anything —
+  # roughly half of the split pairs take a statement rather than a confirmation, so 0.15 puts
+  # about one paginated document in fourteen claims. Above it, the ONE-PAGE statement stops being
+  # the overwhelming majority, and every figure already measured on this class was measured on
+  # one-page documents: a share that changed the mix would change what those numbers describe
+  # without anybody editing them. Asserted from both sides in tests/test_statement_pagination.py.
+  two_page_share: 0.15
+
+  # The row count once a statement paginates. Its own range rather than a widened
+  # `row_count_range`: that bound is tuned against the first sheet, and one range serving both
+  # would either underfill the second sheet or overflow the first. The low end clears
+  # `pagination.rows_first_page` so a paginated statement always has a real second sheet, and the
+  # high end stays inside one continuation sheet — three sheets are allowed by the split and are
+  # not drawn, because the second page is what makes the rule falsifiable and a third adds paper.
+  two_page_row_count_range: [28, 45]
 
   # 👁 15 of 89 operations are credits — money arriving. The share matters because `direction` is
   # a label field: a page with no credit row at all would carry no visible instance of the
@@ -863,6 +892,47 @@ bank_statement:
       # 👁 The observed service-charge wording, verbatim as a formula: it names a tariff rather
       # than a transaction, and carries no identifier of anything.
       service_fee: "Комісія за розрахунково-касове обслуговування згідно тарифів банку, без ПДВ"
+
+
+# =============================================================================
+# File composition — how many documents one submitted FILE holds
+# =============================================================================
+#
+# 🔴 THE SAME SPLIT AS `mismatch` AND `partial_payment` ABOVE, ON A QUESTION ABOUT FILES. A share
+# that sizes a LABELLED BUCKET belongs beside `verdict_mix` in config/policy.yaml; this one sizes
+# none. Bundling changes no verdict, no cause, no amount, no date and no party — the same claim,
+# the same two documents, the same labels, carried in one file instead of two. What it changes is
+# where a consumer has to look for them, which makes it a composition knob of exactly the kind
+# `bank_statement.two_page_share` is, and this file is where those live.
+#
+# ⛔ THE PATTERN IS DOCUMENTS OF **ONE CLAIM** IN ONE FILE, AND ONLY THAT. Documents of DIFFERENT
+# claims in one file is a shape this generator deliberately does not produce; the boundary and its
+# reason are stated at the bundling site in `assembler.documents_share_one_file`.
+file_composition:
+  # HOW OFTEN THE DOCUMENTS OF ONE CLAIM ARRIVE AS ONE FILE, drawn per eligible claim — a claim
+  # carrying a single document has nothing to bundle and is never eligible.
+  #
+  # 👁 ZERO OF THE AUTHOR'S OWN 87 FILES HOLDS MORE THAN ONE DOCUMENT, so the value is not measured
+  # from them and the honest reading of that set is that it contains no instance of the case.
+  # ⚠️ IT IS A JUDGEMENT, and the argument for it not being zero is about the SUBMISSION rather
+  # than about the document: a channel that takes one file per claim, while a claim needs both a
+  # subject document and a payment document, makes stitching the two the ordinary way to file it —
+  # and a submission rule that admits a file of a dozen documents is stating that such files
+  # arrive. A verifier meets them; a corpus in which every file holds exactly one document cannot
+  # ask a file-splitting step to refuse a single cut, so it measures the construction of the data
+  # rather than the step. See templates/ua_claim_bundle.html.
+  #
+  # 0.25 IS CHOSEN FROM TWO BOUNDS RATHER THAN PICKED, and the arithmetic is worth stating because
+  # the eligible claims are not a small minority: at the current archetype registry ≈4 claims in 5
+  # carry two documents (measured over 2,400 planned claims, no rendering involved). So 0.25 of
+  # eligible puts roughly one claim in five, and about one FILE in eight, into the multi-document
+  # case. Below that, a run of a few hundred claims holds too few boundaries for a segmentation
+  # figure to mean anything. Above it, the single-document file stops being the overwhelming
+  # majority — and every classification and extraction number this corpus has produced was
+  # measured on files holding one document, so a share that changed the mix would change what
+  # those numbers describe without anybody editing them. Asserted from both sides in
+  # tests/test_multidocument_files.py.
+  bundle_share: 0.25
 
 
 # =============================================================================

@@ -14,6 +14,7 @@ import random
 import tempfile
 from collections import Counter
 from collections.abc import Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from decimal import Decimal
 from functools import partial
@@ -36,7 +37,11 @@ from receipt_synth.claim_planner import (
     unrealizable_verdicts,
     why_no_claim,
 )
-from receipt_synth.config import load_vendors, mismatch_delta_range
+from receipt_synth.config import (
+    file_composition_share,
+    load_vendors,
+    mismatch_delta_range,
+)
 from receipt_synth.content_builder import (
     KOPIYKA,
     DocumentReference,
@@ -47,6 +52,7 @@ from receipt_synth.content_builder import (
     build_payment_confirmation,
     build_prro_receipt,
     draw_party_identity,
+    draw_statement_pages,
     resolve_vendor,
     vendor_can_carry,
 )
@@ -62,8 +68,9 @@ from receipt_synth.policy_engine import (
     partially_covered_causes,
     verdict_mix,
 )
-from receipt_synth.renderer import Renderer
+from receipt_synth.renderer import RenderedDocument, Renderer
 from receipt_synth.schemas import (
+    BBox,
     Capture,
     ClaimGroundTruth,
     Country,
@@ -90,6 +97,34 @@ UNATTRIBUTED = "not attributed — planning stopped for a reason claim_planner c
 # `data-field` name — those are printed-field names, and none begins that way — and the collision is
 # checked rather than assumed.
 _CONTENT_BBOX_KEY = "__content_extent__"
+
+# The same device for a document's PAGE REGIONS — one key per sheet, numbered from 1 in reading
+# order, matching the `data-region="page_N"` the template marks. The prefix is what the split
+# sweeps by, so that EVERY reserved key is removed even where the label has no room for it.
+_PAGE_REGION_PREFIX = "__page_region_"
+_PAGE_REGION_KEY = _PAGE_REGION_PREFIX + "{page}__"
+
+# The composition template — templates/ua_claim_bundle.html. ⛔ NOT AN ARCHETYPE: it has no entry
+# in `claim_planner.ARCHETYPES` and none in `_BUILDERS`, because it is not a document class.
+# It is the FILE the documents of one claim are carried in, and what it embeds are those
+# documents' own renders. See `_compose_bundle`.
+BUNDLE_TEMPLATE = "ua_claim_bundle"
+
+# The `data-region` the template marks each embedded document's rectangle with, numbered from 1 in
+# CLAIM order — the subject document first, the payment document second, which is the order
+# `ClaimPlan.documents` is built in.
+_BUNDLE_REGION = "doc_{index}"
+
+# The two reserved key families the bundle merge adds on top of the two above, so that every
+# rectangle of every document in one file goes through the degrader in ONE call.
+#
+# 🔴 THE PER-DOCUMENT PREFIX IS WHAT MAKES THE MERGE POSSIBLE AT ALL: two documents of one claim
+# print the same field names — both carry an `amount` — and a flat merge would silently leave the
+# file with one box under that name, with the label of whichever document lost pointing at the
+# other's ink. The trailing `__` is not decoration either: it is what keeps `__doc_1__` from being
+# a prefix of `__doc_11__`.
+_IN_DOCUMENT_KEY = "__doc_{index}__{name}"
+_FILE_REGION_KEY = "__file_region_{index}__"
 
 # Stamped into a `tEXt` chunk of every shipped PNG (see `_write_png`), so that a viewer who
 # encounters one outside this repository — cropped into a slide, forwarded in a chat — can tell
@@ -396,10 +431,11 @@ def _write_png(path: Path, image: np.ndarray) -> None:
     """Write a BGR image (OpenCV's convention) to `path`, stamped with `SYNTHETIC_DATA_MARKER`.
 
     THE LAST SAVE POINT FOR A SHIPPED IMAGE, and the only one: `renderer.render` also writes a
-    PNG, but only to a temporary staging file that `_build_document` deletes before returning,
-    so nothing downstream ever sees it; `degrader.degrade` never touches disk — it hands back a
-    numpy array. This function is therefore the single place a PNG that lands in `out_dir/images`
-    is written, which is what makes stamping it here sufficient for 100% of the corpus.
+    PNG — a document's clean render, and the composed file of a bundle — but only into a staging
+    directory whose owner discards it, so nothing downstream ever sees one; `degrader.degrade`
+    never touches disk, it hands back a numpy array. This function is therefore the single place a
+    PNG that lands in `out_dir/images` is written, whether that PNG holds one document or the two
+    of a claim, which is what makes stamping it here sufficient for 100% of the corpus.
 
     PIL rather than `cv2.imwrite`: OpenCV's PNG writer has no `tEXt`-chunk support. The chunk is
     metadata appended to the file; it does not touch a pixel, so the decoded image is unchanged.
@@ -407,6 +443,67 @@ def _write_png(path: Path, image: np.ndarray) -> None:
     info = PngImagePlugin.PngInfo()
     info.add_text("Comment", SYNTHETIC_DATA_MARKER)
     Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)).save(path, pnginfo=info)
+
+
+@dataclass(frozen=True)
+class _BuiltDocument:
+    """One document built and rendered clean, before it is known what FILE will carry it.
+
+    🔴 THE SEAM THIS DATACLASS EXISTS FOR. Every document used to be built, degraded and written in
+    one pass, which is exactly right while a file holds one document. It cannot be right for a file
+    that holds two: the composition has to be rendered from BOTH clean renders before any of it can
+    be degraded, and the degradation then has to happen once, for the file. So the pipeline splits
+    in two — `_render_document` up to the clean render, and one of two carriers after it
+    (`_build_document`'s own tail, or `_bundle_one_file`).
+
+    `degrade_seed` IS DRAWN IN THE FIRST HALF, at the point in the stream the single-document path
+    always drew it, and carried here rather than drawn where it is used. That is what keeps the
+    generator's draw stream identical whichever carrier runs: at one seed the same documents are
+    produced, and only their carriage differs. ⚠️ A bundle uses the FIRST document's seed and
+    channel for the file and does not use the second's — a file is captured once — so those two
+    values of the second document are drawn and left unused rather than not drawn.
+    """
+
+    doc_id: str
+    # The builder's own product — a `Receipt`, an `Invoice`, a `BankStatement`. Kept whole because
+    # the label is asked of it (`ground_truth`), and so are `page_count` and `reference`.
+    document: object
+    reference: DocumentReference | None
+    capture: Capture
+    degrade_seed: int
+    clean: RenderedDocument
+
+    @property
+    def page_count(self) -> int:
+        """How many sheets this document prints on. Asked of the document rather than counted from
+        the render: a render that lost a sheet's marker has to fail rather than be labelled as
+        fewer pages than the image holds."""
+        return getattr(self.document, "page_count", 1)
+
+    def as_rendered(self, *, source_file: str) -> DocGroundTruth:
+        """This document's label AS IT WAS RENDERED — every value final, the geometry not yet moved
+        by any capture.
+
+        ONE CALLER AND ONE PURPOSE, and it is not the dataset: the claim loop has to tell the
+        payment document what its subject states, and `_amount_the_payment_states` reads that off
+        the subject's RECORD rather than recomputing it — an invoice divided its own total and
+        PRINTED the result, so a second division would round apart from the printed one. In a
+        bundle the final record cannot exist that early: the file is composed only after every
+        document of the claim has been rendered. ⛔ WHAT THIS RETURNS IS NEVER WRITTEN. The record
+        the dataset ships is built by the carrier, from the degraded geometry.
+
+        ⚠️ CALLED FOR THE SUBJECT DOCUMENT ONLY, which is a class that prints on one sheet. A
+        paginated subject would raise here — `ground_truth` requires the regions it has no way to
+        pass — rather than be labelled as a one-page document.
+        """
+        return self.document.ground_truth(
+            doc_id=self.doc_id,
+            source_file=source_file,
+            capture=self.capture,
+            field_bboxes=self.clean.field_bboxes,
+            reference_text=self.clean.reference_text,
+            content_bbox=self.clean.content_bbox,
+        )
 
 
 def _build_document(
@@ -423,7 +520,13 @@ def _build_document(
     settles: Decimal | None = None,
     cites: DocumentReference | None = None,
 ) -> tuple[DocGroundTruth, DocumentReference | None]:
-    """One document of a claim, and the reference by which another document of it can cite this one.
+    """One document of a claim IN A FILE OF ITS OWN, and the reference by which another document
+    of the claim can cite this one.
+
+    The majority path, and the whole path until a claim's documents could share a file: what this
+    function adds to `_render_document` is the CARRIAGE — one capture channel applied to one
+    document, written to one image named after it. `_bundle_one_file` is the other carrier, and
+    the two are alternatives rather than layers.
 
     The second half of the return value is `None` for every class but the invoice: a payment
     document is not cited by anything in its own claim, and a fiscal receipt is the whole claim.
@@ -463,6 +566,92 @@ def _build_document(
     state different things: a receipt needs a category to draw a basket from, and a payment
     confirmation needs the two parties and takes no basket at all. Keying on the evidence means a
     further archetype of either class arrives without this branch being touched.
+    """
+    with tempfile.TemporaryDirectory() as staging:
+        built = _render_document(
+            rng,
+            persona=persona,
+            plan=plan,
+            document_plan=document_plan,
+            vendor=vendor,
+            identity=identity,
+            doc_id=doc_id,
+            renderer=renderer,
+            staging=Path(staging),
+            settles=settles,
+            cites=cites,
+        )
+        document, clean = built.document, built.clean
+        image_path = out_dir / "images" / f"{doc_id}.png"
+        # 🔴 THE CONTENT EXTENT AND THE PAGE REGIONS TRAVEL WITH THE FIELD BOXES, THROUGH ONE CALL
+        # AND ONE TRANSFORM. Geometry is Albumentations' alone (see `degrader`), and every channel
+        # that has any DRAWS it — so a box moved by a second call is moved by a second draw and
+        # lands somewhere else. `tracked_boxes` is the merge and the two lines below are the split.
+        moved = degrade(
+            cv2.imread(str(clean.image_path)),
+            tracked_boxes(clean),
+            seed=built.degrade_seed,
+            capture=built.capture,
+        )
+        boxes = dict(moved.field_bboxes)
+        content_bbox = boxes.pop(_CONTENT_BBOX_KEY)
+        # `page_regions` is `None` unless the document has more than one sheet, which is what
+        # `DocGroundTruth._page_count_and_regions_agree` requires of a one-page label.
+        page_regions = take_page_regions(boxes, page_count=built.page_count)
+        pages = {"page_regions": page_regions} if page_regions is not None else {}
+        # 🔴 GATE 2 OF THE FIDELITY MATRIX: DID THE CONTENT SURVIVE THE CAPTURE. Measured against
+        # the DEGRADED image, because that is the file a consumer receives, and from the CONTENT
+        # extent rather than from the field boxes — a document whose every labelled field came
+        # through while a crop took the footer with the fiscal wording would report as complete
+        # measured on the fields, and would then hand a system a falsely high character error rate
+        # for text that is not in the picture.
+        height, width = moved.image.shape[:2]
+        lost = clipped_edges(content_bbox, width, height)
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_png(image_path, moved.image)
+
+    return (
+        document.ground_truth(
+            doc_id=doc_id,
+            source_file=image_path.name,
+            capture=built.capture,
+            field_bboxes=boxes,
+            reference_text=clean.reference_text,
+            content_bbox=content_bbox,
+            content_lost_edges=lost,
+            # Passed only by a class that HAS sheets to report. A `page_regions` parameter added to
+            # all five content classes for the sake of the one that paginates would be four classes
+            # carrying an argument they can only ever be given `None` for.
+            **pages,
+        ),
+        built.reference,
+    )
+
+
+def _render_document(
+    rng: random.Random,
+    *,
+    persona: Persona,
+    plan: ClaimPlan,
+    document_plan: DocumentPlan,
+    vendor: dict,
+    identity: PartyIdentity,
+    doc_id: str,
+    renderer: Renderer,
+    staging: Path,
+    settles: Decimal | None = None,
+    cites: DocumentReference | None = None,
+) -> _BuiltDocument:
+    """Build one document and render it CLEAN into `staging` — everything both carriers share.
+
+    ⛔ IT WRITES NOTHING A CONSUMER RECEIVES. The clean render is an intermediate: the dataset
+    ships the document as it would have been CAPTURED, and `staging` is a temporary directory the
+    caller owns and discards. A bundled claim's documents never reach `images/` at all — only the
+    file that carries them does.
+
+    Every draw this function makes is at the position the single-document path always made it,
+    which is what lets a run be bundled or not at one seed and produce the same documents. See
+    `_BuiltDocument`.
     """
     archetype = document_plan.archetype
     slug = archetype.slug
@@ -545,65 +734,384 @@ def _build_document(
         # such claim would be labelled `insufficient_evidence` with the cause `amount_mismatch`.
         # Measured before this was written: an invoice of 1200.00 beside an independently drawn
         # payment came out exactly that, while the same pair agreeing came out `covered`.
-        document = _BUILDERS[slug](
-            rng,
-            issued_at=document_plan.issued_at,
-            vendor=vendor,
-            identity=identity,
-            payer_name=persona.full_name,
-            payer_tax_id=persona.tax_id,
-            amount=settles,
-            cites=cites,
-        )
+        transfer = {
+            "issued_at": document_plan.issued_at,
+            "vendor": vendor,
+            "identity": identity,
+            "payer_name": persona.full_name,
+            "payer_tax_id": persona.tax_id,
+            "amount": settles,
+            "cites": cites,
+        }
+        if archetype.doc_type is DocType.BANK_STATEMENT:
+            # 🔴 HOW MANY SHEETS THE STATEMENT RUNS TO IS DRAWN HERE, not in the builder, and it is
+            # drawn for the same reason `capture` is: it is a decision about how difficult this
+            # RUN's documents are, and a builder that took it would leave no caller able to ask for
+            # either case. It is also the change that stops «one page is one document» from being
+            # true by construction across this corpus — see `draw_statement_pages`.
+            transfer |= {"pages": draw_statement_pages(rng)}
+        document = _BUILDERS[slug](rng, **transfer)
 
-    image_path = out_dir / "images" / f"{doc_id}.png"
-    with tempfile.TemporaryDirectory() as staging:
-        # The clean render is an intermediate, not an artifact: the dataset ships the
-        # document as it would have been captured.
-        clean = renderer.render(slug, document.render_context(), Path(staging) / f"{doc_id}.png")
-        # 🔴 THE CONTENT EXTENT TRAVELS WITH THE FIELD BOXES, THROUGH THE SAME TRANSFORM. Geometry
-        # is Albumentations' alone (see `degrader`), and a box moved by a second route would drift
-        # from the fields the moment a real geometric step arrives — which is exactly when a
-        # measurement built on it would start being quietly wrong.
-        if _CONTENT_BBOX_KEY in clean.field_bboxes:
-            raise ValueError(
-                f"a template marks a field named {_CONTENT_BBOX_KEY!r}, which this module reserves "
-                "for the content extent; rename the `data-field`"
-            )
-        moved = degrade(
-            cv2.imread(str(clean.image_path)),
-            {**clean.field_bboxes, _CONTENT_BBOX_KEY: clean.content_bbox},
-            seed=rng.getrandbits(32),
-            capture=capture,
-        )
-        boxes = dict(moved.field_bboxes)
-        content_bbox = boxes.pop(_CONTENT_BBOX_KEY)
-        # 🔴 GATE 2 OF THE FIDELITY MATRIX: DID THE CONTENT SURVIVE THE CAPTURE. Measured against
-        # the DEGRADED image, because that is the file a consumer receives, and from the CONTENT
-        # extent rather than from the field boxes — a document whose every labelled field came
-        # through while a crop took the footer with the fiscal wording would report as complete
-        # measured on the fields, and would then hand a system a falsely high character error rate
-        # for text that is not in the picture.
-        height, width = moved.image.shape[:2]
-        lost = clipped_edges(content_bbox, width, height)
-        image_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_png(image_path, moved.image)
-
-    return (
-        document.ground_truth(
-            doc_id=doc_id,
-            source_file=image_path.name,
-            capture=capture,
-            field_bboxes=boxes,
-            reference_text=clean.reference_text,
-            content_bbox=content_bbox,
-            content_lost_edges=lost,
-        ),
+    clean = renderer.render(slug, document.render_context(), staging / f"{doc_id}.png")
+    return _BuiltDocument(
+        doc_id=doc_id,
+        document=document,
         # Asked of the document rather than composed here: what a reference to an invoice consists
         # of is the invoice's business. A class that nothing cites has no such property and returns
         # nothing, so registering one does not bring this branch a case to handle.
-        getattr(document, "reference", None),
+        reference=getattr(document, "reference", None),
+        capture=capture,
+        # DRAWN HERE, and used by whichever carrier takes this document — see `_BuiltDocument`.
+        degrade_seed=rng.getrandbits(32),
+        clean=clean,
     )
+
+
+def tracked_boxes(clean: RenderedDocument) -> dict[str, BBox]:
+    """Every rectangle that has to come out of the degrader where its pixels came out.
+
+    🔴 ONE DICT, ONE CALL, ONE TRANSFORM — and that is the whole of why this function exists rather
+    than three call sites. Geometry belongs to Albumentations alone (see `degrader.carry_boxes`),
+    and the transform each channel applies is DRAWN: a perspective and a rotation are sampled from
+    a range, so a second call with the same seed is a second draw and lands somewhere else. A box
+    carried by a second call would therefore be plausible and wrong, in a way that shows up
+    downstream as a poor extractor or a poor segmenter and never as a coordinate defect.
+
+    Three kinds of rectangle ride together:
+
+    * the LABELLED FIELDS, under their own `data-field` names;
+    * the CONTENT EXTENT, under `_CONTENT_BBOX_KEY` — the box `content_lost_edges` is measured
+      from, which is why it must not drift from the ink by so much as a rotation;
+    * the PAGE REGIONS of a document printed on more than one sheet, under `_PAGE_REGION_KEY`.
+
+    The two reserved names begin with two underscores, which no `data-field` does — and the
+    collision is CHECKED rather than trusted, because "no template does that today" is exactly the
+    kind of premise a later template breaks in silence.
+    """
+    reserved = {_CONTENT_BBOX_KEY} | {
+        _PAGE_REGION_KEY.format(page=index + 1) for index in range(len(clean.region_bboxes))
+    }
+    claimed = sorted(reserved & set(clean.field_bboxes))
+    if claimed:
+        raise ValueError(
+            f"a template marks field(s) named {claimed}, which this module reserves for the "
+            "content extent and the page regions; rename the `data-field`"
+        )
+    tracked: dict[str, BBox] = {**clean.field_bboxes, _CONTENT_BBOX_KEY: clean.content_bbox}
+    for page in range(1, len(clean.region_bboxes) + 1):
+        # By NAME rather than by iterating the dict: `page_regions` is a list in reading order, and
+        # a template that numbered its sheets from 0 or skipped one has to fail here rather than
+        # produce a label whose second region is the third sheet.
+        name = f"page_{page}"
+        if name not in clean.region_bboxes:
+            raise ValueError(
+                f"the render marks {sorted(clean.region_bboxes)} but no {name!r}; a document's "
+                "sheets are `page_1` … `page_N` in reading order"
+            )
+        tracked[_PAGE_REGION_KEY.format(page=page)] = clean.region_bboxes[name]
+    return tracked
+
+
+def take_page_regions(boxes: dict[str, BBox], *, page_count: int) -> list[BBox] | None:
+    """The page half of the inverse of `tracked_boxes` — TAKEN OUT of the degraded boxes.
+
+    Removes every reserved region key from `boxes` and returns the regions in reading order, or
+    `None` where the document is a single sheet, which is what
+    `DocGroundTruth._page_count_and_regions_agree` requires of a one-page label. It pops rather
+    than copies for the reason the content extent above it does: what is left in `boxes` afterwards
+    is exactly the label's `field_bboxes`, so a key this function forgot cannot quietly become one.
+
+    `page_count` COMES FROM THE DOCUMENT, not from counting the keys. A render that lost a sheet's
+    marker would otherwise be split into however many regions survived and labelled as that many
+    pages — an image of two sheets described as a document of one, with nothing anywhere saying so.
+
+    ⚠️ EVERY RESERVED KEY GOES WHATEVER `page_count` SAYS. A one-page document still marks its
+    single sheet, so the carried boxes hold a region the label has no room for — and a key left
+    behind would reach a consumer as a `data-field` named `__page_region_1__`, which is a field no
+    template prints and no requirement names.
+    """
+    carried = {key: boxes.pop(key) for key in list(boxes) if key.startswith(_PAGE_REGION_PREFIX)}
+    if page_count == 1:
+        if len(carried) > 1:
+            raise ValueError(
+                f"this document reports one page and the render marked {len(carried)} sheets; the "
+                "image and the label disagree about how many pages there are"
+            )
+        return None
+    regions = []
+    for page in range(1, page_count + 1):
+        key = _PAGE_REGION_KEY.format(page=page)
+        if key not in carried:
+            raise ValueError(
+                f"this document is printed on {page_count} sheets and the carried boxes hold no "
+                f"{key!r}; the render and the document disagree about how many pages there are"
+            )
+        regions.append(carried[key])
+    return regions
+
+
+def documents_share_one_file(*, seed: int, claim_id: str, document_count: int) -> bool:
+    """Whether this claim's documents arrive as ONE file rather than as one file each.
+
+    A claim of a single document is never eligible: a file holding one document is not a bundle of
+    one, and there is nothing to compose. Everything else is drawn at
+    `file_composition.bundle_share` in config/generation.yaml, which is also where the value's
+    justification and its bounds are written down.
+
+    ⛔ THE PATTERN IS DOCUMENTS OF **ONE CLAIM** IN ONE FILE, AND NOTHING ELSE. A file holding
+    documents of DIFFERENT claims is a shape this generator does not produce and will not be given
+    a flag for. It is not an oversight and it is not "later": a claim is the unit a verdict is
+    reached on, so a file spanning two claims would be evidence for two answers at once, and the
+    ground truth would have to say which part of one image belongs to which claim's label —
+    a relation nothing in the schema carries. The documents of one claim are one submission; two
+    claims in one file are two submissions somebody stapled together.
+
+    🔴 SEEDED INDEPENDENTLY OF THE GENERATOR'S OWN DRAW, from `f"bundle:{seed}:{claim_id}"` rather
+    than from the claim's generator — the device `assign_splits` uses, for a related reason. This
+    decision is about CARRIAGE and not about content: at one seed the run builds the same
+    documents, with the same amounts, dates, parties and verdicts, whether or not they end up in
+    one file. Drawing from the claim's own generator would have shifted every document after the
+    first bundled claim, so a corpus could not be regenerated with the composition changed and
+    nothing else — and the label-integrity test that compares the two shares at one seed could not
+    exist at all.
+
+    `random.Random` seeds from a string through SHA-512 of its bytes, so the decision does not
+    depend on `PYTHONHASHSEED` and is reproducible across machines and interpreter runs.
+    """
+    if document_count < 2:
+        return False
+    return random.Random(f"bundle:{seed}:{claim_id}").random() < file_composition_share("bundle")
+
+
+def _compose_bundle(
+    renderer: Renderer, sheets: Sequence[RenderedDocument], *, output_path: Path
+) -> RenderedDocument:
+    """Render the FILE that carries `sheets` — their clean renders embedded at natural size.
+
+    The result's `region_bboxes` is where each document landed, keyed `doc_1`, `doc_2`, … in claim
+    order. Its `field_bboxes`, `reference_text` and `content_bbox` are empty or meaningless and are
+    not used: the bundle template marks no field and prints no text of its own, and what a bundled
+    document says is recorded from ITS OWN render.
+
+    🔴 THE 1:1 CHECK IS THE POINT OF THIS FUNCTION BEING A FUNCTION. Every coordinate of every
+    bundled label is a per-document coordinate plus its region's origin, which is true only while
+    the embedded image is drawn at the size it was rendered at. A stylesheet that gave `.doc` a
+    width would scale every one of those coordinates by a factor nothing in the label records —
+    and the result would be plausible everywhere and wrong everywhere, which is the class of defect
+    this repository refuses rather than tests for afterwards.
+    """
+    context = {
+        "sheets": [
+            {
+                "region": _BUNDLE_REGION.format(index=index),
+                "url": sheet.image_path.as_uri(),
+                "width": sheet.width,
+                "height": sheet.height,
+            }
+            for index, sheet in enumerate(sheets, start=1)
+        ],
+        # The template prints no QR and the renderer requires the key — see `Renderer.build_html`.
+        "qr_payload": None,
+    }
+    composed = renderer.render(BUNDLE_TEMPLATE, context, output_path)
+
+    for index, sheet in enumerate(sheets, start=1):
+        name = _BUNDLE_REGION.format(index=index)
+        if name not in composed.region_bboxes:
+            raise ValueError(
+                f"the composed file marks {sorted(composed.region_bboxes)} but no {name!r}; "
+                f"templates/{BUNDLE_TEMPLATE}.html must mark one region per embedded document"
+            )
+        _, _, width, height = composed.region_bboxes[name]
+        if (width, height) != (sheet.width, sheet.height):
+            raise ValueError(
+                f"{name} came out {width:g}×{height:g} px and the document inside it is "
+                f"{sheet.width}×{sheet.height} px: the sheet is not embedded at natural size, so "
+                "every coordinate offset into this file would be off by that scale"
+            )
+    return composed
+
+
+def bundled_boxes(
+    sheets: Sequence[tuple[BBox, dict[str, BBox]]],
+) -> dict[str, BBox]:
+    """Every rectangle of every document in one file, in FILE coordinates, for ONE degrader call.
+
+    The outer counterpart of `tracked_boxes`, and it takes that function's output per document:
+    each entry is the document's region in the composed file, together with the boxes
+    `tracked_boxes` collected in that document's OWN coordinates — its fields, its content extent
+    and its page regions. Two things happen to them here, and both have to happen before the
+    degrader rather than after it:
+
+    * they are OFFSET by the region's origin, which is the whole arithmetic of putting a document
+      in a file — the embedding is 1:1, so a size is never touched;
+    * they are NAMESPACED per document, because two documents of one claim print the same field
+      names and a flat merge would leave the file one box under each.
+
+    The region itself rides along under `_FILE_REGION_KEY`. 🔴 IT MUST: it is the segmentation
+    ground truth, the geometry of every capture channel that has any is DRAWN, and a region moved
+    by a second call to the degrader is moved by a second draw. It would land somewhere plausible
+    and wrong, and downstream that reads as a poor segmenter rather than as a coordinate defect.
+    """
+    merged: dict[str, BBox] = {}
+    for index, (region, boxes) in enumerate(sheets, start=1):
+        merged[_FILE_REGION_KEY.format(index=index)] = region
+        for name, box in boxes.items():
+            merged[_IN_DOCUMENT_KEY.format(index=index, name=name)] = _offset(box, region)
+    return merged
+
+
+def _offset(box: BBox, region: BBox) -> BBox:
+    """A box of a document's own render, in the coordinates of the file that carries it."""
+    x, y, width, height = box
+    return (x + region[0], y + region[1], width, height)
+
+
+@dataclass(frozen=True)
+class CarriedDocument:
+    """Where one document of a bundled file ended up — the geometry half of its label."""
+
+    file_region: BBox
+    field_bboxes: dict[str, BBox]
+    content_bbox: BBox
+    page_regions: list[BBox] | None
+
+
+def take_bundled_boxes(
+    boxes: dict[str, BBox], *, index: int, page_count: int
+) -> CarriedDocument:
+    """The inverse of `bundled_boxes` for ONE document — TAKEN OUT of the degraded boxes.
+
+    Removes this document's region and every box that came from it, strips the namespace, and
+    hands the two inner reserved keys back to the same split the single-document path uses
+    (`take_page_regions` and the content extent), so the two paths cannot drift in what they
+    consider a field.
+
+    It POPS for the reason that split does: what is left in `boxes` after every document has been
+    taken is nothing, and a key this function forgot cannot quietly reach a consumer as a
+    `data-field` named `__doc_1__amount` — a field no template prints and no requirement names.
+
+    ⛔ A DOCUMENT WITH NO REGION IS A REFUSAL, not an empty label. A file whose second region never
+    reached the degrader would otherwise produce a record that looks like a page nothing was
+    extracted from, which is a defect wearing the appearance of a result.
+    """
+    region_key = _FILE_REGION_KEY.format(index=index)
+    if region_key not in boxes:
+        raise ValueError(
+            f"the carried boxes hold no {region_key!r}; the composition and the split disagree "
+            "about how many documents this file holds"
+        )
+    file_region = boxes.pop(region_key)
+    prefix = _IN_DOCUMENT_KEY.format(index=index, name="")
+    mine = {
+        key.removeprefix(prefix): boxes.pop(key)
+        for key in list(boxes)
+        if key.startswith(prefix)
+    }
+    content_bbox = mine.pop(_CONTENT_BBOX_KEY)
+    return CarriedDocument(
+        file_region=file_region,
+        content_bbox=content_bbox,
+        page_regions=take_page_regions(mine, page_count=page_count),
+        # Whatever is left once both reserved families are out: the labelled fields, and nothing
+        # else. Read after `take_page_regions`, which removes the page keys in place.
+        field_bboxes=mine,
+    )
+
+
+def _bundle_one_file(
+    builts: Sequence[_BuiltDocument],
+    *,
+    claim_id: str,
+    renderer: Renderer,
+    out_dir: Path,
+    staging: Path,
+) -> list[DocGroundTruth]:
+    """Carry the documents of ONE claim in ONE file, and label each of them where it landed.
+
+    The alternative to `_build_document`'s own tail, and the differences are the whole of what a
+    multi-document file is:
+
+    * the documents are composed into a file FIRST, from their clean renders, at natural size;
+    * every coordinate of every document is offset into the file's own space;
+    * 🔴 THE FILE IS DEGRADED ONCE, with every document's boxes and every region in the SAME call.
+      A second call is a second draw of the same channel's geometry, so a box carried by one would
+      be plausible and wrong. This is the same rule `tracked_boxes` states one level down, applied
+      to a file rather than to a document;
+    * ONE CAPTURE CHANNEL FOR THE FILE, because a file is captured once — a claimant who
+      photographs a stapled pair does not photograph one sheet and scan the other. It is the first
+      document's drawn channel; the second's is drawn and unused (see `_BuiltDocument`);
+    * ONE IMAGE IS WRITTEN, named after the CLAIM, and the per-document renders stay in `staging`.
+
+    `file_region` reaches the label through `model_copy` rather than through `ground_truth`,
+    deliberately: where a document sits inside a shared file is a fact about the FILE, decided here
+    after the composition has been rendered, and not one of the five content classes knows it or
+    could be asked it. Threading a parameter through all five so that this function could pass it
+    to one of them would put a file-level fact in five document-level signatures.
+    """
+    composed = _compose_bundle(
+        renderer, [built.clean for built in builts], output_path=staging / f"{claim_id}.png"
+    )
+    # ⛔ THE FILE TAKES THE FIRST DOCUMENT'S CHANNEL AND THE SECOND'S IS DROPPED, WHICH IS SOUND
+    # ONLY WHILE NO BUILDER PRINTS MEDIUM-DEPENDENT CONTENT. Today none does: `capture` reaches the
+    # degrader and the label and never a content builder, so the second document's pixels are the
+    # same whichever channel was drawn for it and the discard costs nothing. A builder that started
+    # to read its own capture — a caption naming the copy as scanned, a header only a screenshot
+    # carries — would make this line quietly wrong: that document would print for one channel while
+    # its file was captured on another, and nothing downstream measures the two against each other.
+    # The precondition is stated here because the violation would be invisible, not because it is
+    # near; if it ever stops holding, the channel has to be chosen for the CLAIM before its
+    # documents are built rather than picked off one of them afterwards.
+    capture = builts[0].capture
+    moved = degrade(
+        cv2.imread(str(composed.image_path)),
+        bundled_boxes(
+            [
+                (
+                    composed.region_bboxes[_BUNDLE_REGION.format(index=index)],
+                    tracked_boxes(built.clean),
+                )
+                for index, built in enumerate(builts, start=1)
+            ]
+        ),
+        seed=builts[0].degrade_seed,
+        capture=capture,
+    )
+    boxes = dict(moved.field_bboxes)
+    # THE FRAME IS THE FILE'S, and it is the file a consumer receives — see the same measurement in
+    # `_build_document`. A document whose sheet was cropped off the photograph loses its content in
+    # exactly the way a single-document capture does.
+    file_height, file_width = moved.image.shape[:2]
+    image_path = out_dir / "images" / f"{claim_id}.png"
+
+    labels: list[DocGroundTruth] = []
+    for index, built in enumerate(builts, start=1):
+        carried = take_bundled_boxes(boxes, index=index, page_count=built.page_count)
+        pages = (
+            {"page_regions": carried.page_regions} if carried.page_regions is not None else {}
+        )
+        label = built.document.ground_truth(
+            doc_id=built.doc_id,
+            source_file=image_path.name,
+            capture=capture,
+            field_bboxes=carried.field_bboxes,
+            reference_text=built.clean.reference_text,
+            content_bbox=carried.content_bbox,
+            content_lost_edges=clipped_edges(carried.content_bbox, file_width, file_height),
+            **pages,
+        )
+        labels.append(label.model_copy(update={"file_region": carried.file_region}))
+    if boxes:
+        raise ValueError(
+            f"the split left {sorted(boxes)} behind after {len(builts)} document(s); every "
+            "carried box belongs to one of them"
+        )
+    # WRITTEN LAST, after every label has been built and the split has come out empty: an image on
+    # disk that no label describes correctly is worse than a run that stopped, because it is the
+    # half a consumer keeps.
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_png(image_path, moved.image)
+    return labels
 
 
 # How many times `_payee_the_payment_names` may draw before it gives up. The filter inside
@@ -733,6 +1241,99 @@ def _amount_the_payment_states(
     return (subject_amount + (delta if rng.random() < 0.5 else -delta)).quantize(KOPIYKA)
 
 
+def _claim_documents(
+    rng: random.Random,
+    *,
+    seed: int,
+    plan: ClaimPlan,
+    persona: Persona,
+    vendor: dict,
+    identity: PartyIdentity,
+    payee: dict,
+    payee_identity: PartyIdentity,
+    renderer: Renderer,
+    out_dir: Path,
+) -> list[DocGroundTruth]:
+    """Every document of one claim, built, captured and labelled — in one file or in one each.
+
+    A claim is a list of documents, and since the invoice archetype landed it may genuinely hold
+    two. A LOOP RATHER THAN A COMPREHENSION, because the documents are not independent: the subject
+    document fixes the claim's amount and the payment document has to be told it, or the two
+    disagree and the engine labels every such claim `insufficient_evidence`.
+
+    `plan.documents` is ordered subject-first — `_select_documents` builds it that way — and the
+    LABELS follow that order into the file: `doc_1` is the subject, `doc_2` the payment. Nothing
+    else here relies on it: `settles` is read off whichever document proved the subject, and stays
+    `None` for a self-contained claim, whose single document is its own subject and its own
+    payment.
+
+    🔴 THE CARRIAGE IS DECIDED BEFORE THE FIRST DOCUMENT IS BUILT, and it changes nothing about
+    what is built — see `documents_share_one_file`. A bundled claim renders its documents clean
+    into a staging directory that outlives them, because the file is composed from all of them at
+    once; an unbundled one takes the path it always took, document by document.
+    """
+    bundled = documents_share_one_file(
+        seed=seed, claim_id=plan.claim_id, document_count=len(plan.documents)
+    )
+    source_file = f"{plan.claim_id}.png" if bundled else None
+    documents: list[DocGroundTruth] = []
+    rendered: list[_BuiltDocument] = []
+    settles: Decimal | None = None
+    cites: DocumentReference | None = None
+
+    with ExitStack() as stack:
+        # Opened only for a bundled claim: the composition needs every clean render at the same
+        # time, so the directory belongs to the CLAIM. An unbundled document stages its own inside
+        # `_build_document` and discards it there.
+        staging = (
+            Path(stack.enter_context(tempfile.TemporaryDirectory())) if bundled else None
+        )
+        for doc_index, document_plan in enumerate(plan.documents, start=1):
+            # WHICH PARTY THIS DOCUMENT NAMES, decided by what it establishes and read from
+            # policy.yaml like every other role in this loop. The two are the same object on every
+            # claim but a `counterparty_mismatch` one, so this dispatch changes nothing about the
+            # rest of the corpus.
+            states_subject = evidence_of(document_plan.archetype).proves_subject
+            asked = {
+                "persona": persona,
+                "plan": plan,
+                "document_plan": document_plan,
+                "vendor": vendor if states_subject else payee,
+                "identity": identity if states_subject else payee_identity,
+                "doc_id": f"{plan.claim_id}_d{doc_index}",
+                "renderer": renderer,
+                "settles": settles,
+                "cites": cites,
+            }
+            if bundled:
+                built = _render_document(rng, staging=staging, **asked)
+                rendered.append(built)
+                reference = built.reference
+                # ⚠️ ASKED OF THE SUBJECT DOCUMENT AND OF NO OTHER, which is a condition rather
+                # than an optimization: `as_rendered` labels a document from its own render, and a
+                # PAGINATED one refuses to be labelled without the regions it has no way to pass.
+                # The payment class is the one that paginates, and nothing needs its record here.
+                record = built.as_rendered(source_file=source_file) if states_subject else None
+            else:
+                record, reference = _build_document(rng, out_dir=out_dir, **asked)
+                documents.append(record)
+            if states_subject:
+                settles = _amount_the_payment_states(rng, plan, record)
+                # What the payment document will cite. It travels beside `settles` because it is
+                # the same kind of fact — a property of the claim that the subject document decides
+                # and the payment document has to be told.
+                cites = reference
+        if bundled:
+            documents = _bundle_one_file(
+                rendered,
+                claim_id=plan.claim_id,
+                renderer=renderer,
+                out_dir=out_dir,
+                staging=staging,
+            )
+    return documents
+
+
 def generate_dataset(
     *,
     seed: int,
@@ -829,45 +1430,18 @@ def generate_dataset(
                     if payee is vendor
                     else draw_party_identity(rng, payee, persona.location.country.value)
                 )
-                # A claim is a list of documents, and since the invoice archetype landed it may
-                # genuinely hold two. A LOOP RATHER THAN A COMPREHENSION, because the documents are
-                # no longer independent: the subject document fixes the claim's amount and the
-                # payment document has to be told it, or the two disagree and the engine labels
-                # every such claim `insufficient_evidence`.
-                #
-                # `plan.documents` is ordered subject-first — `_select_documents` builds it that
-                # way — but nothing here relies on the order: `settles` is read off whichever
-                # document proved the subject, and stays `None` for a self-contained claim, whose
-                # single document is its own subject and its own payment.
-                documents: list[DocGroundTruth] = []
-                settles: Decimal | None = None
-                cites: DocumentReference | None = None
-                for doc_index, document_plan in enumerate(plan.documents, start=1):
-                    # WHICH PARTY THIS DOCUMENT NAMES, decided by what it establishes and read from
-                    # policy.yaml like every other role in this loop. The two are the same object
-                    # on every claim but a `counterparty_mismatch` one, so this dispatch changes
-                    # nothing about the rest of the corpus.
-                    states_subject = evidence_of(document_plan.archetype).proves_subject
-                    document, reference = _build_document(
-                        rng,
-                        persona=persona,
-                        plan=plan,
-                        document_plan=document_plan,
-                        vendor=vendor if states_subject else payee,
-                        identity=identity if states_subject else payee_identity,
-                        doc_id=f"{plan.claim_id}_d{doc_index}",
-                        renderer=renderer,
-                        out_dir=out_dir,
-                        settles=settles,
-                        cites=cites,
-                    )
-                    if states_subject:
-                        settles = _amount_the_payment_states(rng, plan, document)
-                        # What the payment document will cite. It travels beside `settles` because
-                        # it is the same kind of fact — a property of the claim that the subject
-                        # document decides and the payment document has to be told.
-                        cites = reference
-                    documents.append(document)
+                documents = _claim_documents(
+                    rng,
+                    seed=seed,
+                    plan=plan,
+                    persona=persona,
+                    vendor=vendor,
+                    identity=identity,
+                    payee=payee,
+                    payee_identity=payee_identity,
+                    renderer=renderer,
+                    out_dir=out_dir,
+                )
                 # The oracle, not the plan, decides the label. The plan's verdict was the
                 # target; where the two differ the balance report says so.
                 evaluation = evaluate_claim(

@@ -968,6 +968,40 @@ jurisdictions:
       # which is 👁 an observation about till printers and not about bank documents.
       time_format: "%H:%M"
 
+      # 🔴 WHAT HAPPENS WHEN THE OPERATIONS DO NOT FIT ON ONE SHEET — the layout half of the
+      # answer; how often it happens is a composition decision and lives in config/generation.yaml.
+      #
+      # ⛔ THE CONTINUATION SHEET WAS NEVER OBSERVED. Only a preview of the first page of the one
+      # statement was seen, so nothing here may be marked 👁: what a second sheet carries is taken
+      # from GENERAL LAYOUT OF A PAGINATED TABLE — the column headings repeat over the continued
+      # rows, and each sheet says which of how many it is — and from nothing else. In particular
+      # the bank header, the title and the turnover block are NOT repeated: repeating them would
+      # assert an arrangement no source supports, and printing them once is the weaker claim.
+      #
+      # THE THREE CAPACITIES DIFFER BY WHAT ELSE IS ON THE SHEET, and each is measured against a
+      # render by a test rather than trusted here — a stylesheet loosened by a pixel per row moves
+      # all three.
+      #
+      #   `rows_single_sheet`      a statement that fits on ONE sheet, under the header block, the
+      #                            title and the turnovers, and with NO page footer. This is the
+      #                            bound `row_count_range` in config/generation.yaml is tuned to.
+      #   `rows_first_page`        the first sheet of a PAGINATED statement: the same furniture
+      #                            PLUS the page footer, whose line costs exactly one row. 🔴 One
+      #                            fewer than the bound above, and the difference is not a rounding
+      #                            allowance — at 25 the footer pushes the first sheet five pixels
+      #                            past the A4 height this file declares, so a paginated statement
+      #                            would print its two sheets on two different papers.
+      #   `rows_continuation_page` a sheet with neither the header block, the title nor the
+      #                            turnovers — it gets that height back and holds more.
+      pagination:
+        rows_single_sheet: 25
+        rows_first_page: 24
+        rows_continuation_page: 30
+        # The footer every sheet of a PAGINATED statement carries. ⚠️ A one-page statement prints
+        # none: «Сторінка 1 з 1» would be a visible change to the settled look of the overwhelming
+        # majority of this class's images in exchange for a count a reader can already see.
+        folio: "Сторінка {page} з {total}"
+
       # 👁 The per-row operation number appears in two shapes on one document: a short number of
       # three or four digits, and a longer prefixed form used for payments involving private
       # individuals. Both are drawn from, because a consumer validating the field by shape needs

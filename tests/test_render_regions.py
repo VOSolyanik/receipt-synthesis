@@ -1,0 +1,153 @@
+"""The renderer's collection pass: `[data-region]` and `[data-field]` boxes, and the images the
+page had to have loaded for either of them to describe the picture.
+
+A SEPARATE MODULE FROM `test_renderer.py`, and deliberately so: this file needs its own
+`Renderer`, pointed at a fixture template directory rather than `templates/`, and
+Playwright's sync API refuses to run two instances in one process at once — `renderer` in
+`test_renderer.py` is a module-scoped fixture that stays alive for that module's whole run,
+so a second one has to live in a module of its own (see the note on this in
+test_reference_text.py, next to its own nested-`Renderer()` warning).
+
+The fixture templates below are not under `templates/` — that directory is another task's,
+and this one only proves the renderer's collection pass.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from receipt_synth.renderer import Renderer
+
+# A page carrying TWO documents, each with fields nested inside its `[data-region]` box — the
+# shape a multi-document file will have once a later task starts building one. `data-document`
+# still marks the page root, one level above both regions.
+_REGIONS_HTML = """
+<div data-document>
+  <div data-region="doc_a" style="padding: 12px; margin-bottom: 20px;">
+    <div data-field="a_name">{{ name_a }}</div>
+    <div data-field="a_amount">{{ amount_a }}</div>
+  </div>
+  <div data-region="doc_b" style="padding: 12px;">
+    <div data-field="b_name">{{ name_b }}</div>
+  </div>
+</div>
+"""
+
+_REGIONS_CSS = """
+body { margin: 0; font-family: sans-serif; font-size: 14px; }
+[data-region] { display: block; width: 200px; }
+"""
+
+# The same shape, except both documents claim the same region key — the case `_unique_boxes`
+# must refuse rather than resolve by keeping whichever element it saw last.
+_DUPLICATE_REGION_HTML = """
+<div data-document>
+  <div data-region="dup"><div data-field="x">1</div></div>
+  <div data-region="dup"><div data-field="y">2</div></div>
+</div>
+"""
+
+# Two elements claiming ONE field name, which is the same defect one level down and is the one a
+# template reaches by accident: a per-sheet counter on a paginated document names its rows from 1
+# on every sheet, and the second sheet's boxes would then quietly replace the first's.
+_DUPLICATE_FIELD_HTML = """
+<div data-document>
+  <div data-region="doc_a"><div data-field="dup">1</div></div>
+  <div data-region="doc_b"><div data-field="dup">2</div></div>
+</div>
+"""
+
+# A page whose image never loads. `alt` is empty exactly as in `ua_claim_bundle`, so nothing is
+# painted where the picture should be and the render comes out a plausible blank.
+_BROKEN_IMAGE_HTML = """
+<div data-document>
+  <div data-region="doc_a"><div data-field="a_name">Alpha</div></div>
+  <img data-region="doc_b" src="no_such_sheet.png" alt="" width="120" height="80">
+</div>
+"""
+
+@pytest.fixture(scope="module")
+def fixture_templates_dir(tmp_path_factory):
+    directory = tmp_path_factory.mktemp("region_fixture_templates")
+    (directory / "fixture_regions.html").write_text(_REGIONS_HTML, encoding="utf-8")
+    (directory / "fixture_regions.css").write_text(_REGIONS_CSS, encoding="utf-8")
+    (directory / "fixture_duplicate_region.html").write_text(
+        _DUPLICATE_REGION_HTML, encoding="utf-8"
+    )
+    (directory / "fixture_duplicate_region.css").write_text(_REGIONS_CSS, encoding="utf-8")
+    (directory / "fixture_duplicate_field.html").write_text(_DUPLICATE_FIELD_HTML, encoding="utf-8")
+    (directory / "fixture_duplicate_field.css").write_text(_REGIONS_CSS, encoding="utf-8")
+    (directory / "fixture_broken_image.html").write_text(_BROKEN_IMAGE_HTML, encoding="utf-8")
+    (directory / "fixture_broken_image.css").write_text(_REGIONS_CSS, encoding="utf-8")
+    return directory
+
+
+@pytest.fixture(scope="module")
+def renderer(fixture_templates_dir):
+    with Renderer(templates_dir=fixture_templates_dir) as instance:
+        yield instance
+
+
+def region_context(**overrides):
+    context = {"name_a": "Alpha", "amount_a": "10.00", "name_b": "Beta", "qr_payload": None}
+    return context | overrides
+
+
+@pytest.fixture(scope="module")
+def rendered(renderer, tmp_path_factory):
+    output = tmp_path_factory.mktemp("regions") / "regions.png"
+    return renderer.render("fixture_regions", region_context(), output)
+
+
+def test_every_data_region_marker_gets_a_box(rendered):
+    assert set(rendered.region_bboxes) == {"doc_a", "doc_b"}
+
+
+def test_region_boxes_are_whole_pixels_and_lie_inside_the_image(rendered):
+    for name, (x, y, width, height) in rendered.region_bboxes.items():
+        assert all(float(value).is_integer() for value in (x, y, width, height)), name
+        assert width > 0 and height > 0, f"{name} has no area"
+        assert x >= 0 and y >= 0, f"{name} starts outside the image"
+        assert x + width <= rendered.width, f"{name} runs past the right edge"
+        assert y + height <= rendered.height, f"{name} runs past the bottom edge"
+
+
+def test_each_field_lies_inside_its_own_region(rendered):
+    ax, ay, aw, ah = rendered.region_bboxes["doc_a"]
+    for name in ("a_name", "a_amount"):
+        x, y, width, height = rendered.field_bboxes[name]
+        assert x >= ax and y >= ay, f"{name} starts outside doc_a"
+        assert x + width <= ax + aw and y + height <= ay + ah, f"{name} ends outside doc_a"
+
+    bx, by, bw, bh = rendered.region_bboxes["doc_b"]
+    x, y, width, height = rendered.field_bboxes["b_name"]
+    assert x >= bx and y >= by, "b_name starts outside doc_b"
+    assert x + width <= bx + bw and y + height <= by + bh, "b_name ends outside doc_b"
+
+
+def test_a_duplicate_data_region_value_fails_loudly_rather_than_last_write_wins(
+    renderer, tmp_path
+):
+    with pytest.raises(ValueError, match="dup"):
+        renderer.render("fixture_duplicate_region", region_context(), tmp_path / "dup.png")
+
+
+def test_a_duplicate_data_field_value_fails_loudly_rather_than_last_write_wins(renderer, tmp_path):
+    with pytest.raises(ValueError, match="dup"):
+        renderer.render("fixture_duplicate_field", region_context(), tmp_path / "dup_field.png")
+
+
+def test_an_image_that_did_not_load_is_refused_by_the_basename_it_was_asked_for(
+    renderer, tmp_path, fixture_templates_dir
+):
+    """A failed `<img>` leaves a blank where a document should be, and every box collected around
+    it is still perfectly plausible — so the render has to stop rather than be labelled."""
+    with pytest.raises(ValueError, match="no_such_sheet.png") as raised:
+        renderer.render("fixture_broken_image", region_context(), tmp_path / "broken.png")
+
+    # ⛔ THE MESSAGE NAMES THE FILE AND NOT WHERE IT LIVES: a local path in an exception is a path
+    # in a log, and the redaction gate holds for what this repository prints as much as for what it
+    # commits. No separator anywhere in the sentence is the cheapest statement of that.
+    message = str(raised.value)
+    assert str(fixture_templates_dir) not in message
+    assert "/" not in message.replace("no_such_sheet.png", "")

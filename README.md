@@ -74,7 +74,8 @@ Output:
 
 ```text
 out/images/<doc_id>.png       rendered documents, degraded as they would have been captured
-out/labels/<doc_id>.json      document-level ground truth
+out/images/<claim_id>.png     …or one file holding BOTH documents of a claim, at a declared share
+out/labels/<doc_id>.json      document-level ground truth — `source_file` names the image, whichever it is
 out/labels/<claim_id>.claim.json   claim-level ground truth
 out/ground_truth.json         the full index: every persona, claim and document, plus the partition
 ```

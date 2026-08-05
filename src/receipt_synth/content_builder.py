@@ -2405,6 +2405,44 @@ class BankStatement:
         """The one transaction this document is labelled for."""
         return self.rows[self.relevant_index]
 
+    # -- the sheets ------------------------------------------------------------
+
+    @property
+    def page_sheets(self) -> tuple[tuple[StatementRow, ...], ...]:
+        """The operations grouped by the sheet each one is printed on, in reading order.
+
+        🔴 DERIVED FROM THE ROW COUNT AND NOTHING ELSE, which is what makes it honest: a page holds
+        what fits on it, so how many sheets this document has is a consequence of how many
+        operations it lists, not a second decision that could disagree with the first. The
+        capacities are `bank_statement.pagination` in config/fiscal-rules.yaml — layout, checked
+        against a real render by a test.
+
+        ⚠️ THE FIRST SHEET IS FILLED BEFORE THE SECOND IS STARTED, and it holds FEWER rows than a
+        continuation sheet: it carries the bank header, the title and the turnover block, and a
+        continuation sheet gets that height back. A split that balanced the sheets evenly would be
+        a layout no printer produces.
+
+        🔴 A SHEET THAT IS THE WHOLE STATEMENT HOLDS ONE ROW MORE THAN THE FIRST SHEET OF A
+        PAGINATED ONE, because a paginated sheet carries the «Сторінка N з M» footer and that line
+        costs a row. The two capacities are not circular: whether there is a footer at all is
+        decided by whether the rows fit under the LARGER bound, which is asked first and answered
+        without reference to the smaller.
+        """
+        single, first, per_sheet = _statement_capacities()
+        if len(self.rows) <= single:
+            return (self.rows,)
+        sheets = [self.rows[:first]]
+        rest = self.rows[first:]
+        while rest:
+            sheets.append(rest[:per_sheet])
+            rest = rest[per_sheet:]
+        return tuple(sheets)
+
+    @property
+    def page_count(self) -> int:
+        """How many sheets this statement is printed on — `DocGroundTruth.page_count`."""
+        return len(self.page_sheets)
+
     # -- the four turnover totals, all derived --------------------------------
 
     @property
@@ -2476,26 +2514,55 @@ class BankStatement:
             "credit_count": self.credit_count,
             "debit_count": self.debit_count,
             "columns": block["columns"],
-            "rows": [
-                {
-                    "number": row.number,
-                    "date": row.at.strftime(rules["date_format"]),
-                    "time": row.at.strftime(block["time_format"]),
-                    "debit": self._amount(row.amount) if row.is_debit else None,
-                    "credit": None if row.is_debit else self._amount(row.amount),
-                    "purpose": row.purpose,
-                    "counterparty_name": row.counterparty_name,
-                    "counterparty_code": row.counterparty_code,
-                    "counterparty_account": row.counterparty_account,
-                    "counterparty_bank": row.counterparty_bank,
-                    "relevant": index == self.relevant_index,
-                }
-                for index, row in enumerate(self.rows)
-            ],
+            "pages": self._pages(rules, block),
             # This class carries no QR — 👁 none was observed on a statement, and the renderer
             # requires the key on every context.
             "qr_payload": None,
         }
+
+    def _pages(self, rules: dict, block: dict) -> list[dict]:
+        """The sheets the template lays out, each with its own rows and its own footer.
+
+        🔴 THE ROW'S INDEX IS THE ONE IT HAS IN THE DOCUMENT, not on its sheet. Every row carries an
+        `operation_<i>` box so that a test can decide box containment per row, and a counter that
+        restarted on each sheet would give two rows one box name — which the renderer refuses, and
+        which would otherwise have made the second sheet's boxes overwrite the first's.
+
+        `folio` IS `None` ON A ONE-SHEET STATEMENT, and that is the whole of the difference between
+        today's page and this one: «Сторінка 1 з 1» printed on the majority of this class's images
+        would be a visible change to a settled look, in exchange for a count a reader can see.
+        """
+        total = self.page_count
+        folio = block["pagination"]["folio"]
+        pages = []
+        offset = 0
+        for sheet in self.page_sheets:
+            pages.append(
+                {
+                    "folio": (
+                        folio.format(page=len(pages) + 1, total=total) if total > 1 else None
+                    ),
+                    "rows": [
+                        {
+                            "index": offset + index,
+                            "number": row.number,
+                            "date": row.at.strftime(rules["date_format"]),
+                            "time": row.at.strftime(block["time_format"]),
+                            "debit": self._amount(row.amount) if row.is_debit else None,
+                            "credit": None if row.is_debit else self._amount(row.amount),
+                            "purpose": row.purpose,
+                            "counterparty_name": row.counterparty_name,
+                            "counterparty_code": row.counterparty_code,
+                            "counterparty_account": row.counterparty_account,
+                            "counterparty_bank": row.counterparty_bank,
+                            "relevant": offset + index == self.relevant_index,
+                        }
+                        for index, row in enumerate(sheet)
+                    ],
+                }
+            )
+            offset += len(sheet)
+        return pages
 
     # -- labels ---------------------------------------------------------------
 
@@ -2509,6 +2576,7 @@ class BankStatement:
         reference_text: str = "",
         content_bbox: tuple[float, float, float, float] | None = None,
         content_lost_edges: tuple[str, ...] = (),
+        page_regions: list[tuple[float, float, float, float]] | None = None,
     ) -> DocGroundTruth:
         """The label record for this statement — one transaction, not one document.
 
@@ -2528,7 +2596,18 @@ class BankStatement:
         ⚠️ A single counterparty field is ambiguous about ROLE on a statement — for a debit the
         counterparty received the money, for a credit it sent it — and `direction` is what removes
         the ambiguity. That is the second reason the field exists, beside proof of payment.
+
+        🔴 `page_regions` COMES FROM THE RENDERER AND `page_count` FROM THIS OBJECT, and the two
+        must be handed in together: the document knows how many sheets it has, only the render
+        knows where they landed. ⛔ NO SILENT FALLBACK — a paginated statement whose regions were
+        not supplied is refused rather than labelled as one page, because that label would be
+        wrong about an image already written to disk and nothing downstream would say so.
         """
+        if self.page_count > 1 and page_regions is None:
+            raise ValueError(
+                f"this statement is printed on {self.page_count} sheets, so its label needs "
+                "`page_regions` — the renderer's `page_N` boxes, in reading order"
+            )
         row = self.relevant
         return DocGroundTruth(
             doc_id=doc_id,
@@ -2556,6 +2635,10 @@ class BankStatement:
             has_fiscal_number=False,
             capture=capture,
             field_bboxes=field_bboxes,
+            # ⛔ `file_region` STAYS `None`: this file holds one document. Several documents in one
+            # file is a separate relation and a separate step.
+            page_count=self.page_count,
+            page_regions=page_regions,
             # From the RENDERER, like the boxes: neither is decided by the content class, and both
             # describe the page that was produced from it.
             reference_text=reference_text,
@@ -2595,6 +2678,38 @@ def _draw_row_amount(rng: random.Random, low: Decimal, high: Decimal) -> Decimal
     return Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100
 
 
+def _statement_capacities(country: str = "UA") -> tuple[int, int, int]:
+    """How many operations fit on a sheet that is the whole statement, on the first sheet of a
+    paginated one, and on each sheet after that.
+
+    ⛔ THE CONTINUATION SHEET IS NOT AN OBSERVED ANATOMY. Only the first page of the one statement
+    was ever seen; the capacities are `bank_statement.pagination` in config/fiscal-rules.yaml, and
+    what a continuation sheet carries there is general layout of a paginated table.
+    """
+    block = jurisdiction(country)["bank_statement"]["pagination"]
+    return (
+        int(block["rows_single_sheet"]),
+        int(block["rows_first_page"]),
+        int(block["rows_continuation_page"]),
+    )
+
+
+def draw_statement_pages(rng: random.Random, country: str = "UA") -> int:
+    """How many sheets the next statement runs to — 1 or 2, at the declared share.
+
+    🔴 A COMPOSITION KNOB AND NOT A LABEL, which is why it reads config/generation.yaml and why it
+    is a function of its own rather than a draw buried in `build_bank_statement`. The assembler
+    calls it and passes the answer in, exactly as it draws the capture channel and passes that in:
+    how difficult a document is belongs to whoever is composing the run, and a builder that decided
+    it would leave every caller — including a test — unable to ask for either case.
+
+    ⛔ THREE SHEETS ARE NOT DRAWN, though `page_sheets` splits any number of rows. The second page
+    is what makes «one page = one document» falsifiable; a third would add paper and test nothing
+    the second does not.
+    """
+    return 2 if rng.random() < bank_statement_share("two_page") else 1
+
+
 def build_bank_statement(
     rng: random.Random,
     *,
@@ -2605,9 +2720,10 @@ def build_bank_statement(
     payer_tax_id: str,
     amount: Decimal | None = None,
     cites: DocumentReference | None = None,
+    pages: int = 1,
     country: str = "UA",
 ) -> BankStatement:
-    """Build one Ukrainian bank account statement, on one page.
+    """Build one Ukrainian bank account statement.
 
     ⚠️ `issued_at` IS THE MOMENT OF THE LABELLED TRANSACTION, not of the document. Every other
     archetype of this repository is a document about one payment, so the two coincide there and
@@ -2631,9 +2747,22 @@ def build_bank_statement(
     `amount` is the labelled transaction's amount, drawn when not given. It is a parameter for the
     reason the confirmation's `transfer` is one: a caller pairing this statement with an invoice
     has to be able to state the amount both documents describe.
+
+    `pages` IS HOW MANY SHEETS THE DOCUMENT RUNS TO, and it is a parameter for a third reason: it
+    is a composition decision, drawn by the assembler from `two_page_share` — see
+    `draw_statement_pages`. ⚠️ It reaches this function as a ROW COUNT and nothing else: which
+    range the operations are drawn from is the whole of what it changes, and how those rows then
+    fall across sheets is `BankStatement.page_sheets`, derived from the count. A page holds what
+    fits on it, so the two cannot disagree. DEFAULTING TO 1 is what keeps every existing caller —
+    and every figure already measured on this class — on the one-page document it was built for.
     """
     rules = jurisdiction(country)
     block = rules["bank_statement"]
+    if pages not in (1, 2):
+        raise ValueError(
+            f"a statement is built on one sheet or two, not {pages}: config/generation.yaml draws "
+            "a row count for each, and a third sheet has no range to draw from"
+        )
 
     if amount is None:
         amount = _draw_row_amount(rng, *bank_statement_money_range("transaction_amount"))
@@ -2652,8 +2781,11 @@ def build_bank_statement(
     period_start = issued_at.date() - timedelta(days=lead)
     period_end = issued_at.date() + timedelta(days=trail)
 
-    # -- how many operations, and how many of them arrive rather than leave
-    row_count = rng.randint(*bank_statement_count_range("row_count"))
+    # -- how many operations, and how many of them arrive rather than leave. The range is the one
+    # tuned against the sheets this document runs to — see `two_page_row_count_range`.
+    row_count = rng.randint(
+        *bank_statement_count_range("row_count" if pages == 1 else "two_page_row_count")
+    )
     # One row is the labelled transaction and one is the bank's own service charge; the rest are
     # ordinary payments. `max` keeps a short page from having no ordinary rows at all.
     ordinary = max(1, row_count - 2)

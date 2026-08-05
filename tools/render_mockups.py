@@ -8,12 +8,14 @@ none is registered in `claim_planner.ARCHETYPES`, none has a builder in
 `assembler._BUILDERS`, and none reaches a dataset. So there is no place in the pipeline for them,
 and inventing one would be a connection nobody has decided to make. See templates/README.md.
 
-⚠️ ONE MOCK-UP LEFT THIS SCRIPT BY BEING CONNECTED. `ua_non_fiscal_receipt` is registered, built
-by `content_builder.build_non_fiscal_receipt` and rendered by runs, so it is no longer something
-this script has any business drawing — a second, script-only way of building a shipped page would
-drift from the builder the moment either changed. Its Ukrainian strings went to
-`receipt.non_fiscal` in config/fiscal-rules.yaml, which is what the block below always said would
-happen to them.
+⚠️ TWO MOCK-UPS HAVE LEFT THIS SCRIPT BY BEING CONNECTED, and the rule is the same both times: a
+second, script-only way of building a shipped page drifts from the pipeline the moment either
+changes. `ua_non_fiscal_receipt` is registered, built by `content_builder.build_non_fiscal_receipt`
+and rendered by runs; its Ukrainian strings went to `receipt.non_fiscal` in
+config/fiscal-rules.yaml, which is what the block below always said would happen to them.
+`ua_claim_bundle` is now the composition template `assembler._compose_bundle` renders, at the
+share `file_composition.bundle_share` declares in config/generation.yaml — so the file it shows is
+one a run produces, and this script would only be photographing a second copy of it.
 
 THE OUTPUT GOES OUTSIDE THE REPOSITORY by default, for the same reason `out/` is gitignored:
 rendered images are not what this repository ships. `--out` overrides it, and a path inside
@@ -25,8 +27,8 @@ JSON beside the images. That is the boundary the branch was given: labels and bo
 the connection, not with the layout.
 
 DETERMINISM. One seed, one set of images. Every draw goes through the `random.Random` created
-here, and the documents built by shipped builders (`build_payment_confirmation`, `build_invoice`)
-take it as their generator, exactly as the assembler does.
+here, and the document built by a shipped builder (`build_payment_confirmation`) takes it as its
+generator, exactly as the assembler does.
 """
 
 from __future__ import annotations
@@ -35,7 +37,7 @@ import argparse
 import random
 import sys
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -45,7 +47,6 @@ from receipt_synth.config import (
     load_vendors,
 )
 from receipt_synth.content_builder import (
-    build_invoice,
     build_payment_confirmation,
     draw_party_identity,
     generate_edrpou,
@@ -59,16 +60,6 @@ DEFAULT_OUT = Path(tempfile.gettempdir()) / "receipt-synth-mockups"
 # The instant every mock-up is dated from. Fixed rather than "now": an image that changes with
 # the clock is one no second run reproduces, which is the property this repository is built on.
 ISSUED_AT = datetime(2026, 3, 17, 13, 52, 41)
-
-# 📄 An invoice is issued and then settled. How long that takes is not a fact any source here
-# states, so it is a fixed plausible gap rather than a draw: what the bundle needs is that the
-# payment is LATER than the invoice, which is a property of the pair and not of its length.
-SETTLEMENT_DELAY_DAYS = 4
-
-# How many confirmations the claim bundle may draw before one of them prints a purpose naming the
-# invoice. Two of the five configured purposes name no document, so a handful of draws is expected;
-# the bound is here so that a pool with no such purpose left fails by name instead of looping.
-_PURPOSE_DRAW_LIMIT = 40
 
 # ---------------------------------------------------------------------------
 # Ukrainian strings that have no home in config/ yet.
@@ -778,128 +769,6 @@ def ua_platform_receipt_context(rng: random.Random) -> dict:
     }
 
 
-def claim_bundle_context(rng: random.Random, renderer: Renderer, out_dir: Path) -> dict:
-    """One file holding TWO documents — an invoice and the confirmation that settled it.
-
-    🔴 THE OTHER HALF OF THE SEGMENTATION CONTROL. `ua_insurance_contract` puts one document
-    across several pages; this puts several documents in one file. A splitting step measured on a
-    corpus with only the first is still measured against a guarantee — every cut it needs is a cut
-    it never has to refuse.
-
-    🔴 NEITHER DOCUMENT IS REWRITTEN. Both are the shipped archetypes, built by the shipped
-    builders and rendered by the shipped renderer, written to disk and embedded as frames — the
-    route `ua_bank_receipt_in_app` takes, at the same cost and for the same reason.
-
-    THE TWO ARE ONE CLAIM BY CONSTRUCTION, not by coincidence. Five things tie them:
-
-      * ONE VENDOR INSTANCE, resolved once and passed to both, so two documents cannot name two
-        firms — the constraint `resolve_vendor` exists to enforce;
-      * ONE `PartyIdentity`, drawn once and passed to both, so the two cannot name that one firm by
-        two tax codes and two accounts;
-      * one buyer, named identically on both;
-      * THE INVOICE'S OWN TOTAL handed to the confirmation as its transfer, which is the order the
-        assembler uses: the document that lists the purchase fixes the money, and the payment
-        document is told what it settles;
-      * the confirmation dated AFTER the invoice, because an invoice is issued and then settled;
-      * the invoice's own reference handed to the confirmation, so the payment purpose names the
-        invoice on the previous page.
-
-    🔴 TWO OF THOSE FIVE USED TO BE OVERRIDDEN HERE BY HAND, and this function is why they no
-    longer are. Rendering the pair on one sheet is what made the divergence visible — the two pages
-    printed one firm under two ЄДРПОУ — and the mock-up then patched the payment purpose in this
-    file so that at least the reference would agree. A fixture that repairs by hand what the
-    builders get wrong is the defect it was meant to expose: it reports a link the shipped
-    generator does not produce, and every eye that checks the picture is spent confirming the
-    patch. Both facts now come from the builders, so this page shows what a run shows. See
-    docs/cross-document-fields.md, and templates/README.md for what the broken pair looked like.
-    """
-    vendor = resolve_vendor(
-        rng,
-        next(
-            entry
-            for entry in load_vendors()["vendors"]["UA"]["professional_development"]
-            if entry.get("profile") == "training_centre" and "name" in entry
-        ),
-        "UA",
-    )
-    buyer = {"name": UA_BUYER["name"], "tax_id": "2345678901"}
-    identity = draw_party_identity(rng, vendor, "UA")
-
-    invoice = build_invoice(
-        rng,
-        category_id="professional_development",
-        issued_at=ISSUED_AT,
-        vendor=vendor,
-        identity=identity,
-        buyer_name=buyer["name"],
-        buyer_tax_id=buyer["tax_id"],
-    )
-    # 📄 An invoice is issued and then settled, so the payment is later. Days rather than minutes:
-    # a claimant pays an invoice on a different day, and two documents timestamped a minute apart
-    # would be a pair no claim produces.
-    settled_at = ISSUED_AT + timedelta(days=SETTLEMENT_DELAY_DAYS)
-    # `initiation="transfer"` rather than a draw: it is the mode that prints a purpose AND names
-    # the payer, and a bundle whose second page states neither shows nothing about the link the
-    # archetype exists to pose. Pinning it here is a choice about what the MOCK-UP shows; the
-    # corpus keeps drawing all three.
-    #
-    # 🔴 AND THE PURPOSE IS REDRAWN UNTIL IT NAMES A DOCUMENT — not edited afterwards. Two of the
-    # configured purposes name no document at all, which is deliberate and is a real part of the
-    # corpus, but a bundle drawing one of them shows a pair with nothing tying its pages. The
-    # difference from what this function used to do is the whole point: the NUMBER still comes from
-    # `invoice.reference` through the builder, so the page cannot say something a run could not.
-    # What is chosen here is which of the configured cases to photograph.
-    for _ in range(_PURPOSE_DRAW_LIMIT):
-        confirmation = build_payment_confirmation(
-            rng,
-            issued_at=settled_at,
-            vendor=vendor,
-            identity=identity,
-            payer_name=buyer["name"],
-            payer_tax_id=buyer["tax_id"],
-            amount=invoice.total,
-            initiation="transfer",
-            cites=invoice.reference,
-        )
-        if invoice.number in (confirmation.purpose or ""):
-            break
-    else:
-        raise RuntimeError(
-            f"no confirmation in {_PURPOSE_DRAW_LIMIT} draws printed a purpose naming the "
-            "invoice; check that config/generation.yaml still holds a purpose with {invoice_no}"
-        )
-
-    invoice_context = invoice.render_context()
-    confirmation_context = confirmation.render_context()
-
-    sheets = []
-    for slug, page, context in (
-        ("ua_invoice", "page1_invoice", invoice_context),
-        ("ua_bank_payment_confirmation", "page2_confirmation", confirmation_context),
-    ):
-        document_path = out_dir / f"ua_claim_bundle.{page}.html"
-        document_path.write_text(renderer.build_html(slug, context), encoding="utf-8")
-        # RENDERED SEPARATELY AS WELL, and not only to be measured: the two singles beside the
-        # bundle are what a reader compares it against — the file, and the documents it is made
-        # of, which is the whole question a splitting step is asked.
-        rendered = renderer.render(slug, context, out_dir / f"ua_claim_bundle.{page}.png")
-        sheets.append(
-            {
-                "url": document_path.as_uri(),
-                "title": slug,
-                "width": rendered.width,
-                "height": rendered.height,
-            }
-        )
-
-    print(
-        f"  note: the bundle is {len(sheets)} documents in one file — invoice "
-        f"{invoice.number} for {_amount(invoice.total)} UAH and the confirmation that settles "
-        "it. NOTHING ON THE FILE SAYS THEY ARE TWO."
-    )
-    return {"sheets": sheets, "qr_payload": None}
-
-
 def _report_conversion(eur_total: Decimal) -> None:
     """State the conversion the corpus cannot show, and say where the rate came from.
 
@@ -925,7 +794,7 @@ def _report_conversion(eur_total: Decimal) -> None:
 
 
 def render_all(out_dir: Path, seed: int) -> list[Path]:
-    """Render every mock-up, and the two extra pages two of them are made of. Returns what was
+    """Render every mock-up, and the extra page one of them is made of. Returns what was
     written."""
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -943,7 +812,6 @@ def render_all(out_dir: Path, seed: int) -> list[Path]:
             ("eu_platform_receipt", lambda: eu_platform_receipt_context(rng)),
             ("ua_platform_receipt", lambda: ua_platform_receipt_context(rng)),
             ("ua_insurance_contract", lambda: insurance_contract_context(rng)),
-            ("ua_claim_bundle", lambda: claim_bundle_context(rng, renderer, out_dir)),
         ):
             context = build_context()
             # Keys the run needs and no template prints. Popped rather than left for Jinja to

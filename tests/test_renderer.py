@@ -489,6 +489,14 @@ def test_boxes_are_whole_pixels(rendered):
         assert all(float(value).is_integer() for value in box)
 
 
+def test_a_template_with_no_data_region_markers_yields_an_empty_dict(rendered):
+    """`region_bboxes` is collected in the same pass as `field_bboxes` — see
+    test_render_regions.py for the geometry itself. No template registered today marks a
+    `[data-region]`, so every existing render must keep reporting an empty dict rather than
+    a missing attribute, which is what makes this change safe for every existing call site."""
+    assert rendered.region_bboxes == {}
+
+
 def test_indexed_fields_follow_the_line_items(renderer, tmp_path):
     """One set of boxes per line item, ordered down the page — so a consumer can pair
     box i with line item i without matching text."""

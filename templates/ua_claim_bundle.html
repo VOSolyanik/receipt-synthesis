@@ -1,41 +1,53 @@
 {#
-  ONE FILE, TWO DOCUMENTS — an invoice and the bank confirmation that settled it, stitched into
-  one multi-page file the way a claimant submits them.
+  ONE FILE, TWO DOCUMENTS — the documents of one claim, stitched into a single file the way a
+  claimant submits them.
 
-  ⚠️ A MOCK-UP, on the same terms as the others here: not registered in `ARCHETYPES`, no builder,
-  no run, and NO `data-field` attributes — the renderer collects no bounding box from it and
-  nothing here becomes a label. See templates/README.md.
+  A COMPOSITION TEMPLATE AND NOT A DOCUMENT CLASS, which is the whole of what distinguishes it
+  from every other file here. It is not registered in `ARCHETYPES`, nothing plans it, no builder
+  produces it and no label names it — because it is not a document: it is the FILE two documents
+  are carried in. `assembler._compose_bundle` renders it, from the clean renders of the documents
+  themselves; see `assembler.documents_share_one_file` for when.
 
-  🔴 THE OTHER HALF OF THE SEGMENTATION CONTROL. `ua_insurance_contract` breaks «one page = one
-  document» in one direction: one document across three pages. This breaks it in the other: two
+  ⚠️ IT WAS A MOCK-UP AND IS NOT ONE ANY MORE. What it demonstrated by hand — that a segmentation
+  step needs a file whose contents it has to disagree with — the corpus now contains: a share of
+  eligible claims declared in `file_composition.bundle_share` (config/generation.yaml) arrives as
+  one of these.
+
+  NO `data-field` MARKERS, and their absence is structural rather than an omission. The fields of
+  a bundled document are inside the embedded image, and their boxes come from THAT document's own
+  render, offset into this file's coordinates by its region's origin. A marker here would add a
+  second, empty box under a name the document already uses.
+
+  🔴 THE OTHER HALF OF THE SEGMENTATION CONTROL. `ua_bank_statement` breaks «one page = one
+  document» in one direction: one document across two sheets. This breaks it in the other: two
   documents in one file. A file-splitting step measured on a corpus containing only the first
   would still be scoring against a guarantee — every cut it needs to make would be a cut it never
   has to refuse. Both directions or neither.
 
-  👁 AND IT IS AN OBSERVED PATTERN RATHER THAN A HYPOTHESIS: claimants really do staple the
-  documents of one claim into a single PDF before submitting them.
+  ⚠️ AND THE SHAPE IS A JUDGEMENT RATHER THAN AN OBSERVATION. 👁 Zero of the author's own 87 files
+  holds more than one document, so this file realizes a case the observed set does not contain.
+  The argument for it is about the SUBMISSION rather than about the document: a channel that takes
+  one file per claim, while a claim needs both a subject document and a payment document, makes
+  stitching the two the ordinary way to file it. The practitioner observation behind that — that
+  colleagues combine files before sending them — is the recorded rationale and not evidence of an
+  artifact. The honest number sits beside the share in config/generation.yaml, and the contract
+  says the same at `file_region.what_may_share_a_file`.
 
-  🔴 THE STITCHING ADDS NOTHING, AND THAT IS THE WHOLE DIFFICULTY. Compare the contract: it
-  numbers its own pages, repeats its own number on each of them, and carries a running head — the
-  document tells you which pages belong together. Here there is no cover page, no continuous
-  pagination, no unifying header, and no page numbering across the file. Each page carries only
-  its own document's marks, and **nothing on the file says the two are different documents**. A
-  segmenter has nothing to key on but the documents themselves.
+  ⛔ DOCUMENTS OF ONE CLAIM ONLY. A file holding documents of DIFFERENT claims is a shape this
+  generator does not produce, deliberately; the reason is at the bundling site.
 
-  🔴 NEITHER BODY IS REWRITTEN OR COPIED. The two sheets hold `ua_invoice` and
-  `ua_bank_payment_confirmation` — the shipped templates, rendered from the shipped builders'
-  contexts by the shipped renderer, written to disk and embedded as frames. The same route
-  `ua_bank_receipt_in_app` takes, for the same reason and at the same cost: connecting this means
-  the renderer learns to render documents inside another one. What it buys is that the pages of
-  this file ARE the documents the dataset already contains, so a segmentation result on it is a
-  result about those documents rather than about two files written to resemble them.
+  🔴 THE STITCHING ADDS NOTHING, AND THAT IS THE WHOLE DIFFICULTY. Compare a paginated statement:
+  it repeats its own column headings and prints «Сторінка N з M», so the document tells you which
+  sheets belong together. Here there is no cover page, no continuous pagination, no unifying
+  header and no page numbering across the file. Each sheet carries only its own document's marks,
+  and **nothing on the file says the two are different documents**. A segmenter has nothing to key
+  on but the documents themselves.
 
-  THE TWO PAGES ARE ONE CLAIM, and the render script links them rather than hoping they agree:
-  one vendor instance, one buyer, the invoice's own total handed to the confirmation as the
-  transfer, the confirmation dated after the invoice, and the invoice's real number and date
-  written into the payment purpose. That last one is the LINK — the thing a cross-document check
-  keys on — and without the override the builder would have drawn an invoice number naming no
-  document in the file.
+  🔴 NEITHER BODY IS REWRITTEN OR COPIED. Each sheet is the PNG of a shipped archetype, rendered
+  from a shipped builder's context by the same renderer, embedded at its natural size. What that
+  buys is that the pages of this file ARE the documents the dataset already contains, so a
+  segmentation result on it is a result about those documents rather than about two images written
+  to resemble them.
 #}
 <!DOCTYPE html>
 <html lang="uk">
@@ -61,10 +73,18 @@
 
   {% for sheet in sheets %}
   <section class="sheet">
-    {# Rendered at its own width, which is the file's width: both classes are A4 at 96 dpi, so
-       nothing is scaled and the pages are the documents at their own size. #}
-    <iframe class="doc" src="{{ sheet.url }}" title="{{ sheet.title }}"
-            style="width: {{ sheet.width }}px; height: {{ sheet.height }}px;"></iframe>
+    {# `data-region` ON THE IMAGE ITSELF and not on the sheet around it: the region IS the
+       document's rectangle, and a sheet is as wide as the file while a document need not be.
+       The width and height attributes are the document's own pixel size — 🔴 the embedding is
+       1:1, checked after the render by `assembler._compose_bundle`, because every coordinate of
+       every bundled label is a per-document coordinate plus this box's origin.
+
+       `alt` IS EMPTY ON PURPOSE. A browser paints the alternative text where an image fails to
+       load, and that text would then be picked up by the renderer's `reference_text` — a line of
+       ground truth describing a sheet that is not in the picture. The document's own text is
+       recorded from its own render, so there is nothing for this attribute to carry. #}
+    <img class="doc" data-region="{{ sheet.region }}" src="{{ sheet.url }}" alt=""
+         width="{{ sheet.width }}" height="{{ sheet.height }}">
   </section>
   {% endfor %}
 

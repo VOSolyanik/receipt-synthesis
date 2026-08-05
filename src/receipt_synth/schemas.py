@@ -18,7 +18,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, computed_field
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, computed_field, model_validator
 
 from receipt_synth import __version__
 
@@ -400,6 +400,26 @@ class DocGroundTruth(BaseModel):
     has_fiscal_number: bool
 
     capture: Capture
+
+    # WHERE THIS DOCUMENT SITS INSIDE `source_file` — same pixel space and `[x, y, width,
+    # height]` convention as `field_bboxes`. `None` means the document IS the whole file, which
+    # is 🔴 today's only path and MUST STAY THE DEFAULT: every existing call site constructs a
+    # record without this field, and each one describes a file holding exactly one document.
+    # Non-`None` is the segmentation ground truth for a document that shares its file with others
+    # — independent of `page_count` below, so the two may be set together.
+    file_region: BBox | None = None
+    # Number of pages OF THIS DOCUMENT inside `source_file` — not of the file, which may hold
+    # more documents again. One unless stated otherwise; see `page_regions` for where each page
+    # is.
+    page_count: int = 1
+    # One rectangle per page of THIS document, in reading order, same pixel space as
+    # `field_bboxes`. Present exactly when `page_count > 1`, with one entry per page; `None` when
+    # `page_count == 1`, because a single page has nothing for a list of regions to add over
+    # `file_region` (or over "the whole file", where `file_region` is itself `None`). Enforced by
+    # `_page_count_and_regions_agree` below rather than left for a consumer to notice a length
+    # mismatch downstream.
+    page_regions: list[BBox] | None = None
+
     field_bboxes: dict[str, BBox] = Field(default_factory=dict)
     # 🔴 EVERY PRINTED CHARACTER OF THE PAGE, IN READING ORDER, taken from the layout engine BEFORE
     # rasterization — so it is ground truth by construction rather than by annotation, exactly as
@@ -466,6 +486,28 @@ class DocGroundTruth(BaseModel):
         if self.content_bbox is None:
             return None
         return not self.content_lost_edges
+
+    @model_validator(mode="after")
+    def _page_count_and_regions_agree(self) -> DocGroundTruth:
+        """`page_regions` exists exactly when there is more than one page to point at.
+
+        A single page has `file_region` (possibly `None`) to say where the WHOLE document is;
+        a list of one region there would say the same thing a second way, so `page_count == 1`
+        requires `page_regions is None` rather than tolerating a redundant singleton list.
+        """
+        if self.page_count > 1:
+            if self.page_regions is None or len(self.page_regions) != self.page_count:
+                got = "None" if self.page_regions is None else len(self.page_regions)
+                raise ValueError(
+                    f"page_count={self.page_count} requires page_regions with exactly that many "
+                    f"entries, got {got}"
+                )
+        elif self.page_regions is not None:
+            raise ValueError(
+                f"page_count={self.page_count} means one page, so page_regions must be None, "
+                f"got {len(self.page_regions)} entries"
+            )
+        return self
 
 
 class ClaimGroundTruth(BaseModel):

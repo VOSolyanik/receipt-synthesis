@@ -67,6 +67,12 @@ class RenderedDocument:
     width: int
     height: int
     field_bboxes: dict[str, BBox]
+    # One box per `[data-region]` element, keyed by the attribute's value — EMPTY on every
+    # template today, none of which mark one. Collected in the SAME pass as `field_bboxes` (see
+    # `_COLLECT_BBOXES`) rather than a second page evaluation, and with the same rounding
+    # convention. Nothing draws a multi-document file yet; this is the geometry a later stage
+    # needs once a template starts marking more than one document's rectangle on a page.
+    region_bboxes: dict[str, BBox]
     # The page's text in reading order, taken from the layout engine BEFORE rasterization — so it
     # is ground truth by construction rather than by annotation. See `_COLLECT_TEXT`.
     reference_text: str
@@ -143,15 +149,35 @@ _COLLECT_TEXT = """
 # equal page coordinates because the renderer never scrolls and sizes the viewport to the
 # whole document first. Rounded to whole pixels: a box is an index into an image, and a
 # fractional pixel index means nothing to a consumer.
+#
+# ONE PASS COLLECTS BOTH `[data-field]` AND `[data-region]` BOXES, rather than a second page
+# evaluation for the region markers — the same layout, read once.
+#
+# 🔴 BOTH COME BACK AS A LIST OF PAIRS RATHER THAN AN OBJECT, and for both the reason is the same:
+# `Object.fromEntries` on a duplicate key keeps only the last write, silently, leaving a label
+# whose box points at another element's ink. A repeat has to survive the crossing to be refused on
+# the Python side (`_unique_boxes`), which it cannot do once an object has collapsed it.
 _COLLECT_BBOXES = """
-() => Object.fromEntries(
-  [...document.querySelectorAll('[data-field]')].map(el => {
+() => {
+  const box = (el) => {
     const r = el.getBoundingClientRect();
-    return [el.dataset.field, [
-      Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height),
-    ]];
-  })
-)
+    return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
+  };
+  return {
+    fields: [...document.querySelectorAll('[data-field]')].map(
+      el => [el.dataset.field, box(el)]
+    ),
+    regions: [...document.querySelectorAll('[data-region]')].map(
+      el => [el.dataset.region, box(el)]
+    ),
+    // THE BASENAME ONLY, NEVER THE PATH — `el.src` is an absolute file:// URL, and what
+    // crosses into Python is the file's name so that an exception can say which picture is
+    // missing without printing where this machine keeps it.
+    broken_images: [...document.querySelectorAll('img')]
+      .filter(el => !(el.complete && el.naturalWidth > 0))
+      .map(el => el.src.split('?')[0].split('/').pop()),
+  };
+}
 """
 
 
@@ -226,9 +252,10 @@ class Renderer:
                 page_path.write_text(html, encoding="utf-8")
                 page.goto(page_path.as_uri())
                 width, height = _fit_viewport_to_content(page)
-                bboxes = {
-                    name: tuple(box) for name, box in page.evaluate(_COLLECT_BBOXES).items()
-                }
+                collected = page.evaluate(_COLLECT_BBOXES)
+                _refuse_unloaded_images(collected["broken_images"])
+                bboxes = _unique_boxes(collected["fields"], attribute="data-field")
+                region_bboxes = _unique_boxes(collected["regions"], attribute="data-region")
                 # Read BEFORE the screenshot, from the same page state. The order matters only in
                 # that nothing may change between them; there is no scrolling or animation here, so
                 # both describe one layout.
@@ -242,9 +269,66 @@ class Renderer:
             width=width,
             height=height,
             field_bboxes=bboxes,
+            region_bboxes=region_bboxes,
             reference_text=content["text"],
             content_bbox=tuple(content["bbox"]),
         )
+
+
+def _refuse_unloaded_images(basenames: list[str]) -> None:
+    """Stop the render when a picture the page asked for is not in it.
+
+    🔴 THE ONE FAILURE THAT LOOKS LIKE A SUCCESS. Only a composition template embeds an image
+    (`ua_claim_bundle`), and its `alt` is empty on purpose, so an image that does not load paints
+    nothing at all: the sheet comes out blank, every box around it is collected as usual, and the
+    label goes on asserting a document that is not in the pixels. Nothing downstream can notice —
+    the geometry is plausible, the region is where it was meant to be, and the run finishes. A
+    corpus can therefore be corrupted wholesale by one unreadable path, which is why this is a
+    refusal at the source rather than a check somebody remembers to run afterwards.
+
+    `complete && naturalWidth > 0` IS THE TEST BECAUSE `complete` ALONE IS NOT: it is true for a
+    finished attempt whether the attempt succeeded or failed, and a failed decode reports a natural
+    width of zero. Read after `_fit_viewport_to_content`, which waits for the network to go idle,
+    so an image still in flight is not mistaken for one that failed.
+
+    ⛔ THE MESSAGE CARRIES BASENAMES AND NO PATH. What it names has to be enough to find the file
+    and not enough to describe the machine; an absolute path in an exception is an absolute path in
+    whatever log catches it, and this repository's redaction gate holds for what it prints too.
+    """
+    if basenames:
+        raise ValueError(
+            f"image(s) that did not load: {sorted(set(basenames))} — the page rendered a blank "
+            "where each of them should be, and its label would describe a document the picture "
+            "does not hold"
+        )
+
+
+def _unique_boxes(pairs: list[list], *, attribute: str) -> dict[str, BBox]:
+    """Marked boxes keyed by attribute value — refusing a duplicate key rather than letting one
+    silently overwrite another.
+
+    Takes the pairs as JavaScript returned them (a list, not an object) precisely so a repeat
+    survives to be checked here: an `Object.fromEntries` on the JavaScript side would already
+    have collapsed it to whichever element came last, with nothing left to detect.
+
+    🔴 ONE FUNCTION FOR `data-field` AND `data-region` BECAUSE IT IS ONE RULE. A name is what a
+    label points with, at either level, and the failure a repeat produces is identical: a box that
+    belongs to one element filed under a name another element also answers to. The attribute is a
+    parameter so the sentence names the marker the template author actually wrote.
+
+    ⚠️ THE SCOPE IS ONE RENDER AND NOT THE CORPUS. Two documents of one file may of course print
+    the same field name — both an invoice and its payment carry `amount` — but they are rendered
+    separately and merged under per-document prefixes (`assembler._IN_DOCUMENT_KEY`), so no such
+    pair ever reaches this function.
+    """
+    names = [name for name, _ in pairs]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise ValueError(
+            f"duplicate {attribute} value(s): {duplicates} — every {attribute} must be unique "
+            "within one render"
+        )
+    return {name: tuple(box) for name, box in pairs}
 
 
 def _fit_viewport_to_content(page: Page) -> tuple[int, int]:

@@ -299,6 +299,9 @@ These are the most valuable examples in the dataset.
   "qr_is_fiscal": false,
   "has_fiscal_number": true,
   "capture": "photo",
+  "file_region": null,
+  "page_count": 1,
+  "page_regions": null,
   "field_bboxes": { "amount": [0, 0, 0, 0], "date": [0, 0, 0, 0] },
   "reference_text": "…every printed character of the page, in reading order…",
   "content_bbox": [0, 0, 0, 0],
@@ -309,6 +312,21 @@ These are the most valuable examples in the dataset.
   "content_complete": true
 }
 ```
+
+**A file usually holds one document, and sometimes holds a claim's two.** `source_file` is the image this
+record describes; where it is the only document in it, `file_region` is `null` and every box is in the image's
+own coordinates. At the share `file_composition.bundle_share` declares in `config/generation.yaml`, the
+documents of one claim arrive stitched into a single file instead — the way a claimant staples them before
+submitting — and then both records name that one file, `file_region` says where each document sits in it, and
+`field_bboxes`, `content_bbox` and `page_regions` are in the file's coordinates. Nothing on such a file says
+that its sheets are two different documents, which is what makes splitting it a real problem: the only mark
+the stitching leaves is the gap between the sheets. ⛔ **Documents of *different* claims never share a file.**
+A claim is the unit a verdict is reached on, so a file spanning two claims would be evidence for two answers
+at once, and no relation in the schema could say which part of the image belongs to which claim's label.
+
+`page_count` and `page_regions` are the independent relation — how many sheets *this document* runs to, and
+where each of them is. The two combine: a two-sheet statement bundled with the invoice it settles carries
+both.
 
 Every record carries `synthetic: true` and the generator version. This is not decoration — it is what makes
 the provenance of any individual file unambiguous once it leaves this repository.
@@ -649,7 +667,7 @@ reimbursement* above.
 | 5–7 | Payment-service receipts (three providers) | `payment_confirmation` | Payment-gateway layouts |
 | 8 | Software cash register receipt (ПРРО) — QR, `ФН ПРРО`, VAT letters; **two templates, 80 mm and 58 mm** | `fiscal_receipt` | Modern fiscal document |
 | 9 | Classic hardware cash register receipt (РРО), 80 mm — `ЗН` beside `ФН`, sequential number | `fiscal_receipt` | Register diversity |
-| 10 | Account statement, A4 landscape — **one page, 15–25 operations, one of them labelled** | `bank_statement` | The statement class |
+| 10 | Account statement, A4 landscape — 15–25 operations on one sheet, one of them labelled; **and, at a declared share, 28–45 operations across two sheets in one file** | `bank_statement` | The statement class; the multi-page case |
 | 11 | Sole-trader invoice for services | `invoice` | The invoice class |
 | 12 | Sales slip (товарний чек) — «ТОВАРНИЙ ЧЕК» where the fiscal wording stands, and **no** fiscal number, serial, maker, mode marker or QR | `non_fiscal_receipt` | Fiscality trap; proves the subject, not the payment |
 | 13 | Non-fiscal POS slip — RRN and auth code, no fiscal number | trap | Fiscality trap |
