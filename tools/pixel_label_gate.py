@@ -226,9 +226,25 @@ def _grey(image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
 
 
-# How much darker than the paper a pixel has to be to count as a mark. Read against the crop's OWN
-# median rather than against white, because a photographed page carries a lighting gradient and a
-# shadow: the paper inside one box is grey, and a fixed threshold would call a whole box ink.
+# How far from the paper a pixel has to be to count as a mark. Read against the crop's OWN median
+# rather than against white, because a photographed page carries a lighting gradient and a shadow:
+# the paper inside one box is grey, and a fixed threshold would call a whole box ink.
+#
+# ⚠️ IT IS A FIXED DISTANCE ALL THE SAME, AND THAT IS THE INSTRUMENT'S KNOWN LIMIT. On a photograph
+# whose shadow falls across a requisite the WHOLE crop can span 37 grey levels — the digits stay
+# legible to a reader, and their distance from the local paper is under this threshold, so the box
+# goes unmeasured. Measured: 2 boxes of 1580 on one seed, both of them a tax code under a cast
+# shadow. They are counted under `survival: no marks in the reference` and printed, so the gap is a
+# number in the report rather than a silence; a threshold derived from each crop's own dynamic range
+# would close it and would re-open the calibration above, which is why it is recorded rather than
+# tuned here.
+#
+# 🔴 AND IN EITHER DIRECTION, WHICH THE FIRST VERSION GOT WRONG AND THE COVERAGE REPORT CAUGHT. Two
+# archetypes of this corpus are banking-app screens in a DARK theme — light text on a dark panel —
+# so "darker than the paper" found no marks in any of their boxes and nine of them went unmeasured
+# on a single seed. They were counted and printed rather than passed over, which is the only reason
+# the gap was visible at all; a gate that had reported them as clean would have been silent about
+# two whole archetypes.
 _INK_CONTRAST = 25
 
 
@@ -243,7 +259,7 @@ def _ink_template(reference: np.ndarray) -> np.ndarray | None:
     mark.
     """
     paper = float(np.median(reference))
-    marks = np.argwhere(reference < paper - _INK_CONTRAST)
+    marks = np.argwhere(np.abs(reference.astype(np.int16) - paper) > _INK_CONTRAST)
     if marks.size == 0:
         return None
     (top, left), (bottom, right) = marks.min(axis=0), marks.max(axis=0)
