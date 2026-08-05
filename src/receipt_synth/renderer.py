@@ -237,10 +237,25 @@ class Renderer:
 
     def render(self, template_name: str, context: dict, output_path: Path) -> RenderedDocument:
         """Render one document to a PNG and return the bounding box of every field."""
+        return self.render_html(
+            self.build_html(template_name, context), output_path, name=template_name
+        )
+
+    def render_html(self, html: str, output_path: Path, *, name: str = "page") -> RenderedDocument:
+        """Render a page that is already HTML — the same capture pass `render` performs.
+
+        Public for the same reason `build_html` is, and for one more. The pixel↔label gate
+        (`tools/pixel_label_gate.py`) renders a page it EDITED: it substitutes characters inside a
+        labelled element and asks which pixels moved. Going back through a re-built context would
+        re-run the layout, and a re-run layout cannot tell "this box shows this value" from "this
+        box moved" — the edit has to happen downstream of the template and upstream of the browser,
+        which is exactly here.
+
+        `name` names the temporary file only, and so appears in nothing the caller receives.
+        """
         if self._browser is None:
             raise RuntimeError("Renderer must be used as a context manager")
 
-        html = self.build_html(template_name, context)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         page = self._browser.new_page(device_scale_factor=1)
@@ -248,7 +263,7 @@ class Renderer:
             # Written to a file rather than injected: the @font-face rules point at
             # file:// URLs, which a page served from about:blank is not allowed to fetch.
             with tempfile.TemporaryDirectory() as tmp:
-                page_path = Path(tmp) / f"{template_name}.html"
+                page_path = Path(tmp) / f"{name}.html"
                 page_path.write_text(html, encoding="utf-8")
                 page.goto(page_path.as_uri())
                 width, height = _fit_viewport_to_content(page)
