@@ -786,9 +786,9 @@ def _render_document(
             # explained.
             basket |= {"buyer_name": persona.full_name, "buyer_tax_id": persona.tax_id}
         if archetype.doc_type in _PRINTS_A_TERM_BOUND_BY_THE_PAYMENT:
-            # 🔴 `plan.issued_at` AND NOT `document_plan.issued_at`: the claim's date is the date its
-            # money moved (see `ClaimPlan`), while this document's own date is when the offer was
-            # drawn up. The term is about the first and printed on the second.
+            # 🔴 `plan.issued_at` AND NOT `document_plan.issued_at`: the claim's date is the date
+            # its money moved (see `ClaimPlan`), while this document's own date is when the offer
+            # was drawn up. The term is about the first and printed on the second.
             basket |= {"settled_at": plan.issued_at}
         if archetype.doc_type in _CAPTURE_SHAPES_A_REQUISITE:
             # 🔴 THE CAPTURE CHANNEL REACHES THE BUILDER, not only the degrader. 👁 The VAT summary

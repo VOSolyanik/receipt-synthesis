@@ -385,8 +385,8 @@ def test_a_printed_offer_still_stands_on_the_day_the_claim_settles_it():
     outruns = sum((lead_days - days) / (lead_days + 1) for days in window) / len(window)
     visible = invoice_share("validity") * outruns
     assert visible > 0, "the mutation could never show and this test would be a tautology"
-    # ⚠️ THE RATE ABOVE IS AN AVERAGE OVER THE LEAD, so the sweep has to CONTAIN the whole lead range
-    # or the rate it actually samples is a different one. Measured the hard way: sized at the 13 runs
+    # ⚠️ THE RATE ABOVE IS AN AVERAGE OVER THE LEAD, so the sweep has to CONTAIN the whole lead
+    # range or the rate it samples is a different one. Measured the hard way: sized at the 13 runs
     # the rate alone asks for, one lead each, the sweep only ever reached a 12-day lead — under the
     # smallest drawable window on most of them — and the mutation SURVIVED. The count is therefore
     # the larger of the two demands.

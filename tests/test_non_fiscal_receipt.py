@@ -232,6 +232,55 @@ def test_the_money_on_the_page_is_the_money_in_the_label():
     assert document.total == line_items_total(document.line_items)
 
 
+@pytest.mark.parametrize("seed", range(6))
+def test_the_amount_column_is_one_column(seed, tmp_path_factory):
+    """🔴 THE CHECK THAT DID NOT EXIST WHEN AN OUTSIDE READER REPORTED THE AMOUNTS AS STANDING IN
+    THE WRONG COLUMNS OF THIS ARCHETYPE. Nothing in the suite read a coordinate off this template:
+    every other assertion in this file is about what the page SAYS, and a money column that had
+    drifted would say all the same things.
+
+    WHAT A COLUMN IS, HERE. 📄 The form this class follows prints one amount column, flush right,
+    and 👁 an amount on a thermal roll is right-aligned against the paper's edge. So every line total
+    and every line of the totals block must END at one x — the `qty × price` group is inline text on
+    the left of its own row and is not part of that column. A shift of a cell into a neighbouring
+    column, of the kind reported, breaks this by construction: the moved amount ends where its
+    neighbour's column ends.
+
+    ⚠️ A PIXEL OF SLACK AND NO MORE: a bold row's advance width rounds a coordinate up one column on
+    some seeds, which is `font-weight` and not a layout. Anything wider is a column.
+
+    ⛔ WHAT IT CANNOT SEE, established by running both mutations rather than reasoned about. A
+    `margin-right` on the line-total cell moves the box and is caught (570 against 610). A
+    `padding-right` of the same size moves the INK and leaves the box where it was — and this test
+    passes, because it reads boxes. That case is not a defect of the label: the promised rectangle
+    still contains the value, so a consumer cropping it still reads the amount. What WOULD be a
+    defect is a box with no marks in it at all, and that is the pixel gate's question
+    (`tools/pixel_label_gate.py`), not this one's.
+    """
+    document = make(seed=seed, item_count=4)
+    output = tmp_path_factory.mktemp("columns") / f"nf{seed}.png"
+    with Renderer() as renderer:
+        rendered = renderer.render(SLUG, document.render_context(), output)
+
+    column = {
+        name: box[0] + box[2]
+        for name, box in rendered.field_bboxes.items()
+        if name.endswith("_sum") or name in ("total", "discount", "rounding", "amount_due",
+                                             "paid_amount")
+    }
+    # The denominator is the document's own: one box per line total, plus the four lines of the
+    # totals block and the payment row. A count derived from the render would let a template that
+    # stopped printing a row pass by shrinking the comparison.
+    expected = len(document.line_items) + 5
+    assert len(column) == expected, (
+        f"{len(column)} amount boxes against {expected} the document has lines for: "
+        f"{sorted(column)}"
+    )
+    assert max(column.values()) - min(column.values()) <= 1, (
+        f"the amounts do not share one right edge: {sorted(column.items(), key=lambda kv: kv[1])}"
+    )
+
+
 def test_the_payment_method_is_cash():
     """🔴 THE FIRST DOCUMENT OF THE CORPUS TO PRINT «ГОТІВКА», and it is a consequence rather than
     a preference: 📄 a card sale is a settlement operation that obliges the seller to use a

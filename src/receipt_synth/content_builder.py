@@ -3448,9 +3448,9 @@ def build_invoice(
     lapsed is not the obligation the payment discharged: a seller reissues a lapsed invoice rather
     than banking against it. Measured over eight seeds before this parameter existed: of 490
     invoices, 182 printed the line and 100 of those were paid later than the date they printed — 27
-    of them on claims the label calls `covered`. Nothing in policy.yaml reads the line, so no verdict
-    moved and nothing noticed; a consumer that learned to read it would have rejected those claims
-    and been right, which makes it a defect of this generator rather than noise.
+    of them on claims the label calls `covered`. Nothing in policy.yaml reads the line, so no
+    verdict moved and nothing noticed; a consumer that learned to read it would have rejected those
+    claims and been right, which makes it a defect of this generator rather than noise.
 
     `None` is for a document with no settlement to respect — a builder called directly, and the
     mock-ups — and then the drawn window is the whole of the span.
