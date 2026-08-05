@@ -1269,7 +1269,9 @@ def _draw_basket(
     `covered_only` is the label-first knob: the planner has already chosen the verdict, and the
     builder realizes it. For `covered` the basket is drawn from the category's covered items
     alone; for `partially_covered` by `mixed_items` the caller clears the flag and states the
-    `coverage_target` the basket should come to.
+    `coverage_target` the basket should come to; for the zero-coverage route to `rejected` the
+    caller states a target of exactly ZERO and every line comes from `excluded_items` — the
+    mirror of `covered_only`, and the branch that used to be refused while nothing could plan it.
 
     `document` names the class in the length message and changes nothing else — "a receipt
     carries 1 to 20 lines" is what a caller of that builder needs to read, and the bound itself
@@ -1310,9 +1312,29 @@ def _draw_basket(
             "a mixed basket needs the coverage_target the planner chose — the builder "
             "realizes a verdict, it does not decide one"
         )
+    if coverage_target == Decimal(0):
+        # 🔴 THE ZERO-COVERAGE ROUTE TO `rejected`: every line drawn from the category's
+        # `excluded_items`, none covered, so the covered amount comes to zero and
+        # `policy_engine.verdict_for` answers `rejected` with no cause. The mirror of the
+        # `covered_only` branch above rather than a degenerate mixed basket — there is no ratio
+        # to price toward and no covered side to shrink, so `_build_mixed_basket` has nothing to
+        # do here and its "produced no covered line" guard keeps meaning what it says.
+        catalogue = category(category_id)["excluded_items"]
+        kinds = sellable_kinds(catalogue, vendor)
+        if not kinds:
+            raise ValueError(
+                f"vendor {vendor['name']!r} (profile {vendor['profile']!r}) sells nothing "
+                f"category {category_id!r} excludes, so it cannot carry a zero-coverage "
+                "basket — ask `vendor_can_carry` before choosing the vendor"
+            )
+        return _draw_distinct_items(
+            rng, kinds, catalogue, count, covered=False, vat_payer=vat_payer,
+            language=language, currency=currency,
+        )
     if not Decimal(0) < coverage_target < Decimal(1):
         raise ValueError(
-            f"a coverage target lies strictly between 0 and 1, got {coverage_target}"
+            f"a coverage target lies between 0 inclusive — the zero-coverage route to "
+            f"`rejected`, handled above — and 1 exclusive, got {coverage_target}"
         )
     return _build_mixed_basket(
         rng,
@@ -1866,6 +1888,10 @@ class PaymentConfirmation:
     amount_in_words: str | None
     amount_in_words_caption: str
     purpose: str | None
+    # The рахунок number `purpose` names, where it names one — the structured copy the label
+    # ships as `cites_document_no`. Computed beside the fill (`_fill_reference_traced`), never
+    # parsed back out of the text.
+    cites_document_no: str | None
     auth_code: str | None
     card_masked: str | None
     terminal_label: str | None
@@ -1988,6 +2014,7 @@ class PaymentConfirmation:
             counterparty=self.payee.trade_name,
             payer=self.payer.name,
             payment_purpose=self.purpose,
+            cites_document_no=self.cites_document_no,
             document_code=self.document_code,
             auth_code=self.auth_code,
             line_items=[],
@@ -2100,17 +2127,37 @@ def _fill_reference(
     would shift with it — the same reason `build_bank_statement` nudges a colliding amount instead
     of redrawing it.
     """
+    return _fill_reference_traced(rng, template, rules, at, cites)[0]
+
+
+def _fill_reference_traced(
+    rng: random.Random,
+    template: str,
+    rules: dict,
+    at: datetime,
+    cites: DocumentReference | None,
+) -> tuple[str, str | None]:
+    """`_fill_reference`, plus WHICH рахунок number the line ended up naming — or `None` where the
+    template names none (a generic formula) or names a ВН, whose number belongs to no document of
+    the claim.
+
+    The second value is what the label field `cites_document_no` carries, so it is computed here,
+    beside the fill, rather than re-parsed out of the finished text — an instrument reading its
+    own output back is the failure mode `tools/cross_document_audit.py` exists to catch, not one
+    to build in. Same draws, same order, so a caller switching to the traced form moves no seed.
+    """
     drawn_number = f"{rng.randint(1, 9999)}"
     drawn_date = at - timedelta(days=rng.randint(0, 20))
     delivery_note_no = f"{rng.randint(1, 9999)}"
     number, issued_at = (
         (cites.number, cites.issued_at) if cites else (drawn_number, drawn_date)
     )
-    return template.format(
+    text = template.format(
         invoice_no=number,
         invoice_date=issued_at.strftime(rules["date_format"]),
         delivery_note_no=delivery_note_no,
     )
+    return text, (number if "{invoice_no}" in template else None)
 
 
 def build_payment_confirmation(
@@ -2124,9 +2171,17 @@ def build_payment_confirmation(
     amount: Decimal | None = None,
     initiation: str | None = None,
     cites: DocumentReference | None = None,
+    must_cite: bool = False,
     country: str = "UA",
 ) -> PaymentConfirmation:
     """Build one Ukrainian bank payment confirmation.
+
+    ``must_cite`` is the label-first knob of the `subject` axis: the plan has decided this
+    payment's purpose NAMES the рахунок in ``cites``, so the initiation mode is drawn among those
+    that print a purpose at all and the formula among those that cite an invoice by number.
+    Without it either draw may honestly produce a page that cites nothing — the ordinary case —
+    and a claim built to disagree about its subject would disagree about nothing. It requires
+    ``cites``: a forced citation of no document is not a page anything plans.
 
     ``vendor`` is an entry of config/vendors.json, resolved — it is the PAYEE, and the same
     instance is passed to every document of a claim so two documents cannot name two firms. Its
@@ -2163,6 +2218,12 @@ def build_payment_confirmation(
     rules = jurisdiction(country)
     block = rules["payment_confirmation"]
 
+    if must_cite and cites is None:
+        raise ValueError(
+            "must_cite forces the purpose line to name the document in `cites`, and none was "
+            "given — a forced citation of no document is not a page anything plans"
+        )
+
     try:
         mode = block["initiation"][initiation] if initiation else None
     except KeyError:
@@ -2170,8 +2231,20 @@ def build_payment_confirmation(
             f"config/fiscal-rules.yaml declares no initiation mode {initiation!r} for "
             f"{country}; it knows {sorted(block['initiation'])}"
         ) from None
+    if mode is not None and must_cite and not mode["prints_purpose"]:
+        raise ValueError(
+            f"initiation mode {initiation!r} prints no purpose line, and must_cite asks this "
+            "page to cite its subject there — the plan and the named mode have come apart"
+        )
     if mode is None:
         shares = initiation_shares()
+        if must_cite:
+            # The same draw over the modes that can carry the citation, renormalized — the page
+            # is planned to print one, so a mode with no purpose line is not drawn from.
+            shares = {
+                name: share for name, share in shares.items()
+                if block["initiation"][name]["prints_purpose"]
+            }
         initiation = rng.choices(list(shares), weights=list(shares.values()), k=1)[0]
         mode = block["initiation"][initiation]
 
@@ -2242,8 +2315,15 @@ def build_payment_confirmation(
     card_masked = _draw_card(rng, block) if mode["prints_card"] else None
 
     purpose = None
+    cites_document_no = None
     if mode["prints_purpose"]:
-        template = rng.choice(payment_purposes(rules["language"]))
+        pool = payment_purposes(rules["language"])
+        if must_cite:
+            # The formula draw over the templates that name a рахунок, for the reason the mode
+            # draw above narrowed: a plan that aims a subject disagreement at this page needs the
+            # citation ON the page, and «Оплата за товар» carries none.
+            pool = tuple(t for t in pool if "{invoice_no}" in t)
+        template = rng.choice(pool)
         # An invoice number and its date, filled here rather than from the placeholder
         # vocabulary: this is a reference to another document, not merchandise. 🔴 It still proves
         # nothing about the SUBJECT — it names a document, and a document number says nothing
@@ -2251,7 +2331,9 @@ def build_payment_confirmation(
         # the two documents can be linked by somebody willing to parse both ends. Some templates
         # name no document at all; that absence is deliberate and is what stops a linker from
         # assuming the reference is always there.
-        purpose = _fill_reference(rng, template, rules, issued_at, cites)
+        purpose, cites_document_no = _fill_reference_traced(
+            rng, template, rules, issued_at, cites
+        )
 
     terminal_label = terminal_value = None
     if rng.random() < payment_confirmation_share("terminal"):
@@ -2288,6 +2370,7 @@ def build_payment_confirmation(
         ),
         amount_in_words_caption=rng.choice(block["amount_in_words_captions"]),
         purpose=purpose,
+        cites_document_no=cites_document_no,
         auth_code=auth_code,
         card_masked=card_masked,
         terminal_label=terminal_label,
@@ -2348,6 +2431,10 @@ class StatementRow:
     counterparty_code: str
     counterparty_account: str
     counterparty_bank: str
+    # The рахунок number `purpose` names, where it names one — set on the LABELLED row, whose
+    # purpose is the one the label ships, and left `None` on ordinary rows: their citations point
+    # outside the claim by construction and no label reads them.
+    cites_document_no: str | None = None
 
     @property
     def is_debit(self) -> bool:
@@ -2668,6 +2755,7 @@ class BankStatement:
             counterparty=self.payee_trade_name,
             payer=self.holder_name,
             payment_purpose=row.purpose,
+            cites_document_no=row.cites_document_no,
             # 👁 The observed statement's header carries no number of its own — a client, an
             # account, a period and a production time. `document_code` is therefore `None`, and
             # `relevant_transaction` below is a pointer INTO the document rather than its identity.
@@ -2767,10 +2855,16 @@ def build_bank_statement(
     payer_tax_id: str,
     amount: Decimal | None = None,
     cites: DocumentReference | None = None,
+    must_cite: bool = False,
     pages: int = 1,
     country: str = "UA",
 ) -> BankStatement:
     """Build one Ukrainian bank account statement.
+
+    ``must_cite`` narrows the LABELLED row's purpose formula to those naming a рахунок by number
+    — the `subject` axis's label-first knob, exactly as on the confirmation builder. The ordinary
+    rows are untouched: their citations point outside the claim by construction. Requires
+    ``cites`` for the same reason the confirmation does.
 
     ⚠️ `issued_at` IS THE MOMENT OF THE LABELLED TRANSACTION, not of the document. Every other
     archetype of this repository is a document about one payment, so the two coincide there and
@@ -2957,18 +3051,33 @@ def build_bank_statement(
     )
 
     # -- the labelled transaction. The ONE row that carries the claim's own payee, and therefore
-    # the only row printing the claim's identity and citing the claim's invoice.
+    # the only row printing the claim's identity and citing the claim's invoice. Its purpose is
+    # filled TRACED — the label ships the cited рахунок number structured — and, under
+    # `must_cite`, from the formulas that name one.
+    labelled_pool = purposes["debit"]
+    if must_cite:
+        if cites is None:
+            raise ValueError(
+                "must_cite forces the labelled row's purpose to name the document in `cites`, "
+                "and none was given — a forced citation of no document is not a page anything "
+                "plans"
+            )
+        labelled_pool = [t for t in labelled_pool if "{invoice_no}" in t]
+    labelled_purpose, labelled_cites_no = _fill_reference_traced(
+        rng, rng.choice(labelled_pool), rules, issued_at, cites
+    )
     rows.append(
         StatementRow(
             number=numbers[ordinary + 1],
             at=issued_at,
             amount=amount,
             direction=Direction.DEBIT,
-            purpose=purpose_of("debit", issued_at, cites),
+            purpose=labelled_purpose,
             counterparty_name=relevant_name,
             counterparty_code=identity.tax_code,
             counterparty_account=identity.account,
             counterparty_bank=identity.bank_name,
+            cites_document_no=labelled_cites_no,
         )
     )
 
@@ -3267,6 +3376,10 @@ class Invoice:
             date=self.issued_at.date(),
             counterparty=self.supplier.name,
             payer=self.buyer.name,
+            # The invoice's own printed № — the number a payment's purpose cites where it cites
+            # this document, and the value the `subject` axis compares `cites_document_no`
+            # against on the payment beside it.
+            document_code=self.number,
             line_items=self.line_items,
             has_qr=False,
             qr_is_fiscal=False,
@@ -4195,8 +4308,14 @@ def build_app_transaction(
     payer_tax_id: str,
     amount: Decimal | None = None,
     cites: DocumentReference | None = None,
+    must_cite: bool = False,
 ) -> AppTransaction:
     """Build one app transaction screen.
+
+    ``must_cite`` is REFUSED where true: the screen has no purpose line, so a plan forcing a
+    citation onto it has aimed the `subject` axis at a class that cannot carry the negative —
+    `claim_planner` keeps such plans off this archetype, and reaching the refusal means the two
+    have come apart.
 
     THE TRANSFER KEYWORDS OF EVERY PAYMENT BUILDER, four of them unprinted here:
     `identity`, `payer_name` and `payer_tax_id` are accepted so that one mechanism
@@ -4213,6 +4332,12 @@ def build_app_transaction(
     here only for the claim that deliberately has none: the evidence gap, exactly as on
     the A4 confirmation, from the same range.
     """
+    if must_cite:
+        raise ValueError(
+            "an app transaction screen prints no purpose line, so it cannot be forced to cite "
+            "its subject — see `claim_planner._CITES_THE_SETTLED_DOCUMENT`, which is what keeps "
+            "a subject-mismatch plan off this archetype"
+        )
     del identity, payer_name, payer_tax_id, cites  # accepted, never printed — see above
     if amount is None:
         # An EVIDENCE-GAP claim carries this payment document ALONE — there is no subject
@@ -4298,12 +4423,14 @@ def build_bank_receipt_in_app(
     payer_tax_id: str,
     amount: Decimal | None = None,
     cites: DocumentReference | None = None,
+    must_cite: bool = False,
 ) -> BankReceiptInApp:
     """Build the confirmation and the frame around it.
 
-    The inner document is built FIRST and with the same keywords the A4 archetype gets,
-    so a claim carried by this archetype is document-for-document what it would have been
-    on paper; the chrome draws come after, and the order is part of the seed's meaning.
+    The inner document is built FIRST and with the same keywords the A4 archetype gets —
+    `must_cite` passes through untouched, so a subject-mismatch claim carried by this archetype
+    is document-for-document what it would have been on paper; the chrome draws come after, and
+    the order is part of the seed's meaning.
     """
     inner = build_payment_confirmation(
         rng,
@@ -4314,6 +4441,7 @@ def build_bank_receipt_in_app(
         payer_tax_id=payer_tax_id,
         amount=amount,
         cites=cites,
+        must_cite=must_cite,
     )
     return BankReceiptInApp(inner=inner, battery_fill_px=46 - rng.randrange(0, 20))
 

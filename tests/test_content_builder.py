@@ -255,12 +255,59 @@ def test_a_mixed_basket_refuses_to_guess_its_coverage():
         build(1, covered_only=False)
 
 
-@pytest.mark.parametrize("target", ["0", "1", "-0.5", "1.5"])
-def test_a_coverage_target_outside_the_open_unit_interval_is_refused(target):
-    """At 1 there is no non-covered line and at 0 there is no covered one; both are other
-    verdicts, reached by other mechanisms."""
+@pytest.mark.parametrize("target", ["1", "-0.5", "1.5"])
+def test_a_coverage_target_outside_the_permitted_interval_is_refused(target):
+    """At 1 there is no non-covered line, which is `covered`, reached by `covered_only`; above
+    and below the interval nothing is meant at all. ⚠️ ZERO LEFT THIS LIST: it is the
+    zero-coverage route to `rejected` now, asserted below rather than refused here."""
     with pytest.raises(ValueError):
         mixed(1, coverage_target=target)
+
+
+# ------------------------------------------------------ zero-coverage baskets ----
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_a_zero_coverage_basket_contains_no_covered_line(seed):
+    """The realizing step of the `rejected` route by WHAT WAS BOUGHT, in isolation: every line
+    from `excluded_items`, every flag False. A single covered line here would hand the engine a
+    `partially_covered` claim under a `rejected` target — the drift that looks like a draw that
+    missed, which is why it is asserted per seed rather than once."""
+    spec = category("vitamins_nutrition")
+    receipt = mixed(seed, coverage_target="0")
+
+    assert receipt.line_items, "a basket with no lines states nothing"
+    assert all(not item.covered for item in receipt.line_items)
+    assert {item.item_kind for item in receipt.line_items} <= set(spec["excluded_items"])
+    assert {item.item_kind for item in receipt.line_items}.isdisjoint(spec["ambiguous_items"])
+
+
+def test_a_zero_coverage_basket_is_rejected_by_the_oracle():
+    """The loop from knob to verdict, on the builder's own output: covered money of zero is
+    `rejected` with the coverage branch, before any date is consulted."""
+    receipt = mixed(3, coverage_target="0")
+    items = receipt.line_items
+    covered = covered_total("vitamins_nutrition", items)
+    every_line_covered = all(resolved_coverage("vitamins_nutrition", items))
+
+    assert covered == 0
+    assert verdict_for(covered, receipt.total, every_line_covered=every_line_covered) is (
+        Verdict.REJECTED
+    )
+
+
+def test_a_zero_coverage_basket_still_satisfies_every_document_invariant():
+    receipt = mixed(5, coverage_target="0")
+    assert validate_line_item_sum(receipt.line_items, receipt.total)
+    assert validate_amount_in_words(receipt.amount_in_words, receipt.total)
+    assert sum(line.gross for line in receipt.tax_lines) == receipt.total
+    for item in receipt.line_items:
+        assert validate_vat_letter(item.item_kind, item.vat_letter, "UA")
+        assert item.price > 0
+
+
+def test_a_zero_coverage_basket_is_deterministic_under_seed():
+    assert mixed(7, coverage_target="0") == mixed(7, coverage_target="0")
 
 
 def test_a_covered_only_basket_refuses_a_coverage_target():

@@ -375,9 +375,21 @@ class DocGroundTruth(BaseModel):
     # (👁 0 of 7 observed), which is the observation behind `proves_subject: false` for the
     # payment-confirmation type in policy.yaml.
     payment_purpose: str | None = None
-    # The bank's own number for the document, 👁 present on 8 of 8 and 📄 mandatory. It is the
-    # deduplication key of this class — the authorization code is not, being six digits and
-    # unique only within an issuer and a window.
+    # THE РАХУНОК THE PURPOSE LINE ABOVE CITES BY NUMBER, structured — the payment's one statement
+    # about WHICH obligation it settles, and the field the `subject` axis of
+    # `cross_document_agreement` compares against the subject document's `document_code`.
+    #
+    # ⛔ ONLY AN INVOICE-CLASS CITATION FILLS IT. 👁 An observed purpose names a рахунок OR a ВН —
+    # a delivery note, a class no claim of this dataset holds — and a ВН citation, a generic
+    # formula («Оплата за товар») and an unprinted purpose all leave this `None`: there is nothing
+    # resolvable to compare, so the axis does not run. The number here is always a substring of
+    # `payment_purpose` — a structured copy of what the page prints, never an extra fact.
+    cites_document_no: str | None = None
+    # The document's OWN printed number: the bank's code on a confirmation (👁 present on 8 of 8
+    # and 📄 mandatory — the deduplication key of that class, where the authorization code is not,
+    # being six digits and unique only within an issuer and a window), and the invoice's own № on
+    # an invoice — the number by which a payment's purpose can cite it, which is what the
+    # `subject` axis compares `cites_document_no` above against.
     document_code: str | None = None
     # WHICH ROW OF A MULTI-ROW DOCUMENT THE FIELDS ABOVE DESCRIBE — the printed operation number
     # («Номер документа») of the labelled transaction, unique within the statement it is on. A

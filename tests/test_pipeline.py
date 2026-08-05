@@ -50,6 +50,7 @@ from receipt_synth.claim_planner import (
 )
 from receipt_synth.cli import main
 from receipt_synth.config import (
+    archetype_draw_weights,
     high_frequency_surnames,
     jurisdiction,
     load_policy,
@@ -68,6 +69,7 @@ from receipt_synth.policy_engine import (
     COUNTERPARTY_MISMATCH,
     OUTSIDE_PERIOD,
     PAYMENT_PRECEDES_SUBJECT,
+    SUBJECT_MISMATCH,
     SUBJECT_NOT_EVIDENCED,
     Evidence,
     Ledger,
@@ -75,6 +77,7 @@ from receipt_synth.policy_engine import (
     document_evidence,
     insufficient_evidence_causes,
     insufficient_evidence_causes_min_run_size,
+    rejected_routes,
     verdict_mix,
 )
 from receipt_synth.schemas import (
@@ -333,11 +336,11 @@ def test_the_planner_realizes_exactly_the_verdicts_the_engine_can_be_asked_for()
     MEMBER OF THE ENUM IS NOW REALIZABLE, which is what makes the second assertion below the
     interesting one: it is empty, and it has never been empty before.
 
-    `_UNREALIZABLE_ROUTES` is where a route to a REALIZABLE verdict explains itself, and its one
-    entry is asserted by name: `rejected` is buildable by WHEN it was paid and not by WHAT was
-    bought, and those are different statements about the same verdict. An empty table here would
-    say every route to every realizable verdict is drawn, which would be a promise the corpus does
-    not keep — every `rejected` claim it contains is out of period.
+    `_UNREALIZABLE_ROUTES` is where a route to a REALIZABLE verdict explains itself, and it is
+    asserted EMPTY now: `rejected` became buildable by WHAT was bought as well as by WHEN it was
+    paid the day `_draw_basket` accepted a coverage target of zero, so every route to every
+    realizable verdict is drawn — a promise the corpus keeps for the first time, and one this
+    test exists to catch anyone quietly breaking.
     """
     assert set(REALIZABLE_VERDICTS) == set(Verdict), (
         "the planner no longer aims at every verdict; the balance report's absent-mix block and "
@@ -348,12 +351,9 @@ def test_the_planner_realizes_exactly_the_verdicts_the_engine_can_be_asked_for()
         "a verdict is named unrealizable while `REALIZABLE_VERDICTS` holds every member; one of "
         "the two tables is stale"
     )
-    assert set(claim_planner._UNREALIZABLE_ROUTES) == {"rejected/zero_coverage"}, (
-        "the routes a realizable verdict cannot be reached by are declared here; an entry added or "
-        "closed without this list moving is a corpus property nobody wrote down"
-    )
-    assert "content_builder" in claim_planner._UNREALIZABLE_ROUTES["rejected/zero_coverage"], (
-        "the entry has to name what blocks the route, not merely that one is blocked"
+    assert claim_planner._UNREALIZABLE_ROUTES == {}, (
+        "the routes a realizable verdict cannot be reached by are declared here; an entry added "
+        "or closed without this list moving is a corpus property nobody wrote down"
     )
 
 
@@ -719,21 +719,29 @@ def test_rejected_is_planned_in_a_run_large_enough_to_require_it():
         f"no claim aimed at `rejected` in {len(plans)} planned claims, where its share in "
         "verdict_mix makes absence a one-in-a-thousand event"
     )
-    assert all(plan.cause == OUTSIDE_PERIOD for plan in rejected), (
-        "a `rejected` plan carries the one cause its buildable route has: "
-        f"{sorted({plan.cause for plan in rejected})}"
+    assert all(
+        plan.cause in (OUTSIDE_PERIOD, claim_planner.ZERO_COVERAGE) for plan in rejected
+    ), (
+        "a `rejected` plan carries one of the two routes `rejected_routes` declares: "
+        f"{sorted({str(plan.cause) for plan in rejected})}"
     )
 
 
-def test_only_a_rejected_plan_dates_its_payment_outside_the_benefit_period():
-    """Both directions, claim by claim, because the label rests entirely on this date.
+def test_only_an_outside_period_rejected_plan_dates_its_payment_outside_the_period():
+    """Both directions, claim by claim, because one route's label rests entirely on this date.
 
-    A `rejected` plan whose payment stayed INSIDE the window is a claim the engine labels
-    `covered` while the plan says otherwise — the drift the balance report would report as a
-    builder shortfall, on a mechanism that never fired. A plan of any OTHER verdict whose payment
-    left the window is worse: the engine refuses it on the period before it ever reads the basket,
-    so a claim planned as `partially_covered` comes back `rejected` and the mechanism it was built
-    to exercise is absent from the corpus under a label that says it is there.
+    A plan on the `outside_period` route whose payment stayed INSIDE the window is a claim the
+    engine labels `covered` while the plan says otherwise — the drift the balance report would
+    report as a builder shortfall, on a mechanism that never fired. A plan of any OTHER verdict —
+    or of the ZERO-COVERAGE route, whose date is deliberately ordinary — whose payment left the
+    window is worse: the engine refuses it on the period before it ever reads the basket, so the
+    mechanism the claim was built to exercise is absent from the corpus under a label that says
+    it is there.
+
+    🔴 THE BICONDITIONAL USED TO READ "outside == rejected", AND MUST NEVER AGAIN: that equality
+    was the corpus's most expensive degeneracy — the payment date alone predicted the verdict —
+    and the zero-coverage route exists precisely to break it. The equality below is per ROUTE,
+    which is the statement that survives.
 
     ⚠️ THE CLAIM'S DATE, NOT EVERY DOCUMENT'S. policy.yaml checks the period against the payment
     and against nothing else, so a subject document dated inside the window on a `rejected` claim
@@ -744,10 +752,46 @@ def test_only_a_rejected_plan_dates_its_payment_outside_the_benefit_period():
 
     for plan in plans:
         outside = not start <= plan.issued_at.date() <= end
-        assert outside == (plan.verdict is Verdict.REJECTED), (
-            f"{plan.claim_id}: {plan.verdict.value} claim dated {plan.issued_at.date()} against "
-            f"the period {start}..{end}"
+        assert outside == (
+            plan.verdict is Verdict.REJECTED and plan.cause == OUTSIDE_PERIOD
+        ), (
+            f"{plan.claim_id}: {plan.verdict.value}/{plan.cause} claim dated "
+            f"{plan.issued_at.date()} against the period {start}..{end}"
         )
+
+
+def test_a_zero_coverage_plan_keeps_an_ordinary_date_and_an_empty_basket_target():
+    """The route by WHAT WAS BOUGHT, named explicitly: an in-window date and a coverage target
+    of exactly zero, which is what `content_builder._draw_basket` reads as "no covered line".
+
+    The date staying inside the window is not incidental — it is the property the route was
+    opened for. A consumer reading only the calendar must have nothing to read on this claim.
+    """
+    start, end = active_period()
+    plan = plan_claim(
+        random.Random(1), persona=persona(), claim_id="c1", ledger=Ledger(),
+        verdict=Verdict.REJECTED, cause=claim_planner.ZERO_COVERAGE,
+    )
+    assert plan.cause == claim_planner.ZERO_COVERAGE
+    assert plan.coverage_target == Decimal(0)
+    assert start <= plan.issued_at.date() <= end, plan.issued_at
+
+
+def test_both_rejected_routes_occur_in_a_run_large_enough_to_require_them():
+    """A declared route share that never fires fails silently in the healthiest-looking
+    direction — every claim still gets a label and the bucket simply stays empty. Sized from the
+    draw: each route is `rejected`'s renormalized share times its `rejected_routes` share, so a
+    run of `_run_size_for` that rate misses either route once in a thousand shifted seed streams.
+    """
+    shares = rejected_routes()
+    size = _run_size_for(_drawn_at(Verdict.REJECTED) * min(shares.values()))
+    plans = _plans_from_many_personas(size)
+
+    routes = {plan.cause for plan in plans if plan.verdict is Verdict.REJECTED}
+    assert routes == {OUTSIDE_PERIOD, claim_planner.ZERO_COVERAGE}, (
+        f"routes realized in {len(plans)} planned claims: {sorted(map(str, routes))}; "
+        "`rejected_routes` declares two"
+    )
 
 
 def test_a_rejected_payment_falls_on_both_sides_of_the_benefit_period():
@@ -760,7 +804,9 @@ def test_a_rejected_payment_falls_on_both_sides_of_the_benefit_period():
     and a run this size misses either one about once in a thousand.
     """
     start, end = active_period()
-    size = _run_size_for(_drawn_at(Verdict.REJECTED) * 0.5)
+    # Two halvings, not one: the sign draw splits the OUT-OF-PERIOD route's dates, and that
+    # route is itself `rejected_routes["outside_period"]` of the verdict's bucket.
+    size = _run_size_for(_drawn_at(Verdict.REJECTED) * rejected_routes()[OUTSIDE_PERIOD] * 0.5)
     plans = _plans_from_many_personas(size)
     assert len(plans) >= size
 
@@ -1014,19 +1060,66 @@ def test_a_category_documented_by_a_receipt_alone_cannot_realize_not_proof_of_pa
             )
 
 
-def test_the_route_to_rejected_the_planner_cannot_build_is_refused_by_name():
-    """`rejected` has two routes and one mechanism, so a caller naming the other one has to be
-    told which it is rather than handed an ordinary out-of-period claim under its name.
+def test_a_subject_mismatch_plan_carries_a_payment_that_can_print_the_citation():
+    """🔴 THE SHAPE HALF OF THE `subject_mismatch` MECHANISM: the cause needs a page with a
+    purpose line, and the app-transaction screen has none — a plan that drew it would build a
+    claim whose builder refuses `must_cite`, a stage away from the choice that broke it.
 
-    The route by WHAT WAS BOUGHT carries no cause at all — policy.yaml gives the verdict the whole
-    meaning there — so there is no second string to pass; any cause but `outside_period` is a
-    caller asking for something this planner does not build, and `_UNREALIZABLE_ROUTES` is where
-    the reason lives.
+    DIRECT CALLS, SIZED AGAINST THE MUTATION RATHER THAN THE DRAW. A planner that dropped the
+    narrowing hands the cause to the citation-less archetype only at that archetype's own draw
+    weight — 8% today — so a sweep sized merely to CONTAIN the cause once passes such a mutation
+    more often than not (measured: it did). The seed count is derived from that weight the way
+    `_run_size_for` derives everything else: absence of a violation across it clears the
+    once-in-a-thousand bar, from the weight as configured rather than as remembered.
     """
-    with pytest.raises(ValueError, match="_UNREALIZABLE_ROUTES"):
+    pool = {
+        slug: archetype
+        for slug, archetype in ARCHETYPES.items()
+        if evidence_of(archetype) == Evidence(False, True)
+        or archetype.doc_type in claim_planner._SETTLED_BY_A_PAYMENT
+    }
+    uncitable = [
+        slug for slug in pool
+        if evidence_of(pool[slug]) == Evidence(False, True)
+        and slug not in claim_planner._CITES_THE_SETTLED_DOCUMENT
+    ]
+    assert uncitable, (
+        "every registered payment archetype can print a citation, so this test cannot "
+        "distinguish the narrowing from its absence"
+    )
+    weights = archetype_draw_weights()
+    seeds = _run_size_for(min(weights[slug] for slug in uncitable))
+
+    holder = generate_persona(random.Random(3), persona_id="pX", country=Country.UA)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claim_planner, "ARCHETYPES", pool)
+        for seed in range(seeds):
+            plan = plan_claim(
+                random.Random(seed), persona=holder, claim_id=f"c{seed}", ledger=Ledger(),
+                verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=SUBJECT_MISMATCH,
+            )
+            payments = [
+                d for d in plan.documents if not evidence_of(d.archetype).proves_subject
+            ]
+            assert len(payments) == 1, plan.claim_id
+            assert payments[0].archetype.slug in claim_planner._CITES_THE_SETTLED_DOCUMENT, (
+                f"seed {seed}: {payments[0].archetype.slug} cannot print the citation the "
+                "cause is realized by"
+            )
+
+
+def test_a_rejected_route_the_policy_does_not_declare_is_refused_by_name():
+    """`rejected` has exactly the two routes `rejected_routes` declares, so a caller naming a
+    third has to be told what the two are rather than handed an ordinary claim under its name.
+
+    ⚠️ THE CALL THAT USED TO SIT HERE ASSERTED THE OPPOSITE: `cause="zero_coverage"` was refused
+    while nothing could build the basket, and it builds now — that flip is deliberate and is
+    covered by `test_a_zero_coverage_plan_keeps_an_ordinary_date_and_an_empty_basket_target`.
+    """
+    with pytest.raises(ValueError, match="rejected_routes"):
         plan_claim(
             random.Random(1), persona=persona(), claim_id="c1", ledger=Ledger(),
-            verdict=Verdict.REJECTED, cause="zero_coverage",
+            verdict=Verdict.REJECTED, cause="basket_from_another_planet",
         )
 
 
@@ -2265,6 +2358,76 @@ def test_the_payment_of_a_mismatched_party_claim_names_a_seller_the_invoice_does
         )
 
 
+def test_the_payment_of_a_subject_mismatch_claim_cites_an_invoice_the_claim_does_not_hold():
+    """🔴 THE HALF OF THE `subject_mismatch` MECHANISM THAT LIVES IN THE ASSEMBLER, tested where
+    it is — the sibling of the payee sweep above, on the transaction's last dimension. A step
+    that returned the claim's own reference would leave the pair agreeing, the engine answering
+    `covered`, and the corpus with ZERO claims of the cause — the `partially_paid` lesson.
+
+    SWEPT OVER SEEDS for the collision half — the drawn number must differ from the subject's own
+    at every seed — and the ordinary half asserts the SAME OBJECT comes back, since every honest
+    claim's citation must stay resolvable.
+    """
+    from receipt_synth.assembler import _reference_the_payment_cites
+    from receipt_synth.content_builder import DocumentReference
+
+    mismatched = _plan_for_cause(SUBJECT_MISMATCH)
+    ordinary = _plan_for_cause(None)
+    own = DocumentReference(number="1234", issued_at=WHEN)
+    for seed in range(12):
+        rng = random.Random(seed)
+        other = _reference_the_payment_cites(rng, mismatched, own)
+        assert other is not own
+        assert other.number != own.number, (seed, other.number)
+
+        assert _reference_the_payment_cites(rng, ordinary, own) is own, (
+            f"seed {seed}: an ordinary claim's payment must cite the claim's own invoice"
+        )
+
+
+def test_a_forced_subject_mismatch_plan_comes_back_with_the_citation_on_the_page(tmp_path):
+    """🔴 THE PLAN → LABEL LOOP FOR THE SUBJECT AXIS, through the real assembler, builders and
+    renderer. Three things have to conspire — the wrong reference drawn, the purpose formula
+    forced to CITE, and the engine reading both label ends — and a failure of any one leaves the
+    claim `covered` here while every unit test above stays green.
+    """
+    from receipt_synth import assembler
+
+    plan = ClaimPlan(
+        claim_id="p001_c1", persona_id="p001", category="sport",
+        verdict=Verdict.INSUFFICIENT_EVIDENCE, cause=SUBJECT_MISMATCH,
+        documents=(
+            DocumentPlan(archetype=ARCHETYPES["ua_invoice"], issued_at=WHEN),
+            DocumentPlan(archetype=ARCHETYPES["ua_bank_payment_confirmation"], issued_at=WHEN),
+        ),
+        issued_at=WHEN,
+    )
+
+    def one_plan(rng, **kwargs):
+        return iter([plan])
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(assembler, "plan_claims", one_plan)
+        result = generate_dataset(
+            seed=SEED, out_dir=tmp_path, train_fraction=0.5, personas=1, claims_per_persona=1
+        )
+
+    claim = result.claims[0]
+    assert claim.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert claim.imperfection == [SUBJECT_MISMATCH]
+
+    by_id = {document.doc_id: document for document in result.documents}
+    subject = next(d for d in (by_id[i] for i in claim.documents) if d.line_items)
+    payment = next(d for d in (by_id[i] for i in claim.documents) if not d.line_items)
+
+    assert subject.document_code, "the invoice's own № is the axis's right-hand side"
+    assert payment.cites_document_no, "the forced citation never reached the label"
+    assert payment.cites_document_no != subject.document_code
+    # The label is a structured copy of the page, not an extra fact: the cited number is printed
+    # in the purpose line, where a reader of the image finds it.
+    assert payment.cites_document_no in payment.payment_purpose
+
+
 def test_the_party_a_document_names_follows_what_that_document_ESTABLISHES(tmp_path):
     """🔴 THE OTHER HALF OF THE MECHANISM: WHICH DOCUMENT RECEIVES WHICH PARTY. The sweep above
     asserts only which party is DRAWN; the claim loop then has to hand the invoice's seller to the
@@ -2334,6 +2497,57 @@ def test_the_party_a_document_names_follows_what_that_document_ESTABLISHES(tmp_p
     # And the label the built pair earns, since the whole point of the dispatch is to produce it.
     assert claim.verdict is Verdict.INSUFFICIENT_EVIDENCE
     assert claim.imperfection == [COUNTERPARTY_MISMATCH]
+
+
+def test_a_forced_zero_coverage_plan_comes_back_rejected_with_no_cause(tmp_path):
+    """🔴 THE PLAN → LABEL LOOP FOR THE ROUTE BY WHAT WAS BOUGHT, through the real assembler,
+    builders and renderer — the `partially_paid` lesson applied on arrival rather than after the
+    incident. A realizing step that silently stopped firing — a basket that drew one covered line
+    after all — would come back `partially_covered` here, not `rejected`, and the corpus would
+    hold ZERO claims of the route while every engine test stayed green.
+
+    FORCED, NOT DRAWN: the route is a 5% draw, so a run this size would miss it more often than
+    not — `plan_claims` is replaced by one hand-built plan, which also pins the claim's date
+    inside the window, the property the route exists for.
+    """
+    from receipt_synth import assembler
+
+    plan = ClaimPlan(
+        claim_id="p001_c1", persona_id="p001", category="sport",
+        verdict=Verdict.REJECTED, cause=claim_planner.ZERO_COVERAGE,
+        documents=(
+            DocumentPlan(archetype=ARCHETYPES["ua_invoice"], issued_at=WHEN),
+            DocumentPlan(archetype=ARCHETYPES["ua_bank_payment_confirmation"], issued_at=WHEN),
+        ),
+        issued_at=WHEN, coverage_target=Decimal(0),
+    )
+
+    def one_plan(rng, **kwargs):
+        return iter([plan])
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(assembler, "plan_claims", one_plan)
+        result = generate_dataset(
+            seed=SEED, out_dir=tmp_path, train_fraction=0.5, personas=1, claims_per_persona=1
+        )
+
+    claim = result.claims[0]
+    assert claim.verdict is Verdict.REJECTED
+    assert claim.imperfection == [], (
+        "the zero-coverage route carries no cause; `outside_period` here means the date "
+        "mechanism fired on a claim whose date was pinned inside the window"
+    )
+    assert claim.covered_fraction == 0.0
+    assert claim.reimbursable_amount == 0.0
+
+    by_id = {document.doc_id: document for document in result.documents}
+    lines = [
+        item for doc_id in claim.documents for item in by_id[doc_id].line_items
+    ]
+    assert lines, "no document of the claim lists what was bought"
+    assert all(not item.covered for item in lines), (
+        "a covered line on a zero-coverage claim is the realizing step not firing"
+    )
 
 
 def test_a_party_mismatch_cannot_be_planned_where_the_category_has_one_seller():

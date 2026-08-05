@@ -16,6 +16,7 @@ from collections import Counter
 from collections.abc import Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
+from datetime import timedelta
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
@@ -64,6 +65,7 @@ from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
     COUNTERPARTY_MISMATCH,
+    SUBJECT_MISMATCH,
     Ledger,
     evaluate_claim,
     insufficient_evidence_causes,
@@ -770,6 +772,12 @@ def _render_document(
             "payer_tax_id": persona.tax_id,
             "amount": settles,
             "cites": cites,
+            # 🔴 THE OTHER HALF OF THE `subject_mismatch` MECHANISM: the wrong reference above is
+            # only a defect if the page PRINTS it, and the purpose formula draw may honestly cite
+            # nothing. The knob forces a citing formula (and, on the confirmation, a
+            # purpose-printing initiation mode); `claim_planner` keeps such plans off the one
+            # archetype that cannot print one.
+            "must_cite": plan.cause == SUBJECT_MISMATCH,
         }
         if archetype.doc_type is DocType.BANK_STATEMENT:
             # 🔴 HOW MANY SHEETS THE STATEMENT RUNS TO IS DRAWN HERE, not in the builder, and it is
@@ -1269,6 +1277,50 @@ def _amount_the_payment_states(
     return (subject_amount + (delta if rng.random() < 0.5 else -delta)).quantize(KOPIYKA)
 
 
+# How many times `_reference_the_payment_cites` may redraw a colliding number before it gives up.
+# The pool is 1..9999 against one excluded value, so reaching the bound means the generator is
+# broken, not unlucky — the same reasoning as `_PAYEE_DRAW_ATTEMPTS`.
+_REFERENCE_DRAW_ATTEMPTS = 8
+
+
+def _reference_the_payment_cites(
+    rng: random.Random, plan: ClaimPlan, reference: DocumentReference | None
+) -> DocumentReference | None:
+    """Which рахунок this claim's payment document cites, given the subject document's own.
+
+    THE SAME REFERENCE ON AN ORDINARY CLAIM — the same object, untouched — which is what makes a
+    citation resolvable at all: where the purpose formula names a рахунок, it names the claim's
+    own invoice.
+
+    🔴 A DIFFERENT REFERENCE WHEN THE PLAN ASKED FOR ONE. A claim planned as
+    `insufficient_evidence` with the cause `subject_mismatch` is realized here and nowhere else —
+    the sibling of `_amount_the_payment_states` and `_payee_the_payment_names`, on the last of
+    the transaction's dimensions: the payment states the right money, to the right party, in the
+    right order, FOR A DIFFERENT PURCHASE. The number is drawn in the same 1..9999 form
+    `content_builder._fill_reference_traced` draws for a citation pointing outside the claim,
+    because that is exactly what this one is; the date is drawn a few days back from the
+    payment's, as an unrelated invoice's would be.
+
+    The builder is separately told to PRINT the citation (`must_cite`): a wrong reference on a
+    page whose formula draw happened to cite nothing would leave the corpus with zero claims of
+    the cause while every engine test stayed green — the `partially_paid` lesson, applied at the
+    step that realizes rather than the step that labels.
+    """
+    if plan.cause != SUBJECT_MISMATCH or reference is None:
+        return reference
+    for _ in range(_REFERENCE_DRAW_ATTEMPTS):
+        number = f"{rng.randint(1, 9999)}"
+        if number != reference.number:
+            return DocumentReference(
+                number=number,
+                issued_at=plan.issued_at - timedelta(days=rng.randint(0, 20)),
+            )
+    raise RuntimeError(
+        f"claim {plan.claim_id}: {_REFERENCE_DRAW_ATTEMPTS} draws from 1..9999 all collided "
+        f"with the subject's own number {reference.number!r} — the draw is broken, not unlucky"
+    )
+
+
 def _claim_documents(
     rng: random.Random,
     *,
@@ -1349,8 +1401,10 @@ def _claim_documents(
                 settles = _amount_the_payment_states(rng, plan, record)
                 # What the payment document will cite. It travels beside `settles` because it is
                 # the same kind of fact — a property of the claim that the subject document decides
-                # and the payment document has to be told.
-                cites = reference
+                # and the payment document has to be told. On a `subject_mismatch` claim it is the
+                # one fact told WRONG, and told wrong HERE — the same seam, so the defect cannot
+                # drift apart from the mechanism that delivers every honest citation.
+                cites = _reference_the_payment_cites(rng, plan, reference)
         if bundled:
             documents = _bundle_one_file(
                 rendered,

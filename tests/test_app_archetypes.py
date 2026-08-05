@@ -190,6 +190,23 @@ def test_the_amount_is_the_claims_where_given_and_drawn_only_for_the_gap():
         assert drawn == drawn.quantize(Decimal("0.10"))
 
 
+def test_a_screen_with_no_purpose_line_refuses_to_be_forced_to_cite():
+    """The `subject` axis's knob, aimed at the one payment archetype that cannot carry it: the
+    refusal is what tells a drifted planner apart from a silently uncited page — see
+    `claim_planner._CITES_THE_SETTLED_DOCUMENT`, which is what keeps such plans off this class."""
+    with pytest.raises(ValueError, match="purpose line"):
+        build_app_transaction(
+            random.Random(1),
+            issued_at=WHEN,
+            vendor=VENDOR,
+            identity=identity(),
+            payer_name="Ковальчук Олена Петрівна",
+            payer_tax_id="2345678901",
+            amount=Decimal("600.00"),
+            must_cite=True,
+        )
+
+
 def test_the_same_seed_builds_the_same_screen():
     assert make_transaction() == make_transaction()
 

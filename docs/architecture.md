@@ -104,9 +104,12 @@ receipt need not notice a missing payment.
 than a document.** The payment is displaced by a whole period, into the benefit year before or after the
 window — the side is drawn, so a corpus does not teach "late" where the rule says "outside" — and everything
 else about the claim stays ordinary: the evidence is complete, the basket is covered, and the policy engine
-answers `rejected`, cause `outside_period`, off the payment date alone. Only one of the two routes to that
-verdict is built this way; a claim whose basket the category covers *none* of needs a builder that draws no
-covered line, and `claim_planner._UNREALIZABLE_ROUTES` records that it does not.
+answers `rejected`, cause `outside_period`, off the payment date alone. That is one of the two routes to the
+verdict; the other is a claim whose basket the category covers *none* of — every line drawn from the
+category's excluded items, an ordinary in-window date, and the engine answers `rejected` off the line items
+alone, with no cause at all. Which route a planned claim takes is `rejected_routes` in `config/policy.yaml`,
+and the split is what stops the payment date from predicting the verdict — a corpus where every refusal is
+out-of-period would measure the period rule and nothing else.
 
 **And a claim may be planned to be settled in parts, which is the one mechanism that is neither a document
 shape nor a date but a line of PRINT.** The plan names a payment schedule; the invoice states that its
@@ -389,7 +392,8 @@ distinguishes a limit-bound claim numerically, and it is what makes the pairing 
 **`imperfection`** names why the verdict is what it is, where the verdict alone does not say. For
 `partially_covered` the causes are declared in `policy.yaml`: `mixed_items` (a non-covered line is on the
 document) and `limit_exhausted` (the annual balance ran out). For `insufficient_evidence` they are
-`subject_not_evidenced`, `amount_mismatch` and `payment_precedes_subject`, and for `rejected` there is one,
+`subject_not_evidenced`, `amount_mismatch`, `payment_precedes_subject`, `counterparty_mismatch` and
+`subject_mismatch`, and for `rejected` there is one,
 `outside_period` — see [Evidence](#evidence). A claim can carry more than one. The three sets are disjoint, so
 a cause always determines its verdict. The converse holds for the first two verdicts only: `rejected` also
 arrives through zero coverage, and a claim rejected that way carries no cause, because the verdict already
@@ -527,14 +531,19 @@ policy parameter**, not a list in the engine: `config/policy.yaml` declares them
 `cross_document_agreement`, each with the verdict and the cause a failure earns, and `policy_engine` reads that
 block. A consumer builds its own engine from the same declaration; an axis withdrawn there is a check neither
 engine performs, and adding a field two documents must agree on is an edit to that block rather than to any
-code. Three are declared today, and each is its own defect with its own name:
+code. Four are declared today, and each is its own defect with its own name:
 
 - **`amount_mismatch`** — the subject document and its payment state different amounts;
 - **`payment_precedes_subject`** — the payment is dated before the document it settles. Strictly before:
   paying an invoice on the day it is issued is ordinary;
 - **`counterparty_mismatch`** — the invoice was issued by one party and the payment was made to another. Both
   pages may be flawless and the amounts and dates may agree exactly; the money still settled some other
-  obligation. Compared on the `counterparty` field, which carries the bare trading name on every class.
+  obligation. Compared on the `counterparty` field, which carries the bare trading name on every class;
+- **`subject_mismatch`** — the payment's purpose line cites a different рахунок from the invoice beside it.
+  The last of the transaction's dimensions: the right money, to the right party, in the right order, declared
+  on the payment's own face to settle a different purchase. Compared on `cites_document_no` against the
+  subject document's own `document_code`, and only where both are stated — a generic purpose, a delivery-note
+  citation and an unprinted purpose line leave nothing to compare, and absence is never a disagreement.
 
 Any of them makes the claim `insufficient_evidence`. This is the third slot: both other facts are established
 separately, and the claim still does not establish that *this* payment paid for *this* subject — a linkage a
@@ -542,8 +551,8 @@ claim has to prove. It is a verdict and not a flag beside a coverage verdict, be
 whose documents contradict each other come out `covered`.
 
 These causes are the linkage slot; the missing **subject** document is the other slot `insufficient_evidence`
-owns. Together they are why the verdict still exists after the period case moved to `rejected`: in all three
-something genuinely *is* unestablished.
+owns. Together they are why the verdict still exists after the period case moved to `rejected`: in every one
+of them something genuinely *is* unestablished.
 
 ### A smaller payment that is not a disagreement
 

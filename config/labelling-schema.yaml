@@ -1035,7 +1035,23 @@
 # target classes and the metric's denominator are unchanged; what changed is that a
 # per-class figure now averages over renderings, and the per-archetype notes in
 # `document_types` say how to slice them apart.
-version: 32
+#
+# Version 33 is THE CORPUS AS A MEASURING INSTRUMENT, in two degenerate places. FIRST, the
+# second route to `rejected`: a basket the claimed category covers none of, drawn per
+# `rejected_routes` in policy.yaml (new block, 0.5/0.5), so the payment date stops predicting
+# the verdict — until now every `rejected` claim was out-of-period and a false-approval rate
+# scored on the label measured the period rule alone. No new field; the route is visible as an
+# EMPTY `imperfection` beside `covered_fraction` 0.0, per `imperfection.cardinality`. KL-07 is
+# rewritten rather than deleted. SECOND, the `subject` axis: `cross_document_agreement` gains
+# its fourth entry, the cause `subject_mismatch` joins the vocabulary at a 0.2 share (five-way
+# even split; `insufficient_evidence_causes_min_run_size` 119 -> 149), and TWO LABEL FIELDS
+# carry its ends — `cites_document_no`, the рахунок the payment's purpose names, new and null
+# wherever no рахунок is cited; and `document_code`, which now also carries the invoice's own
+# printed №. KL-16 narrows to the citation noise that stays outside the axis; KL-16's
+# `fixed_by`, misfiled under KL-17 since it was written, moved home. A consumer that vendored
+# version 32 receives claims of a cause it does not know and `rejected` claims its date rule
+# cannot explain — re-vendor before scoring anything generated at this version.
+version: 33
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -3173,13 +3189,39 @@ document_label:
       required: false
       normalize: identifier
       meaning: >
-        The bank's own number for the document. 👁 8 of 8 and 📄 mandatory as "the number of the
-        payment instruction", and 📄 the key the official check services take.
+        The document's OWN printed number. On a payment confirmation, the bank's number for the
+        document — 👁 8 of 8 and 📄 mandatory as "the number of the payment instruction", and 📄
+        the key the official check services take. On an invoice, its own printed № — the number by
+        which a payment's purpose cites it, and the value the `subject` axis of
+        `cross_document_agreement` compares `cites_document_no` against.
       deduplication: >
-        THIS is the decisive key for this class. Not the authorization code, which is six digits,
-        unique only within an issuer and a window, and 👁 absent from half the documents; and not an
-        RRN, which 👁 is not on this class at all. See RC-06.
-      null_on: every class but `payment_confirmation`
+        THIS is the decisive key for the confirmation class. Not the authorization code, which is
+        six digits, unique only within an issuer and a window, and 👁 absent from half the
+        documents; and not an RRN, which 👁 is not on this class at all. See RC-06.
+      null_on: every class but `payment_confirmation` and `invoice`
+
+    - name: cites_document_no
+      type: string or null
+      required: false
+      normalize: identifier
+      meaning: >
+        The рахунок the payment's purpose line names by number — the payment document's ONE
+        statement about WHICH obligation it settles, structured. Always a substring of
+        `payment_purpose`: a structured copy of what the page prints, never an extra fact. It is
+        the left-hand side of the `subject` axis of `cross_document_agreement` in
+        config/policy.yaml; the right-hand side is the subject document's own `document_code`.
+      null_means: >
+        ⛔ NO РАХУНОК IS CITED, WHICH IS THREE PAGE FORMS UNDER ONE VALUE: a generic formula
+        («Оплата за товар»), a purpose citing a ВН — a delivery note, a class no claim of this
+        dataset holds — and no purpose line at all (the internet-acquiring confirmation, the
+        app-transaction screen). A consumer that needs the three apart reads `payment_purpose`,
+        which still carries the text; what this field promises is only the resolvable case. On
+        every one of the three, the `subject` axis does not run — absence is never a
+        disagreement.
+      null_on: >
+        every class but `payment_confirmation` and `bank_statement` — and within them, wherever
+        no рахунок is cited, per `null_means`. On a statement it describes the LABELLED row;
+        ordinary rows cite documents outside the claim by construction and reach no label.
 
     - name: auth_code
       type: string or null
@@ -4133,10 +4175,18 @@ verdicts:
       causes are therefore emitted, and the shares of the other three fell from a third each to a
       quarter each: a corpus generated before this revision contains none of the fourth, and its
       per-cause counts are conditional on a three-way split.
+
+      🔴 AND A FIFTH, IN VERSION 33, BY THE SAME MACHINERY. `subject_mismatch` — a payment whose
+      purpose cites a different рахунок from the invoice beside it — carries a share and is
+      realized by `assembler`, which draws the wrong reference, and by the builders, which are
+      forced to PRINT the citation (`must_cite`). The shares fell from a quarter each to a fifth
+      each and `insufficient_evidence_causes_min_run_size` moved 119 to 149; a corpus generated
+      before version 33 contains none of the fifth, and its per-cause counts are conditional on
+      a four-way split.
     means: >
       THE SLOTS: that a PURCHASE WAS MADE, and that the payment and the purchase are ONE
       TRANSACTION. This verdict is what the claim gets when either of those two facts of
-      `document_evidence` is not established, and `imperfection` says which — FOUR CAUSES over
+      `document_evidence` is not established, and `imperfection` says which — FIVE CAUSES over
       two slots:
 
         WHAT WAS BOUGHT is not established — no document of the claim is of a type that states
@@ -4144,8 +4194,9 @@ verdicts:
 
         ONE TRANSACTION is not established — a subject document and its payment both exist and
         fail a cross-check: the amounts differ (`amount_mismatch`), the payment is dated
-        before the document it settles (`payment_precedes_subject`), or the two name different
-        parties (`counterparty_mismatch`).
+        before the document it settles (`payment_precedes_subject`), the two name different
+        parties (`counterparty_mismatch`), or the payment's purpose cites a different рахунок
+        from the subject document's own number (`subject_mismatch`).
 
       🔴 THE SECOND LIST IS AS LONG AS config/policy.yaml MAKES IT. `cross_document_agreement`
       there declares which axes a pair is compared on and what a failure earns; a cause of this
@@ -4309,20 +4360,22 @@ verdicts:
         The consumer's catch-all for a guard firing. A runtime outcome, not a label; see
         `verdict_decision_mapping`.
     emitted: >
-      YES, BY ONE OF THE TWO MECHANISMS, AND THE OTHER STILL BY NEITHER. Every `rejected` claim
-      in a dataset is one whose PAYMENT FELL OUTSIDE THE BENEFIT PERIOD, carrying the cause
-      `outside_period`: `claim_planner` displaces such a claim's payment by a whole period, into
-      the adjacent benefit year, on either side of the window. Its documents are otherwise
-      ordinary and its basket is an ordinary covered basket, so `covered_fraction` on such a
-      claim is typically 1.0 and `reimbursable_amount` is 0.00 — a combination no other verdict
-      produces.
+      YES, BY BOTH MECHANISMS, SINCE VERSION 33. On the period route the claim's PAYMENT FELL
+      OUTSIDE THE BENEFIT PERIOD, carrying the cause `outside_period`: `claim_planner` displaces
+      such a claim's payment by a whole period, into the adjacent benefit year, on either side of
+      the window; its basket is an ordinary covered basket, so `covered_fraction` is typically
+      1.0 beside `reimbursable_amount` 0.00. On the coverage route the date is ORDINARY and the
+      basket holds NO covered line — every item from the category's `excluded_items`, a covered
+      fraction of exactly 0.0, and an empty `imperfection`: the verdict says the whole of it.
+      How the bucket splits between the two is `rejected_routes` in policy.yaml.
 
-      ⛔ THE OTHER ROUTE IS NOT IN THE DATA. `rejected` by WHAT WAS BOUGHT — a covered fraction
-      of zero — is labelled by `policy_engine` and built by nothing: `content_builder` always
-      draws at least one covered line. A consumer must therefore not learn "`rejected` means the
-      payment date is outside the window", true though it is of every claim here; see
-      `known_limitations` KL-07, and `claim_planner._UNREALIZABLE_ROUTES` for what the route
-      waits for.
+      🔴 THE DEGENERACY THE SECOND ROUTE CLOSED IS WORTH ONE PARAGRAPH, because it is the reason
+      the route was opened at all. Until version 33 every `rejected` claim was an out-of-period
+      one, so the payment date ALONE predicted the verdict, and a false-approval rate measured on
+      this label exercised exactly one rule — a system implementing only the period check would
+      have scored perfectly. A consumer must not learn "`rejected` means the payment date is
+      outside the window": on a corpus of this version it is true of the period route only. KL-07
+      recorded the degeneracy while it held and is rewritten rather than deleted.
     share: >
       `verdict_mix` in policy.yaml declares 0.10 for this member since the revision that made it
       buildable. It read `null` before — a share, unlike a weight of 0, that the loader returns
@@ -4330,6 +4383,10 @@ verdicts:
       MIX CARRIES `null` TODAY, and the rule about one is unchanged for whichever verdict is next
       declared before its mechanism exists: an undeclared share is absent, not zero, and the
       balance report reports the absent fraction of the mix as a LOWER BOUND when one appears.
+
+      SINCE VERSION 33 THE BUCKET IS SPLIT BY ROUTE — `rejected_routes` in policy.yaml, 0.5
+      each, with the even split reasoned and the both-routes-non-zero run size (59) derived
+      beside the shares. The verdict's own 0.10 did not move.
 
       🔴 THE SHARE CAME OUT OF `covered`, WHICH FELL 0.50 TO 0.40, so the realizable subset still
       sums to 0.80 and the conditional rate of every other realizable verdict is unchanged. A
@@ -4392,7 +4449,9 @@ verdict_notes:
       that MONEY MOVED                not_proof_of_payment    none - the verdict says it all
       that a PURCHASE was made        insufficient_evidence   subject_not_evidenced
       that the two are ONE            insufficient_evidence   amount_mismatch,
-      TRANSACTION                                             payment_precedes_subject
+      TRANSACTION                                             payment_precedes_subject,
+                                                              counterparty_mismatch,
+                                                              subject_mismatch
     the_test_an_edit_must_pass: >
       A BARE INVOICE MUST BE CLASSIFIABLE FROM `verdicts.not_proof_of_payment.means` ALONE, with
       no mention of any other verdict in it. An invoice is a `proves_payment: false` type, the
@@ -4559,7 +4618,7 @@ claim_evidence:
       `cross_document_agreement`, and is no longer a list inside the engine. Each entry names the
       AXIS and the OUTCOME — the verdict and the cause a failure earns — so a consumer building its
       own engine reads both from the same file the labels were derived from, and an axis withdrawn
-      there is a check neither engine performs. The three below are what that block declares today;
+      there is a check neither engine performs. The four below are what that block declares today;
       the block is the authority and this section describes it.
     amount: >
       The subject document and its payment state the same amount, compared to two decimal
@@ -4579,6 +4638,19 @@ claim_evidence:
       normalization of its own). ⛔ THE COUNTERPARTY'S TAX NUMBER IS NOT COMPARED, and cannot be:
       no label field of any class carries it. That is the consumer cross-check named in
       `claim_label.linked` and it stays unperformed for want of a field, not for want of a rule.
+    subject: >
+      Where the payment's purpose names the рахунок it settles, it names THE CLAIM'S OWN subject
+      document. Cause `subject_mismatch`. Axis `subject`. Compared on `cites_document_no` against
+      the subject document's `document_code`, and ONLY where both are stated — ⛔ ABSENCE IS NEVER
+      A DISAGREEMENT: a generic formula, a ВН citation and an unprinted purpose line all leave the
+      axis silent, which is what keeps the ordinary citation noise KL-16 documents from becoming
+      a verdict. What the axis catches is the one defect no other axis can see — the right money,
+      to the right party, in the right order, declared on the payment's own face to settle a
+      DIFFERENT purchase.
+
+      ⚠️ IT IS NOT A SUBJECT-CONTENT COMPARISON. A payment document states no basket
+      (`proves_subject: false` is unchanged, and remains 👁-grounded); what it states is a
+      document NUMBER, and the number is the whole of what is compared.
     not_checked_here: >
       Whether a document's own stated `amount` equals the sum of its own line items. That
       is a DOCUMENT invariant, owned by `content_builder.validate_line_item_sum`,
@@ -4761,15 +4833,17 @@ claim_label:
         limit_exhausted: the annual balance ran out — NOT VISIBLE IN THE IMAGE
         # Causes of `insufficient_evidence`, one per slot it owns: the WHAT-WAS-BOUGHT slot and
         # the ONE-TRANSACTION slot (see `verdict_notes.definitions_name_their_own_slot`).
-        # POLICY.YAML NAMES ALL THREE — under `insufficient_evidence_causes`, which exists to
+        # POLICY.YAML NAMES ALL FIVE — under `insufficient_evidence_causes`, which exists to
         # give them SHARES of that verdict's bucket, exactly as `partially_covered_causes` does
         # above. That is a DRAW and not a vocabulary: `policy_engine` derives a cause from a
         # claim's documents without consulting a share, so a cause whose share was removed would
         # still be returned and still reach a label. The names are `policy_engine`'s, exported as
         # module constants, and THIS FILE is where the vocabulary is contracted.
-        # ⛔ `outside_period` below has no share OF ITS OWN, and needs none: `rejected` has two
-        # routes and only one is buildable, so a per-route split would be the number 1.0 written
-        # down. The VERDICT carries a share since this revision — see `verdicts.rejected.share`.
+        # ⛔ `outside_period` below has a ROUTE share rather than a cause share: `rejected`'s two
+        # routes are both drawn since version 33, and `rejected_routes` in policy.yaml is what
+        # splits the verdict's bucket between them. It is a route map and not a cause map,
+        # because the zero-coverage route carries NO cause at all — the label tells the routes
+        # apart by the PRESENCE of `outside_period`, per `cardinality` below.
         subject_not_evidenced: >
           The WHAT-WAS-BOUGHT slot: no document of the claim is of a type that states it — a
           bare transfer. That slot has no document at all.
@@ -4792,6 +4866,18 @@ claim_label:
           the check. See `claim_evidence.cross_checks.counterparty`, and
           `cross_document_agreement` in policy.yaml, which is where the axis and this cause are
           declared together.
+        subject_mismatch: >
+          The ONE-TRANSACTION slot a fourth time, and the axis that closes the transaction's
+          last dimension: the amount says HOW MUCH, the counterparty TO WHOM, the order WHEN —
+          this one says FOR WHAT. The payment's purpose line cites a рахунок by number, and the
+          number is not the subject document's own: the payment declares, on its own face, that
+          it settles a DIFFERENT purchase. Amounts, dates and parties may all agree exactly.
+
+          🔴 ONLY A STATED CITATION CAN EARN IT. `cites_document_no` is `null` on a generic
+          formula, a ВН citation and an unprinted purpose line, and every such claim passes the
+          axis whatever else is true of it — absence is never a disagreement. See
+          `claim_evidence.cross_checks.subject`, and KL-16, whose ordinary citation noise this
+          cause is deliberately deaf to.
         # The one cause of `rejected`, and the only one that verdict needs: its other
         # mechanism, a basket the category covers none of, is the whole of what the verdict
         # already says.
@@ -4805,11 +4891,11 @@ claim_label:
         Empty on a `covered` claim, empty on `not_proof_of_payment`, and empty on a `rejected`
         claim whose basket is what the policy does not cover — in each case the verdict says
         the whole of it. Several causes may appear on one claim: both `partially_covered`
-        causes, for which policy.yaml declares no share, and both cross-check causes, where
-        one pair of documents disagrees twice over.
+        causes, for which policy.yaml declares no share, and several cross-check causes, where
+        one pair of documents disagrees on more than one axis.
       verdict_scope: >
         A cause never appears under a verdict it does not belong to. Three disjoint sets —
-        two `partially_covered` causes, three `insufficient_evidence` causes, one `rejected`
+        two `partially_covered` causes, five `insufficient_evidence` causes, one `rejected`
         cause — so a cause always determines its verdict, and a consumer may key on the cause
         to recover the verdict.
 
@@ -4821,8 +4907,8 @@ claim_label:
         as a value rather than as missing data, and must not assume every `rejected` claim
         names one.
       narrower_than_the_catalogue: >
-        docs/architecture.md#imperfection-catalogue names fifteen mechanisms; only these six
-        reach a label, because only these six are mechanisms whose verdict does not say by
+        docs/architecture.md#imperfection-catalogue names the mechanisms; only these seven
+        reach a label, because only these seven are mechanisms whose verdict does not say by
         itself which of them applied — read PER ROUTE rather than per verdict, since
         `rejected` names a cause on its period route and none on its coverage route. Where the
         others will be recorded is not decided. The consumer's counterpart is
@@ -5417,59 +5503,60 @@ known_limitations:
       is declared here rather than fixed alongside the archetype that exposed it.
 
   - id: KL-07
-    name: one of the two routes to `rejected` is never realized, so the date predicts the verdict
+    name: on corpora before version 33, the payment date fully predicted `rejected`
     predictor: >
-      the payment date — outside the benefit period on every `rejected` claim and on no other
+      the payment date — on a pre-33 corpus, outside the benefit period on every `rejected`
+      claim and on no other; on a corpus of this version, on the `outside_period` route only
     hurts: [evaluation, training]
     subset: >
-      🔴 EVERY `rejected` CLAIM IS AN OUT-OF-PERIOD ONE. That verdict has two routes and the corpus
-      contains one: by WHEN it was paid, cause `outside_period`. The other — by WHAT WAS BOUGHT, a
-      basket the claimed category covers none of, carrying NO cause — is labelled by
-      `policy_engine` and built by nothing, because `content_builder` always draws at least one
-      covered line (`claim_planner._UNREALIZABLE_ROUTES`).
+      🔴 CLOSED IN VERSION 33, AND REWRITTEN RATHER THAN DELETED, because every corpus generated
+      before it — including the ones the run profiles below measure — carries the degeneracy this
+      entry records. On such a corpus every `rejected` claim is an out-of-period one: the verdict
+      has two routes and those corpora contain one, by WHEN it was paid, cause `outside_period`.
+      The other — by WHAT WAS BOUGHT, a basket the claimed category covers none of, carrying NO
+      cause — was labelled by `policy_engine` and built by nothing, because `content_builder`
+      always drew at least one covered line.
 
-      So the verdict is FULLY PREDICTED BY A DATE COMPARISON on this corpus, and a system that
-      never reads a line item can score perfectly on it. That is a shortcut the data teaches, not
+      So on a pre-33 corpus the verdict is FULLY PREDICTED BY A DATE COMPARISON, and a system
+      that never reads a line item scores perfectly on it — a shortcut the data teaches, not
       merely a gap in it, which is why this entry hurts training as well as evaluation.
 
-      ⚠️ THIS ENTRY USED TO BE ABOUT A MISSING CAUSE, and both of the gaps it described have since
-      closed: `subject_not_evidenced` when the planner gained
-      `claim_planner.EvidenceIntent.EVIDENCE_GAP`, and `outside_period` when it learned to displace
-      a claim's payment out of the benefit period. ALL SIX CAUSES OF `imperfection` NOW OCCUR. What
-      survives is one step narrower than a cause: a route that carries no cause at all, and is
-      therefore invisible to a consumer stratifying by `imperfection`.
+      SINCE VERSION 33 BOTH ROUTES ARE DRAWN (`rejected_routes` in policy.yaml, 0.5 each): the
+      coverage route's claims sit INSIDE the window with a covered fraction of exactly 0.0 and
+      an empty `imperfection`, so the date predicts the verdict on neither axis of a fresh run.
     how_a_consumer_detects_it: >
       Take every claim labelled `rejected` and compare its payment date against `period` in
-      config/policy.yaml: all of them fall outside it, and all of them carry `outside_period` in
-      `imperfection`. The complement — a `rejected` claim with an EMPTY `imperfection`, whose
-      `covered_fraction` is 0 and whose lines are all non-covered — does not occur at any run size,
-      because nothing builds it; a scorecard row for that case is unmeasured rather than perfect.
-      Reading the other way round is the trap: `covered_fraction` on a `rejected` claim of this
-      corpus is typically 1.0, so a consumer that learned "rejected means nothing was covered" from
-      the policy will find the data disagreeing with it in every instance.
+      config/policy.yaml. On a pre-33 corpus all of them fall outside it and all carry
+      `outside_period` in `imperfection` — the complement, a `rejected` claim with an EMPTY
+      `imperfection` and every line non-covered, does not occur at any run size, and a scorecard
+      row for that case is unmeasured rather than perfect. On a corpus of this version the same
+      comparison splits the bucket into the two routes at roughly the declared shares (both
+      non-zero from 59 built claims, per the derivation beside `rejected_routes`). Reading the
+      other way round is the trap either way: `covered_fraction` on the period route is typically
+      1.0, so "rejected means nothing was covered" disagrees with half the data or all of it,
+      depending on the vintage.
     see_profile: run_profiles
     when_it_appeared: >
-      WHEN THE PLANNER GAINED THE PERIOD ROUTE AND NOT THE COVERAGE ONE. Before that revision the
-      verdict itself was absent from every dataset and this entry described the absence of its
-      cause; a profile measured earlier — every profile in `run_profiles` — counts `rejected` as
-      zero and five causes rather than six, correctly for the run it names. The asymmetry recorded
-      here is what the revision created: a verdict that is now present through exactly one of its
-      two mechanisms.
+      WHEN THE PLANNER GAINED THE PERIOD ROUTE AND NOT THE COVERAGE ONE, and it held until
+      version 33 gained the second. Every profile in `run_profiles` was measured while it held —
+      each counts every `rejected` claim as an out-of-period one, correctly for the run it names.
     consequence: >
-      A per-verdict figure for `rejected` measured on this corpus is a figure about the PERIOD
-      RULE and about nothing else. It does not evidence that a system can refuse a claim whose
-      basket the policy excludes, and it must not be quoted as one. A consumer building an
-      evaluation of category-coverage refusals has to source it elsewhere until the route is built.
+      A per-verdict figure for `rejected` measured on a PRE-33 corpus is a figure about the
+      PERIOD RULE and about nothing else: it does not evidence that a system can refuse a claim
+      whose basket the policy excludes, and it must not be quoted as one. The same figure on a
+      corpus of this version measures both refusal rules at the declared route split — which is
+      the property the false-approval bound needs, and the reason the route was opened.
     how_to_stratify: >
-      By `imperfection` membership within the verdict: `outside_period` present is the whole of the
-      `rejected` bucket here, and `rejected` with an empty `imperfection` is the empty stratum
-      whose denominator is zero by construction rather than by outcome.
+      By `imperfection` membership within the verdict, on any vintage: `outside_period` present
+      is the period route; an empty `imperfection` beside `covered_fraction` 0.0 is the coverage
+      route, a stratum whose denominator is zero by construction on every pre-33 corpus and
+      non-zero from version 33 on.
     fixed_by: >
-      A BASKET BUILDER THAT CAN DRAW NO COVERED LINE. `content_builder` draws at least one covered
-      line for every claim, which is what makes a covered fraction of zero unreachable; opening the
-      route means changing that builder and giving the planner a way to ask for it, in the way
-      `EvidenceIntent` gave it a way to ask for missing evidence. The engine needs nothing: it has
-      labelled the case since `verdict_for` was written.
+      WHAT THE ENTRY USED TO NAME AS THE FIX, DONE, in version 33: `content_builder._draw_basket`
+      accepts a coverage target of exactly ZERO and draws every line from `excluded_items`; the
+      planner asks for it via `ClaimPlan.coverage_target` and draws the route per
+      `rejected_routes`. The engine needed nothing: it had labelled the case since `verdict_for`
+      was written.
 
   - id: KL-08
     name: the cross-check causes can never occur on a fiscal receipt
@@ -5796,10 +5883,12 @@ known_limitations:
       about the mix and not an implementation gap.
 
   - id: KL-16
-    name: the payment purpose reads like a linkage key and is not one
+    name: the payment purpose reads like a linkage key, and only its рахунок citation is one
     predictor: >
-      none — a cross-document cue that carries no information about the verdict, while disagreeing
-      with the subject document on some claims whose label is perfectly ordinary
+      none on the noise — ВН citations, generic nouns and unprinted lines carry no information
+      about the verdict while disagreeing with the subject document on ordinary claims. The
+      рахунок citation is not noise since version 33: it is the `subject` axis, compared and
+      labelled (`subject_mismatch`), visible in the image by design like every content negative
     hurts: [training, evaluation]
     subset: >
       🔴 CLAIMS EVIDENCED BY A PAIR WHOSE PAYMENT DOCUMENT PRINTS A PURPOSE LINE, which is most of
@@ -5809,11 +5898,13 @@ known_limitations:
       DOCUMENT, both visible to a reader:
 
       THE DOCUMENT CITED. Some formulas name a рахунок and are filled with the claim's own invoice
-      number and date; others name a ВН — a delivery note — whose number is DRAWN AND BELONGS TO NO
-      DOCUMENT OF THE CLAIM (`content_builder._fill_reference`: `{delivery_note_no}` is never filled
-      from the claim, deliberately, so that a linker matching on «№» without reading which class is
-      named links the wrong document). So on a share of ordinary, fully covered claims the payment
-      cites a document number the invoice beside it does not carry.
+      number and date — except on a claim planned as `subject_mismatch`, where the number is drawn
+      WRONG on purpose and labelled (see the ⛔ below); others name a ВН — a delivery note — whose
+      number is DRAWN AND BELONGS TO NO DOCUMENT OF THE CLAIM (`content_builder._fill_reference`:
+      `{delivery_note_no}` is never filled from the claim, deliberately, so that a linker matching
+      on «№» without reading which class is named links the wrong document). So on a share of
+      ordinary, fully covered claims the payment cites a document number the invoice beside it
+      does not carry.
 
       THE GOODS NOUN. «за товар», «за обладнання», «за витратні матеріали» — generic, and drawn
       without reference to the claim's category, so a psychotherapy invoice may be settled by a
@@ -5830,13 +5921,18 @@ known_limitations:
       carries a purpose whatever the draw. A consumer that folds this case into "cites nothing of
       the claim" is measuring two different things under one name.
 
-      ⛔ IT IS NOT A LABELLING ERROR AND THE CITATION IS NOT AN AXIS. `cross_document_agreement` in
-      config/policy.yaml declares three — amount, date order, counterparty — and document-number
-      agreement is deliberately not among them. 👁 An observed purpose line names an invoice OR a
-      delivery note by number, and a delivery note is a class no claim of this dataset holds, so a
-      citation pointing outside the claim is the ordinary form of the line rather than a defect in
-      it; what makes a pair one transaction is the money and the party. Every verdict here is
-      derived from the declared axes and is right on every such claim.
+      ⛔ IT IS NOT A LABELLING ERROR — AND SINCE VERSION 33 ONE SLICE OF IT IS AN AXIS, WHILE THE
+      REST REMAINS EXACTLY THE NOISE THIS ENTRY DESCRIBES. `cross_document_agreement` in
+      config/policy.yaml now declares four axes, and the fourth — `subject` — compares ONLY the
+      рахунок citation, structured as `cites_document_no`, against the subject document's own
+      number: a рахунок citation naming a different invoice is `insufficient_evidence` with the
+      cause `subject_mismatch`, deliberately visible in the image, exactly as a counterparty
+      mismatch is. Everything else this entry lists stays OUTSIDE the axis, on purpose: 👁 an
+      observed purpose line names an invoice OR a delivery note by number, a delivery note is a
+      class no claim of this dataset holds, so a ВН citation pointing outside the claim is the
+      ordinary form of the line rather than a defect in it — and the generic nouns and the
+      unprinted lines state nothing at all. Every verdict on those claims is derived from the
+      declared axes and is right on every one of them; absence is never a disagreement.
     how_a_consumer_detects_it: >
       Read the purpose line of a claim's payment document — where the document prints one; see the
       third case above — against the subject document's own number and against its line items. The
@@ -5861,12 +5957,18 @@ known_limitations:
 
       ⚠️ THAT INFERENCE IS NOT SUPPORTED ON THE CLAIMS THIS ENTRY IS ABOUT, AND SAYING SO IS THE
       USEFUL PART. Among claims that HAVE a pair, the formula is drawn from the same pool on a
-      planned negative as on an ordinary claim, and the negative's own realization touches the PARTY
-      and nothing else — so citation fidelity is drawn INDEPENDENTLY OF THE LABEL and no
-      correlation exists in either direction. What was seen at that size was a coincidence of the
-      draw. The limitation is the independence itself: the cue looks like a linkage key, and a system
-      that treats a matching citation as evidence of a link is right by accident and wrong by
-      accident in equal measure.
+      planned negative as on an ordinary claim, and the counterparty negative's own realization
+      touches the PARTY and nothing else — so ВН citations, generic nouns and unprinted lines are
+      drawn INDEPENDENTLY OF THE LABEL and no correlation exists in either direction. What was
+      seen at that size was a coincidence of the draw.
+
+      🔴 SINCE VERSION 33 THERE IS EXACTLY ONE EXCEPTION, AND IT IS A LABEL, NOT A LEAK: on a
+      `subject_mismatch` claim the рахунок citation itself is the planned defect, forced onto the
+      page (`must_cite`) and compared by the `subject` axis. So a рахунок citation that RESOLVES
+      says something now — it says the pair passes that axis — while the noise this entry lists
+      goes on saying nothing. The limitation that survives is the independence of the NOISE: a
+      system that treats a ВН citation or a generic noun as linkage evidence is still right by
+      accident and wrong by accident in equal measure.
 
       ⛔ THE INDEPENDENCE IS NOT A CORPUS-WIDE CLAIM, AND ONE LABELLED CAUSE IS OUTSIDE IT ENTIRELY.
       An `insufficient_evidence` claim with the cause `subject_not_evidenced` carries a payment
@@ -5884,26 +5986,40 @@ known_limitations:
       gradient points at dropping the field — while in the world a payment purpose is one of the few
       places a payment says which obligation it settles.
 
-      ⚠️ AND A LINKER'S RECALL IS NOT HONESTLY MEASURABLE ON THIS CORPUS, for a reason no run size
-      fixes: nothing in the label says whether a citation of the claim's own document was THERE TO BE
-      FOUND, so "the linker missed it" and "there was nothing to find" fall into one bucket. A
-      `cites_subject_document` flag is specified for exactly that denominator in
-      docs/cross-document-fields.md and DOES NOT EXIST — ⛔ it is deliberately blocked there until a
-      contaminated share of the confirmation purpose pool is repaired, because shipping it earlier
-      would certify those documents as legitimately non-citing.
+      ⚠️ A LINKER'S RECALL BECAME MEASURABLE ON THE РАХУНОК SLICE IN VERSION 33, and only there:
+      `cites_document_no` now says, structured, whether a рахунок citation was THERE TO BE FOUND
+      and which number it names — the denominator the `cites_subject_document` flag was specified
+      for in docs/cross-document-fields.md, delivered in a narrower and stronger form (the number
+      itself rather than a boolean). The block that held that flag back — a contaminated share of
+      the confirmation purpose pool — was repaired before this field shipped. ⛔ The ВН slice
+      stays unmeasurable by design: a delivery-note number belongs to no document of the claim,
+      so there is no "found it" for a recall figure to count.
     how_to_stratify: >
       INTO THREE BUCKETS, NOT TWO, AND THE FIRST OF THEM IS FREE. `payment_purpose` is a label
       field: `null` says the document PRINTS NO PURPOSE LINE, which is a different fact from a line
       that cites nothing of the claim, and a consumer that reports them together is measuring a
       linker against documents that gave it nothing to read.
 
-      Of the documents that do print one, split by whether the line cites the claim's own document —
-      that half has to be parsed from `reference_text`, since no label field carries it. Report a
-      linkage figure on each of the three shares and never as one number; a single figure moves with
-      the pool's formula mix and with `payment_confirmation.initiation_shares`, both properties of a
-      config file rather than of the system. And take the figure over claims that HAVE a pair: on a
-      `subject_not_evidenced` claim there is nothing to cite, so a corpus-wide denominator scores
-      that cause as a total linkage failure by construction.
+      Of the documents that do print one, split by whether the line cites a рахунок —
+      `cites_document_no` carries that structured since version 33; the ВН half still has to be
+      parsed from `reference_text`. Report a linkage figure on each of the three shares and never
+      as one number; a single figure moves with the pool's formula mix and with
+      `payment_confirmation.initiation_shares`, both properties of a config file rather than of
+      the system. And take the figure over claims that HAVE a pair: on a `subject_not_evidenced`
+      claim there is nothing to cite, so a corpus-wide denominator scores that cause as a total
+      linkage failure by construction.
+    # ⚠️ MOVED HOME IN VERSION 33: this key sat under KL-17, the fx-rates entry, since the
+    # revision that wrote it — a misfiled key, found while the version-33 change edited it.
+    fixed_by: >
+      NOTHING THAT SHOULD BE DONE BY WIDENING THE POOL, and the decision is the author's: 👁 the
+      observed purpose lines name a delivery note as well as an invoice, and a corpus in which
+      every payment cited its own invoice perfectly would put that field into the state
+      `docs/cross-document-fields.md` calls ① — matching by construction, so a selector built on
+      it measures the generator rather than the system. Both closures it once deferred were taken
+      in version 33: the denominator is honest (`cites_document_no`), and document-number
+      agreement IS the fourth axis of `cross_document_agreement` — as `subject`, scoped to the
+      рахунок citation, with the ВН noise deliberately left outside it. The pool itself stays as
+      observed, which is what keeps the field out of state ①.
 
   - id: KL-17
     name: currency conversion is exercised against static rates, and the world's are live
@@ -5934,14 +6050,11 @@ known_limitations:
       of date-sensitive conversion needs data this corpus deliberately does not contain.
     see_profile: run_profiles
     fixed_by: >
-      NOTHING THAT SHOULD BE DONE BY WIDENING THE POOL, and the decision is the author's: 👁 the
-      observed purpose lines name a delivery note as well as an invoice, and a corpus in which
-      every payment cited its own invoice perfectly would put that field into the state
-      `docs/cross-document-fields.md` calls ① — matching by construction, so a selector built on it
-      measures the generator rather than the system. What WOULD close it is the flag above, once its
-      denominator is honest, plus a policy decision about whether document-number agreement becomes a
-      fourth axis of `cross_document_agreement`. Neither is an implementation gap and neither is
-      taken here.
+      NOTHING, BY DECISION: config/fx-rates.yaml is static because reproducibility outranks
+      realistic drift, as its own header reasons. A corpus exercising date-sensitive conversion
+      would need labels that change with the day they are generated on, which is the property
+      this generator exists to refuse. The gap is inherited as a decision, not a backlog item.
+      ⚠️ Until version 33 this key carried KL-16's `fixed_by` — a misfiled key, moved home.
 
 
 # =============================================================================
