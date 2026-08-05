@@ -526,3 +526,68 @@ def test_a_realized_cause_carries_no_run_size_finding():
 
     assert "RUN TOO SMALL" not in line
     assert "DESIGN/MECHANISM DEFECT" not in line
+
+
+# ------------------------------------------------------- report: the rejected routes --
+
+
+def a_run_with_rejected_routes(outside_period: int, zero_coverage: int):
+    """`rejected` claims attributed by the label's own rule — the cause `outside_period` or an
+    empty `imperfection` — plus one `covered` filler so `rejected` is never the whole run."""
+    claims = [
+        ClaimGroundTruth(
+            claim_id=f"c{index:03d}", persona_id=f"p{index:03d}", category="vitamins_nutrition",
+            documents=[], verdict=Verdict.REJECTED,
+            imperfection=["outside_period"] if index <= outside_period else [],
+        )
+        for index in range(1, outside_period + zero_coverage + 1)
+    ]
+    claims.append(a_claim("c999", "p999", [], verdict=Verdict.COVERED))
+    return Dataset(seed=1, personas=[], claims=claims, documents=[])
+
+
+def test_rejected_routes_are_counted_off_the_label():
+    """🔴 THE COUNTS ARE DELIBERATELY ASYMMETRIC — 2 against 1 — because a symmetric pair cannot
+    discriminate the mutation this test exists for: with one claim on each route, swapping the
+    attribution rule (`outside_period` read as the basket route and vice versa) reproduces the
+    same table. At 2/1 the swap prints 1/2 and this goes red. Same lesson as the bank-name
+    equality tests: size the test against the mutation, not against the draw."""
+    report = balance_report(a_run_with_rejected_routes(outside_period=2, zero_coverage=1))
+    lines = [
+        ln
+        for ln in report.splitlines()
+        if ln.strip().startswith(("outside_period", "zero_coverage"))
+    ]
+
+    assert any(ln.strip().startswith("outside_period") and "   2  " in ln for ln in lines), lines
+    assert any(ln.strip().startswith("zero_coverage") and "   1  " in ln for ln in lines), lines
+    assert "rejected by route — 3 claim(s)" in report
+
+
+def test_a_route_realizing_zero_prints_the_probability_of_that_zero():
+    """The zero row must not read as broken and must not read as fine either: it prints the
+    probability of the zero under the declared shares, computed by the same arithmetic as the
+    cause block's — and, deliberately, NO run-size guideline: policy.yaml declines to declare
+    one for the routes, and the report must not invent a threshold the policy does not hold."""
+    from receipt_synth.policy_engine import rejected_routes
+
+    run = a_run_with_rejected_routes(outside_period=2, zero_coverage=0)
+    report = balance_report(run)
+    line = next(ln for ln in report.splitlines() if ln.strip().startswith("zero_coverage"))
+    odds = _absence_probability(
+        rejected_routes()["zero_coverage"], len(run.claims), verdict=Verdict.REJECTED
+    )
+
+    assert f"ZERO IN THIS RUN — a zero is a {odds:.1%} event" in line
+    assert "guideline" not in line
+    assert "RUN TOO SMALL" not in line
+
+
+def test_a_run_with_no_rejected_claims_prints_the_denominator_and_no_finding():
+    """A run that drew no `rejected` at all is the verdict table's finding, not this block's: the
+    routes of zero claims are not absent routes, and a probability printed over an empty
+    denominator would be a statement about nothing."""
+    report = balance_report(a_dataset())
+
+    assert "rejected by route — 0 claim(s)" in report
+    assert "ZERO IN THIS RUN" not in report

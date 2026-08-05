@@ -30,6 +30,7 @@ from receipt_synth.claim_planner import (
     ARCHETYPES,
     REALIZABLE_VERDICTS,
     STATES_AN_INSTALMENT_TERM,
+    ZERO_COVERAGE,
     Archetype,
     ClaimPlan,
     DocumentPlan,
@@ -67,12 +68,14 @@ from receipt_synth.persona_generator import generate_persona
 from receipt_synth.policy_engine import (
     AMOUNT_MISMATCH,
     COUNTERPARTY_MISMATCH,
+    OUTSIDE_PERIOD,
     SUBJECT_MISMATCH,
     Ledger,
     evaluate_claim,
     insufficient_evidence_causes,
     insufficient_evidence_causes_min_run_size,
     partially_covered_causes,
+    rejected_routes,
     verdict_mix,
 )
 from receipt_synth.renderer import RenderedDocument, Renderer
@@ -1664,7 +1667,8 @@ def balance_report(dataset: Dataset) -> str:
     lesson is that the sigil is a reserved word, not emphasis.
 
     The report covers the verdict axis, the claim count, the exclusion note, imperfection causes,
-    document classes, currency, language, capture channels and the train / validation partition.
+    the routes of `rejected`, document classes, currency, language, capture channels and the
+    train / validation partition.
     """
     mix = verdict_mix()
     missing = unrealizable_verdicts()
@@ -1717,6 +1721,7 @@ def balance_report(dataset: Dataset) -> str:
 
     lines += _cause_lines(dataset)
     lines += _insufficient_evidence_cause_lines(dataset)
+    lines += _rejected_route_lines(dataset)
 
     if missing:
         named = ", ".join(_target_share(verdict, mix) for verdict in missing)
@@ -2005,9 +2010,11 @@ def _cause_lines(dataset: Dataset) -> list[str]:
     return lines
 
 
-def _absence_probability(cause_share: float, run_size: int) -> float:
-    """P(a cause declared at `cause_share` of its verdict is realized ZERO times in `run_size`
-    built claims), under the declared shares.
+def _absence_probability(
+    cause_share: float, run_size: int, verdict: Verdict = Verdict.INSUFFICIENT_EVIDENCE
+) -> float:
+    """P(a cause or route declared at `cause_share` of `verdict` is realized ZERO times in
+    `run_size` built claims), under the declared shares.
 
     🔴 THE SAME ARITHMETIC policy.yaml DERIVES `insufficient_evidence_causes_min_run_size` BY, and
     that is the whole reason it exists here rather than a sentence someone wrote once: a cause is
@@ -2034,7 +2041,7 @@ def _absence_probability(cause_share: float, run_size: int) -> float:
         for verdict, share in mix.items()
         if verdict in REALIZABLE_VERDICTS and share is not None
     )
-    verdict_share = mix.get(Verdict.INSUFFICIENT_EVIDENCE)
+    verdict_share = mix.get(verdict)
     if not declared or not subset or verdict_share is None:
         return 1.0
     rate = (verdict_share / subset) * cause_share
@@ -2109,6 +2116,59 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
         lines.append(
             f"  {cause:<26} {counts[cause]:>4}  {_share(counts[cause], total):>6}"
             "   !! realized with no share declared for it in policy.yaml"
+        )
+    return lines
+
+
+def _rejected_route_lines(dataset: Dataset) -> list[str]:
+    """`rejected` by route, attributed off the label the way a consumer would have to.
+
+    🔴 A ROUTE IS NOT A CAUSE, AND THE ATTRIBUTION RULE IS THE LABEL'S OWN: policy.yaml gives
+    the zero-coverage route NO cause — the verdict is the whole of what it says — so a
+    `rejected` claim carrying `outside_period` came by the period route and one carrying
+    nothing came by the basket. Until the second route existed, every `rejected` claim was an
+    out-of-period one and the payment date predicted the verdict; this block is what says
+    whether a particular run exercises both routes, which a reader needs BEFORE quoting any
+    false-approval figure on `rejected` — a run where one route is absent is measuring the
+    other rule alone.
+
+    A route realizing zero prints the probability of that zero under the declared shares, by
+    the same arithmetic as the cause block above. ⛔ NO run-size guideline is printed beside
+    it: policy.yaml deliberately declares no `min_run_size` key for the routes — the
+    derivation lives as a comment beside the shares, and a key without a reader rots — so the
+    report states the figure and leaves the reading to the reader rather than inventing a
+    threshold the policy does not declare.
+    """
+    routes = rejected_routes()
+    rejected = [claim for claim in dataset.claims if claim.verdict is Verdict.REJECTED]
+    counts = Counter(
+        OUTSIDE_PERIOD if OUTSIDE_PERIOD in claim.imperfection else ZERO_COVERAGE
+        for claim in rejected
+    )
+    total = len(rejected)
+
+    lines = [
+        f"rejected by route — {total} claim(s); the label tells the routes apart by the "
+        f"cause: `{OUTSIDE_PERIOD}` or nothing at all"
+    ]
+    for route, share in routes.items():
+        row = (
+            f"  {route:<26} {counts[route]:>4}  {_share(counts[route], total):>6}"
+            f"   target {share:.1%}"
+        )
+        if counts[route] == 0 and total:
+            odds = _absence_probability(share, len(dataset.claims), verdict=Verdict.REJECTED)
+            row += (
+                f"   ZERO IN THIS RUN — a zero is a {odds:.1%} event under the declared "
+                f"shares in {len(dataset.claims)} built claim(s)"
+            )
+        lines.append(row)
+
+    unattributed = total - sum(counts[route] for route in routes)
+    if unattributed:
+        lines.append(
+            f"  !! {unattributed} rejected claim(s) fall on a route `rejected_routes` does not "
+            "declare — the table is wrong, not the dataset"
         )
     return lines
 
