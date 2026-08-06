@@ -1207,7 +1207,50 @@
 #   ⚠️ WHAT A CONSUMER MUST DO: nothing, unless it reads the validity line. If it does, it may now
 #   rely on the guarantee — and if it measured anything on a corpus generated before this version, a
 #   consumer that read this line was scored against pages that contradicted their own claims.
-version: 37
+# Bumped to 38 by A NEW DELIVERED CORPUS, RP-07, AND BY THE DEFECT THAT DELIVERING IT FOUND: THIS
+# GENERATOR WAS NOT REPRODUCIBLE FROM ITS SEED. ⛔ `config/policy.yaml` IS NOT TOUCHED — no verdict,
+# no cause, no share and no comparison rule moves — so this is NOT an I-2 event. What changes is
+# WHICH CORPUS A SEED PRODUCES, which is a larger change than any of them, and it is first.
+#
+#   🔴 THE CORPUS WAS A FUNCTION OF THE SEED AND OF THE CALENDAR DAY. `persona_generator` drew the
+#   birth date the РНОКПП encodes with `Faker.date_of_birth`, which takes its OFFSET from the seeded
+#   instance and its ANCHOR from `datetime.now()`. Measured rather than argued: two runs of a
+#   byte-identical command two hours apart across midnight moved 36 of 96 personas' `tax_id` and
+#   352 of 1 141 images. The birth date is now drawn from the seeded generator and anchored on
+#   `config/policy.yaml`'s benefit period — the frame every other date in this dataset already
+#   lives in — so a corpus is a function of the configuration plus the seed, with nothing left over.
+#
+#   🔴 SO EVERY `corpus_identity` DIGEST TAKEN BEFORE THIS VERSION NAMES A CORPUS NOBODY CAN
+#   REPRODUCE, RP-05's AND RP-06's INCLUDED. The three digests exist to settle "is the directory I
+#   hold the corpus these figures describe"; against a pre-38 profile that question is now
+#   unanswerable rather than answered negatively. The profiles are NOT edited — a run that happened
+#   does not go stale — and the consequence is stated once, at
+#   `run_profiles.a_digest_taken_before_version_38`. ⚠️ A consumer holding a pre-38 corpus keeps a
+#   perfectly good dataset; what it has lost is the ability to prove which one it is.
+#
+#   🔴 RP-07 IS THE DELIVERED CORPUS AND RP-06 IS DEMOTED IN WRITING, at its own `superseded_by`
+#   key, exactly as RP-05 was. The reason is not a measurement this time: RP-06 describes a corpus
+#   generated at contract version 20, and seventeen versions of new verdicts, causes, archetypes,
+#   channels and file shapes have moved every count in it. It also cannot be reproduced, per the
+#   entry above. Its numbers were correct when taken and are correct now; what changed is standing.
+#
+#   ⚠️ THE MINIMUM OF 30 DOCUMENTS PER CLASS IS NOW CHECKED ON EACH SIDE OF THE PARTITION BY THE
+#   GENERATOR'S OWN REPORT, and this file's threshold did not move — where it is applied did, and
+#   only in the report. `assembler._document_class_lines` compared the CORPUS row against it, which
+#   is the row RP-06's own `purpose` says is not binding, so `non_fiscal_receipt` read `ok` at 40
+#   documents while carrying 19 on train and 21 on validation. That is the shape RP-05 was demoted
+#   for, recurring inside the report that demoted it.
+#
+#   ⚠️ AND RP-07 CARRIES A CLASS BELOW THAT MINIMUM, REPORTED RATHER THAN TUNED AWAY.
+#   `non_fiscal_receipt` holds 21 on validation and `platform_receipt` 26 on train. Neither is one
+#   of `classifier_metric.target_classes`, all four of which clear 30 on validation with margin —
+#   see RP-07 `split_by_document_class`, which states it class by class. ⛔ NOTHING WAS REWEIGHTED
+#   TO CLOSE IT: the class count of a slip that only a `not_proof_of_payment` claim prints is a
+#   consequence of `verdict_mix`, and moving it would be tuning a document mix this file refuses.
+#
+#   ⚠️ WHAT A CONSUMER MUST DO: RE-VENDOR TO v38, and regenerate. A corpus produced by a pre-38
+#   generator is not the corpus RP-07 describes, and the seed alone will not tell the two apart.
+version: 38
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -6444,18 +6487,22 @@ known_limitations:
 run_profiles:
   status: emitted
   authoritative_profile: >
-    RP-06, AND ONLY RP-06. It is the profile of the delivered production corpus — twice the size of
-    the first production run and partitioned in half — so it is the one whose numbers describe the
-    data in a consumer's hands, and it is the only profile marked `authoritative: true`.
+    RP-07, AND ONLY RP-07. It is the profile of the delivered production corpus — RP-06's command
+    verbatim, run against a generator seventeen contract versions later — so it is the one whose
+    numbers describe the data in a consumer's hands, and it is the only profile marked
+    `authoritative: true`.
 
-    🔴 RP-05 WAS AUTHORITATIVE AND IS NOT ANY MORE, AND IT IS DEMOTED IN WRITING RATHER THAN
-    QUIETLY. It records the first production run, at half the size and an 85/15 partition, and it
-    stays here for the same reason every other profile does: a run that happened does not go stale.
-    What changed is its STANDING, not its numbers — they were correct when taken and are correct
-    now. Its own `superseded_by` key says so at the profile, so a consumer that opens RP-05 first
-    learns it there and not only here. THE REASON IT WAS SUPERSEDED IS A MEASUREMENT: its corpus row
-    cleared the per-class minimum and its VALIDATION side did not, and validation is where a figure
-    is actually computed.
+    🔴 RP-06 WAS AUTHORITATIVE AND IS NOT ANY MORE, AND IT IS DEMOTED IN WRITING RATHER THAN
+    QUIETLY, exactly as RP-05 was before it. Its own `superseded_by` key gives both reasons at the
+    profile, so a consumer that opens it first learns them there and not only here: it describes a
+    corpus generated at contract version 20, and its digests cannot be reproduced by any generator
+    because reproduction from the seed alone did not work until version 38.
+
+    🔴 RP-05 WAS AUTHORITATIVE BEFORE THAT, and stays here for the same reason every other profile
+    does: a run that happened does not go stale. What changed is STANDING, not numbers — they were
+    correct when taken and are correct now. THE REASON IT WAS SUPERSEDED IS A MEASUREMENT: its
+    corpus row cleared the per-class minimum and its VALIDATION side did not, and validation is
+    where a figure is actually computed.
 
     EVERY OTHER PROFILE HERE IS AN EXAMPLE AND STAYS ONE. RP-01 through RP-04 record runs kept
     because a cheaply reproducible example of how a quantity behaves is worth having; none of them
@@ -6464,9 +6511,10 @@ run_profiles:
     figures below would read as the file disagreeing with itself.
 
     This repository still ships the generator, its configuration and a seed, never a dataset. The
-    corpus RP-06 describes is reproduced from the seed rather than committed, which is why the
+    corpus RP-07 describes is reproduced from the seed rather than committed, which is why the
     production profiles carry hashes: they are how a consumer checks that the directory they hold is
-    the corpus this file is talking about.
+    the corpus this file is talking about. ⚠️ THAT CHECK ONLY WORKS FROM VERSION 38 — see
+    `a_digest_taken_before_version_38`.
 
   a_profile_describes_the_version_it_names: >
     🔴 FOUR PROFILES BELOW WERE TAKEN FROM THE SAME INVOCATION, AND SOME OF THEM CARRY DIFFERENT
@@ -6525,9 +6573,368 @@ run_profiles:
     and a run that happened does not go stale; rewriting one to match a newer version would destroy
     the only thing it is evidence of. A new version adds a profile.
 
+  a_digest_taken_before_version_38: >
+    🔴 NO `corpus_identity` BELOW VERSION 38 CAN BE REPRODUCED, AND THAT IS A PROPERTY OF THE
+    GENERATOR RATHER THAN OF THE PROFILES. Until version 38 the persona's birth date — which the
+    РНОКПП encodes, which the invoice prints as the buyer's code, which lands in `reference_text` —
+    was drawn with `Faker.date_of_birth`: the offset came from the seed and the ANCHOR from
+    `datetime.now()`. So the same command at the same seed produced a different corpus on a
+    different calendar day. Measured: two runs two hours apart across midnight moved 36 of 96
+    personas' `tax_id` and 352 of 1 141 images.
+
+    WHAT THIS DOES AND DOES NOT INVALIDATE. It does NOT invalidate a single count in RP-05 or
+    RP-06: those runs happened, and every figure was measured on the directory they wrote. It
+    invalidates the CHECK — a consumer holding a pre-38 corpus can no longer settle "is this the
+    directory those figures describe" by re-running the command, because no run will reproduce
+    those digests again. The question becomes unanswerable, which is different from being answered
+    negatively, and a consumer must not read a digest mismatch on a pre-38 corpus as evidence that
+    its data is wrong.
+
+    ⛔ THE PROFILES ARE NOT EDITED FOR THIS. A profile is a record of a run that happened and does
+    not go stale; rewriting one would destroy the only thing it is evidence of. The consequence is
+    stated here, once, and referenced from the version history.
+
   profiles:
-    - id: RP-06
+    - id: RP-07
       authoritative: true
+      purpose: >
+        🔴 THE DELIVERED PRODUCTION CORPUS, AND THE FIRST ONE A SEED REPRODUCES. It is RP-06's
+        command verbatim — same seed, same personas, same claims per persona, same fraction — run
+        against a generator seventeen contract versions later. Nothing about the invocation was
+        refreshed, deliberately: holding the command fixed is what makes every shift below
+        attributable to the generator and to nothing else.
+
+        🔴 AND THE THRESHOLD THAT DECIDES WHETHER THIS CORPUS IS USABLE IS ON THE VALIDATION SIDE,
+        not on the corpus row. Nothing is measured on the corpus as a whole: a consumer inspects
+        documents on one side and reports figures on the other, so `split_by_document_class` below
+        is the row that matters and `document_types` is context for it. From this version the
+        generator's own report checks it there too — until version 38 it checked the corpus row,
+        and printed `ok` for a class carrying 21 documents on validation.
+
+        The human-readable form of this run is `docs/balance-report.md`.
+      command: "generate-dataset --seed 42 --personas 96 --claims-per-persona 8 --split 0.5"
+      seed: 42
+      generator_version_at_measurement: contract version 38, receipt-synth 0.1.0
+      corpus_identity:
+        manifest_sha256: e1ed5058b607bcc19b629317e64962bfd04923fba93af1ecc41791e4fd9516e6
+        images_sha256: 6a63bfae609351c64bcdc58601427432038b87262624b1ee270e654d6b8fad4f
+        labels_sha256: 78f26ffd26dddb9beb2d04fd81bede2d63a065f2ad77b2120c50ff2201367d33
+        images: 1122
+        labels: 1991
+        note: >
+          Denominator: the 1122 image files and 1991 label files this run wrote — 1241 document
+          labels plus 750 claim labels. 🔴 IMAGES ARE FEWER THAN DOCUMENTS AND THAT IS THE POINT OF
+          THE COUNT BEING HERE: 119 files carry both documents of one claim, so 1241 documents ship
+          as 1122 files. Every profile before this one had the two equal, and a reader who expects
+          them to be will conclude the run lost documents.
+        how_to_recompute: >
+          `manifest_sha256` is the SHA-256 of `ground_truth.json`. The other two are a SHA-256 over
+          a directory: for each entry in name order, feed the file NAME and then the SHA-256 DIGEST
+          of its bytes. The name is part of the input on purpose — a digest over contents alone
+          would match a corpus whose files had been renamed, which is a different dataset.
+
+          🔴 THIS IS WHAT MAKES THE PROFILE CHECKABLE RATHER THAN MERELY STATED, AND FROM THIS
+          VERSION IT IS ALSO TRUE. A consumer that quotes a figure below is asserting something
+          about a specific directory; these three strings are how that assertion is settled instead
+          of assumed. ⚠️ They settle it only for a generator at version 38 or later — see
+          `a_digest_taken_before_version_38` for why no earlier profile's digests can be
+          reproduced, and what that does and does not mean.
+      why_the_partition_is_half:
+        train_fraction_requested: 0.5
+        note: >
+          🔴 RECORDED HERE BECAUSE A FRACTION INHERITED SILENTLY IS THE PART THAT LATER READS AS
+          AUTHORITATIVE. Denominator: the whole 1241-document corpus, split 631 / 610.
+
+          NOTHING IS TRAINED ON THIS DATASET. The familiar 85/15 comes from tasks where a model
+          LEARNS on the larger side, and that side is large because learning consumes examples.
+          Here the partition guards against fitting the MEASUREMENT instead: a consumer looks into
+          documents, finds where classification or extraction errs, adjusts accordingly — and a
+          figure does not count on the documents that were looked at and tuned against. Inspecting
+          failures needs a few dozen documents, so the development side has no reason to be large
+          and the measurement side has every reason to be.
+
+          ⚠️ AND A HALF IS NOT ITSELF DERIVED FROM THAT ARGUMENT — the argument alone would justify
+          a far smaller development side. What sets the FLOOR is the thinnest TARGET class: a
+          per-class figure needs 30 documents ON THE SIDE IT IS MEASURED ON, and `fiscal_receipt`
+          runs at 8.9% of this corpus, so a validation side much below a third of it could not
+          carry one. ⚠️ THE MARGIN IS THINNER THAN RP-06's: that run's `fiscal_receipt` was 10.7%
+          of the corpus and put 70 on validation, this one puts 63, because two classes that did
+          not exist then now take documents the receipt used to. A half still clears it.
+      size:
+        personas: 96
+        claims_ordered: 768
+        claims_built: 750
+        documents: 1241
+        files: 1122
+        note: >
+          Denominator: the whole run. ⚠️ MORE CLAIMS AND FEWER DOCUMENTS THAN RP-06 — 750 built
+          against 728, on 1241 documents against 1315 — and the two move for the same reason. Three
+          verdicts added since RP-06 reimburse nothing, so an annual limit binds far later: 461 of
+          these 750 claims consume balance, where all but 74 of RP-06's 728 did, and only 18 claims
+          went unbuilt against 40. The same three are largely SINGLE-document claims, so the corpus
+          grew in claims and shrank in documents: 1.65 documents a claim against 1.81.
+      document_types:
+        invoice: 523
+        bank_statement: 261
+        payment_confirmation: 247
+        fiscal_receipt: 111
+        platform_receipt: 59
+        non_fiscal_receipt: 40
+        note: >
+          Denominator 1241 documents. CONTEXT, NOT THE ROW THE CORPUS IS HELD TO — see
+          `split_by_document_class`.
+
+          TWO CLASSES ARE NEW SINCE RP-06 AND NEITHER IS A TARGET CLASS. `non_fiscal_receipt` gained
+          an archetype at contract version 27 and `platform_receipt` an enum member and two
+          archetypes at version 32; `classifier_metric.target_classes` still names four, and all
+          four are above. `act` and `order_screenshot` HAVE no archetype and appear in no run of any
+          size — absence, not a count of zero.
+
+          The mix is uneven and nothing tuned it. `config/policy.yaml` declares `verdict_mix` and
+          refuses a document mix, so a class count falls out of which verdicts are realizable and
+          which archetypes exist. macro-F1 weights classes equally and therefore needs sufficient n
+          per class, never equal n.
+      split_by_document_class:
+        train: {invoice: 274, bank_statement: 133, payment_confirmation: 131, fiscal_receipt: 48,
+                platform_receipt: 26, non_fiscal_receipt: 19}
+        validation: {invoice: 249, bank_statement: 128, payment_confirmation: 116,
+                     fiscal_receipt: 63, platform_receipt: 33, non_fiscal_receipt: 21}
+        note: >
+          🔴 THE HEADLINE OF THIS PROFILE, AND THE THRESHOLD CHECKED ON THE SIDE THAT MATTERS.
+          Denominator: 631 train documents and 610 validation documents.
+
+          EVERY TARGET CLASS CLEARS 30 ON VALIDATION — `fiscal_receipt` 63, `payment_confirmation`
+          116, `bank_statement` 128, `invoice` 249 — so a per-class figure may be quoted for all
+          four, which is what `classifier_metric` scores.
+
+          🔴 TWO NON-TARGET CLASSES DO NOT, AND THEY ARE NAMED RATHER THAN AVERAGED AWAY.
+          `non_fiscal_receipt` carries 21 on validation and 19 on train; `platform_receipt` carries
+          33 on validation and 26 on train. A per-class figure must not be quoted for
+          `non_fiscal_receipt` on either side, nor for `platform_receipt` on train. ⛔ NOTHING WAS
+          REWEIGHTED TO CLOSE THIS: the count of a slip only a `not_proof_of_payment` claim prints
+          follows from `verdict_mix`, and moving it would be choosing a document mix this
+          repository refuses to choose.
+      split:
+        unit: persona
+        stratified: false
+        train_fraction_requested: 0.5
+        train: {personas: 48, claims: 373, documents: 631}
+        validation: {personas: 48, claims: 377, documents: 610}
+        note: >
+          Denominator: 96 personas, 750 claims and 1241 documents. The realized claim share is
+          49.7% / 50.3% against a requested 50% of PERSONAS — the two differ because personas do not
+          carry equal numbers of claims. The unit is the persona because annual limits are
+          cumulative per persona, so a per-claim partition would make a validation label a function
+          of development data.
+      split_by_verdict:
+        train: {partially_covered: 120, covered: 113, rejected: 44, not_proof_of_payment: 35,
+                partially_paid: 32, insufficient_evidence: 29}
+        validation: {covered: 117, partially_covered: 111, rejected: 44, not_proof_of_payment: 37,
+                     partially_paid: 34, insufficient_evidence: 34}
+        note: >
+          Denominator: 373 train claims and 377 validation claims. ⚠️ ALL SIX VERDICTS OCCUR ON BOTH
+          SIDES AND ALL SIX ARE ABOVE 30 ON VALIDATION — an outcome and not a guarantee, because the
+          partition is not stratified. `insufficient_evidence` at 29 on TRAIN is the thinnest cell
+          and is below 30 there; nothing is measured on train, so it costs a consumer nothing but is
+          stated rather than rounded past. See KL-13.
+      split_by_capture:
+        train: {photo: 197, screenshot: 147, scan: 145, digital_pdf: 142}
+        validation: {screenshot: 173, photo: 163, scan: 142, digital_pdf: 132}
+        note: 'Denominator: 631 train documents and 610 validation documents.'
+      content_complete_by_side:
+        train: {screenshot: 147 of 147, scan: 145 of 145, digital_pdf: 142 of 142, photo: 192 of 197}
+        validation: {screenshot: 173 of 173, scan: 142 of 142, digital_pdf: 132 of 132,
+                     photo: 152 of 163}
+        note: >
+          The character-error-rate denominator per channel PER SIDE — see KL-12. On validation that
+          is 152 photographs of 163. ⚠️ THINNER THAN RP-06's 193, because the capture mix is drawn
+          per document class from `capture_mix` rather than uniformly since contract version 35, and
+          `photo` is no longer a third of the corpus. Denominator: 631 train and 610 validation.
+      claim_shapes:
+        two_documents: 491
+        one_document: 259
+        note: >
+          Denominator 750 claims; `linked` is true on the 491. ⚠️ THE SINGLE-DOCUMENT SHARE NEARLY
+          DOUBLED against RP-06's 141 of 728, and it is by construction rather than by draw: a
+          `not_proof_of_payment` claim is one document that proves no payment (72 here — 40 slips
+          and 32 bare invoices), a `subject_not_evidenced` claim is one payment document with no
+          subject beside it (17), and a `platform_receipt` proves both facts alone (59).
+      files:
+        one_document: 1003
+        two_documents: 119
+        documents_in_a_multi_document_file: 238
+        note: >
+          Denominator 1122 files carrying 1241 documents. 🔴 A FILE IS NOT A DOCUMENT IN THIS CORPUS
+          AND WAS IN EVERY EARLIER ONE — contract version 29. The 119 are drawn per eligible claim at
+          `file_composition.bundle_share` 0.25 of the 491 two-document claims, which predicts 123.
+      verdicts:
+        partially_covered: 231
+        covered: 230
+        rejected: 88
+        not_proof_of_payment: 72
+        partially_paid: 66
+        insufficient_evidence: 63
+        note: >
+          Denominator 750 claims built. 🔴 THE FIRST DELIVERED CORPUS CONTAINING EVERY MEMBER OF
+          `verdict_mix`, so these shares are this dataset's balance against it rather than shares
+          conditional on a realizable subset — which is what every profile before this one carried.
+          RP-06 held three of six and at least 20% of the declared mix was absent from it.
+
+          ⚠️ `covered` LANDS AT 30.7% AGAINST A DECLARED 40%, AND `partially_covered` AT 30.8%
+          AGAINST 20%, AND THAT IS THE ORACLE RATHER THAN THE DRAW: 102 claims drawn as `covered`
+          were labelled `partially_covered` by a binding annual limit and 20 went the other way, so
+          the drawn populations are 312 and 149 — 41.6% and 19.9% of the run. The label is derived,
+          never asserted. The other four sit within 1.6 points of their declared 10%, which is
+          inside the seed-to-seed spread measured over eight further seeds.
+      insufficient_evidence_causes:
+        subject_not_evidenced: 17
+        counterparty_mismatch: 13
+        amount_mismatch: 11
+        payment_precedes_subject: 11
+        subject_mismatch: 11
+        note: >
+          🔴 DENOMINATOR 63 `insufficient_evidence` CLAIMS — the causes, not the verdict. ALL FIVE
+          DECLARED CAUSES OCCUR, against RP-06's two: `subject_not_evidenced` gained a mechanism at
+          contract version 25 and the two `counterparty_mismatch` / `subject_mismatch` axes at
+          version 33. The five are mutually exclusive by construction, which is what
+          `config/policy.yaml` requires of the RESULT rather than of the share.
+      rejected_routes:
+        outside_period: 47
+        zero_coverage: 41
+        note: >
+          Denominator 88 `rejected` claims. Both declared routes occur, against a declared 50 / 50.
+          🔴 THE DATE DOES NOT PREDICT THE VERDICT: an out-of-period payment is one route of two, and
+          the 41 zero-coverage claims carry no cause at all.
+      partially_covered_causes:
+        realized: {mixed_items_only: 78, limit_exhausted_only: 136, both_on_one_claim: 17}
+        drawn: {mixed_items: 95, limit_exhausted: 54}
+        note: >
+          TWO DENOMINATORS, AND THE TARGET BELONGS TO THE SECOND. Realized: 231 claims labelled
+          `partially_covered`. Drawn: the 149 claims AIMED at it. 🔴 102 OF THE REALIZED 231 WERE
+          DRAWN AS `covered` and moved in by a binding limit, every one carrying `limit_exhausted`,
+          so the realized split (33.8% / 58.9%) is pulled toward that cause by an amount the
+          realized row cannot show. `partially_covered_causes` sizes the DRAW, and against the drawn
+          bucket the split is 63.8% / 36.2% on a declared 65 / 35.
+      imperfection_causes:
+        limit_exhausted: 153
+        mixed_items: 95
+        outside_period: 47
+        subject_not_evidenced: 17
+        counterparty_mismatch: 13
+        amount_mismatch: 11
+        subject_mismatch: 11
+        payment_precedes_subject: 11
+        note: >
+          Denominator 750 claims. Counted per OCCURRENCE, so the rows sum past the claims that carry
+          them: 17 claims carry both `partially_covered` causes.
+      capture_channels:
+        photo: 360
+        screenshot: 320
+        scan: 287
+        digital_pdf: 274
+        note: >
+          Denominator 1241. 🔴 NO LONGER ROUGHLY EQUAL, AND THE CHANGE IS A CALIBRATION RATHER THAN
+          A DRAW: since contract version 35 a channel is drawn per DOCUMENT CLASS from
+          `capture_mix` in config/policy.yaml, and `digital_pdf` — the undamaged original — is a
+          member. RP-06's three-way near-equality was the uniform placeholder KL-11 describes.
+          A screen-native archetype takes no draw at all: `payment_confirmation` is 50% screenshot
+          because two of its four archetypes are banking-app screens.
+      content_complete:
+        screenshot: 320 of 320
+        scan: 287 of 287
+        digital_pdf: 274 of 274
+        photo: 344 of 360
+        unmeasured: 0
+        lost_edges:
+          right: 10
+          bottom: 6
+          left: 1
+        note: >
+          🔴 THE SHARE OF DOCUMENTS WITH `content_complete: true`, PER CHANNEL — AND THIS IS THE
+          DENOMINATOR OF ANY CHARACTER ERROR RATE ON THIS CORPUS. It is part of the result and not a
+          caveat to it: "CER on photo = X" is not a result, "CER on 344 photographs of 360" is. See
+          KL-12. 16 photographs lost TEXT off the frame; `screenshot` and `digital_pdf` apply no
+          geometry and a flatbed's margin absorbs its own skew, so none of the three lost any.
+          ⚠️ TEXT ONLY: a capture that cut off a QR or a stamp is counted complete, truthfully.
+      pixel_label_gate:
+        labelled_boxes: 37155
+        survival_measured: 37124
+        survival_findings: 1
+        evidence_measured: 0
+        note: >
+          🔴 THE FIRST PRODUCTION-SCALE SWEEP OF `tools/pixel_label_gate.py`, and the only figures
+          here about PIXELS rather than about labels. Denominator: 37 155 labelled boxes over 1241
+          documents — every `field_bboxes` entry the run wrote, and the gate saw exactly that many.
+
+          SURVIVAL — did the shipped JPEG keep the marks — was measured on 37 124 of them. 31 are
+          unmeasured with a reason: 30 boxes the render left blank, one lying outside the frame.
+          ONE FAILED: `p025_c5_d1:relevant_transaction`, peak correlation 0.549 against a `photo`
+          floor of 0.700. It is the corpus's smallest box, 22×14 px, on a washed-out patch spanning
+          46 grey levels. 325 of the corpus's photo boxes are that small, so the rate among them is
+          1 in 325. ⛔ NOT REPAIRED AND NOT TUNED AWAY: a floor raised to swallow it would stop the
+          gate going red where the damage is easiest to see, which is what the per-channel floors
+          exist for.
+
+          ⚠️ EVIDENCE — do a box's pixels answer to that field's own value — WAS NOT RUN ON THIS
+          CORPUS, and `evidence_measured: 0` says so rather than leaving it to be assumed. It costs
+          three renders a page. It WAS run at the same seed and command on the corpus this one
+          replaced: 28 433 boxes measured, no findings, over the same eleven archetypes. That is
+          evidence about the TEMPLATES, which the repair between the two runs did not touch — it
+          moved printed values, not which element carries which `data-field` — and it is NOT a
+          measurement of these 37 155 boxes.
+      unassigned:
+        claims: 0
+        documents: 0
+        note: >
+          Denominator: all 750 claims and all 1241 documents. Every record carries a side; a record
+          with `split: null` after a run would mean the partition failed to reach it, which is why
+          the count is stated rather than assumed.
+      vat_row_form:
+        paper_equals: 67
+        paper_spaced: 0
+        electronic_spaced: 15
+        electronic_equals: 9
+        null_because_the_seller_is_not_registered: 20
+        note: >
+          Denominator 111 fiscal receipts, of which 91 carry a tax row. Paper produced the `equals`
+          form 67 times and the spaced form NEVER, which is the one-sided half of the asymmetric
+          rule appearing again; electronic drew both. The paper/electronic split here follows
+          `capture_mix` for this class, so it measures that calibration and not the world.
+      cross_check_denominators:
+        fiscal_receipts_in_a_multi_document_claim: 0
+        multi_document_claims: 491
+        note: Zero of 491 — see KL-08 for why it is zero BY CONSTRUCTION rather than by outcome.
+      unidentified_payers:
+        documents: 27
+        note: 27 of 1241 documents carry a payer of "-" — see KL-09.
+      currency_and_language:
+        documents_UAH: 1202
+        documents_EUR: 39
+        documents_uk: 1202
+        documents_en: 39
+        note: >
+          Denominator 1241 documents each. 🔴 NEITHER DIMENSION IS SINGLE-VALUED ANY MORE — RP-06
+          was UAH and `uk` on all 1315 of its documents, and the report said in so many words that
+          it did not exercise either. The 39 are `eu_platform_receipt`, and each one's claim carries
+          the applied rate in `fx_rates`. ⚠️ 3.1% IS NOT A SECOND CURRENCY TO REPORT PER-VALUE
+          FIGURES ON: it exercises the axis, and it does not populate it.
+
+    - id: RP-06
+      authoritative: false
+      superseded_by: >
+        🔴 RP-07, AND FOR TWO REASONS, OF WHICH THE SECOND IS THE ONE THAT COULD NOT BE FIXED BY
+        RE-READING. First, this profile describes a corpus generated at contract version 20, and
+        seventeen versions have since added three verdicts, three `insufficient_evidence` causes,
+        two document classes, a fourth capture channel drawn per class, a second currency and
+        language, multi-page documents and multi-document files — so every count below is a count of
+        a corpus no current command produces. Second, its `corpus_identity` digests CANNOT BE
+        REPRODUCED by anyone, because the generator was not a function of its seed alone until
+        version 38; see `a_digest_taken_before_version_38` above.
+
+        NOTHING BELOW IS WRONG AND NOTHING BELOW WAS EDITED. Every count here was correct when taken
+        and is correct now; a run that happened does not go stale. What changed is standing, and it
+        is written down here as well as at `authoritative_profile` so that a consumer opening this
+        profile directly is not left reading superseded numbers as current ones.
       purpose: >
         🔴 THE DELIVERED PRODUCTION CORPUS. Twice the personas of RP-05 and partitioned in half
         rather than 85/15 — BOTH CHANGES TOGETHER, because neither alone produces a usable
