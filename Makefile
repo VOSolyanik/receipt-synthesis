@@ -16,6 +16,7 @@ help:
 	@echo "  lint       Run ruff"
 	@echo "  test       Run pytest"
 	@echo "  redaction  Run the redaction gate (fails if an unpublishable term is in the tree)"
+	@echo "  cross-seed Assert that a corpus is a function of its seed and of nothing else"
 	@echo "  install    Sync dependencies and install the Chromium build the renderer needs"
 
 # Ordered cheapest-first: a lint error is reported without waiting for the full test run.
@@ -36,6 +37,12 @@ test:
 .PHONY: redaction
 redaction:
 	$(UV) python tools/check_redaction.py
+
+# Deliberately not part of `check`: it generates three small corpora, which costs about half a
+# minute, and `check` is the target people run between edits. CI runs it on every push instead.
+.PHONY: cross-seed
+cross-seed:
+	$(UV) python tools/cross_seed_check.py
 
 # Chromium is not a Python dependency, so `uv sync` alone leaves the renderer unable to run.
 .PHONY: install
