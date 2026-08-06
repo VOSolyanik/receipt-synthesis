@@ -15,12 +15,13 @@ accident.
 from __future__ import annotations
 
 import random
-from datetime import date
+from datetime import date, timedelta
 
 from faker import Faker
 
 from receipt_synth.config import load_policy
 from receipt_synth.content_builder import generate_rnokpp, personal_surname
+from receipt_synth.policy_engine import active_period
 from receipt_synth.schemas import Country, Location, Persona
 
 # Faker locale, home currency and language per jurisdiction. A persona generated for a
@@ -31,6 +32,38 @@ _LOCALES: dict[Country, tuple[str, str, str]] = {
     Country.DE: ("de_DE", "EUR", "de"),
     Country.ES: ("es_ES", "EUR", "es"),
 }
+
+# The age band a claimant of a workplace benefit is drawn from. Nothing PRINTS an age; the band
+# exists so that the birth date the РНОКПП encodes belongs to a working-age adult rather than to
+# an arbitrary point in the century the identifier can express.
+_MIN_AGE_YEARS, _MAX_AGE_YEARS = 22, 60
+
+# Days per year, averaged over the Gregorian cycle. An age band is not a date arithmetic problem
+# and does not need one: the band is a decision about who the personas are, and a leap day either
+# way moves nobody across it.
+_DAYS_PER_YEAR = 365.2425
+
+
+def _draw_birth_date(rng: random.Random, reference: date) -> date:
+    """A birth date in the age band, drawn from the SEEDED generator and anchored on `reference`.
+
+    🔴 ANCHORED ON THE BENEFIT PERIOD, NEVER ON THE CLOCK, AND THAT IS THE WHOLE POINT OF THIS
+    FUNCTION. It replaces `Faker.date_of_birth(minimum_age=…, maximum_age=…)`, which draws its
+    OFFSET from the seeded instance and takes its ANCHOR from `datetime.now()` — so the same
+    command at the same seed produced a different corpus on a different calendar day. Measured
+    rather than argued: two production runs of the identical command, two hours apart across
+    midnight, moved 36 of 96 personas' `tax_id` and 352 of 1141 images. The corpus was a function
+    of the seed AND of the day, and `corpus_identity` in the labelling contract — three sha256
+    digests a consumer checks its directory against — cannot survive that.
+
+    ⚠️ THE ANCHOR IS `policy.yaml`'s BENEFIT PERIOD, which is the frame every other date in this
+    dataset already lives in: a claim is in or out of the period, a payment precedes or follows an
+    invoice. Anchoring the one remaining date on the same declared window is what makes the whole
+    corpus a function of the configuration plus the seed, with nothing left over.
+    """
+    oldest = reference - timedelta(days=round(_MAX_AGE_YEARS * _DAYS_PER_YEAR))
+    youngest = reference - timedelta(days=round(_MIN_AGE_YEARS * _DAYS_PER_YEAR))
+    return oldest + timedelta(days=rng.randint(0, (youngest - oldest).days))
 
 
 def _draw_categories(rng: random.Random, country: Country) -> list[str]:
@@ -68,7 +101,13 @@ def generate_persona(
     locale, currency, language = _LOCALES[country]
 
     # Faker carries its own generator, so it is seeded from ours rather than left to
-    # start from a clock. Everything below is then a function of the incoming seed.
+    # start from a clock.
+    #
+    # ⚠️ SEEDING THE INSTANCE IS NOT THE WHOLE OF DETERMINISM, and this comment used to claim it
+    # was — "everything below is then a function of the incoming seed" was false for four months,
+    # falsified by the line that drew the birth date. A seeded Faker provider still reads the
+    # CLOCK for anything defined relative to now, so what a seed fixes is the offset and not the
+    # date. See `_draw_birth_date`.
     fake = Faker(locale)
     fake.seed_instance(rng.getrandbits(64))
 
@@ -87,7 +126,7 @@ def generate_persona(
     # yet, so nothing is misprinted in the meantime.
     first = fake.first_name_female() if female else fake.first_name_male()
     full_name = f"{first} {personal_surname(rng, fake, country.value, female=female)}"
-    birth_date: date = fake.date_of_birth(minimum_age=22, maximum_age=60)
+    birth_date: date = _draw_birth_date(rng, active_period()[1])
 
     tax_id = (
         generate_rnokpp(rng, birth_date=birth_date, female=female)

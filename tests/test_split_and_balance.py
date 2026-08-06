@@ -15,7 +15,7 @@ denominator, and something with no data is ABSENT rather than zero.
 from __future__ import annotations
 
 import random
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
@@ -27,6 +27,7 @@ from receipt_synth.assembler import (
     assign_splits,
     balance_report,
 )
+from receipt_synth.claim_planner import ClaimPlan
 from receipt_synth.policy_engine import (
     insufficient_evidence_causes,
     insufficient_evidence_causes_min_run_size,
@@ -337,6 +338,143 @@ def test_a_document_class_no_archetype_can_build_is_ABSENT_and_carries_no_thresh
     assert "ABSENT" in lines["act"]
     assert str(MIN_DOCUMENTS_PER_TARGET_CLASS) not in lines["act"]
     assert f"BELOW {MIN_DOCUMENTS_PER_TARGET_CLASS}" in lines["invoice"]
+
+
+def a_lopsided_dataset(*, train: int, validation: int, doc_type=DocType.INVOICE):
+    """One class, `train` documents on one side and `validation` on the other, one claim each.
+
+    Sized by the caller so that the CORPUS row and a SIDE can disagree about the minimum, which
+    is the only shape that tells the two checks apart.
+    """
+    documents, claims, assignment = [], [], {}
+    for side, count in ((Split.TRAIN, train), (Split.VALIDATION, validation)):
+        for index in range(count):
+            persona_id = f"p{side.value[0]}{index:03d}"
+            doc_id = f"{persona_id}_c1_d1"
+            assignment[persona_id] = side
+            documents.append(a_document(doc_id, doc_type=doc_type, split=side))
+            claims.append(a_claim(f"{persona_id}_c1", persona_id, [doc_id], split=side))
+    return Dataset(
+        seed=1, personas=[], claims=claims, documents=documents,
+        split=assignment, train_fraction=0.5,
+    )
+
+
+def test_the_per_class_minimum_is_checked_on_EACH_SIDE_and_not_on_the_corpus_row():
+    """🔴 THE ROW A CORPUS IS HELD TO IS THE SIDE'S, AND THE CORPUS ROW IS CONTEXT.
+
+    Nothing is measured on the corpus as a whole: a consumer inspects documents on the development
+    side and reports figures on the measurement side, so a per-class figure needs its 30 documents
+    ON THE SIDE IT IS COMPUTED ON. The contract says exactly this at `run_profiles` RP-06, and
+    RP-05 was demoted for exactly this — its corpus row cleared the minimum on all four classes
+    while its validation side carried 10 and 21.
+
+    Sized so that the two checks DISAGREE: 40 documents in the corpus, 31 and 9 across the sides.
+    A report that checks the whole prints `ok` here, which is the state this test was written
+    against and observed passing before the check moved.
+    """
+    report = balance_report(a_lopsided_dataset(train=31, validation=9))
+    line = next(ln for ln in report.splitlines() if ln.strip().startswith("invoice"))
+
+    assert "40" in line, f"the corpus row is still reported as context: {line!r}"
+    assert f"BELOW {MIN_DOCUMENTS_PER_TARGET_CLASS} on validation" in line, line
+    assert "train" not in line.split("BELOW")[1], (
+        f"train carries 31 and must not be flagged: {line!r}"
+    )
+
+
+def test_a_class_clearing_the_minimum_on_both_sides_is_not_flagged():
+    """The negative half. Without it the flag above could be unconditional and this suite would
+    not know — a warning printed on every class is a warning nobody reads."""
+    report = balance_report(a_lopsided_dataset(train=31, validation=31))
+    line = next(ln for ln in report.splitlines() if ln.strip().startswith("invoice"))
+
+    assert f"BELOW {MIN_DOCUMENTS_PER_TARGET_CLASS}" not in line, line
+    # Both per-side counts are printed whether or not anything is flagged: the numbers are the
+    # evidence for the verdict, and a bare `ok` would be a claim with nothing beside it.
+    assert line.split()[3:7] == ["train", "31", "validation", "31"], line
+
+
+def test_an_unpartitioned_run_checks_the_minimum_on_the_corpus_and_says_that_is_what_it_did():
+    """A dataset with no partition has no side to check, and the fallback must SAY so rather than
+    print a per-side verdict computed from two empty counters — which would flag every class of
+    every unpartitioned run as below the minimum."""
+    report = balance_report(a_dataset(split=False))
+    index = next(
+        i for i, ln in enumerate(report.splitlines()) if ln.startswith("Document classes")
+    )
+    block = "\n".join(report.splitlines()[index : index + 3])
+
+    assert "NOT PARTITIONED" in block, block
+
+
+def a_plan(claim_id, *, verdict, cause=None):
+    """The target a claim was drawn at. Only the three fields the cause block reads are meant;
+    the rest is the minimum `ClaimPlan` requires to exist."""
+    return ClaimPlan(
+        claim_id=claim_id, persona_id=claim_id.split("_")[0], category="vitamins_nutrition",
+        verdict=verdict, documents=(), issued_at=datetime(2026, 6, 15), cause=cause,
+    )
+
+
+def test_the_cause_block_says_how_much_of_its_denominator_the_draw_did_not_size():
+    """🔴 A TARGET COLUMN BESIDE A SHARE COMPUTED ON ANOTHER POPULATION READS AS A MISS.
+
+    `partially_covered_causes` sizes the DRAW: of the claims aimed at `partially_covered`, 65% are
+    aimed through `mixed_items`. The realized bucket is not that population — the oracle moves
+    claims drawn as `covered` into it whenever an annual limit binds, and every one of those
+    arrives carrying `limit_exhausted`. So the realized shares are pulled toward `limit_exhausted`
+    by an amount nobody can read off the block, and the target column cannot be met however large
+    the run.
+
+    Built so the two populations disagree by construction: four claims realize
+    `partially_covered`, of which TWO were drawn as `covered`. The drawn bucket is therefore the
+    other two, and 1 of 2 carries `mixed_items` — 50.0%, against 25.0% over the realized four.
+    """
+    claims = [
+        a_claim("p001_c1", "p001", ["d1"], verdict=Verdict.PARTIALLY_COVERED),
+        a_claim("p002_c1", "p002", ["d2"], verdict=Verdict.PARTIALLY_COVERED),
+        a_claim("p003_c1", "p003", ["d3"], verdict=Verdict.PARTIALLY_COVERED),
+        a_claim("p004_c1", "p004", ["d4"], verdict=Verdict.PARTIALLY_COVERED),
+    ]
+    for claim, causes in zip(
+        claims, (["mixed_items"], ["limit_exhausted"], ["limit_exhausted"], ["limit_exhausted"]),
+        strict=True,
+    ):
+        claim.imperfection = causes
+    dataset = Dataset(
+        seed=1, personas=[], claims=claims,
+        documents=[a_document(f"d{index + 1}") for index in range(4)],
+        plans=[
+            a_plan("p001_c1", verdict=Verdict.PARTIALLY_COVERED, cause="mixed_items"),
+            a_plan("p002_c1", verdict=Verdict.PARTIALLY_COVERED, cause="limit_exhausted"),
+            a_plan("p003_c1", verdict=Verdict.COVERED),
+            a_plan("p004_c1", verdict=Verdict.COVERED),
+        ],
+    )
+
+    report = balance_report(dataset)
+    block = report[report.index("partially_covered by cause") :]
+    block = block[: block.index("insufficient_evidence by cause")]
+
+    assert "2 of the 4" in block, block
+    assert "DRAWN AS `covered`" in block, block
+    # The share the target actually sizes, printed where the target is.
+    assert "50.0%" in block, block
+
+
+def test_a_run_whose_bucket_the_oracle_did_not_touch_carries_no_such_note(multi_claim_dataset=None):
+    """The negative half: a note printed on every run is a note nobody reads. Here no claim was
+    drawn as `covered`, so the realized bucket IS the drawn bucket and there is nothing to warn
+    about."""
+    claims = [a_claim("p001_c1", "p001", ["d1"], verdict=Verdict.PARTIALLY_COVERED)]
+    claims[0].imperfection = ["mixed_items"]
+    dataset = Dataset(
+        seed=1, personas=[], claims=claims, documents=[a_document("d1")],
+        plans=[a_plan("p001_c1", verdict=Verdict.PARTIALLY_COVERED, cause="mixed_items")],
+    )
+
+    assert "DRAWN AS `covered`" not in balance_report(dataset)
 
 
 def test_the_per_class_minimum_is_reported_and_never_acted_on():

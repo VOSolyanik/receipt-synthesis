@@ -1784,16 +1784,46 @@ def _document_class_lines(dataset: Dataset) -> list[str]:
     registry can build four; the other three cannot appear in any run at any size, so a count of 0
     beside a threshold would invite somebody to fix a shortfall that no run can close. The minimum
     is stated only for the classes it can be asked of.
+
+    🔴 AND THE MINIMUM IS CHECKED ON EACH SIDE OF THE PARTITION, NOT ON THE CORPUS ROW. Nothing is
+    measured on the corpus as a whole: a consumer inspects documents on the development side and
+    reports figures on the measurement side, so a per-class figure needs its 30 documents ON THE
+    SIDE IT IS COMPUTED ON. The corpus row stays, as CONTEXT and with its share, because it is what
+    says how the mix fell — but it is not what the class is held to.
+
+    ⚠️ THIS BLOCK USED TO CHECK THE CORPUS ROW, AND THE FAILURE IT COULD NOT SEE IS ON RECORD: RP-05
+    was demoted because its corpus row cleared the minimum on all four classes while its validation
+    side carried 10 and 21. The report printed `ok` for both. The class the shortfall lands on has
+    changed since; the shape has not, which is why it moved here rather than into a note.
+
+    A RUN WITH NO PARTITION HAS NO SIDE TO CHECK, and it says so rather than checking two empty
+    counters — which would flag every class of every unpartitioned run as below the minimum, i.e. a
+    finding produced by the absence of a partition rather than by the corpus.
     """
     buildable = {archetype.doc_type for archetype in ARCHETYPES.values()}
     counts: Counter[DocType] = Counter(document.doc_type for document in dataset.documents)
     total = sum(counts.values())
+    # A side EXISTS when personas were assigned to it, not when documents landed on it: a side
+    # holding no document of a class is precisely the shortfall being looked for, while a side
+    # nobody was assigned to is a property of the run's size and is reported by `_split_lines`.
+    sides = [
+        side for side in Split if any(value is side for value in (dataset.split or {}).values())
+    ]
+    per_side: dict[Split, Counter[DocType]] = {
+        side: Counter(d.doc_type for d in dataset.documents if d.split is side) for side in sides
+    }
 
     lines = [
         f"Document classes — {total} document(s); target ≥ {MIN_DOCUMENTS_PER_TARGET_CLASS} "
         "per buildable class,",
         "  REPORTED AND NEVER TUNED TO — policy.yaml declares no document mix, on purpose",
     ]
+    lines.append(
+        "  the minimum is checked ON EACH SIDE, which is where a figure is computed; the corpus"
+        " row is CONTEXT"
+        if sides
+        else "  NOT PARTITIONED — no side to check, so the minimum is applied to the corpus row"
+    )
     for doc_type in DocType:
         count = counts[doc_type]
         if doc_type not in buildable:
@@ -1805,12 +1835,26 @@ def _document_class_lines(dataset: Dataset) -> list[str]:
                 "                                  contains one; the minimum does not apply to it"
             )
             continue
+        if not sides:
+            mark = (
+                "ok" if count >= MIN_DOCUMENTS_PER_TARGET_CLASS
+                else f"BELOW {MIN_DOCUMENTS_PER_TARGET_CLASS} — do not quote a per-class figure"
+                " here"
+            )
+            lines.append(f"  {doc_type.value:<22} {count:>4}  {_share(count, total):>6}   {mark}")
+            continue
+        short = [
+            side.value for side in sides
+            if per_side[side][doc_type] < MIN_DOCUMENTS_PER_TARGET_CLASS
+        ]
         mark = (
-            "ok" if count >= MIN_DOCUMENTS_PER_TARGET_CLASS
-            else f"BELOW {MIN_DOCUMENTS_PER_TARGET_CLASS} — do not quote a per-class figure here"
+            "ok on every side" if not short
+            else f"BELOW {MIN_DOCUMENTS_PER_TARGET_CLASS} on {', '.join(short)}"
+            " — do not quote a per-class figure there"
         )
+        by_side = "  ".join(f"{side.value} {per_side[side][doc_type]:>4}" for side in sides)
         lines.append(
-            f"  {doc_type.value:<22} {count:>4}  {_share(count, total):>6}   {mark}"
+            f"  {doc_type.value:<22} {count:>4}  {_share(count, total):>6}   {by_side}   {mark}"
         )
     return lines
 
@@ -2001,6 +2045,20 @@ def _cause_lines(dataset: Dataset) -> list[str]:
     A claim with both causes therefore gets its own row and is attributed to neither
     target. Which of the two "really" caused it is not something policy.yaml answers, and
     picking one would be an invented tie-break sitting inside a report about balance.
+
+    🔴 AND THE SHARE THE TARGET SIZES IS THE DRAWN BUCKET'S, NOT THE REALIZED ONE — the same
+    defect as above, one level out, and it is the reason the drawn column exists. The realized
+    bucket is not the population `partially_covered_causes` splits: the oracle moves a claim drawn
+    as `covered` into it whenever an annual limit binds, and every such claim arrives carrying
+    `limit_exhausted`. On the production run that was 95 of 231, which pulls the realized split to
+    36 / 54 against a declared 65 / 35 while the DRAWN split sits on 65.0%. A target column beside
+    a share computed on another population reads as a miss, and no run of any size closes it.
+
+    The realized counts stay, and stay first: they are what the corpus contains, which is what a
+    consumer holds. What moves is which column the target is claimed to be about.
+
+    `Dataset.plans` may be empty for a dataset assembled without them, in which case the drawn
+    bucket is unknown and no drawn column is printed — absent, rather than reported as zero.
     """
     causes = list(partially_covered_causes())
     counts: Counter[tuple[str, ...]] = Counter(
@@ -2010,15 +2068,42 @@ def _cause_lines(dataset: Dataset) -> list[str]:
     del counts[()]  # claims with no cause are not in the partially_covered bucket
     total = sum(counts.values())
 
+    # The population the declared shares size: the claims AIMED at this verdict, by the cause
+    # they were aimed through. A claim that was aimed here and came out `covered` stays in this
+    # denominator — it is a draw that happened, and `_drift_lines` reports it as a shortfall.
+    drawn: Counter[str] = Counter()
+    overruled = 0
+    # `strict=True` inside the guard rather than `strict=False` outside it: a dataset assembled
+    # without plans has none, which is a state; a dataset whose plans and claims differ in length
+    # is a defect, and a zip that quietly stops at the shorter one would report a drawn bucket
+    # measured over part of the run.
+    if dataset.plans:
+        for plan, claim in zip(dataset.plans, dataset.claims, strict=True):
+            if plan.verdict is Verdict.PARTIALLY_COVERED:
+                drawn[plan.cause or ""] += 1
+            elif plan.verdict is Verdict.COVERED and claim.verdict is Verdict.PARTIALLY_COVERED:
+                overruled += 1
+    drawn_total = sum(drawn.values())
+
     lines = [
         f"partially_covered by cause — {total} claim(s); "
         "policy.yaml splits this bucket per claim, not per occurrence"
     ]
+    if overruled:
+        lines.append(
+            f"  {overruled} of the {total} were DRAWN AS `covered` and moved here by a binding"
+            " annual limit, all carrying"
+        )
+        lines.append(
+            f"  `limit_exhausted`. The target sizes the DRAWN bucket — {drawn_total} claim(s) —"
+            " and that is the column it is printed against."
+        )
     for cause, share in partially_covered_causes().items():
         count = counts[(cause,)]
-        lines.append(
-            f"  {cause + ' only':<26} {count:>4}  {_share(count, total):>6}   target {share:.1%}"
-        )
+        line = f"  {cause + ' only':<26} {count:>4}  {_share(count, total):>6}"
+        if drawn_total:
+            line += f"   drawn {drawn[cause]:>4}  {_share(drawn[cause], drawn_total):>6}"
+        lines.append(f"{line}   target {share:.1%}")
     both = total - sum(counts[(cause,)] for cause in causes)
     lines.append(
         f"  {'both causes on one claim':<26} {both:>4}  {_share(both, total):>6}"

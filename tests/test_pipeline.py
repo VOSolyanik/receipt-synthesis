@@ -12,7 +12,7 @@ import math
 import random
 import re
 from collections import Counter, defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 import cv2
@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from receipt_synth import claim_planner
+from receipt_synth import claim_planner, persona_generator
 from receipt_synth.assembler import (
     SYNTHETIC_DATA_MARKER,
     _write_png,
@@ -106,7 +106,51 @@ def persona(seed: int = SEED, country: Country = Country.UA):
 
 
 def test_persona_is_deterministic_under_seed():
+    """⚠️ TWO CALLS IN ONE PROCESS CANNOT SEE A CLOCK DEPENDENCE, which is why the two tests below
+    exist beside this one. Both calls here happen at the same instant, so a value anchored on
+    `datetime.now()` is identical in both — and one was: `Faker.date_of_birth` drew the persona's
+    birth date, the РНОКПП encodes it, and this assertion held every day while the identifier
+    changed at midnight."""
     assert persona() == persona()
+
+
+def test_the_birth_date_the_identifier_encodes_is_anchored_on_THE_BENEFIT_PERIOD():
+    """🔴 THE DISCRIMINATING TEST, and the mutation it exists for is the code that was there.
+
+    A birth date anchored on the CLOCK is invisible to every same-process assertion and moves the
+    corpus at midnight. Measured, not argued: two production runs of the identical command two
+    hours apart across midnight moved 36 of 96 personas' `tax_id` and 352 of 1141 images, because
+    `Faker.date_of_birth` takes its offset from the seed and its anchor from `datetime.now()`.
+
+    So the property asserted is not "deterministic" — that one passes either way. It is WHICH
+    ANCHOR: move `policy.yaml`'s benefit period and the identifier must move with it. Under the
+    clock-anchored draw this patch changes nothing at all and the assertion fails immediately.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            persona_generator, "active_period", lambda: (date(1990, 1, 1), date(1990, 12, 31))
+        )
+        moved = persona()
+
+    assert moved.tax_id != persona().tax_id, (
+        "the identifier did not move when the benefit period did, so the birth date it encodes "
+        "is anchored on something other than the period — a clock, most likely"
+    )
+
+
+def test_the_drawn_birth_date_lands_inside_the_declared_age_band():
+    """The positive half, computed OUTSIDE the code: the РНОКПП's first five digits are days since
+    the epoch, so the birth date can be read back off the identifier and checked against the band
+    the period implies. Without this the test above is satisfied by an anchor that moves with the
+    period and puts personas at any age at all."""
+    reference = active_period()[1]
+    oldest = reference - timedelta(days=round(60 * 365.2425))
+    youngest = reference - timedelta(days=round(22 * 365.2425))
+
+    for seed in range(50):
+        days = int(persona(seed).tax_id[:5])
+        born = date(1900, 1, 1) + timedelta(days=days - 1)
+        assert oldest <= born <= youngest, (seed, born, oldest, youngest)
 
 
 def test_personas_differ_between_seeds():
