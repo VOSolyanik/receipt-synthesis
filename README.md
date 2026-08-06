@@ -15,21 +15,35 @@ detection in multi-document files, deduplication, and reimbursement-decision log
 
 ## Status
 
-Early development — the pipeline was built end to end on a single archetype and the remaining templates are
-being added a document class at a time. The interface below describes the target CLI; see
+The Ukrainian side is built and produces delivered corpora; the European side is not started. The pipeline
+runs end to end, and the labelling contract (`config/labelling-schema.yaml`) is at **version 37**. See
 [docs/architecture.md](docs/architecture.md) for the full design.
 
 | Component | State |
 |---|---|
 | Configuration model — policy, fiscal rules, FX, vendors | in place |
 | Fonts, dependency pinning, reproducible environment | in place |
-| `persona_generator` → `claim_planner` → `content_builder` → `renderer` → `degrader` → `assembler` | in progress |
-| 24 document archetypes | 3 templates, covering 2 of the 24 rows — the Ukrainian `fiscal_receipt` class |
-| Invariant test suite | in progress |
+| `persona_generator` → `claim_planner` → `content_builder` → `renderer` → `degrader` → `assembler` | in place, end to end |
+| Document archetypes | **11 registered** in `claim_planner.ARCHETYPES`, building **6 of the 8** `DocType` classes |
+| Verdict space | all **6** `Verdict` labels reachable from the planner |
+| Multi-document files and multi-page documents | in place — a file may carry several documents, a statement several sheets |
+| Cross-document identity | in place, and audited from the rendered text by `tools/cross_document_audit.py` |
+| Pixel↔label gate | in place — `tools/pixel_label_gate.py`, evidence and survival per labelled box |
+| Invariant test suite | in place — 34 test modules under `tests/` |
 
-The three are a software cash register (ПРРО) on 80 mm and on 58 mm paper, and a classic hardware register
-(РРО), which prints a different set of fiscal requisites. One archetype row is two templates because the paper
-width is one of them; [docs/architecture.md](docs/architecture.md#document-archetypes) has the catalogue.
+**The 11 archetypes and the 6 classes they build.** `fiscal_receipt` — a software cash register (ПРРО) on
+80 mm and on 58 mm paper and a classic hardware register (РРО), which prints a different set of fiscal
+requisites; `payment_confirmation` — an A4 bank confirmation plus two screen-native app archetypes;
+`bank_statement`; `invoice`; `non_fiscal_receipt` — the товарний чек, which proves the subject and not the
+payment; `platform_receipt` — a Ukrainian and a European variant, the latter pricing in a foreign currency.
+Two `DocType` members are declared and **not** built — `act` and `order_screenshot`.
+
+**What is not here.** The European rows of the catalogue (PL, DE, ES) have no templates.
+`templates/ua_insurance_contract.html` is drawn but deliberately **not registered**: `DocType` has no
+`contract` member to label it with, which is RC-14 in `config/labelling-schema.yaml` and is blocked on a
+decision rather than on work.
+[docs/architecture.md](docs/architecture.md#document-archetypes) has the full catalogue, including the rows
+withdrawn by the anatomy of real documents and the reason each was withdrawn.
 
 ## Install
 
