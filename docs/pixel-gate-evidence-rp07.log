@@ -1,0 +1,18 @@
+pixel↔label gate — seed 42
+  documents observed        1360
+  files observed            1122
+  labelled boxes seen       37155
+  boxes measured: evidence  27933
+  boxes measured: survival  37124
+  unmeasured boxes, by reason:
+    evidence: no editable text in the element 7417
+    evidence: the edit resized the page 98
+    evidence: the edited box moved     1707
+    strangers: the page reflowed       1449
+    survival: no marks in the reference 30
+    survival: no pixels on the page    1
+  documents in the manifest 1241
+  labelled boxes in the manifest 37155
+
+1 finding(s):
+  illegible_after_capture    p025_c5_d1:relevant_transaction    photo: peak correlation 0.549 against the same channel without its JPEG step, floor 0.700
