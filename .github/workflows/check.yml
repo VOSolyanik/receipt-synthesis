@@ -22,8 +22,11 @@ permissions:
 
 env:
   UV_VERSION: "0.9.30"
-  # The upper bound in pyproject.toml is <3.13; this pins which 3.12 exactly.
-  PYTHON_VERSION: "3.12.13"
+  # The upper bound in pyproject.toml is <3.13; this pins which 3.12 exactly. It must be a
+  # build the pinned uv can actually fetch: 3.12.12 is the newest CPython 3.12 uv 0.9.30
+  # knows, and naming 3.12.13 asked setup-uv for a build that does not exist — the job died
+  # in nine seconds, before a single test ran.
+  PYTHON_VERSION: "3.12.12"
   # `uv run` inside the Makefile must never re-resolve: the lock is an input here, not an output.
   UV_FROZEN: "1"
 
@@ -42,6 +45,11 @@ jobs:
       # as whatever the resolver happens to do about it.
       - name: uv.lock is up to date
         run: uv lock --check
+        env:
+          # The job-wide UV_FROZEN=1 has to be lifted here: under it `--check` silently
+          # downgrades to "the file parses" and stops asking the only question the step is
+          # named after. `--check` never writes.
+          UV_FROZEN: "0"
 
       - name: Install the project
         run: uv sync --frozen
