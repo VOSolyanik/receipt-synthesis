@@ -1,0 +1,70 @@
+# `make check` is the sentence "I ran the project's checks". Until this workflow existed it
+# was only true when somebody remembered to type it.
+#
+# No secret is used and none is needed: nothing in this repository reads a credential — the
+# generator draws from a seed and renders locally.
+#
+# Every version here is pinned on purpose. A CI that drifts on its own would be one more
+# reproducibility hole rather than the fix for the ones it is here to guard.
+name: check
+
+on:
+  push:
+  pull_request:
+
+# A push to a branch that also has an open pull request would otherwise run this twice.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.9.30"
+  # The upper bound in pyproject.toml is <3.13; this pins which 3.12 exactly. It must be a
+  # build the pinned uv can actually fetch: 3.12.12 is the newest CPython 3.12 uv 0.9.30
+  # knows, and naming 3.12.13 asked setup-uv for a build that does not exist — the job died
+  # in nine seconds, before a single test ran.
+  PYTHON_VERSION: "3.12.12"
+  # `uv run` inside the Makefile must never re-resolve: the lock is an input here, not an output.
+  UV_FROZEN: "1"
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Separate from the sync so that a stale lock is reported as a stale lock rather than
+      # as whatever the resolver happens to do about it.
+      - name: uv.lock is up to date
+        run: uv lock --check
+        env:
+          # The job-wide UV_FROZEN=1 has to be lifted here: under it `--check` silently
+          # downgrades to "the file parses" and stops asking the only question the step is
+          # named after. `--check` never writes.
+          UV_FROZEN: "0"
+
+      - name: Install the project
+        run: uv sync --frozen
+
+      # Chromium is not a Python dependency, so `uv sync` alone leaves the renderer unable to
+      # run and a large part of the suite unable to pass. The build is chosen by the pinned
+      # playwright version, so this line inherits its pin from uv.lock.
+      - name: Install Chromium
+        run: uv run playwright install --with-deps chromium
+
+      - name: make check
+        run: make check
+
+      # ~30 s, three two-persona corpora. It is here rather than in `make check` because it
+      # is the one check that cannot pass by accident on a single machine on a single day:
+      # it generates one seed under two calendar days and asserts the bytes agree.
+      - name: make cross-seed
+        run: make cross-seed
