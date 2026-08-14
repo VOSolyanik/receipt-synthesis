@@ -16,7 +16,7 @@ detection in multi-document files, deduplication, and reimbursement-decision log
 ## Status
 
 The Ukrainian side is built and produces delivered corpora; the European side is not started. The pipeline
-runs end to end, and the labelling contract (`config/labelling-schema.yaml`) is at **version 37**. See
+runs end to end, and the labelling contract (`config/labelling-schema.yaml`) is at **version 38**. See
 [docs/architecture.md](docs/architecture.md) for the full design.
 
 | Component | State |
