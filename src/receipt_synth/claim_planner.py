@@ -126,7 +126,7 @@ def evidence_of(archetype: Archetype) -> Evidence:
     return document_evidence(archetype.doc_type)
 
 
-# The registry the planner selects from — eleven archetypes over six document classes today;
+# The registry the planner selects from — thirteen archetypes over six document classes today;
 # further ones register here as their templates land.
 #
 # THREE ENTRIES OF ONE DOCUMENT CLASS ARE STILL THREE ARCHETYPES. They carry the same

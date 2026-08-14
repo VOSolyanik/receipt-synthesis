@@ -517,9 +517,11 @@ price_ranges:
 # ONLY THE KINDS A EURO-PRICED ARCHETYPE CAN SELL, AND DELIBERATELY NO DEFAULT. The UAH
 # block's default exists because every Ukrainian category draws from it; a euro default
 # would let a kind nobody priced in euros fall through to a number that merely looks like
-# a price. `config.price_range` refuses a missing kind here instead. The five kinds below
-# are the union of the two EU vendor profiles (`online_learning_platform`,
-# `general_retailer`) intersected with what `professional_development` names.
+# a price. `config.price_range` refuses a missing kind here instead. The kinds below are
+# the union of the THREE EU vendor profiles (`online_learning_platform`,
+# `general_retailer`, `online_language_platform`) intersected with what the two categories
+# those sellers serve name — `professional_development` for the platform receipt,
+# `language_courses` for the euro pair.
 #
 # 🔴 EACH RANGE NESTS INSIDE ITS UAH SIBLING AT THE VENDORED RATE, AND THAT IS ARITHMETIC
 # THE PLANNER LEANS ON, not a stylistic echo. `claim_planner` sizes a limit-exhausting
