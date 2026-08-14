@@ -252,6 +252,19 @@ _SCALES = (
 
 _HRYVNIA_FORMS = ("гривня", "гривні", "гривень")
 _KOPIYKA_FORMS = ("копійка", "копійки", "копійок")
+# The euro is INDECLINABLE in Ukrainian — one form for all three counts — while the cent declines
+# like any masculine noun. Both facts are ordinary grammar rather than anything about a document.
+_EURO_FORMS = ("євро", "євро", "євро")
+_CENT_FORMS = ("цент", "центи", "центів")
+
+# What a Ukrainian document spells an amount in, per currency: the unit's forms, the subunit's,
+# and the GENDER THE UNIT GOVERNS — гривня is feminine («одна гривня», «дві гривні») and євро is
+# masculine («один євро», «два євро»). The gender belongs to the currency and not to the amount,
+# which is why it is stored beside the words rather than passed by a caller.
+_CURRENCY_WORDS: dict[str, tuple[tuple[str, str, str], tuple[str, str, str], bool]] = {
+    "UAH": (_HRYVNIA_FORMS, _KOPIYKA_FORMS, True),
+    "EUR": (_EURO_FORMS, _CENT_FORMS, False),
+}
 
 _MAX_UNITS = 1_000_000_000
 
@@ -301,26 +314,41 @@ def _int_to_words_uk(n: int, feminine: bool) -> list[str]:
     return words
 
 
-def amount_in_words_uk(amount: Decimal) -> str:
+def amount_in_words_uk(amount: Decimal, currency: str = "UAH") -> str:
     """An amount as printed in words on a Ukrainian document.
 
-    Hryvnias in words, kopiykas in digits, both units declined to agree with their own
-    count — the convention Ukrainian receipts and invoices follow:
+    Units in words, subunits in digits, both declined to agree with their own count — the
+    convention Ukrainian receipts and invoices follow:
 
-        Decimal("2500.00") -> "дві тисячі п'ятсот гривень 00 копійок"
+        Decimal("2500.00")        -> "дві тисячі п'ятсот гривень 00 копійок"
+        Decimal("394.10"), "EUR"  -> "триста дев'яносто чотири євро 10 центів"
+
+    🔴 A UKRAINIAN DOCUMENT MAY STATE A FOREIGN AMOUNT, and this is the line where it stops being
+    a hryvnia one. The words are what the page says the currency is, beside the caption that names
+    the code — two independent statements of it, which is what a label recording `EUR` needs from
+    an image that would otherwise carry a bare number.
+
+    Raises on a currency this module has no words for, rather than defaulting to hryvnias: an
+    amount spelled in the wrong currency is a document that contradicts its own caption.
     """
     if amount < 0:
         raise ValueError(f"a printed amount is not negative: {amount}")
     if amount != amount.quantize(KOPIYKA):
         raise ValueError(f"an amount has at most two decimal places: {amount}")
+    if currency not in _CURRENCY_WORDS:
+        raise ValueError(
+            f"no Ukrainian unit words are stated for {currency!r}; spelling an amount in "
+            f"{sorted(_CURRENCY_WORDS)} is what this function can do"
+        )
 
-    units, kopiykas = divmod(int(amount.scaleb(2)), 100)
+    units, subunits = divmod(int(amount.scaleb(2)), 100)
     if units >= _MAX_UNITS:
         raise ValueError(f"amount too large to spell out: {amount}")
 
-    words = _int_to_words_uk(units, feminine=True)
-    words.append(_plural_uk(units, *_HRYVNIA_FORMS))
-    return f"{' '.join(words)} {kopiykas:02d} {_plural_uk(kopiykas, *_KOPIYKA_FORMS)}"
+    unit_forms, subunit_forms, feminine = _CURRENCY_WORDS[currency]
+    words = _int_to_words_uk(units, feminine=feminine)
+    words.append(_plural_uk(units, *unit_forms))
+    return f"{' '.join(words)} {subunits:02d} {_plural_uk(subunits, *subunit_forms)}"
 
 
 # Reverse lookup, so that reading an amount back is an independent act rather than the
@@ -336,9 +364,21 @@ _SCALE_VALUES: dict[str, int] = {
     form: value for value, _, forms in _SCALES for form in forms
 }
 
+# Every currency's unit and subunit words at once, so that reading an amount back does not need to
+# be told which currency it is in — the words themselves say. The alternations are sorted longest
+# first so that a form which is a prefix of another cannot win the match.
+_UNIT_FORMS = sorted(
+    {form for unit, _, _ in _CURRENCY_WORDS.values() for form in unit}, key=len, reverse=True
+)
+_SUBUNIT_FORMS = sorted(
+    {form for _, subunit, _ in _CURRENCY_WORDS.values() for form in subunit},
+    key=len,
+    reverse=True,
+)
+
 _AMOUNT_IN_WORDS_RE = re.compile(
-    rf"^(?P<units>.+?)\s+(?P<hryvnia>{'|'.join(_HRYVNIA_FORMS)})"
-    rf"\s+(?P<kopiykas>\d{{2}})\s+(?P<kopiyka>{'|'.join(_KOPIYKA_FORMS)})$"
+    rf"^(?P<units>.+?)\s+(?P<unit>{'|'.join(_UNIT_FORMS)})"
+    rf"\s+(?P<subunits>\d{{2}})\s+(?P<subunit>{'|'.join(_SUBUNIT_FORMS)})$"
 )
 
 
@@ -362,13 +402,19 @@ def _words_to_int_uk(text: str) -> int:
 
 
 def words_to_amount_uk(text: str) -> Decimal:
-    """The amount a Ukrainian amount-in-words states. Raises ``ValueError`` if the text
-    is not one."""
+    """The amount a Ukrainian amount-in-words states, in whatever currency it names. Raises
+    ``ValueError`` if the text is not one.
+
+    ⛔ IT DOES NOT REPORT THE CURRENCY, and that is deliberate: this is the independent reading of
+    a NUMBER, used to check that a printed figure and its printed words agree. Which currency the
+    two are in is stated by the caption beside them and by the label, and a second answer here
+    would be a second place for the two to disagree.
+    """
     match = _AMOUNT_IN_WORDS_RE.match(text.strip())
     if match is None:
         raise ValueError(f"not an amount in words: {text!r}")
     units = _words_to_int_uk(match["units"])
-    return (Decimal(units) + Decimal(match["kopiykas"]) / 100).quantize(KOPIYKA)
+    return (Decimal(units) + Decimal(match["subunits"]) / 100).quantize(KOPIYKA)
 
 
 # =============================================================================
@@ -677,6 +723,12 @@ _ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 # is not a form any Ukrainian document uses.
 _LEGAL_FORM_PREFIX = {"TOV": "ТОВ", "FOP": "ФОП", "PRAT": "ПрАТ"}
 _SOLE_TRADER = "FOP"
+
+# The designation of a firm registered OUTSIDE the Ukrainian register, printed AFTER the name and
+# without quotes — "Coursera Inc." The Ukrainian marks are a rule about how a UKRAINIAN firm name
+# is written; applying them to a foreign one produces «INC «Coursera»», a form no register holds
+# and no document prints. The forms are the ones config/vendors.json's `EU` block uses.
+_LEGAL_FORM_SUFFIX = {"INC": "Inc.", "LLC": "LLC", "SARL": "S.à r.l."}
 
 # Jurisdictions that print a sole trader as surname plus initials — "Ковальчук О. С." —
 # rather than as a full name.
@@ -1884,6 +1936,12 @@ class PaymentConfirmation:
     initiation: str
     transfer: Decimal
     fee: Decimal
+    # 🔴 WHAT THE THREE AMOUNTS ARE IN, and it is a field rather than a constant because a
+    # Ukrainian bank executes instructions in foreign currency too. The label reads it; the page
+    # states it in the captions and in the words. ⚠️ THE FEE IS IN THE SAME CURRENCY as the
+    # transfer — one page, one currency, exactly as one claim is — so nothing here has to say
+    # which of the three a code applies to.
+    currency: str
     # 👁 Four captions for the amount and three for the fee. Carried per document because a
     # consumer keying on one string reads a minority of real documents.
     amount_caption: str
@@ -2009,7 +2067,7 @@ class PaymentConfirmation:
             source_file=source_file,
             doc_type=DocType.PAYMENT_CONFIRMATION,
             language="uk",
-            currency="UAH",
+            currency=self.currency,
             amount=self.transfer,
             fee=self.fee,
             total_charged=self.total_charged,
@@ -2164,6 +2222,24 @@ def _fill_reference_traced(
     return text, (number if "{invoice_no}" in template else None)
 
 
+def _money_caption(
+    rng: random.Random, captions: list[str], block: dict, *, currency: str, domestic: bool
+) -> str:
+    """One caption for an amount, saying which currency the figure beside it is in.
+
+    Domestic: the observed pool, drawn from as it always was. Foreign: the same pool less the
+    captions that name hryvnias, with the ISO code in brackets — the form those captions
+    themselves use. ONE DRAW EITHER WAY, so the currency of a document does not change how many
+    values a run takes from the generator.
+    """
+    if domestic:
+        return rng.choice(captions)
+    neutral = [c for c in captions if c not in block["captions_naming_the_domestic_currency"]]
+    return block["foreign_currency_caption_format"].format(
+        caption=rng.choice(neutral), code=currency
+    )
+
+
 def build_payment_confirmation(
     rng: random.Random,
     *,
@@ -2177,8 +2253,23 @@ def build_payment_confirmation(
     cites: DocumentReference | None = None,
     must_cite: bool = False,
     country: str = "UA",
+    currency: str | None = None,
 ) -> PaymentConfirmation:
     """Build one Ukrainian bank payment confirmation.
+
+    🔴 ``currency`` IS THE ONE AXIS THAT MOVES, and everything else about the page holds still.
+    ``None`` means the jurisdiction's own — every claim of this corpus until a foreign one was
+    planned — and naming another one states a transfer executed in it. 📄 The requisites do not
+    change: the instruction on non-cash settlements names an amount of the operation, not an amount
+    in hryvnias. What changes is what the page must SAY: the caption carries the code (see
+    `captions_naming_the_domestic_currency` in config/fiscal-rules.yaml) and the words spell euros,
+    so a label recording EUR is readable off the image twice over.
+
+    ⛔ A CARD OPERATION IS REFUSED IN A FOREIGN CURRENCY, and it is refused rather than quietly
+    turned into a transfer. 👁 The card modes print an authorization code and a masked card — a
+    domestic acquiring operation — and what a Ukrainian bank executes against a foreign
+    beneficiary's account is a transfer by account details. A caller asking for both has asked for
+    a document this repository has no evidence for.
 
     ``must_cite`` is the label-first knob of the `subject` axis: the plan has decided this
     payment's purpose NAMES the рахунок in ``cites``, so the initiation mode is drawn among those
@@ -2221,6 +2312,8 @@ def build_payment_confirmation(
     """
     rules = jurisdiction(country)
     block = rules["payment_confirmation"]
+    currency = currency or rules["currency"]
+    domestic_currency = currency == rules["currency"]
 
     if must_cite and cites is None:
         raise ValueError(
@@ -2239,6 +2332,12 @@ def build_payment_confirmation(
         raise ValueError(
             f"initiation mode {initiation!r} prints no purpose line, and must_cite asks this "
             "page to cite its subject there — the plan and the named mode have come apart"
+        )
+    if mode is not None and not domestic_currency and mode["prints_card"]:
+        raise ValueError(
+            f"initiation mode {initiation!r} prints a card and an authorization code — a domestic "
+            f"acquiring operation — and this page states a transfer in {currency}. Nothing "
+            "observed here says what such a document looks like."
         )
     if mode is None:
         shares = initiation_shares()
@@ -2276,16 +2375,32 @@ def build_payment_confirmation(
     # required label field, and emitting an empty one would assert that the document names no
     # counterparty, a case whose comparison rule the labelling contract has not settled. Declared
     # as a narrowing in config/labelling-schema.yaml rather than left for a reader to notice.
+    # 🔴 A BANK OUTSIDE THE NATIONAL REGISTER HAS NO МФО TO PRINT. The code beside the payee's
+    # bank is 📄 assigned in the National Bank's register of participants (`identifiers.bank_code`),
+    # so a beneficiary banked abroad has none — and the beneficiary's IBAN is what says so, since
+    # its country is the country of the account. The NAME is printed either way; the code is a
+    # domestic requisite and is omitted rather than invented.
     payee_bank_label = block["parties"]["bank_code_label"]
+    payee_is_domestic = identity.account.startswith(
+        rules["identifiers"]["iban_format"]["country"]
+    )
     payee_bank = (
         None
         if rng.random() < payment_confirmation_share("empty_captioned_field")
         else f"{identity.bank_name}, {payee_bank_label} {identity.bank_code}"
+        if payee_is_domestic
+        else identity.bank_name
     )
     payee = Party(
         name=printed_legal_name(vendor["name"], vendor["legal_form"]),
         trade_name=vendor["name"],
-        code=identity.tax_code,
+        # 🔴 AND NO CODE FOR A BENEFICIARY OUTSIDE THE REGISTER, for the reason its bank carries
+        # none. 👁 The «Код» line holds a ЄДРПОУ or a РНОКПП — both Ukrainian registers — so a
+        # foreign firm has no value for it, and printing the code drawn for the claim would put
+        # an eight-digit Ukrainian identifier under a foreign company's name. The caption
+        # disappears with the value: this is the field being INAPPLICABLE, not empty, and the two
+        # observed forms of emptiness are about a field the document does have.
+        code=identity.tax_code if payee_is_domestic else None,
         account=identity.account,
         bank=payee_bank,
     )
@@ -2362,13 +2477,20 @@ def build_payment_confirmation(
         initiation=initiation,
         transfer=amount,
         fee=fee,
-        amount_caption=rng.choice(block["amount_captions"]),
-        fee_caption=rng.choice(block["fee_captions"]),
+        currency=currency,
+        amount_caption=_money_caption(
+            rng, block["amount_captions"], block,
+            currency=currency, domestic=domestic_currency,
+        ),
+        fee_caption=_money_caption(
+            rng, block["fee_captions"], block,
+            currency=currency, domestic=domestic_currency,
+        ),
         prints_total=rng.random() < payment_confirmation_share("prints_total"),
         # 👁 The words spell the TRANSFER and not the total: 📄 the amount of the operation is the
         # requisite, and the words are the same requisite written twice.
         amount_in_words=(
-            amount_in_words_uk(amount)
+            amount_in_words_uk(amount, currency)
             if rng.random() < payment_confirmation_share("amount_in_words")
             else None
         ),
@@ -4539,12 +4661,20 @@ def printed_legal_name(name: str, legal_form: str) -> str:
     """A party's name as printed, with its legal form.
 
     A sole trader is printed without quotes — ``ФОП Ковальчук О. С.`` — because the name is
-    a person's, not a firm's. Every other form takes the Ukrainian quotation marks.
+    a person's, not a firm's. Every other Ukrainian form takes the Ukrainian quotation marks.
+
+    A FOREIGN FIRM TAKES NEITHER, and carries its own designation after the name instead:
+    ``Coursera Inc.`` The quotation marks are a rule about a Ukrainian firm's name, and the first
+    document to print a cross-border seller's legal name is what made the difference visible —
+    every earlier one either named a domestic firm or, like the platform receipt, printed the
+    bare trade name.
 
     Takes the two strings rather than a ``Seller`` because the same rule prints the RECIPIENT of
     a bank payment confirmation, which is the same firm named on a different document class and
     is not a seller of anything on that page.
     """
+    if legal_form in _LEGAL_FORM_SUFFIX:
+        return f"{name} {_LEGAL_FORM_SUFFIX[legal_form]}"
     prefix = _LEGAL_FORM_PREFIX.get(legal_form, legal_form)
     if legal_form == _SOLE_TRADER:
         return f"{prefix} {name}"

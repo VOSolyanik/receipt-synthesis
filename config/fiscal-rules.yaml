@@ -546,6 +546,21 @@ jurisdictions:
       # config/labelling-schema.yaml.
       amount_captions: ["Сума", "Сума операції", "Сума (грн)", "Сума переказу"]
       fee_captions: ["Комісія", "Комісія (грн)", "Сума комісії"]
+
+      # 🔴 TWO OF THE CAPTIONS ABOVE NAME THE CURRENCY, AND A FOREIGN-CURRENCY INSTRUCTION CANNOT
+      # PRINT EITHER. 👁 «Сума (грн)» and «Комісія (грн)» are observed forms and they are also a
+      # STATEMENT: the figure beside them is in hryvnias. A document whose label records EUR while
+      # its caption says грн contradicts itself on the page, which is a defect no archetype of this
+      # repository may carry by accident.
+      #
+      # ⚠️ AND THE FOREIGN VARIANT MUST STATE ITS CURRENCY SOMEWHERE. Every other class of this
+      # corpus prints one currency, so a bare figure is unambiguous; a page carrying euros is not,
+      # and a label recording EUR would then be unreadable from the image. The observed captions
+      # are what say the currency on this form, so the foreign one says it the same way — the code
+      # in brackets after a caption that does not already name one. 👁 The FORM is observed; ⛔ no
+      # foreign-currency confirmation was observed, and the form is applied rather than copied.
+      captions_naming_the_domestic_currency: ["Сума (грн)", "Комісія (грн)"]
+      foreign_currency_caption_format: "{caption} ({code})"
       total_caption: "Загальна сума"
       # 👁 5/8, under three different captions — and one of those is no caption at all, the
       # words following the digits in brackets. Only the captioned forms are printed here.

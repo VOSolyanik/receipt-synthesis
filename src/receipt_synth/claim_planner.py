@@ -193,6 +193,38 @@ ARCHETYPES: dict[str, Archetype] = {
             "hobby",
         ),
     ),
+    # 🔴 THE SAME CLASS AND THE SAME FORM WITH ONE AXIS MOVED — the payment half of a EURO PAIR,
+    # and the archetype that makes the oracle's currency conversion something a CLAIM goes
+    # through rather than a page.
+    #
+    # WHAT WAS WRONG WITH THE EURO THE CORPUS ALREADY HAD. `eu_platform_receipt` is the only
+    # euro archetype and it proves both facts, so `_select_documents` gives it a claim of its
+    # own: every conversion the engine performed was over a single self-contained document. No
+    # pair, no cross-document amount to convert on both sides, and — the reason this branch
+    # exists — the class collapses downstream into whatever a consumer does with a receipt that
+    # is not fiscal, so a conversion could be labelled and never reached. A `payment_confirmation`
+    # is one of the classes a consumer extracts.
+    #
+    # ONE CATEGORY, AND — UNLIKE THE PLATFORM RECEIPT — NO BLAST RADIUS. That warning is about an
+    # archetype proving BOTH facts: `_select_documents` prefers such a document, so a category
+    # carrying one loses its invoice-plus-payment pair. This proves the payment ALONE, so it joins
+    # the payment pool and takes nothing out of it. `professional_development` is the category
+    # because it is the only one config/vendors.json's `EU` block serves, and the seller has to be
+    # the foreign one: a Ukrainian employee does not settle a domestic invoice in euros.
+    #
+    # ⚠️ ITS CURRENCY IS WHAT KEEPS IT OUT OF EVERY OTHER PAIR. Every domestic subject document is
+    # stated in hryvnias, so `_settleable_subjects` never offers this archetype to one — and the
+    # `EU` vendor pool it names would in any case collide with a domestic archetype's in
+    # `assembler`, one claim being one seller. Two independent rules, agreeing.
+    "ua_bank_payment_confirmation_eur": Archetype(
+        slug="ua_bank_payment_confirmation_eur",
+        doc_type=DocType.PAYMENT_CONFIRMATION,
+        country=Country.UA,
+        language="uk",
+        currency="EUR",
+        categories=("professional_development",),
+        vendor_pool="EU",
+    ),
     # THE THIRD DOCUMENT CLASS, and the SECOND that proves the payment without stating what was
     # bought. 👁 A statement's payment purpose names an invoice or a delivery note, and at best a
     # generic category of goods — never the expense — which CONFIRMS the `proves_subject: false`
@@ -436,6 +468,9 @@ _SETTLED_BY_A_PAYMENT: frozenset[DocType] = frozenset({DocType.INVOICE})
 # labelled row always carries one.
 _CITES_THE_SETTLED_DOCUMENT: frozenset[str] = frozenset({
     "ua_bank_payment_confirmation",
+    # The same form and the same purpose line, in euros. 👁 A purpose naming a рахунок is a
+    # property of the FIELD SET, which the currency axis does not touch.
+    "ua_bank_payment_confirmation_eur",
     "ua_bank_receipt_in_app",
     "ua_bank_statement",
 })

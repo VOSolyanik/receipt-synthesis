@@ -450,6 +450,15 @@ _BUILDERS = {
     "ua_prro_receipt_58mm": build_prro_receipt,
     "ua_rro_receipt": partial(build_prro_receipt, registrar="rro"),
     "ua_bank_payment_confirmation": build_payment_confirmation,
+    # 🔴 THE SAME BUILDER WITH THE CURRENCY AXIS MOVED, and the initiation mode NAMED rather than
+    # drawn: 👁 the card modes print an authorization code and a masked card — a domestic acquiring
+    # operation — and what a bank executes against a foreign beneficiary's account is a transfer
+    # by account details. The builder refuses the combination, so this partial is where the
+    # archetype's one physical fact is declared, exactly as the platform pair declares its
+    # jurisdiction here.
+    "ua_bank_payment_confirmation_eur": partial(
+        build_payment_confirmation, currency="EUR", initiation="transfer"
+    ),
     "ua_bank_statement": build_bank_statement,
     "ua_invoice": build_invoice,
     "ua_non_fiscal_receipt": build_non_fiscal_receipt,

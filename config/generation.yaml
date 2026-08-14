@@ -586,6 +586,23 @@ price_ranges_eur:
 #       actually attach — and they are parameters precisely so the author can retune them
 #       without touching code.
 #
+# 🔴 AND THE FIFTH ENTRY OF THAT POOL IS IN EUROS, WHICH IS WHY THE FOUR ABOVE WERE RESCALED
+# RATHER THAN LEFT ALONE. `ua_bank_payment_confirmation_eur` proves the payment exactly as they
+# do, so it joins the same pool — but only for `professional_development`, the one category the
+# `EU` seller block serves. The four hryvnia archetypes were multiplied by 0.9 and the euro one
+# given the remaining 0.10, which leaves their proportions AMONG THEMSELVES untouched: 0.45 /
+# 0.90 is the statement's old 0.50, and a pool that holds only the four (every other category,
+# and the hryvnia half of this one) renormalizes back to exactly the distribution every measured
+# baseline was taken on.
+#
+# WHERE THE 0.10 IS ACTUALLY SPENT, because it is narrower than it looks. A euro payment can only
+# be paired with a euro subject (`_settleable_subjects`), and within that pair its pool has ONE
+# member — so the weight decides nothing there. It decides one thing: how often a claim built as
+# a deliberate EVIDENCE GAP for `professional_development` — a payment with nothing beside it
+# saying what it bought — is the euro one. ⚠️ A JUDGEMENT like the four above it, and a small one
+# on purpose: the euro pair is the archetype's reason to exist, and the gap claim is a by-product
+# that must not crowd the hryvnia gaps a consumer was scored against.
+#
 # THE PLATFORM POOL: two archetypes, one class, drawn 0.50 / 0.50 — the pair exists for a
 # controlled comparison of the language and currency axes with the layout held fixed, and
 # equal mass is what maximizes the power of that comparison. Skewing it would need a claim
@@ -596,10 +613,11 @@ price_ranges_eur:
 # always has, and listing them here with equal weights would be a no-op that still moved
 # the draw call onto the weighted path — a behaviour change nothing asked for.
 archetype_shares:
-  ua_bank_statement: 0.50
-  ua_bank_payment_confirmation: 0.30
-  ua_bank_receipt_in_app: 0.12
-  ua_bank_app_transaction: 0.08
+  ua_bank_statement: 0.45
+  ua_bank_payment_confirmation: 0.27
+  ua_bank_receipt_in_app: 0.108
+  ua_bank_app_transaction: 0.072
+  ua_bank_payment_confirmation_eur: 0.10
   eu_platform_receipt: 0.50
   ua_platform_receipt: 0.50
 
