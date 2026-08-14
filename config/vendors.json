@@ -14,8 +14,11 @@
       { "slug": "mbank", "display_name": "mBank", "template": "pl_transfer_confirmation" },
       { "slug": "pko",   "display_name": "PKO",   "template": "pl_transfer_confirmation" }
     ],
+    "$note_eu_banks": "A DIFFERENT ROLE FROM THE BLOCK ABOVE, and the reason this list is not a fifth set of issuers: no archetype is issued BY a euro-area bank. These are the banks a seller of the `EU` pool holds its account with — the beneficiary side of a cross-border transfer — so `printed_name` appears in another document's payee block rather than in a header of its own, and no `template` is named because none is owned. `bank_code` is the eight-digit Bankleitzahl carried inside the German IBAN the seller's account is composed as (see `identifiers.iban_format` under EU in config/fiscal-rules.yaml): INVENTED, shaped like a real one, equal to no real institution's, and fixed here rather than drawn for the reason the МФО is.",
     "EU": [
-      { "slug": "sepa", "display_name": "SEPA", "template": "eu_sepa_confirmation" }
+      { "slug": "deutsche",    "display_name": "Deutsche Bank", "printed_name": "Deutsche Bank AG", "bank_code": "99001001" },
+      { "slug": "commerzbank", "display_name": "Commerzbank",   "printed_name": "Commerzbank AG",   "bank_code": "99002002" },
+      { "slug": "ing",         "display_name": "ING",           "printed_name": "ING-DiBa AG",      "bank_code": "99003003" }
     ]
   },
 

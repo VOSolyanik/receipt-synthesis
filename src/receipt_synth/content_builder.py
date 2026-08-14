@@ -1747,11 +1747,15 @@ def is_valid_iban(value: str) -> bool:
 def generate_iban(rng: random.Random, bank_code: str, country: str = "UA") -> str:
     """A checksum-correct IBAN of this jurisdiction, on this bank's code.
 
-    The length and the bank-code length come from `payment_confirmation.iban` in
+    The length and the bank-code length come from `identifiers.iban_format` in
     config/fiscal-rules.yaml rather than from literals here: an IBAN's length is fixed per
-    country by the published registry, and that is a fact about the jurisdiction.
+    country by the published registry, and that is a fact about the jurisdiction — which is why
+    the rule sits beside the МФО rather than under the first document class that printed one.
+
+    ⚠️ `country` IS THE POOL THE ACCOUNT BELONGS TO AND NOT ALWAYS A COUNTRY. `EU` is a pool of
+    cross-border sellers, and the structure it draws is stated where the pool is.
     """
-    rules = jurisdiction(country)["payment_confirmation"]["iban"]
+    rules = jurisdiction(country)["identifiers"]["iban_format"]
     if len(bank_code) != rules["bank_code_length"]:
         raise ValueError(
             f"a {country} IBAN carries a {rules['bank_code_length']}-digit bank code, got "

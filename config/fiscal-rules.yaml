@@ -252,6 +252,21 @@ jurisdictions:
       # pattern exists to check that table's entries are shaped like a real one.
       bank_code: { pattern: "[0-9]{6}" }
 
+      # The Ukrainian IBAN, 📄 ISO 13616 with a country length of 29: "UA", two check digits
+      # computed mod 97-10, the six-digit МФО of the bank, then a nineteen-character account.
+      #
+      # 🔴 MOVED OUT OF `payment_confirmation` AND FOR THE REASON `bank_code` ABOVE IS HERE: the
+      # length of an IBAN is fixed per COUNTRY by the published registry, and it is now printed by
+      # four classes — the confirmation, the statement, the invoice's payment-order block, and the
+      # foreign-currency pair's two documents. A rule about a jurisdiction filed under the first
+      # class that happened to need it reads, on the day a second jurisdiction arrives, as though
+      # that jurisdiction had to declare a payment confirmation it has no archetype for.
+      #
+      # `iban_format` and not `iban`, because the two are different statements and the EU block
+      # below carries both: `iban` is the SHAPE a value has, for checking one; this is what a
+      # generator needs to compose one.
+      iban_format: { country: "UA", length: 29, bank_code_length: 6 }
+
     receipt:
       title: "ФІСКАЛЬНИЙ ЧЕК"
 
@@ -561,10 +576,6 @@ jurisdictions:
         # — OCR returns the string "-" for the first and nothing for the second — so both are
         # produced. This is the hyphen form.
         empty_value: "-"
-
-      # The Ukrainian IBAN, 📄 ISO 13616 with a country length of 29: "UA", two check digits
-      # computed mod 97-10, the six-digit МФО of the bank, then a nineteen-character account.
-      iban: { country: "UA", length: 29, bank_code_length: 6 }
 
       # 🔴 HOW THE PAYMENT WAS INITIATED IS WHAT DECIDES THE FIELD SET — not the family of the
       # document, which is the conclusion this block was rewritten on. 👁 3/8 confirmations
@@ -1279,6 +1290,23 @@ jurisdictions:
     identifiers:
       iban: { pattern: "[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}", checksum: iban, label: "IBAN" }
       bic: { pattern: "[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?", label: "BIC" }
+
+      # WHICH IBAN A SELLER OF THE `EU` POOL IS DRAWN, and ⚠️ ONE COUNTRY STANDS FOR THE POOL.
+      # 📄 The IBAN registry fixes a length and a national structure per COUNTRY, and the euro
+      # area has nineteen of them; "EU" is a pool of cross-border sellers rather than a country,
+      # so it has no length of its own to state. The German structure is the one drawn — 📄 DE,
+      # 22 characters, an eight-digit Bankleitzahl and a ten-digit account, digits throughout,
+      # which is what lets one generator serve both jurisdictions.
+      #
+      # ⛔ IT IS NOT A CLAIM ABOUT WHERE ANY PLATFORM BANKS. It is a narrowing of the corpus: every
+      # euro beneficiary is banked in one country, and a wider draw is a distribution decision
+      # nobody has needed to take. The one thing it must not do is print an IBAN whose check
+      # digits fail, and those are computed rather than drawn.
+      #
+      # `bank_code_length` is the Bankleitzahl, whose invented values are
+      # `banks.EU[].bank_code` in config/vendors.json — the same fixed name → code table the
+      # Ukrainian МФО uses, for the same reason.
+      iban_format: { country: "DE", length: 22, bank_code_length: 8 }
 
     receipt:
       title: "VAT INVOICE"

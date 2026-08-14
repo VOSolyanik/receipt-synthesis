@@ -1208,7 +1208,7 @@ _PAYEE_DRAW_ATTEMPTS = 8
 
 
 def _payee_the_payment_names(
-    rng: random.Random, plan: ClaimPlan, vendor: dict, country: Country
+    rng: random.Random, plan: ClaimPlan, vendor: dict, pool: str
 ) -> dict:
     """Which party the PAYMENT document of this claim names.
 
@@ -1251,12 +1251,12 @@ def _payee_the_payment_names(
     unbuildable = (
         f"claim {plan.claim_id} is planned as {COUNTERPARTY_MISMATCH!r}: its payment has to name a "
         f"party its subject document does not, and no second seller for {plan.category!r} in "
-        f"{country.value} could be drawn"
+        f"{pool} could be drawn"
     )
     for _ in range(_PAYEE_DRAW_ATTEMPTS):
         try:
             other = _pick_vendor(
-                rng, country, plan.category, mixed=False, excluding_name=vendor["name"]
+                rng, pool, plan.category, mixed=False, excluding_name=vendor["name"]
             )
         except ValueError as no_second_seller:
             # RE-RAISED WITH THE CAUSE NAMED. `_pick_vendor` refuses in the language of a vendor
@@ -1537,9 +1537,10 @@ def generate_dataset(
                         f"sellers from different vendor pools {sorted(pools)}; the vendor "
                         "is chosen once per claim, so there is no one pool to choose from"
                     )
+                pool = pools.pop()
                 vendor = _pick_vendor(
                     rng,
-                    pools.pop(),
+                    pool,
                     plan.category,
                     mixed=plan.coverage_target is not None,
                     # 🔴 ONE ARCHETYPE CONSTRAINS WHO CAN HAVE SOLD THE GOODS, and the constraint
@@ -1562,18 +1563,29 @@ def generate_dataset(
                 # not, so two documents of one purchase named one seller by four different numbers
                 # — on every pair of the delivered corpus. The constraint was known; it had been
                 # applied to one field.
-                identity = draw_party_identity(rng, vendor, persona.location.country.value)
+                #
+                # 🔴 DRAWN IN THE SELLER'S POOL AND NOT THE CLAIMANT'S, which is the same
+                # correction `_pick_vendor` above already carries: an identity is WHOSE it is. The
+                # claimant's jurisdiction decided the seller's bank and account while every seller
+                # was domestic, and the two coincided — a foreign seller banked in the euro area
+                # would have been given a Ukrainian IBAN, and the first document to PRINT one
+                # would have said so on the page.
+                identity = draw_party_identity(rng, vendor, pool)
                 # WHOM THE PAYMENT DOCUMENT NAMES, which is the same seller on every claim but
                 # one. A claim planned as `counterparty_mismatch` names a SECOND party here — the
                 # invoice was issued by one seller and the money went to another — and that party
                 # gets its own identity, because a payee is one party on paper: a second name
                 # beside the first one's account and tax code would be a document nothing
                 # describes. Drawn from the same generator, so the run stays determined by `--seed`.
-                payee = _payee_the_payment_names(rng, plan, vendor, persona.location.country)
+                # 🔴 THE SECOND SELLER COMES FROM THE CLAIM'S OWN POOL, for the reason the first
+                # does: a payment that went to the wrong provider went to another provider OF THE
+                # SAME KIND, and a domestic company named on a cross-border claim's payment would
+                # be discriminable by the pool rather than by the party.
+                payee = _payee_the_payment_names(rng, plan, vendor, pool)
                 payee_identity = (
                     identity
                     if payee is vendor
-                    else draw_party_identity(rng, payee, persona.location.country.value)
+                    else draw_party_identity(rng, payee, pool)
                 )
                 documents = _claim_documents(
                     rng,
