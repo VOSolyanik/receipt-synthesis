@@ -728,7 +728,7 @@ _SOLE_TRADER = "FOP"
 # without quotes — "Coursera Inc." The Ukrainian marks are a rule about how a UKRAINIAN firm name
 # is written; applying them to a foreign one produces «INC «Coursera»», a form no register holds
 # and no document prints. The forms are the ones config/vendors.json's `EU` block uses.
-_LEGAL_FORM_SUFFIX = {"INC": "Inc.", "LLC": "LLC", "SARL": "S.à r.l."}
+_LEGAL_FORM_SUFFIX = {"INC": "Inc.", "LLC": "LLC", "SARL": "S.à r.l.", "GMBH": "GmbH"}
 
 # Jurisdictions that print a sole trader as surname plus initials — "Ковальчук О. С." —
 # rather than as a full name.
@@ -4275,13 +4275,272 @@ def build_platform_receipt(
         # authoritative form on every class of this dataset.
         seller_name=vendor["name"],
         buyer_name=buyer_name,
-        buyer_country=block["buyer_country_names"]["UA"],
+        buyer_country=rules["country_names"]["UA"],
         issued_at=issued_at,
         receipt_number=receipt_number,
         card_masked=block["card_mask_format"].format(tail=f"{rng.randint(0, 9999):04d}"),
         line_items=items,
         total=total,
         **seller_extras,
+    )
+
+
+# =============================================================================
+# The cross-border invoice — an offer to pay, in euros
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class EuInvoice:
+    """One invoice issued by a platform of the `EU` pool to a Ukrainian claimant.
+
+    🔴 THE CLASS THAT MAKES A EURO CLAIM A PAIR. Every euro document before it was a
+    `platform_receipt`, which proves BOTH facts and is therefore the whole of its claim: the
+    oracle converted a page. This one proves the subject and no payment — 📄 an invoice is an
+    offer to pay — so the claim it belongs to carries a payment document beside it, and the
+    conversion runs through a cross-document check for the first time.
+
+    📄 NOT A VAT INVOICE, AND FOR A DIFFERENT REASON FROM THE PLATFORM RECEIPT'S. That page
+    declares itself not to be one; this one IS an invoice, for a supply Articles 44 and 59 of
+    Directive 2006/112/EC place outside the scope of EU VAT — so Article 226's tax particulars do
+    not apply to it and the note in the foot says which provisions decide that. Two documents, two
+    routes to the same absence of a tax row, which is exactly the distinction a consumer that
+    classifies on a tax block has to make.
+
+    ⛔ NO PAYMENT STATUS, EVER. The class states an obligation and a date by which it should be
+    settled; whether it was is what the document beside it establishes. A "Paid" mark here would
+    make the class prove both facts and would contradict `document_evidence` in policy.yaml.
+    """
+
+    # THE BARE MARK, which is what `counterparty` carries on every class of this dataset. The
+    # page prints `seller_display` — the same firm with the designation its own register gives it
+    # — so the label and the image differ in exactly the way the contract's `normalization`
+    # section says they may, and the payment document beside it names the party identically.
+    seller_name: str
+    seller_display: str
+    buyer_name: str
+    buyer_country: str
+    issued_at: datetime
+    # 🔴 A TERM OF THE OFFER, and it is bound by the day the claim's money moves: an offer whose
+    # date has passed is not the obligation the payment discharged. `build_eu_invoice` pushes it
+    # out to the settlement where a drawn window would fall short — the same rule the Ukrainian
+    # invoice's validity line follows, and for the reason recorded there.
+    due_at: datetime
+    number: str
+    line_items: list[LineItem]
+    # The seller's account, which is what makes the invoice payable by the transfer beside it.
+    # ⚠️ ORDINARY COMMERCIAL CONTENT AND NOT A TAX REQUISITE — Article 226 lists no bank details.
+    # It is printed because a document nobody could pay is not an offer to pay.
+    iban: str
+    bank_name: str
+    vat_note: str
+    # Present exactly when the plan asked for an obligation settled in parts — see
+    # `claim_planner.STATES_AN_INSTALMENT_TERM`. Never drawn here: it decides a marker the oracle
+    # reads, so a builder that drew it would be choosing a claim's verdict.
+    schedule: str | None = None
+
+    @property
+    def total(self) -> Decimal:
+        """Σ over the line items — derived, for the reason every other total in this module is."""
+        return line_items_total(self.line_items)
+
+    @property
+    def instalment_amount(self) -> Decimal | None:
+        """What ONE PART of this obligation comes to, or `None` for an invoice payable in one.
+
+        The Ukrainian invoice's rule, unchanged and deliberately so: the parts need not sum back
+        to the total, because the page states the amount of the NEXT payment rather than a
+        schedule of every one. See `Invoice.instalment_amount`, which carries the argument.
+        """
+        if self.schedule is None:
+            return None
+        return (self.total / partial_payment_schedules()[self.schedule]).quantize(
+            KOPIYKA, rounding=ROUND_HALF_UP
+        )
+
+    @property
+    def reference(self) -> DocumentReference:
+        """How a payment document names this invoice — its number and the date it bears."""
+        return DocumentReference(number=self.number, issued_at=self.issued_at)
+
+    # -- rendering ------------------------------------------------------------
+
+    def _amount(self, value: Decimal) -> str:
+        rules = jurisdiction("EU")["number_format"]
+        whole, _, fraction = f"{value:.2f}".partition(".")
+        grouped = f"{int(whole):,}".replace(",", rules["thousands_separator"])
+        return f"{grouped}{rules['decimal_separator_variants'][0]}{fraction}"
+
+    def render_context(self) -> dict:
+        """Everything the template prints, already formatted."""
+        rules = jurisdiction("EU")
+        block = rules["invoice"]
+        part = self.instalment_amount
+        return {
+            "language": rules["language"],
+            "labels": block["labels"],
+            "currency": rules["currency"],
+            "title": block["title"],
+            "seller_name": self.seller_display,
+            "buyer": {"name": self.buyer_name, "country": self.buyer_country},
+            "number": self.number,
+            "date": self.issued_at.strftime(rules["date_format"]),
+            "due_date": block["due_date_format"].format(
+                date=self.due_at.strftime(rules["date_format"])
+            ),
+            "lines": [
+                {
+                    "name": item.name,
+                    "qty": f"{item.qty:g}",
+                    "price": self._amount(item.price),
+                    "amount": self._amount((item.qty * item.price).quantize(KOPIYKA)),
+                }
+                for item in self.line_items
+            ],
+            "subtotal": self._amount(self.total),
+            "total": self._amount(self.total),
+            # A caption and a money value, so the amount carries a box of its own rather than
+            # being scored inside a sentence.
+            "instalment": None if part is None else {
+                "caption": block["instalment_caption_format"].format(
+                    period=block["instalment_periods"][self.schedule]
+                ),
+                "amount": self._amount(part),
+            },
+            "iban": self.iban,
+            "bank_name": self.bank_name,
+            "reference": block["payment_reference_format"].format(number=self.number),
+            "vat_note": self.vat_note,
+            # This class carries no QR, and the renderer requires the key on every context.
+            "qr_payload": None,
+        }
+
+    # -- labels ---------------------------------------------------------------
+
+    def ground_truth(
+        self,
+        *,
+        doc_id: str,
+        source_file: str,
+        capture: Capture,
+        field_bboxes: dict[str, tuple[float, float, float, float]],
+        reference_text: str = "",
+        content_bbox: tuple[float, float, float, float] | None = None,
+        content_lost_edges: tuple[str, ...] = (),
+    ) -> DocGroundTruth:
+        """The label record for this invoice — the Ukrainian invoice's record in another currency.
+
+        Same class, same fields, same meanings: `amount` is the total, `document_code` is the
+        printed number a payment's purpose cites, `instalment_amount` is populated exactly when
+        the page prints the term. What differs is `currency` and `language`, which is the whole
+        point of the archetype.
+        """
+        rules = jurisdiction("EU")
+        return DocGroundTruth(
+            doc_id=doc_id,
+            source_file=source_file,
+            doc_type=DocType.INVOICE,
+            language=rules["language"],
+            currency=rules["currency"],
+            amount=self.total,
+            instalment_amount=self.instalment_amount,
+            date=self.issued_at.date(),
+            counterparty=self.seller_name,
+            payer=self.buyer_name,
+            document_code=self.number,
+            line_items=self.line_items,
+            has_qr=False,
+            qr_is_fiscal=False,
+            has_fiscal_number=False,
+            capture=capture,
+            field_bboxes=field_bboxes,
+            reference_text=reference_text,
+            content_bbox=content_bbox,
+            content_lost_edges=list(content_lost_edges),
+        )
+
+
+def build_eu_invoice(
+    rng: random.Random,
+    *,
+    category_id: str,
+    issued_at: datetime,
+    vendor: dict,
+    identity: PartyIdentity,
+    buyer_name: str,
+    buyer_tax_id: str,
+    address: str = "",
+    covered_only: bool = True,
+    coverage_target: Decimal | None = None,
+    item_count: int | None = None,
+    schedule: str | None = None,
+    settled_at: datetime | None = None,
+) -> EuInvoice:
+    """Build one invoice from a platform of the `EU` pool — English, euros, one class with the
+    Ukrainian рахунок.
+
+    THE BASKET IS THE PLATFORM RECEIPT'S — `_draw_basket` with `language="en"` and
+    `currency="EUR"`, which selects the English template lists policy.yaml carries per item kind
+    and the euro price ranges of config/generation.yaml. Same knobs, same meaning, same function
+    as every other basket-carrying class.
+
+    WHAT IT ACCEPTS AND DELIBERATELY DOES NOT PRINT, because the assembler hands these to every
+    subject document and a page must not grow a requisite to use one up:
+
+    * `buyer_tax_id` — 📄 the customer's VAT identification number is an Article 226 particular of
+      a VAT invoice, and this is not one; the customer is in any case a private individual.
+    * `address` — the assembler's address slot holds the CLAIMANT's city, which is the seller's
+      own on a domestic claim and nobody's here. ⛔ Inventing a seat for a named real platform is
+      a checkable claim about a real firm, which this repository does not make.
+
+    `identity` IS PRINTED, and it is the one identity field this class carries: the seller's IBAN
+    and the bank holding it, drawn once for the claim so the payment document settling this
+    invoice names the same account. Its `tax_code` is a Ukrainian register's and is not printed —
+    see the block comment in config/fiscal-rules.yaml.
+
+    🔴 `settled_at` BOUNDS THE DUE DATE, exactly as it bounds the Ukrainian invoice's validity
+    line and for the same reason: an offer whose term lapsed before the payment is not the
+    obligation that payment discharged. The window is drawn first and unconditionally, so a seed's
+    stream does not depend on whether the claim's payment outran it.
+    """
+    del buyer_tax_id, address  # accepted, never printed — see the docstring
+
+    rules = jurisdiction("EU")
+    block = rules["invoice"]
+
+    items = _draw_basket(
+        rng,
+        document="an invoice",
+        category_id=category_id,
+        vendor=vendor,
+        # ⛔ NO LINE CARRIES A VAT LETTER and no tax row is printed: the supply is outside the
+        # scope of EU VAT and the foot says under which provisions. A zero row would assert that
+        # a rate was applied.
+        vat_payer=False,
+        covered_only=covered_only,
+        coverage_target=coverage_target,
+        item_count=item_count,
+        language=rules["language"],
+        currency=rules["currency"],
+    )
+
+    due_at = issued_at + timedelta(days=rng.randint(*invoice_count_range("due_days")))
+    if settled_at is not None and settled_at.date() > due_at.date():
+        due_at = settled_at
+
+    return EuInvoice(
+        seller_name=vendor["name"],
+        seller_display=printed_legal_name(vendor["name"], vendor["legal_form"]),
+        buyer_name=buyer_name,
+        buyer_country=rules["country_names"]["UA"],
+        issued_at=issued_at,
+        due_at=due_at,
+        number=block["number"]["prefix"] + _draw_from_pattern(rng, block["number"]["pattern"]),
+        line_items=items,
+        iban=identity.account,
+        bank_name=identity.bank_name,
+        vat_note=block["vat_note"],
+        schedule=schedule,
     )
 
 

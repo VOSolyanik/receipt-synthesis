@@ -53,6 +53,7 @@ from receipt_synth.content_builder import (
     build_app_transaction,
     build_bank_receipt_in_app,
     build_bank_statement,
+    build_eu_invoice,
     build_invoice,
     build_non_fiscal_receipt,
     build_payment_confirmation,
@@ -461,6 +462,11 @@ _BUILDERS = {
     ),
     "ua_bank_statement": build_bank_statement,
     "ua_invoice": build_invoice,
+    # One class, two jurisdictions — and here two builders rather than one partial, because the
+    # рахунок and the cross-border invoice share no printed requisite: different law, different
+    # language, different party blocks. The platform pair shares a builder because it shares a
+    # body; these two share only what `document_evidence` says the class proves.
+    "eu_invoice": build_eu_invoice,
     "ua_non_fiscal_receipt": build_non_fiscal_receipt,
     "eu_platform_receipt": build_platform_receipt,
     # One class, two jurisdictions, one builder — the partial is the whole difference.

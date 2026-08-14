@@ -536,6 +536,17 @@ price_ranges:
 #   entertainment_book   5.60–13.00   →   252.00–585.00   against [250, 600]
 #   hardware           334.00–1333.00 → 15 030.00–59 985.00 against [15 000, 60 000]
 #
+#   language_lessons    33.40–133.30  → 1 503.00–5 998.50 against [1 500, 6 000]
+#   placement_test       4.50–11.10   →   202.50–499.50   against [200, 500]
+#   language_exam      133.40–200.00  → 6 003.00–9 000.00 against [6 000, 9 000]
+#   textbook             8.90–26.60   →   400.50–1 197.00 against [400, 1 200]
+#
+# The last four arrived with the euro PAIR — `eu_invoice` and the euro confirmation beside it,
+# which are registered for `language_courses` and not for `professional_development`. The reason
+# is not commercial: that category already has an archetype proving BOTH facts (the platform
+# receipt), so `_select_documents` gives it a single self-contained document and a pair is never
+# drawn there. A euro pair therefore has to live in a category that still HAS a pair.
+#
 # The nesting is pinned by a test (tests/test_platform_receipt.py), so an edit to either
 # side that breaks it goes red instead of quietly making exhausted-limit plans miss.
 #
@@ -550,6 +561,10 @@ price_ranges_eur:
     professional_book:  ["10.00", "33.00"]
     entertainment_book: ["5.60", "13.00"]
     hardware:           ["334.00", "1333.00"]
+    language_lessons:   ["33.40", "133.30"]
+    placement_test:     ["4.50", "11.10"]
+    language_exam:      ["133.40", "200.00"]
+    textbook:           ["8.90", "26.60"]
 
 
 # =============================================================================
@@ -598,10 +613,23 @@ price_ranges_eur:
 # WHERE THE 0.10 IS ACTUALLY SPENT, because it is narrower than it looks. A euro payment can only
 # be paired with a euro subject (`_settleable_subjects`), and within that pair its pool has ONE
 # member — so the weight decides nothing there. It decides one thing: how often a claim built as
-# a deliberate EVIDENCE GAP for `professional_development` — a payment with nothing beside it
-# saying what it bought — is the euro one. ⚠️ A JUDGEMENT like the four above it, and a small one
-# on purpose: the euro pair is the archetype's reason to exist, and the gap claim is a by-product
-# that must not crowd the hryvnia gaps a consumer was scored against.
+# a deliberate EVIDENCE GAP for `language_courses` — a payment with nothing beside it saying what
+# it bought — is the euro one. ⚠️ A JUDGEMENT like the four above it, and a small one on purpose:
+# the euro pair is the archetype's reason to exist, and the gap claim is a by-product that must
+# not crowd the hryvnia gaps a consumer was scored against.
+#
+# THE SUBJECT POOL: three archetypes, and it is listed here because the euro invoice made it a
+# pool at all — before it, every category had exactly one pairable subject and the draw was a
+# formality. The rule at the head of this block is what forces all three to be named: a pool with
+# SOME members listed is refused.
+#   ua_invoice 0.50 and ua_non_fiscal_receipt 0.50 — EQUAL, which is exactly what the uniform
+#     draw did before this table reached them. The two meet in one pool only on the
+#     `PAYMENT_GAP` branch (a subject document with no payment beside it), and the товарний
+#     чек's share of the corpus must not move as a side effect of a euro archetype landing.
+#   eu_invoice 0.25 — so a euro invoice is drawn for a third of `language_courses` pairs
+#     (0.25 against ua_invoice's 0.50). ⚠️ A JUDGEMENT, and the one number here that is really a
+#     dial on how much conversion the corpus exercises: too small and the currency dimension is
+#     decorative, too large and a category's ordinary hryvnia pair stops being ordinary.
 #
 # THE PLATFORM POOL: two archetypes, one class, drawn 0.50 / 0.50 — the pair exists for a
 # controlled comparison of the language and currency axes with the layout held fixed, and
@@ -618,6 +646,9 @@ archetype_shares:
   ua_bank_receipt_in_app: 0.108
   ua_bank_app_transaction: 0.072
   ua_bank_payment_confirmation_eur: 0.10
+  ua_invoice: 0.50
+  ua_non_fiscal_receipt: 0.50
+  eu_invoice: 0.25
   eu_platform_receipt: 0.50
   ua_platform_receipt: 0.50
 
@@ -859,6 +890,18 @@ invoice:
   # NOT INDEPENDENT ANY MORE, which is what the note above records: this range and that constant
   # describe the same interval from two ends, and a change to either has to be read against the
   # other.
+
+  # HOW LONG THE CROSS-BORDER INVOICE GIVES THE BUYER TO PAY. The sibling of `validity_days_range`
+  # above and bounded by the same relation: it is a FLOOR on the span, since the term has to still
+  # stand on the day the claim's payment settles it, and `content_builder.build_eu_invoice` prints
+  # the settlement's own day where a drawn window falls short. ⚠️ A judgement — nothing observed
+  # counts what a platform gives — and a fortnight either side of it is the ordinary commercial
+  # range.
+  #
+  # In the `invoice` block rather than one of its own because it is the same question about the
+  # same class: `invoice_count_range` reads both, and a second block would be a second place to
+  # look for how long an offer stands.
+  due_days_range: [7, 30]
 
   # 👁 1 of 2 prints a telephone number in the supplier block. A number is DRAWN from a published
   # range rather than taken from any document — see `phone_prefixes` below.

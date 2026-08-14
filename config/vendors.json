@@ -82,6 +82,7 @@
     "insurer": ["insurance_premium", "family_member_premium", "property_insurance", "travel_insurance"],
 
     "language_school": ["language_lessons", "placement_test", "language_exam", "missed_lesson_fee", "textbook", "stationery"],
+    "online_language_platform": ["language_lessons", "placement_test", "textbook"],
     "private_tutor": ["language_lessons", "placement_test", "missed_lesson_fee"],
     "exam_centre": ["language_exam", "placement_test", "textbook"],
 
@@ -295,12 +296,18 @@
       ]
     },
     "$note_eu": "CROSS-BORDER platforms a Ukrainian claimant buys from, not a fifth jurisdiction: the persona stays Ukrainian and `eu_platform_receipt` is registered under UA, so these are what its seller draw reads. Every name is a public mark that verifiably sells the articles its profile pairs it with — courses on the learning platforms, books and hardware on the marketplace. `vat_payer` is false on each because the flag drives PRINTED requisites and the platform receipt declares itself not a VAT invoice and prints none; it is not a claim about any firm's real registration, which is that firm's own business. The marketplace entry is what carries a mixed basket: the learning-platform profile sells nothing professional_development excludes, so it cannot.",
+    "$note_eu_language_courses": "THE CATEGORY THE EURO PAIR LIVES IN, and it is chosen by the planner rather than by commerce: `professional_development` above already has an archetype proving BOTH facts (the platform receipt), so a claim there is a single self-contained document and an invoice-plus-payment pair is never drawn for it. `language_courses` still has its pair, so `eu_invoice` and the euro confirmation settling it can both be planned — which is the whole point of registering them. Each name is a public mark that verifiably sells language tuition to consumers, which is what `online_language_platform` pairs it with. That profile also sells a coursebook, and a coursebook is what config/policy.yaml EXCLUDES from this category, so one seller carries a fully covered basket and a mixed one and no second vendor is needed to make the mixed case reachable — unlike professional_development above, where the marketplace had to. `vat_payer` is false for the reason the note above gives.",
     "EU": {
       "professional_development": [
         { "name": "Coursera", "legal_form": "INC", "profile": "online_learning_platform", "vat_payer": false },
         { "name": "Udemy",    "legal_form": "INC", "profile": "online_learning_platform", "vat_payer": false },
         { "name": "edX",      "legal_form": "LLC", "profile": "online_learning_platform", "vat_payer": false },
         { "name": "Amazon",   "legal_form": "SARL", "profile": "general_retailer", "vat_payer": false }
+      ],
+      "language_courses": [
+        { "name": "italki", "legal_form": "INC",  "profile": "online_language_platform", "vat_payer": false },
+        { "name": "Preply", "legal_form": "INC",  "profile": "online_language_platform", "vat_payer": false },
+        { "name": "Babbel", "legal_form": "GMBH", "profile": "online_language_platform", "vat_payer": false }
       ]
     }
   },

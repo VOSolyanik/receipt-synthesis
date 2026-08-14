@@ -78,6 +78,7 @@ from receipt_synth.policy_engine import (
     insufficient_evidence_causes,
     insufficient_evidence_causes_min_run_size,
     rejected_routes,
+    reporting_currency,
     verdict_mix,
 )
 from receipt_synth.schemas import (
@@ -1664,10 +1665,35 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
         # Fields that must agree on the RAW value, whatever the claim's cause. `counterparty` left
         # this list when it became an axis a claim can be built to fail — it is checked below,
         # against the claim's own cause, exactly as the amount and the order are.
-        for field in ("currency", "language", "synthetic"):
+        #
+        # 🔴 CURRENCY IS THE HARD ONE AND IT IS THE ORACLE'S RULE, not this test's opinion:
+        # `policy_engine._one_claim_one_currency` refuses to label a claim stated in two, because
+        # coverage pools line items across documents and every cross-document axis compares
+        # amounts between them. The planner pairs within a currency so this can never be reached.
+        for field in ("currency", "synthetic"):
             values = {getattr(document, field) for document in documents}
             assert len(values) == 1, f"{claim.claim_id} disagrees about {field}: {values}"
             checked[field] += 1
+
+        # 🔴 LANGUAGE IS NOT ONE OF THEM ANY MORE, AND THE EXCEPTION IS ASSERTED RATHER THAN
+        # DROPPED. It sat in the tuple above while every document of the corpus was Ukrainian, and
+        # the euro pair falsified it: a Ukrainian employee who buys from a foreign platform submits
+        # THAT PLATFORM's English invoice and THEIR OWN bank's Ukrainian confirmation of the
+        # transfer. That is not a defect to be tolerated — it is the ordinary shape of a
+        # cross-border claim, and a corpus in which every claim is monolingual would be missing it.
+        #
+        # ⛔ The licence is narrow and this is where it is stated: a claim may hold two languages
+        # exactly when it is stated in a currency that is not the reporting one. A mixed-language
+        # claim in hryvnias would be two domestic documents disagreeing, which nothing builds and
+        # nothing would explain. Nothing about the CONTRACT changes — `language` is a per-document
+        # field with a per-language reporting slice, and no statement of it is about a claim.
+        languages = {document.language for document in documents}
+        currencies = {document.currency for document in documents}
+        assert len(languages) == 1 or currencies != {reporting_currency()}, (
+            f"{claim.claim_id} disagrees about language: {languages}, and its documents are "
+            f"stated in {currencies} — a domestic claim's documents share a language"
+        )
+        checked["language" if len(languages) == 1 else "language_cross_border"] += 1
 
         # 🔴 THE PAYER IS NARROWER, AND THIS CHECK IS WHAT ESTABLISHED IT. Its first run failed on
         # `{'-', 'Олекса Семенюк'}`: an internet-acquiring confirmation 👁 does not identify the
@@ -1758,6 +1784,7 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
     readable = Counter()
     agree = Counter()
     pairs = 0
+    domestic_pairs = 0
     for claim in result.claims:
         documents = [by_id[doc_id] for doc_id in claim.documents]
         if len(documents) < 2:
@@ -1801,27 +1828,70 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
             readable["payment_prints_no_party_block"] += 1
             continue
         pairs += 1
+        # 🔴 THE THIRD DELIBERATE EXCLUSION, AND — like the two above — IT ASSERTS WHAT IT EXCUSES.
+        # A cross-border pair names a seller OUTSIDE the Ukrainian register: it has no ЄДРПОУ and
+        # its bank has no МФО, so neither page prints a tax code and there is nothing for the row
+        # below to compare. Printing the code drawn for the claim would put an eight-digit
+        # Ukrainian identifier under a foreign company's name, which is the defect this exclusion
+        # exists to keep visible. The discriminator is the seller's own IBAN — a foreign account is
+        # what says the party is foreign — and the two requisites that ARE printed stay strict.
+        if subject["seller_tax_code"] is None and payment["seller_tax_code"] is None:
+            assert subject["seller_account"] and not subject["seller_account"].startswith("UA"), (
+                f"{claim.claim_id}: neither page printed a seller's tax code and the seller banks "
+                "in Ukraine, so the absence is a defect rather than a foreign party"
+            )
+            readable["cross_border_prints_no_tax_code"] += 1
+        else:
+            domestic_pairs += 1
         for field in ("seller_name", "seller_tax_code", "seller_account", "seller_bank_name"):
             if subject[field] is None or payment[field] is None:
                 continue
             readable[field] += 1
             agree[field] += subject[field] == payment[field]
         if payment["invoice_number"] is not None:
-            readable["invoice_number"] += 1
-            agree["invoice_number"] += (
-                subject["invoice_number"] == payment["invoice_number"]
-            )
+            # 🔴 AND THE CITATION HAS ITS OWN DELIBERATE DISAGREEMENT, which is not the party's:
+            # a claim planned as `subject_mismatch` prints a purpose naming ANOTHER рахунок, and
+            # that wrong number IS the negative. So it is asserted to disagree rather than counted
+            # among the pairs that must agree — the same shape as the `counterparty_mismatch`
+            # branch above, on the axis beside it.
+            #
+            # ⚠️ IT WAS NOT ASSERTED HERE UNTIL A REDRAWN RUN HAPPENED TO CONTAIN ONE. The cause
+            # lands on about one built claim in forty, this fixture builds a few dozen, and the
+            # row read `agree == readable` for as long as no such claim was drawn — a gap in the
+            # test that only a change of the seed stream could expose, and did.
+            if SUBJECT_MISMATCH in claim.imperfection:
+                assert subject["invoice_number"] is not None, (
+                    f"{claim.claim_id}: the subject's own number was not readable, so the "
+                    "disagreement below would assert nothing"
+                )
+                assert subject["invoice_number"] != payment["invoice_number"], (
+                    f"{claim.claim_id} is a subject mismatch and its payment cites the claim's "
+                    "own invoice, so the negative was not built"
+                )
+                readable["invoice_number_disagrees_on_purpose"] += 1
+            else:
+                readable["invoice_number"] += 1
+                agree["invoice_number"] += (
+                    subject["invoice_number"] == payment["invoice_number"]
+                )
 
     assert pairs, "no claim of this run carries two documents — nothing was measured"
     # 👁 THE PAYEE'S BANK IS SOMETIMES A CAPTION WITH NOTHING UNDER IT, observed on the recipient's
     # bank of a real confirmation, so that row is readable on most pairs and not on all. The two
     # bounds are therefore different assertions rather than one loosened to fit: three requisites
     # are printed on every pair, and the fourth must AGREE wherever it is printed at all.
-    for field in ("seller_name", "seller_tax_code", "seller_account"):
+    for field in ("seller_name", "seller_account"):
         assert readable[field] == pairs, (
             f"{field} was readable on {readable[field]} of {pairs} pairs; a field the audit "
             "cannot read is a field it cannot report on either"
         )
+    # The tax code is measured over the pairs that HAVE one — see the cross-border branch above,
+    # where the denominator is split and the absence is asserted rather than tolerated.
+    assert readable["seller_tax_code"] == domestic_pairs, (
+        f"seller_tax_code was readable on {readable['seller_tax_code']} of {domestic_pairs} "
+        "domestic pairs; a field the audit cannot read is a field it cannot report on either"
+    )
+    assert domestic_pairs, "no domestic pair in this run — the tax-code row measured nothing"
     assert readable["seller_bank_name"], "no pair printed the payee's bank on both documents"
     for field in ("seller_name", "seller_tax_code", "seller_account", "seller_bank_name"):
         assert agree[field] == readable[field], (

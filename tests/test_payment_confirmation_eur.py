@@ -31,12 +31,16 @@ from receipt_synth.renderer import Renderer
 from receipt_synth.schemas import Capture, DocType
 
 SLUG = "ua_bank_payment_confirmation_eur"
-CATEGORY = "professional_development"
+# 🔴 THE CATEGORY IS THE PLANNER'S CHOICE, NOT COMMERCE'S. `professional_development` — where the
+# `EU` sellers already were — carries the platform receipts, which prove BOTH facts, so
+# `_select_documents` gives a claim there ONE self-contained document and never draws a pair. A
+# euro pair registered in that category would render in a test and never once in a corpus.
+CATEGORY = "language_courses"
 BLOCK = jurisdiction("UA")["payment_confirmation"]
 
 PLATFORM = {
-    "name": "Coursera", "legal_form": "INC",
-    "profile": "online_learning_platform", "vat_payer": False,
+    "name": "italki", "legal_form": "INC",
+    "profile": "online_language_platform", "vat_payer": False,
 }
 AMOUNT = Decimal("394.10")
 
@@ -182,7 +186,7 @@ def test_the_label_is_euro_and_ukrainian_and_still_proves_only_the_payment():
     assert truth.line_items == [], (
         "a confirmation lists nothing — which is why it proves no subject"
     )
-    assert truth.counterparty == "Coursera"
+    assert truth.counterparty == "italki"
 
 
 def test_the_fee_and_the_total_are_in_the_same_currency_as_the_transfer():

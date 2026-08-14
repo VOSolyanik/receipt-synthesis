@@ -628,7 +628,7 @@ Twenty-four rows below, sixteen Ukrainian and eight European. Layouts follow the
 conventions of each document class and jurisdiction.
 
 **Rows are not templates one for one.** Row 8 is realized by two templates, one per paper width, so the
-twenty-four rows are twenty-five templates. **Eleven exist today**, across six document classes:
+twenty-four rows are twenty-five templates. **Thirteen exist today**, across six document classes:
 
 | Template | Class |
 |---|---|
@@ -641,6 +641,17 @@ twenty-four rows are twenty-five templates. **Eleven exist today**, across six d
 | `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
 | `eu_platform_receipt` | `platform_receipt` — English, EUR; a cross-border platform's receipt a Ukrainian claimant submits |
 | `ua_platform_receipt` | `platform_receipt` — the domestic control of that pair: one shared body, ordinary requisites, UAH |
+| `eu_invoice` | `invoice` — English, EUR; a cross-border platform's invoice, the subject half of a euro claim |
+| `ua_bank_payment_confirmation_eur` | `payment_confirmation` — the same observed A4 form stating a transfer in euros: the payment half of that claim |
+
+**The last two are one CLAIM rather than one class**, and they are the only pair here that has to be read
+together. A euro document used to be a `platform_receipt`, which proves both facts of `document_evidence` and
+is therefore the whole of its claim — so the oracle's currency conversion ran on a single self-contained page
+and never through a cross-document check. The invoice proves the subject and the confirmation the payment, so
+a euro claim is now a pair of two classes, and the rate the oracle applied is recorded per document in the
+claim's `fx_rates`. They are registered for `language_courses` and not for `professional_development`, where
+the `EU` sellers already were: that category carries the platform receipts, and a category holding a
+document that proves both facts is never given a pair.
 
 Which rendering a claim's document takes, where a class has several, is a declared parameter —
 `archetype_shares` in `config/generation.yaml` — so retuning the mix is a config edit, not a code

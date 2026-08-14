@@ -1,0 +1,168 @@
+{#
+  Cross-border invoice, English, EUR — the subject half of a euro claim.
+
+  🔴 WHY IT IS A SEPARATE TEMPLATE FROM THE PLATFORM RECEIPT, whose stylesheet it shares. The two
+  documents are one house style and two document CLASSES, and the difference between them is
+  exactly the fact this corpus is built on: a receipt states that money moved, an invoice asks for
+  it. Sharing a body with conditionals would put the words «Amount paid» one boolean away from an
+  invoice, and 📄 an invoice that recorded its own payment would contradict `document_evidence` in
+  config/policy.yaml — the class proves the subject and NO payment. The stylesheet is shared
+  because a platform's invoice and its receipt do look alike; the markup is not, because they say
+  opposite things.
+
+  📄 WHAT THE LAW REQUIRES AND WHERE IT STOPS is argued once, in the `invoice` block of the EU
+  jurisdiction in config/fiscal-rules.yaml, and not repeated here: Article 226 of Directive
+  2006/112/EC lists the particulars of an invoice under the VAT Directive, Articles 44 and 59 put
+  this supply outside its scope, and the foot of the page names those provisions where a rate and
+  a tax amount would otherwise stand.
+
+  ⛔ NO SUPPLIER ADDRESS AND NO VAT NUMBER ON EITHER SIDE — decisions, each recorded where its
+  reason lives. ⛔ AND NO PAYMENT STATUS AT ANY RATE OF DRAWING: the page has a date by which it
+  should be paid, which is a TERM OF THE OFFER, and nothing that says it was.
+
+  Every element a consumer would extract carries data-field="<name>". A field that is not on this
+  document is omitted entirely rather than rendered empty, so no bounding box points at nothing.
+#}
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{# The English page style, shared with the platform receipt of the same seller — see the header. #}
+{% include "platform_receipt.css" %}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+<div class="page" data-document="invoice">
+
+  {# The seller: the mark and nothing beside it, for the reason the platform receipt's header
+     carries nothing beside it either. The address and the identification numbers that would
+     ordinarily sit here are the two absences the config block argues for. #}
+  <header class="head">
+    <div class="brand" data-field="seller_name">{{ seller_name }}</div>
+  </header>
+
+  {# 🔴 THE TITLE SAYS «INVOICE» AND THE FIGURE BESIDE IT IS «AMOUNT DUE» — the receipt of the
+     same house says «Receipt» and «Amount paid». One word apart on the page, and a different
+     half of `document_evidence`. #}
+  <section class="title-block">
+    <h1 class="title" data-field="title">{{ title }}</h1>
+    <div class="paid">
+      {# The number and the code are two spans on purpose: `total` normalizes as money and must
+         carry no currency symbol inside its box, while the code beside it is this page's one
+         `currency` field. #}
+      <div class="paid-amount"><span data-field="total">{{ total }}</span>&nbsp;<span data-field="currency">{{ currency }}</span></div>
+      <div class="muted">{{ labels.total }}</div>
+    </div>
+  </section>
+
+  <section class="meta">
+    <div class="meta-item">
+      <div class="caption">{{ labels.invoice_number }}</div>
+      {# 🔴 THE NUMBER THE PAYMENT BESIDE THIS PAGE QUOTES. It is `document_code` in the label and
+         the value the `subject` cross-check compares the payment's citation against. #}
+      <div class="mono" data-field="document_code">{{ number }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="caption">{{ labels.date_of_issue }}</div>
+      <div class="mono" data-field="date">{{ date }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="caption">{{ labels.due_date }}</div>
+      <div class="mono" data-field="due_date">{{ due_date }}</div>
+    </div>
+  </section>
+
+  {# The buyer. 📄 An invoice is an offer and has to say to whom it is made — the one structural
+     difference from a till receipt, where the payer is standing at the counter. A private
+     individual states no tax number and none is printed. #}
+  <section class="party">
+    <div class="caption">{{ labels.billed_to }}</div>
+    <div class="party-name" data-field="buyer_name">{{ buyer.name }}</div>
+    <div class="muted" data-field="buyer_country">{{ buyer.country }}</div>
+  </section>
+
+  {# The lines. 📄 The quantity and nature of the services is what an invoice is FOR, and it is
+     what makes this class prove the subject where the payment document beside it cannot.
+
+     ⚠️ THE COURSE TITLES ARE INVENTED — a course is a work, not a mark a firm trades under, and
+     config/generation.yaml admits invented works while admitting no invented marks. #}
+  <table class="lines">
+    <thead>
+      <tr>
+        <th class="col-desc">{{ labels.description }}</th>
+        <th class="col-qty">{{ labels.quantity }}</th>
+        <th class="col-amount">{{ labels.unit_price }}</th>
+        <th class="col-amount">{{ labels.amount }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td class="col-desc" data-field="item_{{ loop.index }}_name">{{ line.name }}</td>
+        <td class="col-qty mono" data-field="item_{{ loop.index }}_qty">{{ line.qty }}</td>
+        <td class="col-amount mono" data-field="item_{{ loop.index }}_price">{{ line.price }}</td>
+        <td class="col-amount mono" data-field="item_{{ loop.index }}_sum">{{ line.amount }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# 🔴 THE CURRENCY CODE TRAVELS WITH EVERY AMOUNT, as it does on the platform receipt: the
+     moment a corpus holds two currencies a bare figure is ambiguous on the page in exactly the
+     way it is ambiguous in a label. ⛔ NO TAX ROW — see the note in the foot. #}
+  <section class="totals">
+    <div class="row">
+      <span class="caption">{{ labels.subtotal }}</span>
+      <span class="mono"><span data-field="subtotal">{{ subtotal }}</span>&nbsp;{{ currency }}</span>
+    </div>
+    <div class="row grand">
+      <span>{{ labels.total }}</span>
+      <span class="mono">{{ total }}&nbsp;{{ currency }}</span>
+    </div>
+  </section>
+
+  {# A TERM OF THE OFFER AND NOT A RECORD OF A PAYMENT, printed only where the plan asked for an
+     obligation settled in parts. The caption and the figure are separate elements so the amount
+     is scored on its own box rather than inside a sentence. #}
+  {% if instalment %}
+  <section class="totals">
+    <div class="row">
+      <span class="caption">{{ instalment.caption }}</span>
+      <span class="mono"><span data-field="instalment_amount">{{ instalment.amount }}</span>&nbsp;{{ currency }}</span>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ⚠️ ORDINARY COMMERCIAL CONTENT, NOT A TAX REQUISITE: Article 226 lists no bank details. It is
+     printed because an offer to pay that names no account is not payable — and because the
+     account it names is the claim's own, so the transfer document beside it settles THIS
+     obligation rather than resembling a settlement of it. #}
+  <section class="party">
+    <div class="caption">{{ labels.payment_details }}</div>
+    <div class="muted">{{ labels.beneficiary }}: <span data-field="seller_name_payment">{{ seller_name }}</span></div>
+    <div class="muted">{{ labels.iban }}: <span class="mono" data-field="seller_account">{{ iban }}</span></div>
+    <div class="muted">{{ labels.bank }}: <span data-field="seller_bank">{{ bank_name }}</span></div>
+    <div class="muted">{{ labels.reference }}: <span class="mono" data-field="payment_reference">{{ reference }}</span></div>
+  </section>
+
+  {# 📄 THE SENTENCE THAT STANDS WHERE A RATE AND A TAX AMOUNT WOULD, naming the provisions that
+     put the supply outside the scope of the tax. The platform receipt's foot carries the other
+     route to the same absence — a document declaring itself not a VAT invoice — and the pair is
+     what a consumer classifying on a tax block has to tell apart. #}
+  <footer class="foot">
+    <div class="notice" data-field="vat_note">{{ vat_note }}</div>
+  </footer>
+
+</div>
+</body>
+</html>

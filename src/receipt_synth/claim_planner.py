@@ -208,9 +208,10 @@ ARCHETYPES: dict[str, Archetype] = {
     # ONE CATEGORY, AND — UNLIKE THE PLATFORM RECEIPT — NO BLAST RADIUS. That warning is about an
     # archetype proving BOTH facts: `_select_documents` prefers such a document, so a category
     # carrying one loses its invoice-plus-payment pair. This proves the payment ALONE, so it joins
-    # the payment pool and takes nothing out of it. `professional_development` is the category
-    # because it is the only one config/vendors.json's `EU` block serves, and the seller has to be
-    # the foreign one: a Ukrainian employee does not settle a domestic invoice in euros.
+    # the payment pool and takes nothing out of it. The category is `language_courses` because
+    # that is where its subject half can be drawn — see `eu_invoice` below, where the reasoning
+    # is — and the seller is the foreign one either way: a Ukrainian employee does not settle a
+    # domestic invoice in euros.
     #
     # ⚠️ ITS CURRENCY IS WHAT KEEPS IT OUT OF EVERY OTHER PAIR. Every domestic subject document is
     # stated in hryvnias, so `_settleable_subjects` never offers this archetype to one — and the
@@ -222,7 +223,7 @@ ARCHETYPES: dict[str, Archetype] = {
         country=Country.UA,
         language="uk",
         currency="EUR",
-        categories=("professional_development",),
+        categories=("language_courses",),
         vendor_pool="EU",
     ),
     # THE THIRD DOCUMENT CLASS, and the SECOND that proves the payment without stating what was
@@ -294,6 +295,46 @@ ARCHETYPES: dict[str, Archetype] = {
             "vitamins_nutrition",
             "hobby",
         ),
+    ),
+    # 🔴 THE SUBJECT HALF OF THE EURO PAIR, AND THE DOCUMENT THIS BRANCH EXISTS FOR. Same class as
+    # `ua_invoice` — an offer to pay, proving what was bought and no payment — issued by the
+    # foreign platform the claimant bought from, in the currency it invoices in.
+    #
+    # 🔴 WHAT IT CHANGES ABOUT THE CORPUS, stated as the mechanism rather than as an intention.
+    # Until it landed, EUR existed on `eu_platform_receipt` alone; that archetype proves BOTH
+    # facts, so `_select_documents` gives it a claim of its own, and the oracle's conversion
+    # therefore ran on a single self-contained page every time. It also lands in a class a
+    # consumer need not extract at all. With this archetype a euro claim is a PAIR of documents
+    # of two classes a consumer does extract, so the conversion runs through the cross-document
+    # checks and reaches a downstream extractor.
+    #
+    # ⛔ NO BLAST RADIUS ON `plannable_categories`, and the contrast with `eu_platform_receipt`
+    # below is the whole reason to say so. That warning applies to an archetype proving both
+    # facts: `_select_documents` PREFERS such a document, so every category carrying one loses
+    # its invoice-plus-payment pair. This one proves the subject alone — it joins the subject pool
+    # of one category beside `ua_invoice`, and every verdict that category could realize before it
+    # landed, it can realize after.
+    #
+    # 🔴 ONE CATEGORY, AND IT IS `language_courses` RATHER THAN THE ONE THE `EU` SELLERS ALREADY
+    # SERVED — the choice the whole registration turns on, and it is the planner's rather than
+    # commerce's. `professional_development` carries the two platform receipts, which prove BOTH
+    # facts, and `_select_documents` PREFERS a self-contained document wherever one is registered:
+    # a complete claim there is one page, and an invoice-plus-payment pair is never drawn for it
+    # at any seed. A euro pair registered in that category would therefore have rendered in a test
+    # and never once in a corpus. `language_courses` still has its pair — 👁 an online language
+    # platform is also the cross-border purchase a Ukrainian employee most plausibly makes — and
+    # config/vendors.json gained the sellers for it.
+    #
+    # Its payment half is `ua_bank_payment_confirmation_eur`, and `_settleable_subjects` is what
+    # guarantees it is never offered a hryvnia payment instead.
+    "eu_invoice": Archetype(
+        slug="eu_invoice",
+        doc_type=DocType.INVOICE,
+        country=Country.UA,
+        language="en",
+        currency="EUR",
+        categories=("language_courses",),
+        vendor_pool="EU",
     ),
     # 🔴 THE FIFTH DOCUMENT CLASS, AND THE ONE THAT LOOKS LIKE THE FIRST. A товарний чек prints a
     # basket, the same four totals, the same columns and the same arithmetic as a fiscal receipt,
