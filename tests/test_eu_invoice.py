@@ -122,15 +122,34 @@ def test_the_euro_payment_document_beside_it_is_registered_for_the_same_category
     ]
 
 
-def test_the_seller_pool_can_carry_both_a_covered_and_a_mixed_basket():
-    """A category needs a euro seller that can print a fully covered basket AND one with a line
-    the policy excludes, or `partially_covered` is unreachable in that currency."""
+def test_the_seller_pool_spans_both_baskets_and_both_trades():
+    """🔴 THE POOL, NOT THE SELLER, IS WHAT HAS TO SPAN THE CATEGORY — the same shape as
+    professional_development, where the marketplace carries the mixed basket the learning platform
+    cannot. An online platform sells tuition and nothing printed, so it cannot carry a line
+    `language_courses` excludes; the exam institutes can.
+
+    ⚠️ AND THE POOL HAS TO SPAN BOTH TRADES, which is a measurement rather than a taste. With the
+    platforms alone no euro basket could draw `language_exam` — 6 000–9 000 UAH a line, which four
+    of the six domestic sellers draw — and a euro claim came out systematically smaller than a
+    hryvnia one in the same category. Currency was then a proxy for the seller's trade, and a
+    consumer could predict `limit_exhausted` from a currency code. The numbers are in
+    config/vendors.json beside the sellers."""
     sellers = load_vendors()["vendors"]["EU"][CATEGORY]
     assert len(sellers) >= 2, "one seller would teach a consumer the name rather than the field"
 
     for seller in sellers:
         assert vendor_can_carry(seller, CATEGORY, mixed=False), seller["name"]
-        assert vendor_can_carry(seller, CATEGORY, mixed=True), seller["name"]
+    assert [s["name"] for s in sellers if vendor_can_carry(s, CATEGORY, mixed=True)], (
+        "no euro seller of this category can carry a mixed basket, so `partially_covered` by "
+        "`mixed_items` is unreachable in euros"
+    )
+
+    profiles = load_vendors()["vendor_profiles"]
+    priciest = "language_exam"
+    assert [s["name"] for s in sellers if priciest in profiles[s["profile"]]], (
+        f"no euro seller sells {priciest}, the category's most expensive covered kind — the "
+        "domestic pool does, and the currency would predict the size of a claim"
+    )
 
 
 def test_every_kind_this_seller_sells_has_a_euro_price_that_nests_in_its_hryvnia_sibling():
@@ -140,9 +159,10 @@ def test_every_kind_this_seller_sells_has_a_euro_price_that_nests_in_its_hryvnia
     generation = load_generation()
     rate = Decimal(str(load_fx_rates()["rates"]["EUR"]))
     eur = generation["price_ranges_eur"]["ranges"]
-    profile = load_vendors()["vendor_profiles"][PLATFORM["profile"]]
+    profiles = load_vendors()["vendor_profiles"]
+    sellers = load_vendors()["vendors"]["EU"][CATEGORY]
 
-    for kind in profile:
+    for kind in {k for s in sellers for k in profiles[s["profile"]]}:
         assert kind in eur, f"{kind} has no euro price, so this seller cannot print a line of it"
         low, high = (Decimal(value) for value in eur[kind])
         uah_low, uah_high = (

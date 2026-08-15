@@ -728,7 +728,15 @@ _SOLE_TRADER = "FOP"
 # without quotes — "Coursera Inc." The Ukrainian marks are a rule about how a UKRAINIAN firm name
 # is written; applying them to a foreign one produces «INC «Coursera»», a form no register holds
 # and no document prints. The forms are the ones config/vendors.json's `EU` block uses.
-_LEGAL_FORM_SUFFIX = {"INC": "Inc.", "LLC": "LLC", "SARL": "S.à r.l.", "GMBH": "GmbH"}
+_LEGAL_FORM_SUFFIX = {
+    "INC": "Inc.", "LLC": "LLC", "SARL": "S.à r.l.", "GMBH": "GmbH", "EV": "e.V.",
+    # ⛔ AN EMPTY DESIGNATION IS A STATEMENT, and it is the honest one for a foreign institution
+    # that trades under a bare name. The forms above are each a real entity's actual one — the
+    # rule config/vendors.json states for a public mark applies to the form printed beside it —
+    # and a body whose form this repository has not verified gets none rather than a plausible
+    # guess. A wrong legal form is a checkable false claim about a real organization.
+    "NONE": "",
+}
 
 # Jurisdictions that print a sole trader as surname plus initials — "Ковальчук О. С." —
 # rather than as a full name.
@@ -4933,7 +4941,8 @@ def printed_legal_name(name: str, legal_form: str) -> str:
     is not a seller of anything on that page.
     """
     if legal_form in _LEGAL_FORM_SUFFIX:
-        return f"{name} {_LEGAL_FORM_SUFFIX[legal_form]}"
+        suffix = _LEGAL_FORM_SUFFIX[legal_form]
+        return f"{name} {suffix}" if suffix else name
     prefix = _LEGAL_FORM_PREFIX.get(legal_form, legal_form)
     if legal_form == _SOLE_TRADER:
         return f"{prefix} {name}"
