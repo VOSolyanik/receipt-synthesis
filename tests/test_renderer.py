@@ -30,6 +30,7 @@ from receipt_synth.content_builder import (
     build_app_transaction,
     build_bank_receipt_in_app,
     build_bank_statement,
+    build_eu_invoice,
     build_invoice,
     build_non_fiscal_receipt,
     build_payment_confirmation,
@@ -129,6 +130,15 @@ PAYER_SOLE_TRADER = resolve_vendor(
 )
 
 
+# The cross-border seller of the euro pair, and the pool its numbers come from. A platform of
+# config/vendors.json's `EU` block, banked in the euro area — which is what makes its IBAN a
+# foreign one and its Ukrainian register code absent from every page that names it.
+EU_SELLER = {
+    "name": "italki", "legal_form": "INC",
+    "profile": "online_language_platform", "vat_payer": False,
+}
+
+
 def identity_for(vendor: dict, seed: int = 606) -> PartyIdentity:
     """Who a seller is on paper, for a module that renders single documents.
 
@@ -138,6 +148,11 @@ def identity_for(vendor: dict, seed: int = 606) -> PartyIdentity:
     test_cross_document_identity.py, which is where that is asserted.
     """
     return draw_party_identity(random.Random(seed), vendor, "UA")
+
+
+def eu_identity_for(vendor: dict, seed: int = 606) -> PartyIdentity:
+    """The same, drawn in the `EU` pool — a euro-area bank and the German IBAN it issues."""
+    return draw_party_identity(random.Random(seed), vendor, "EU")
 
 
 def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "prro",
@@ -171,6 +186,38 @@ def make_confirmation(seed: int = 20260417, vendor: dict = PAYER, initiation: st
         payer_name="Ковальчук Олена Петрівна",
         payer_tax_id="2345678901",
         initiation=initiation,
+    )
+
+
+def make_eu_confirmation(seed: int = 20260417, vendor: dict = EU_SELLER):
+    """The same class and the same form in euros — the payment half of a euro claim.
+
+    The currency and the initiation mode are what `assembler._BUILDERS` fixes for that archetype:
+    a transfer by account details, because 👁 the card modes are a domestic acquiring operation.
+    """
+    return build_payment_confirmation(
+        random.Random(seed),
+        issued_at=datetime(2026, 4, 17, 11, 3, 9),
+        vendor=vendor,
+        identity=eu_identity_for(vendor),
+        payer_name="Ковальчук Олена Петрівна",
+        payer_tax_id="2345678901",
+        amount=Decimal("394.10"),
+        currency="EUR",
+        initiation="transfer",
+    )
+
+
+def make_eu_invoice(seed: int = 20260610, vendor: dict = EU_SELLER):
+    """One cross-border invoice — the subject half of the same claim."""
+    return build_eu_invoice(
+        random.Random(seed),
+        category_id="language_courses",
+        issued_at=datetime(2026, 6, 10, 9, 0, 0),
+        vendor=vendor,
+        identity=eu_identity_for(vendor),
+        buyer_name="Ковальчук Олена Петрівна",
+        buyer_tax_id="2345678901",
     )
 
 
@@ -300,6 +347,13 @@ def context_for(slug: str) -> dict:
     # stopped naming the context the day a class gained a second rendering.
     if slug == "ua_platform_receipt":
         return make_platform_receipt(jurisdiction_code="UA").render_context()
+    # The euro pair: two archetypes whose classes already have a Ukrainian rendering, and whose
+    # templates are not that rendering — the confirmation shares its body and states another
+    # currency, the invoice shares nothing with the рахунок but what its class proves.
+    if slug == "ua_bank_payment_confirmation_eur":
+        return make_eu_confirmation().render_context()
+    if slug == "eu_invoice":
+        return make_eu_invoice().render_context()
     if slug == "ua_bank_app_transaction":
         return make_app_transaction().render_context()
     if slug == "ua_bank_receipt_in_app":

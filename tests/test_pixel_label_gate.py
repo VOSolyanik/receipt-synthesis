@@ -270,7 +270,15 @@ def test_the_gate_measured_something(real_run):
 def test_the_gate_goes_red_when_the_channels_compress_at_three_to_five(monkeypatch):
     """🔴 THE MUTATION THIS GATE EXISTS FOR, run through the whole pipeline rather than on hand-made
     pixels: every channel's JPEG quality forced to 3–5, which is what passed the entire suite before
-    this file was written. One persona, because a mutation this coarse does not need a sample."""
+    this file was written.
+
+    ⚠️ THE SAMPLE HAS TO CONTAIN A LOSSY CHANNEL, and it used to hold one by luck. `digital_pdf`
+    applies no compression at all — the mutation has nothing to bite on — so a run whose every
+    document happens to be drawn on that channel makes this test measure NOTHING while looking
+    like it passed. That is exactly what a redrawn seed stream produced: one persona and two
+    claims came back as two digital PDFs. Three claims is the smallest sample that still draws a
+    photo or a scan at this seed. The assertion below is what says so out loud rather than
+    reporting a clean corpus — it is the failure this note is written from."""
     real_geometry = degrader._geometry
 
     def compressing_at_three(capture: Capture):
@@ -288,11 +296,15 @@ def test_the_gate_goes_red_when_the_channels_compress_at_three_to_five(monkeypat
         findings, coverage = scan_run(
             seed=20260803,
             personas=1,
-            claims_per_persona=2,
+            claims_per_persona=3,
             out_dir=Path(tmp) / "corpus",
             staging=staging,
             evidence=False,
         )
     assert coverage.survival_measured >= 20, "the run has to have been measured to be red"
     illegible = [f for f in findings if f.kind == "illegible_after_capture"]
-    assert illegible, "the corpus was compressed into mush and the gate reported nothing"
+    assert illegible, (
+        "the corpus was compressed into mush and the gate reported nothing — if every document "
+        "of this run was drawn on `digital_pdf`, which applies no compression, the sample "
+        "measured nothing and has to grow rather than the gate being blamed"
+    )

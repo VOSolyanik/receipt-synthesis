@@ -25,15 +25,22 @@ import random
 from datetime import datetime
 from decimal import Decimal
 
-from receipt_synth.config import bank_codes, banks
+from receipt_synth.config import bank_codes, banks, jurisdiction
 from receipt_synth.content_builder import (
     build_bank_statement,
     build_payment_confirmation,
     draw_party_identity,
+    is_valid_iban,
     resolve_vendor,
 )
 
 VENDOR = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
+EU_VENDOR = {
+    "name": "Coursera",
+    "legal_form": "INC",
+    "profile": "online_learning_platform",
+    "vat_payer": False,
+}
 CLAIMANT = "Ковальчук Олена Петрівна"
 CLAIMANT_CODE = "2345678901"
 WHEN = datetime(2026, 6, 11, 14, 33)
@@ -93,6 +100,41 @@ def test_the_tables_codes_are_six_digits_and_unique():
     assert len(set(codes.values())) == len(codes), (
         f"two names share a code: {sorted(codes.items())}"
     )
+
+
+def test_the_euro_pools_codes_are_eight_digits_and_unique():
+    """The seller-side table, whose codes are the Bankleitzahl a German IBAN carries rather than a
+    МФО. Same rule, same reason, a different width — config/fiscal-rules.yaml states the width
+    under EU `identifiers.iban_format` and this is what keeps the table agreeing with it."""
+    codes = bank_codes("EU")
+    width = jurisdiction("EU")["identifiers"]["iban_format"]["bank_code_length"]
+
+    assert set(codes) == set(banks("EU")), "the table names a different set of banks than banks()"
+    assert len(codes) >= 2, "one beneficiary bank would teach a consumer the name, not the field"
+    for name, code in codes.items():
+        assert code.isdigit() and len(code) == width, (
+            f"{name!r} carries {code!r}, not {width} digits"
+        )
+    assert len(set(codes.values())) == len(codes), (
+        f"two names share a code: {sorted(codes.items())}"
+    )
+
+
+def test_a_euro_seller_is_banked_in_the_euro_pool_and_not_at_home():
+    """🔴 THE IDENTITY IS WHOSE IT IS. A seller of the `EU` pool holds a euro-area account, and the
+    claimant's jurisdiction has nothing to say about it — `assembler` draws the identity in the
+    pool the seller came from, and before it did, a foreign platform was given a Ukrainian IBAN
+    that no document happened to print."""
+    for seed in SEEDS:
+        rng = random.Random(seed)
+        vendor = resolve_vendor(rng, dict(EU_VENDOR), "EU")
+        identity = draw_party_identity(rng, vendor, "EU")
+
+        assert identity.bank_name in banks("EU")
+        assert identity.bank_code == bank_codes("EU")[identity.bank_name]
+        assert identity.account.startswith("DE")
+        assert identity.account[4:12] == identity.bank_code
+        assert is_valid_iban(identity.account)
 
 
 # ---------------------------------------------------------------- each site, against the table --

@@ -95,6 +95,18 @@ class Archetype:
     # print a gym membership. As templates land this widens until every category has at
     # least one archetype in every jurisdiction.
     categories: tuple[str, ...]
+    # 🔴 THE CURRENCY THE DOCUMENT IS DRAWN UP IN, AND IT DECIDES WHICH PAYMENT MAY SETTLE WHICH
+    # SUBJECT. `policy_engine._one_claim_one_currency` REFUSES a claim whose documents are stated
+    # in two: coverage pools line items across them and every cross-document axis compares amounts
+    # between them, and policy.yaml states no rule for doing either across a rate. So a pair drawn
+    # from two currencies is not a harder claim — it is one the oracle cannot label at all.
+    # `_settleable_subjects` is where that refusal becomes a selection rule, before a plan exists
+    # to be refused.
+    #
+    # DECLARED HERE AND PRINTED BY THE BUILDER, exactly as `language` is, so the two can drift.
+    # `tests/test_archetype_currency.py` builds one document per archetype and compares the
+    # label's `currency` against this field, which is what stops them.
+    currency: str = "UAH"
     # 🔴 `country` IS THE CLAIMANT'S JURISDICTION — the key `archetypes_for` selects by,
     # which is the persona's — and the SELLER need not share it: a Ukrainian employee
     # buys a course from a foreign platform and submits its receipt. `vendor_pool` names
@@ -114,7 +126,7 @@ def evidence_of(archetype: Archetype) -> Evidence:
     return document_evidence(archetype.doc_type)
 
 
-# The registry the planner selects from — eleven archetypes over six document classes today;
+# The registry the planner selects from — thirteen archetypes over six document classes today;
 # further ones register here as their templates land.
 #
 # THREE ENTRIES OF ONE DOCUMENT CLASS ARE STILL THREE ARCHETYPES. They carry the same
@@ -180,6 +192,39 @@ ARCHETYPES: dict[str, Archetype] = {
             "vitamins_nutrition",
             "hobby",
         ),
+    ),
+    # 🔴 THE SAME CLASS AND THE SAME FORM WITH ONE AXIS MOVED — the payment half of a EURO PAIR,
+    # and the archetype that makes the oracle's currency conversion something a CLAIM goes
+    # through rather than a page.
+    #
+    # WHAT WAS WRONG WITH THE EURO THE CORPUS ALREADY HAD. `eu_platform_receipt` is the only
+    # euro archetype and it proves both facts, so `_select_documents` gives it a claim of its
+    # own: every conversion the engine performed was over a single self-contained document. No
+    # pair, no cross-document amount to convert on both sides, and — the reason this branch
+    # exists — the class collapses downstream into whatever a consumer does with a receipt that
+    # is not fiscal, so a conversion could be labelled and never reached. A `payment_confirmation`
+    # is one of the classes a consumer extracts.
+    #
+    # ONE CATEGORY, AND — UNLIKE THE PLATFORM RECEIPT — NO BLAST RADIUS. That warning is about an
+    # archetype proving BOTH facts: `_select_documents` prefers such a document, so a category
+    # carrying one loses its invoice-plus-payment pair. This proves the payment ALONE, so it joins
+    # the payment pool and takes nothing out of it. The category is `language_courses` because
+    # that is where its subject half can be drawn — see `eu_invoice` below, where the reasoning
+    # is — and the seller is the foreign one either way: a Ukrainian employee does not settle a
+    # domestic invoice in euros.
+    #
+    # ⚠️ ITS CURRENCY IS WHAT KEEPS IT OUT OF EVERY OTHER PAIR. Every domestic subject document is
+    # stated in hryvnias, so `_settleable_subjects` never offers this archetype to one — and the
+    # `EU` vendor pool it names would in any case collide with a domestic archetype's in
+    # `assembler`, one claim being one seller. Two independent rules, agreeing.
+    "ua_bank_payment_confirmation_eur": Archetype(
+        slug="ua_bank_payment_confirmation_eur",
+        doc_type=DocType.PAYMENT_CONFIRMATION,
+        country=Country.UA,
+        language="uk",
+        currency="EUR",
+        categories=("language_courses",),
+        vendor_pool="EU",
     ),
     # THE THIRD DOCUMENT CLASS, and the SECOND that proves the payment without stating what was
     # bought. 👁 A statement's payment purpose names an invoice or a delivery note, and at best a
@@ -251,6 +296,46 @@ ARCHETYPES: dict[str, Archetype] = {
             "hobby",
         ),
     ),
+    # 🔴 THE SUBJECT HALF OF THE EURO PAIR, AND THE DOCUMENT THIS BRANCH EXISTS FOR. Same class as
+    # `ua_invoice` — an offer to pay, proving what was bought and no payment — issued by the
+    # foreign platform the claimant bought from, in the currency it invoices in.
+    #
+    # 🔴 WHAT IT CHANGES ABOUT THE CORPUS, stated as the mechanism rather than as an intention.
+    # Until it landed, EUR existed on `eu_platform_receipt` alone; that archetype proves BOTH
+    # facts, so `_select_documents` gives it a claim of its own, and the oracle's conversion
+    # therefore ran on a single self-contained page every time. It also lands in a class a
+    # consumer need not extract at all. With this archetype a euro claim is a PAIR of documents
+    # of two classes a consumer does extract, so the conversion runs through the cross-document
+    # checks and reaches a downstream extractor.
+    #
+    # ⛔ NO BLAST RADIUS ON `plannable_categories`, and the contrast with `eu_platform_receipt`
+    # below is the whole reason to say so. That warning applies to an archetype proving both
+    # facts: `_select_documents` PREFERS such a document, so every category carrying one loses
+    # its invoice-plus-payment pair. This one proves the subject alone — it joins the subject pool
+    # of one category beside `ua_invoice`, and every verdict that category could realize before it
+    # landed, it can realize after.
+    #
+    # 🔴 ONE CATEGORY, AND IT IS `language_courses` RATHER THAN THE ONE THE `EU` SELLERS ALREADY
+    # SERVED — the choice the whole registration turns on, and it is the planner's rather than
+    # commerce's. `professional_development` carries the two platform receipts, which prove BOTH
+    # facts, and `_select_documents` PREFERS a self-contained document wherever one is registered:
+    # a complete claim there is one page, and an invoice-plus-payment pair is never drawn for it
+    # at any seed. A euro pair registered in that category would therefore have rendered in a test
+    # and never once in a corpus. `language_courses` still has its pair — 👁 an online language
+    # platform is also the cross-border purchase a Ukrainian employee most plausibly makes — and
+    # config/vendors.json gained the sellers for it.
+    #
+    # Its payment half is `ua_bank_payment_confirmation_eur`, and `_settleable_subjects` is what
+    # guarantees it is never offered a hryvnia payment instead.
+    "eu_invoice": Archetype(
+        slug="eu_invoice",
+        doc_type=DocType.INVOICE,
+        country=Country.UA,
+        language="en",
+        currency="EUR",
+        categories=("language_courses",),
+        vendor_pool="EU",
+    ),
     # 🔴 THE FIFTH DOCUMENT CLASS, AND THE ONE THAT LOOKS LIKE THE FIRST. A товарний чек prints a
     # basket, the same four totals, the same columns and the same arithmetic as a fiscal receipt,
     # and 📄 differs from it by exactly the two requisites the tax service says such a document
@@ -311,6 +396,7 @@ ARCHETYPES: dict[str, Archetype] = {
         doc_type=DocType.PLATFORM_RECEIPT,
         country=Country.UA,
         language="en",
+        currency="EUR",
         categories=("professional_development",),
         vendor_pool="EU",
     ),
@@ -423,6 +509,9 @@ _SETTLED_BY_A_PAYMENT: frozenset[DocType] = frozenset({DocType.INVOICE})
 # labelled row always carries one.
 _CITES_THE_SETTLED_DOCUMENT: frozenset[str] = frozenset({
     "ua_bank_payment_confirmation",
+    # The same form and the same purpose line, in euros. 👁 A purpose naming a рахунок is a
+    # property of the FIELD SET, which the currency axis does not touch.
+    "ua_bank_payment_confirmation_eur",
     "ua_bank_receipt_in_app",
     "ua_bank_statement",
 })
@@ -457,6 +546,45 @@ def _pairable_subjects(candidates: list[Archetype]) -> list[Archetype]:
     ]
 
 
+def _payment_archetypes(candidates: list[Archetype]) -> list[Archetype]:
+    """The archetypes proving the payment and no subject — the payment half of every pair.
+
+    A one-line comprehension, extracted on its third call site (`can_assemble_evidence`,
+    `plannable_categories`, `_select_documents`) because all three now feed it to
+    `_settleable_subjects`, and a pool spelled out three ways is a pool that will one day be
+    spelled out three DIFFERENT ways.
+    """
+    return [a for a in candidates if evidence_of(a) == Evidence(False, True)]
+
+
+def _settleable_subjects(
+    subjects: list[Archetype], payments: list[Archetype]
+) -> list[Archetype]:
+    """The subjects some payment archetype of this pool could actually settle — the currency rule.
+
+    🔴 ONE CLAIM, ONE CURRENCY, APPLIED WHERE THE PAIR IS CHOSEN. `policy_engine` refuses to label
+    a claim whose two documents are stated in different currencies (`_one_claim_one_currency`), and
+    that refusal cannot be met by converting: policy.yaml states no rule for pooling line items or
+    comparing amounts across a rate, and the oracle raises rather than guessing one. An invoice in
+    euros beside a confirmation in hryvnias is therefore not a defect a label could describe — it
+    is a claim nothing can label — so it must not be planned in the first place.
+
+    ⛔ AND IT IS NOT A FILTER ON THE PAYMENT ALONE. Filtering the payment after the subject is drawn
+    would leave the subject pool free to draw an archetype no payment can settle, and the refusal
+    would land inside the draw. Narrowing the SUBJECTS first is what makes every draw below
+    reachable — and where a subject is dropped, it is dropped because this registry holds no
+    payment document in its currency, which is a statement about the registry rather than about
+    the claim.
+
+    ONE PREDICATE, THREE CALLERS, for the reason `_pairable_subjects` is one function:
+    `can_assemble_evidence` asks whether a pair exists, `plannable_categories` asks it per verdict,
+    and `_select_documents` builds the pair. A subject admitted by one and refused by another would
+    fail a stage away from its cause.
+    """
+    currencies = {payment.currency for payment in payments}
+    return [subject for subject in subjects if subject.currency in currencies]
+
+
 def _instalment_subjects(candidates: list[Archetype]) -> list[Archetype]:
     """The pairable subjects that can also STATE an instalment term — the subject half of a
     `partially_paid` claim.
@@ -476,6 +604,18 @@ def _instalment_subjects(candidates: list[Archetype]) -> list[Archetype]:
         for archetype in _pairable_subjects(candidates)
         if archetype.doc_type in STATES_AN_INSTALMENT_TERM
     ]
+
+
+def _settleable_instalment_subjects(candidates: list[Archetype]) -> list[Archetype]:
+    """The subject half a `partially_paid` claim needs: states an instalment term AND is settleable
+    by a payment document of this registry.
+
+    The two narrowings composed, at the one place a caller wants them composed — the whole of what
+    `plannable_categories` asks for that verdict, and the same pair `_select_documents` then builds.
+    """
+    return _settleable_subjects(
+        _instalment_subjects(candidates), _payment_archetypes(candidates)
+    )
 
 
 class EvidenceIntent(Enum):
@@ -958,10 +1098,14 @@ def can_assemble_evidence(candidates: list[Archetype]) -> bool:
     is the same predicate `_select_documents` builds from. A category served by a товарний чек and
     a payment document would satisfy "a subject exists and a payment exists" and still not be
     completable, because nothing settles a sales slip.
+
+    ⚠️ NOR IS EVERY PAIRABLE SUBJECT PAYABLE BY EVERY PAYMENT — see `_settleable_subjects`. Since
+    the registry holds documents in a second currency, "a subject exists and a payment exists" can
+    be true of two documents the oracle would refuse to label together.
     """
     both = [a for a in candidates if all(evidence_of(a))]
-    subjects = _pairable_subjects(candidates)
-    payments = [a for a in candidates if evidence_of(a) == Evidence(False, True)]
+    payments = _payment_archetypes(candidates)
+    subjects = _settleable_subjects(_pairable_subjects(candidates), payments)
     return bool(both) or bool(subjects and payments)
 
 
@@ -1080,7 +1224,9 @@ def plannable_categories(
         return [
             category
             for category in paired
-            if _instalment_subjects(archetypes_for(persona.location.country, category))
+            if _settleable_instalment_subjects(
+                archetypes_for(persona.location.country, category)
+            )
         ]
     if verdict is Verdict.NOT_PROOF_OF_PAYMENT:
         return [
@@ -1238,6 +1384,11 @@ def _select_documents(
     `_pairable_subjects`. A payment settles an obligation, and a class that states none is not
     half of a pair however well it states what was bought.
 
+    ⚠️ AND NARROWER AGAIN BY CURRENCY — see `_settleable_subjects`. The two documents of a pair are
+    stated in ONE currency, because the oracle refuses to label a claim whose documents are stated
+    in two. The subject is drawn from what some payment here can settle, and the payment from the
+    subject's own currency.
+
     🔴 `subject_states_instalments` NARROWS IT AGAIN, and it is what `partially_paid` needs: the
     subject has to be a class that can PRINT the term saying its obligation is settled in parts
     (`STATES_AN_INSTALMENT_TERM`), because the verdict rests on that printed marker and on nothing
@@ -1275,7 +1426,7 @@ def _select_documents(
     evidence is missing: the verdict is chosen first here, and a claim short of a fact is
     short of it because this function was asked for that, never because a template was absent.
     """
-    payments = [a for a in candidates if evidence_of(a) == Evidence(False, True)]
+    payments = _payment_archetypes(candidates)
     if payment_must_cite:
         payments = [a for a in payments if a.slug in _CITES_THE_SETTLED_DOCUMENT]
         if not payments:
@@ -1319,10 +1470,11 @@ def _select_documents(
     if both:
         return (DocumentPlan(archetype=_draw_archetype(rng, both), issued_at=issued_at),)
 
-    subjects = (
+    subjects = _settleable_subjects(
         _instalment_subjects(candidates)
         if subject_states_instalments
-        else _pairable_subjects(candidates)
+        else _pairable_subjects(candidates),
+        payments,
     )
     if subject_states_instalments and not subjects:
         raise ValueError(
@@ -1344,9 +1496,20 @@ def _select_documents(
             # what the first one returned.
             lead = max(lead, timedelta(days=1))
         subject_at = issued_at + lead if payment_precedes_subject else issued_at - lead
+        subject = _draw_archetype(rng, subjects)
+        # 🔴 THE PAYMENT IS DRAWN FROM THE SUBJECT'S OWN CURRENCY, and the pool is never empty:
+        # `_settleable_subjects` admitted this subject precisely because some payment here is
+        # stated in it. Two draws either way, in the order they have always happened, so a
+        # single-currency registry takes the same values from the generator as before this
+        # narrowing existed.
         return (
-            DocumentPlan(archetype=_draw_archetype(rng, subjects), issued_at=subject_at),
-            DocumentPlan(archetype=_draw_archetype(rng, payments), issued_at=issued_at),
+            DocumentPlan(archetype=subject, issued_at=subject_at),
+            DocumentPlan(
+                archetype=_draw_archetype(
+                    rng, [p for p in payments if p.currency == subject.currency]
+                ),
+                issued_at=issued_at,
+            ),
         )
 
     raise ValueError(

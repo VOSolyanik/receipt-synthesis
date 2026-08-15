@@ -1,0 +1,31 @@
+/*
+ * Cross-border invoice, English, EUR — A4.
+ *
+ * The page style is templates/platform_receipt.css, which this archetype's template includes
+ * before this file: one seller, one house style, two document classes. What is here is the paper
+ * — 794 px, A4 at 96 dpi — which belongs to the archetype for the reason stated in
+ * eu_platform_receipt.css: the test suite reads a width out of `<slug>.css`, and a width that
+ * migrated into the shared file would leave one archetype silently taking another's page.
+ *
+ * The one rule beyond the paper is the fourth column. The receipt's table has three — description,
+ * quantity, amount — and an invoice states a UNIT PRICE as well, 📄 an Article 226 particular and
+ * the thing a buyer checks an offer against. Widths are restated here rather than in the shared
+ * file so the receipt's three-column table keeps the proportions it was drawn with.
+ */
+
+.page {
+  width: 794px;
+}
+
+.col-desc {
+  width: 46%;
+}
+
+.col-qty {
+  width: 10%;
+}
+
+.col-amount,
+.lines th.col-amount {
+  width: 22%;
+}

@@ -1,0 +1,14 @@
+/*
+ * Ukrainian bank payment confirmation, EUR — A4.
+ *
+ * DELIBERATELY EMPTY OF RULES. The whole layout is templates/ua_bank_payment_confirmation.css,
+ * which this archetype's template includes before this file, and nothing about a currency is
+ * visual: the code travels in the caption and the words, which the shared body already prints
+ * from the context.
+ *
+ * The file exists because the renderer resolves a stylesheet per template name, and it stays
+ * empty because the pair is a CONTROLLED COMPARISON — a rule here would be a second difference
+ * between the two documents, and the archetype's whole purpose is that there is only one. The
+ * same reasoning is in ua_platform_receipt.css, from the other side: identical stylesheets, said
+ * out loud rather than left to be noticed.
+ */

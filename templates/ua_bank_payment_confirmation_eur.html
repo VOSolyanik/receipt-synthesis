@@ -1,0 +1,63 @@
+{#
+  Ukrainian bank payment confirmation, EUR — the domestic form with one axis moved.
+
+  THE SAME DOCUMENT CLASS, THE SAME BANK, THE SAME FIELD SET as ua_bank_payment_confirmation,
+  whose body this includes unchanged. 📄 The requisites of a payment instruction do not mention a
+  currency: the National Bank's instruction on non-cash settlements makes the AMOUNT OF THE
+  OPERATION a requisite, and an operation executed in euros has one exactly as a hryvnia one does.
+  What the page says about which currency that is, is data — the caption carries the code and the
+  words spell «євро» (`content_builder._money_caption`, `amount_in_words_uk`).
+
+  🔴 WHY THIS ARCHETYPE EXISTS, and it is not the currency for its own sake. `platform_receipt` put
+  euros into the corpus and it is the one class that proves both facts alone, so every euro
+  document was the WHOLE of its claim. A conversion the oracle performs on a single self-contained
+  document exercises the rate and nothing else — no pair, no cross-document axis, no subject
+  beside a payment. This document is the payment half of a euro PAIR: `eu_invoice` states what was
+  bought, this states that the money moved, and the oracle converts a claim rather than a page.
+
+  ⚠️ THE COMPARISON IS CONTROLLED ON ONE AXIS AND NOT TWO. Against ua_bank_payment_confirmation
+  this document differs in CURRENCY alone — same language, same layout, same captions but for the
+  code, same initiation field set. That is the point: a consumer whose accuracy moves between the
+  two has met the currency and nothing else. (The euro platform receipt moves language and currency
+  at once against its Ukrainian twin, which is why that pair answers a different question.)
+
+  ⛔ NO FOREIGN-CURRENCY CONFIRMATION WAS OBSERVED. The form is 👁 the observed domestic one — 8/8
+  documents — with the currency axis applied to it, and the requisites a cross-border instruction
+  ADDS are deliberately not printed: no BIC, no correspondent bank, no charge option (OUR/SHA/BEN).
+  Inventing the arrangement of fields nobody here has seen is the one thing this repository does
+  not do with a form it has not observed, and a narrower document is the honest version of it. The
+  omission is a declared narrowing, not an oversight.
+
+  ⛔ AND NO CARD OPERATION. The builder refuses one in a foreign currency: 👁 the card modes print
+  an authorization code and a masked card, which is a domestic acquiring operation, and what a
+  bank executes against a foreign beneficiary's account is a transfer by account details. The
+  archetype is registered with that mode named rather than drawn.
+#}
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<style>
+{% for face in font_faces -%}
+@font-face {
+  font-family: "{{ face.family }}";
+  src: url("{{ face.url }}") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+{% endfor -%}
+{# The layout is the domestic archetype's, included whole. This archetype's own stylesheet is
+   below it and carries nothing but the note saying why it is empty. #}
+{% include "ua_bank_payment_confirmation.css" %}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+{# The document root wraps the shared body at its content's own size: the renderer frames the
+   image to this element, and `fit-content` keeps its extent the A4 sheet's rather than the
+   browser window's. The body itself carries no root — see its own header. #}
+<div data-document="payment_confirmation" style="width: fit-content;">
+{% include "ua_bank_payment_confirmation.jinja" %}
+</div>
+</body>
+</html>

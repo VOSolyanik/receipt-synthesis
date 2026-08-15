@@ -114,6 +114,25 @@ one the long section below said could not happen before the currency decision: t
 the section is kept as written with the resolution noted where it was argued. The Ukrainian one
 is the domestic control of the pair: same body, ordinary requisites, a contained-VAT row, UAH.
 
+`eu_invoice` and `ua_bank_payment_confirmation_eur` are the EURO PAIR, and they are one CLAIM rather
+than one class — the only entry in this table that has to be read as two documents together. The
+platform receipt above put euros into the corpus and proves both facts, so every euro document was
+the whole of its claim: the oracle's conversion ran on a single self-contained page, never across a
+pair, and landed in a class a consumer need not extract. These two are classes a consumer does
+extract. The invoice is a template of its own — it shares the platform receipt's stylesheet, because
+one seller's invoice and its receipt do look alike, and shares no markup with it, because «Amount
+paid» one boolean away from an invoice is a document that records its own payment. The confirmation
+is the observed A4 form with ONE axis moved: same body, same field set, the caption carrying the
+code and the words spelling «євро». ⛔ Neither prints a requisite nobody here has observed — no BIC,
+no correspondent bank, no charge option — and neither prints a Ukrainian register code for a foreign
+firm.
+
+⚠️ **They are registered for `language_courses`, not for `professional_development`**, where the `EU`
+sellers already were, and the reason is the planner rather than commerce: that category carries the
+platform receipts, `_select_documents` prefers a document that proves both facts wherever one is
+registered, and a claim there is therefore one page. A euro pair registered in it would render in a
+test and never once in a corpus.
+
 `ua_bank_app_transaction` and `ua_bank_receipt_in_app` are registered as two more renderings of
 the `payment_confirmation` class — the phone. The transaction screen is built by
 `content_builder.build_app_transaction` and keeps its argument whole: none of the requisites
@@ -135,6 +154,8 @@ file always named as the cheaper one: the confirmation's body was extracted into
 | `ua_invoice` | `invoice` |
 | `ua_non_fiscal_receipt` | `non_fiscal_receipt` |
 | `eu_platform_receipt`, `ua_platform_receipt` | `platform_receipt` — one shared body, two jurisdictions |
+| `eu_invoice` | `invoice` — English, EUR; the subject half of a euro claim |
+| `ua_bank_payment_confirmation_eur` | `payment_confirmation` — the observed A4 form stating a transfer in euros; the payment half of the same claim |
 | `ua_bank_app_transaction`, `ua_bank_receipt_in_app` | `payment_confirmation` — the phone's two carriers |
 | `ua_fiscal_receipt.jinja` + `.css` | the body and the till-roll rules the three receipts share |
 | `ua_bank_payment_confirmation.jinja` | the A4 confirmation's body, shared with its in-app carrier |

@@ -387,7 +387,7 @@ def test_every_generated_iban_passes_its_own_checksum_and_carries_the_bank_code(
     """The length is 📄 fixed per country by the published registry and is read from
     config/fiscal-rules.yaml, so an account number of the wrong width fails here rather than being
     printed."""
-    rules = BLOCK["iban"]
+    rules = jurisdiction("UA")["identifiers"]["iban_format"]
     rng = random.Random(4)
 
     for _ in range(200):

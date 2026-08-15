@@ -14,8 +14,11 @@
       { "slug": "mbank", "display_name": "mBank", "template": "pl_transfer_confirmation" },
       { "slug": "pko",   "display_name": "PKO",   "template": "pl_transfer_confirmation" }
     ],
+    "$note_eu_banks": "A DIFFERENT ROLE FROM THE BLOCK ABOVE, and the reason this list is not a fifth set of issuers: no archetype is issued BY a euro-area bank. These are the banks a seller of the `EU` pool holds its account with — the beneficiary side of a cross-border transfer — so `printed_name` appears in another document's payee block rather than in a header of its own, and no `template` is named because none is owned. `bank_code` is the eight-digit Bankleitzahl carried inside the German IBAN the seller's account is composed as (see `identifiers.iban_format` under EU in config/fiscal-rules.yaml): INVENTED, shaped like a real one, equal to no real institution's, and fixed here rather than drawn for the reason the МФО is.",
     "EU": [
-      { "slug": "sepa", "display_name": "SEPA", "template": "eu_sepa_confirmation" }
+      { "slug": "deutsche",    "display_name": "Deutsche Bank", "printed_name": "Deutsche Bank AG", "bank_code": "99001001" },
+      { "slug": "commerzbank", "display_name": "Commerzbank",   "printed_name": "Commerzbank AG",   "bank_code": "99002002" },
+      { "slug": "ing",         "display_name": "ING",           "printed_name": "ING-DiBa AG",      "bank_code": "99003003" }
     ]
   },
 
@@ -79,6 +82,8 @@
     "insurer": ["insurance_premium", "family_member_premium", "property_insurance", "travel_insurance"],
 
     "language_school": ["language_lessons", "placement_test", "language_exam", "missed_lesson_fee", "textbook", "stationery"],
+    "$note_online_language_platform": "AN ONLINE PLATFORM SELLS TUITION AND NOTHING PRINTED. It carries no coursebook and no stationery, which is what its trade actually is — and the consequence is that it cannot carry a MIXED basket at all, since `language_courses` excludes exactly those two kinds. That is why the euro pool holds exam institutes as well: `vendor_can_carry(..., mixed=True)` selects them, exactly as the marketplace carries the mixed basket for professional_development above. An earlier version gave this profile a textbook so one seller could do both; it made the mixed-basket amounts diverge from the domestic ones and described a trade these platforms are not in.",
+    "online_language_platform": ["language_lessons", "placement_test"],
     "private_tutor": ["language_lessons", "placement_test", "missed_lesson_fee"],
     "exam_centre": ["language_exam", "placement_test", "textbook"],
 
@@ -292,12 +297,20 @@
       ]
     },
     "$note_eu": "CROSS-BORDER platforms a Ukrainian claimant buys from, not a fifth jurisdiction: the persona stays Ukrainian and `eu_platform_receipt` is registered under UA, so these are what its seller draw reads. Every name is a public mark that verifiably sells the articles its profile pairs it with — courses on the learning platforms, books and hardware on the marketplace. `vat_payer` is false on each because the flag drives PRINTED requisites and the platform receipt declares itself not a VAT invoice and prints none; it is not a claim about any firm's real registration, which is that firm's own business. The marketplace entry is what carries a mixed basket: the learning-platform profile sells nothing professional_development excludes, so it cannot.",
+    "$note_eu_language_courses": "THE CATEGORY THE EURO PAIR LIVES IN, and it is chosen by the planner rather than by commerce: `professional_development` above already has an archetype proving BOTH facts (the platform receipt), so a claim there is a single self-contained document and an invoice-plus-payment pair is never drawn for it. `language_courses` still has its pair, so `eu_invoice` and the euro confirmation settling it can both be planned — which is the whole point of registering them. Each name is a public mark that verifiably sells what its profile pairs it with: online tuition on the three platforms, language examinations at the two institutes. `vat_payer` is false for the reason the note above gives, and `legal_form` is each entity's real designation or `NONE` where this repository has not verified one — a wrong legal form is a checkable false claim about a real organization. THE POOL SPANS TWO TRADES BECAUSE THE DOMESTIC ONE DOES, and that is a repair with a measurement behind it. With the three platforms alone no euro basket could draw `language_exam` — 6 000–9 000 UAH a line, which four of the six domestic sellers DO draw — so a euro claim came out systematically SMALLER than a hryvnia one in the same category: median 10 035 UAH against 13 788, exceeding the category's 12 000 annual limit on 35% of covered-only baskets against 58%. The currency was acting as a proxy for the seller's TRADE, which would let a consumer predict `limit_exhausted` from a currency code — the same defect as a currency that predicts a verdict, mirrored. With the institutes the two distributions come to 54% against 58% on covered-only baskets and 65% against 68% on mixed ones, medians 13 001 against 13 788 and 12 983 against 13 742, measured over 4 000 baskets a side. The residual is in that direction and is stated rather than assumed.",
     "EU": {
       "professional_development": [
         { "name": "Coursera", "legal_form": "INC", "profile": "online_learning_platform", "vat_payer": false },
         { "name": "Udemy",    "legal_form": "INC", "profile": "online_learning_platform", "vat_payer": false },
         { "name": "edX",      "legal_form": "LLC", "profile": "online_learning_platform", "vat_payer": false },
         { "name": "Amazon",   "legal_form": "SARL", "profile": "general_retailer", "vat_payer": false }
+      ],
+      "language_courses": [
+        { "name": "italki", "legal_form": "INC",  "profile": "online_language_platform", "vat_payer": false },
+        { "name": "Preply", "legal_form": "INC",  "profile": "online_language_platform", "vat_payer": false },
+        { "name": "Babbel", "legal_form": "GMBH", "profile": "online_language_platform", "vat_payer": false },
+        { "name": "Goethe-Institut",     "legal_form": "EV",   "profile": "exam_centre", "vat_payer": false },
+        { "name": "Instituto Cervantes", "legal_form": "NONE", "profile": "exam_centre", "vat_payer": false }
       ]
     }
   },

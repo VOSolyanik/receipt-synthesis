@@ -65,9 +65,30 @@ INVOICE_ACCOUNT = re.compile(r"КРЕДИТ рах\. №\t(UA\d{27})\b")
 INVOICE_TITLE = re.compile(r"Рахунок на оплату № *(\S+) від (.+?) р\.")
 INVOICE_BUYER = re.compile(r"Покупець:\n(.+?), РНОКПП (\d{10})\b")
 
+# THE CROSS-BORDER INVOICE, whose captions are English and whose party block is three lines of a
+# payment-details section rather than a Ukrainian requisites table. A separate set of patterns and
+# not a widened one: every pattern above is anchored to a caption, and a caption in another
+# language is another anchor. ⛔ NO TAX-CODE PATTERN, because the page prints no tax code — a
+# foreign firm has no Ukrainian register entry, and a pattern for a field that is never printed
+# would report a permanent zero and read as a defect.
+EU_INVOICE_PAYEE = re.compile(r"Beneficiary: (.+)")
+EU_INVOICE_ACCOUNT = re.compile(r"IBAN: ([A-Z]{2}\d{18,30})\b")
+EU_INVOICE_BANK = re.compile(r"Bank: (.+)")
+EU_INVOICE_NUMBER = re.compile(r"Payment reference: (\S+)")
+EU_INVOICE_BUYER = re.compile(r"BILL TO\n(.+)")
+
+# ⚠️ TWO OPTIONAL PIECES ARE OPTIONAL FOR A NEW REASON since the euro pair landed, and the groups
+# had to be named to keep the reader legible. A payee OUTSIDE the Ukrainian register prints no
+# «Код» and no «Код банку» — those are a ЄДРПОУ and a МФО, which a foreign firm and a foreign bank
+# do not have — and its IBAN is not a Ukrainian one. So the account pattern is any IBAN and the
+# bank code is optional WITHIN the bank line rather than the line being absent. The Ukrainian
+# reading is unchanged: the optional code group is tried before it is skipped, so a coded line
+# still yields both halves.
 CONFIRMATION_PARTY = re.compile(
-    r"^(Платник|Отримувач)\n(.+?)\n(?:Код (\d{8,10})\n)?(?:IBAN (UA\d{27})\n)?"
-    r"(?:Банк отримувача (.+?), Код банку (\d{6})\n)?",
+    r"^(?P<role>Платник|Отримувач)\n(?P<name>.+?)\n"
+    r"(?:Код (?P<code>\d{8,10})\n)?"
+    r"(?:IBAN (?P<account>[A-Z]{2}\d{18,30})\n)?"
+    r"(?:Банк отримувача (?P<bank>.+?)(?:, Код банку (?P<bank_code>\d{6}))?\n)?",
     re.MULTILINE,
 )
 STATEMENT_HOLDER = re.compile(r"Клієнт (.+?), РНОКПП (\d{10})\b")
@@ -108,6 +129,30 @@ class Row:
     payment: str | None
 
 
+def _eu_invoice_fields(text: str) -> dict[str, str | None]:
+    """The cross-border invoice, read by its own captions.
+
+    ⛔ `seller_tax_code` IS NONE BY CONSTRUCTION and not by a failure to read: neither document of
+    a euro claim prints one. The audit reports it as unreadable, which is the truthful answer —
+    what a caller must not do is treat that as a disagreement.
+    """
+    payee = EU_INVOICE_PAYEE.search(text)
+    account = EU_INVOICE_ACCOUNT.search(text)
+    bank = EU_INVOICE_BANK.search(text)
+    number = EU_INVOICE_NUMBER.search(text)
+    buyer = EU_INVOICE_BUYER.search(text)
+    return {
+        "seller_name": payee.group(1) if payee else None,
+        "seller_tax_code": None,
+        "seller_bank_name": bank.group(1) if bank else None,
+        "seller_bank_code": None,
+        "seller_account": account.group(1) if account else None,
+        "invoice_number": number.group(1) if number else None,
+        "payer_name": buyer.group(1) if buyer else None,
+        "payer_tax_code": None,
+    }
+
+
 def _invoice_fields(text: str) -> dict[str, str | None]:
     payee = INVOICE_PAYEE.search(text)
     bank = INVOICE_PAYEE_BANK.search(text)
@@ -136,19 +181,19 @@ def _confirmation_fields(text: str) -> dict[str, str | None]:
     disagreements out of a corpus that had none.
     """
     parties = {
-        match.group(1): match for match in CONFIRMATION_PARTY.finditer(text + "\n")
+        match.group("role"): match for match in CONFIRMATION_PARTY.finditer(text + "\n")
     }
     payer, payee = parties.get("Платник"), parties.get("Отримувач")
     purpose = CITED_INVOICE.search(text)
     return {
-        "seller_name": payee.group(2) if payee else None,
-        "seller_tax_code": payee.group(3) if payee else None,
-        "seller_bank_name": payee.group(5) if payee else None,
-        "seller_bank_code": payee.group(6) if payee else None,
-        "seller_account": payee.group(4) if payee else None,
+        "seller_name": payee.group("name") if payee else None,
+        "seller_tax_code": payee.group("code") if payee else None,
+        "seller_bank_name": payee.group("bank") if payee else None,
+        "seller_bank_code": payee.group("bank_code") if payee else None,
+        "seller_account": payee.group("account") if payee else None,
         "invoice_number": purpose.group(1) if purpose else None,
-        "payer_name": payer.group(2) if payer else None,
-        "payer_tax_code": payer.group(3) if payer else None,
+        "payer_name": payer.group("name") if payer else None,
+        "payer_tax_code": payer.group("code") if payer else None,
     }
 
 
@@ -220,7 +265,14 @@ def fields_of(document: dict) -> dict[str, str | None]:
     doc_type = document["doc_type"]
     text = document["reference_text"]
     if doc_type == "invoice":
-        return _invoice_fields(text)
+        # ONE CLASS, TWO LAYOUTS AND TWO LANGUAGES. Dispatched on the label's own `language`
+        # rather than by trying one reader and falling back to the other: a fallback would report
+        # a Ukrainian invoice this reader failed on as a euro one it read badly.
+        return (
+            _eu_invoice_fields(text)
+            if document.get("language") == "en"
+            else _invoice_fields(text)
+        )
     if doc_type == "payment_confirmation":
         return _confirmation_fields(text)
     if doc_type == "bank_statement":
