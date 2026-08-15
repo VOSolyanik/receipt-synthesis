@@ -633,6 +633,24 @@ price_ranges_eur:
 #     dial on how much conversion the corpus exercises: too small and the currency dimension is
 #     decorative, too large and a category's ordinary hryvnia pair stops being ordinary.
 #
+# 🔴 ONE WEIGHT, TWO POOLS, AND THEY CANNOT BOTH COME OUT AT A THIRD. `eu_invoice` is drawn from
+# two different pools and this table gives it one number for both:
+#
+#   the PAIR subject pool   {ua_invoice, eu_invoice}                     → 0.25/0.75 = 33.3% euro
+#   the SUBJECT-ALONE pool  {ua_invoice, ua_non_fiscal_receipt, eu_invoice} → 0.25/1.25 = 20.0%
+#
+# The товарний чек sits in the second pool and not the first — no payment settles a sales slip —
+# so it DILUTES the euro share of the one branch it is in. The consequence is small and real: a
+# claim built as `not_proof_of_payment` (a subject document with no payment beside it) is stated
+# in euros 20% of the time where every pair-realized verdict is 33%. Measured end to end over
+# 2 063 claims, that verdict came back at exactly its predicted 20.0% euro share while the five
+# pair verdicts scattered around 33% within sampling error.
+#
+# ⛔ NOT EQUALIZED, and the reason is that no single weight can: the two pools differ by a member.
+# Doing it would need a weight per BRANCH, which is a second concept in this table for a skew of
+# about four claims in a corpus the size of the delivered one. It is written down instead, because
+# the thing that must not happen is a reader discovering it from a score.
+#
 # THE PLATFORM POOL: two archetypes, one class, drawn 0.50 / 0.50 — the pair exists for a
 # controlled comparison of the language and currency axes with the layout held fixed, and
 # equal mass is what maximizes the power of that comparison. Skewing it would need a claim
