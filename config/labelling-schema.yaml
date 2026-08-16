@@ -1250,7 +1250,31 @@
 #
 #   ⚠️ WHAT A CONSUMER MUST DO: RE-VENDOR TO v38, and regenerate. A corpus produced by a pre-38
 #   generator is not the corpus RP-07 describes, and the seed alone will not tell the two apart.
-version: 38
+# Bumped to 39 by THE CONSUMER'S EXTRACTION SCHEMA GAINING FOUR FIELDS, TWO OF WHICH THE DATASET
+# ALREADY LABELS. ⛔ `config/policy.yaml` IS NOT TOUCHED — no verdict, no cause, no share and no
+# comparison rule moves — and NO LABEL RECORD GAINS OR LOSES A KEY: no image, no label value and
+# no digest of any delivered corpus changes. What changes is what a consumer's schema is declared
+# to ask for.
+#
+#   🔴 `fee` AND `total_charged` BECOME REACHABLE ON `payment_confirmation`, through two new
+#   `label_field:` slots (`the_fee`, `the_total_charged`). Both fields were labelled since the
+#   class entered the data, and neither had a `prd_required_fields` row — the requirement names
+#   the amount alone — so the union of version 36 never offered them and the salience divergence
+#   `total_charged.why_it_is_labelled_apart` exists to measure was measurable on no consumer.
+#   This is the `instalment_amount` failure shape, closed through the slot built for it.
+#
+#   🔴 `subtotal` AND `taxes` ENTER `document_label` AS `forward_contract` — the consumer-side
+#   fields for a document that adds its tax ON TOP of a net subtotal. No Ukrainian archetype
+#   prints either (prices are VAT-inclusive throughout), so NO label record carries them and
+#   nothing generated moves; what the two entries settle is the MEANING a consumer builds
+#   against: printed-or-null, never derived. The net/gross contradiction recorded at
+#   `amount.no_subtotal` dissolves under that meaning — the note there says how, and what
+#   remains undecided (whether a tax-on-top archetype ever enters the corpus).
+#
+#   ⚠️ WHAT A CONSUMER MUST DO: re-vendor, extend its extraction requests with the four fields,
+#   and treat an extracted `subtotal` beside a non-empty `taxes` as the page's own printed
+#   decomposition — never as licence to derive one where the page prints none.
+version: 39
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -1816,6 +1840,33 @@ document_types:
           (cash / card) is a receipt requisite too, carried over by the same mistake. A consumer
           cross-checking a payment form between linked documents has nothing on this class to read
           it from.
+
+    the_fee:
+      status: emitted
+      label_field: fee
+      note: >
+        🔴 LABELLED SINCE THE CLASS ENTERED THE DATA, DECLARED REACHABLE ONLY IN VERSION 39.
+        The requirement's field list for this class names the amount and not the fee, so the
+        field has no `prd_required_fields` row to stand in — the same convention that left
+        `instalment_amount` unreachable for seven versions — and a consumer generating its
+        schema from the indexed slots alone never asked for it. This slot is the
+        declaration: a consumer's extraction schema for this type carries `fee`. Without it
+        the salience trap beside `amount` is described and measurable nowhere on the
+        consumer's side — see `the_total_charged` below for the pair's reasoning.
+
+    the_total_charged:
+      status: emitted
+      label_field: total_charged
+      note: >
+        🔴 THE OTHER HALF OF THE SAME DECLARATION, and the one the measurement rests on.
+        `document_label.total_charged.why_it_is_labelled_apart` states the purpose — an
+        extractor reaching for the most salient figure returns the total charged and is
+        wrong by exactly the fee, and folding the two would hide whether a system resists
+        salience. That purpose is only served if the consumer READS both fields: labelled
+        ground truth with no requested counterpart scores nothing. Since version 39 the
+        union at `document_types` offers both to the consumer's schema, and the divergence
+        between "reads the operation amount" and "reads the biggest number" is a number a
+        scorecard can hold.
 
   bank_statement:
     classifier_role: target_class
@@ -3302,13 +3353,20 @@ document_label:
       no_subtotal:
         status: undecided
         note: >
-          THERE IS NO NET SUBTOTAL FIELD, and on a VAT-inclusive Ukrainian receipt no net
-          subtotal is printed either — the tax block states the VAT contained within the
-          gross. The consumer's arithmetic guard checks `subtotal + Σtax ≈ total` and its
-          line-item guard checks `abs(Σline_items − subtotal)`, which require `subtotal` to
-          be net in the first and gross in the second. The two cannot both hold in a
-          VAT-inclusive jurisdiction, and this file cannot reconcile them. Raised as a
-          question for the requirement, not as a generator change.
+          THERE IS NO NET SUBTOTAL IN THE DATA, and on a VAT-inclusive Ukrainian receipt no
+          net subtotal is printed either — the tax block states the VAT contained within the
+          gross. This note used to record a contradiction on the consumer side: its
+          arithmetic guard checked `subtotal + Σtax ≈ total` and its line-item guard checked
+          `abs(Σline_items − subtotal)`, which required `subtotal` to be net in the first
+          and gross in the second, and the two could not both hold in a VAT-inclusive
+          jurisdiction. VERSION 39 DISSOLVES THAT PAIR BY SETTLING THE MEANING, at the
+          `subtotal` field below: the PRINTED pre-tax total of a document that adds its tax
+          on top, null wherever no such line is printed, never derived. Where a subtotal is
+          printed the lines sum to it and both guards read the same printed number; where
+          none is printed the value is null and the consumer's line-sum check runs against
+          the gross total exactly as before. WHAT STAYS UNDECIDED IS THE DATASET HALF:
+          whether an archetype that prints a subtotal ever enters this corpus — which is
+          what would move `subtotal` and `taxes` from `forward_contract` to `emitted`.
 
     - name: instalment_amount
       type: number or null
@@ -3371,6 +3429,50 @@ document_label:
         `ЗНИЖКА` and `ЗАОКРУГЛЕННЯ`, and the observed receipt prints all four. The generator
         printed ONE merged "СУМА ДО СПЛАТИ" line until version 7, which is neither of the two
         requisites — a defect on every image, and one no label could have revealed.
+
+    - name: subtotal
+      type: number or null
+      required: false
+      normalize: money
+      status: forward_contract
+      meaning: >
+        THE PRINTED PRE-TAX TOTAL of a document that adds its tax ON TOP — the net figure a
+        «Subtotal» / «Net total» line states before the tax lines. ⛔ PRINTED OR NULL, NEVER
+        DERIVED: where the page prints no such line the value is null, and computing it as
+        `amount − tax` would manufacture exactly the number the consumer's arithmetic
+        gates on. A VAT-inclusive document states the tax contained WITHIN its gross total
+        («У т.ч. ПДВ», the receipt's «ПДВ А 20%» block); that is not a subtotal and must
+        not be turned into one.
+      null_on: >
+        every document that prints no subtotal line — which is every Ukrainian archetype of
+        this dataset, prices being VAT-inclusive throughout. The field is `forward_contract`
+        for that reason: a consumer facing foreign tax-on-top documents may build against
+        it, and no label record of this corpus carries it today.
+
+    - name: taxes
+      type: array of tax_line or null
+      required: false
+      status: forward_contract
+      meaning: >
+        THE TAX LINES A DOCUMENT ADDS ON TOP OF ITS SUBTOTAL — one entry per printed line,
+        each carrying `label` (the caption as printed — «VAT 20%», «Sales tax» — string or
+        null), `rate` (percent, number or null, only where printed) and `amount` (what the
+        line adds, number, in the document's own currency). Where the field is populated
+        beside a printed `subtotal`, the page's own arithmetic is
+        `subtotal + Σ taxes[].amount = amount`. ⛔ A VAT-INCLUSIVE TAX BLOCK IS NOT THIS
+        FIELD: «ПДВ А 20%» on a Ukrainian receipt states tax contained within the gross and
+        belongs to no entry here — an empty value there is the truth of the page, not a
+        failure to read. Extracted-or-empty, never derived, for the same reason `subtotal`
+        is printed-or-null.
+      note: >
+        NO `normalize:`, exactly as `line_items` since version 24 — the array is not
+        compared as a scalar, and the element shape is stated in `meaning:` rather than in
+        a fourth field block: no label record carries the field, so there is nothing for a
+        block-level status to describe yet.
+      null_on: >
+        every document whose taxes live inside its prices — every document of this corpus.
+        Same `forward_contract` standing as `subtotal`, and the two move together: a
+        tax-on-top archetype entering the dataset would emit both or neither.
 
     - name: date
       type: string
@@ -8076,8 +8178,9 @@ required_changes:
 #     two types always land in manual review. Recorded under
 #     `document_label.line_items.cardinality`.
 #
-#   * The consumer's arithmetic guard checks `subtotal + Σtax ≈ total` and its line-item
-#     guard checks `abs(Σline_items − subtotal)`, which require `subtotal` to be net in one
-#     and gross in the other. On a VAT-inclusive Ukrainian receipt only the gross is
-#     printed, and the generator emits no subtotal at all. Recorded under
-#     `document_label.amount.no_subtotal`.
+#   * The consumer's arithmetic guards read a `subtotal` this generator never emits. The
+#     net/gross contradiction the two guards used to carry is dissolved in version 39 by
+#     settling the meaning — the printed pre-tax total, null where none is printed, never
+#     derived — and `subtotal` / `taxes` now stand in `document_label` as forward contracts
+#     for it. What remains on this side is recorded under `document_label.amount.no_subtotal`:
+#     no archetype of this corpus prints either field.
