@@ -332,6 +332,13 @@ class DocGroundTruth(BaseModel):
     reimbursable, so nothing about it is undecided: it is 👁 non-zero on about a third of real
     confirmations and is generated that way, and ``total_charged`` genuinely differs from
     ``amount`` whenever it is.
+
+    ``tax`` IS THE SAME CONTRACTUAL SHAPE ON THE SUBJECT SIDE. Where an EU page adds the
+    destination tax on top of its prices, ``amount`` is the PRINTED total — the figure the page
+    asks for and the payment document beside it states — so ``Σ line items = amount`` stops
+    holding on exactly those documents, by construction rather than by defect, and ``tax`` is
+    labelled apart so the gap is measurable: ``amount = Σ line items + tax`` wherever it is
+    populated.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -358,6 +365,22 @@ class DocGroundTruth(BaseModel):
     # (`insufficient_evidence`, cause `amount_mismatch`) — two claims whose amounts look identical
     # and whose labels must not. config/policy.yaml, `partial_payment`, states the rule.
     instalment_amount: Money | None = None
+    # The tax an EU page prints ON TOP of its line items — the destination tax of a cross-border
+    # supply, in a row of its own between the subtotal and the total, so that
+    # `amount = Σ line items + tax` exactly where it is populated. The same contractual shape as
+    # `fee` below: a charge that never enters the basket, is read by no coverage rule, and is
+    # labelled apart so the divergence between the printed total and the line-item sum is
+    # measurable rather than mistaken for an arithmetic defect.
+    #
+    # `None` where the page prints no such row — every Ukrainian class, and an EU page whose
+    # drawn form is the out-of-scope one; `0.00` exactly when the page prints a zero row under
+    # the reverse-charge caption, because what is printed is what is labelled.
+    #
+    # ⛔ THE UKRAINIAN «У т.ч. ПДВ» ROW IS NOT THIS FIELD. That row states the tax CONTAINED in a
+    # gross price — informational, the total unchanged — and carrying it here would give one key
+    # two meanings: a consumer summing `amount - tax` would corrupt exactly the documents where
+    # the subtraction is wrong.
+    tax: Money | None = None
     # The bank's own charge for executing the payment — комісія. `None` on a class that has no
     # such requisite, and NEVER reimbursable: it pays for a banking service rather than for
     # anything a benefit category covers, so no policy limit applies to it.
