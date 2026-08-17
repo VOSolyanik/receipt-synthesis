@@ -1273,8 +1273,43 @@
 #
 #   ⚠️ WHAT A CONSUMER MUST DO: re-vendor, extend its extraction requests with the four fields,
 #   and treat an extracted `subtotal` beside a non-empty `taxes` as the page's own printed
-#   decomposition — never as licence to derive one where the page prints none.
-version: 39
+#   decomposition — never as licence to derive one where the page prints none.#
+# Version 40 is THE EU PAGES LEARNING TO ADD THE TAX ON TOP — a blind spot of the corpus's own
+# construction, closed. ⛔ `config/policy.yaml` IS NOT TOUCHED — no verdict, no cause, no share
+# and no comparison rule moves — so this is NOT an I-2 event. What changes is what two archetypes
+# may print, one label field, and the meaning of `amount` on exactly those pages.
+#
+#   🔴 THE BLIND SPOT FIRST, because it is why the version exists. Every foreign-form document of
+#   this corpus reproduced the Ukrainian tax convention — the tax inside the price, or no tax
+#   block at all — so `Σ line items = amount` held on every subject document BY CONSTRUCTION,
+#   and a validator holding that equation scored perfectly here while flagging honest real
+#   cross-border receipts, which 👁 add the destination tax ON TOP of net prices. A defect of
+#   that shape cannot be found by any corpus this generator produced before it; it had to be
+#   named as a constraint and built.
+#
+#   🔴 THE MECHANISM: the tax treatment is DERIVED FROM THE BUYER'S COUNTRY — the persona's own
+#   jurisdiction axis, not a new persona field. The two EU pages (`eu_invoice`,
+#   `eu_platform_receipt`) draw one of three FORMS of their totals block per document, at the
+#   shares `eu_tax_treatment` in config/generation.yaml declares: the destination tax on top
+#   (`total = subtotal + tax`, the mass form), the out-of-scope form (the old page exactly — no
+#   row, the invoice's foot naming Articles 44 and 59), and reverse charge (a zero row under its
+#   own caption, a sentence in the foot). ⛔ THE RATES ARE PROJECT PARAMETERS for reproducing the
+#   form — `tax_on_top` in config/fiscal-rules.yaml, keyed by buyer country — not statements
+#   about any jurisdiction's tax law; Ukraine's 20% is the one figure cited from published law.
+#
+#   🔴 `amount` IS THE PRINTED TOTAL ON THOSE PAGES, and the new `tax` field is labelled apart —
+#   the `fee`/`total_charged` shape on the subject side — so `amount = Σ line_items + tax` where
+#   the row is printed and the old sentence everywhere else. The payment document beside a
+#   subject page is told the subject's `amount`, so the pair pays the printed total and no
+#   cross-check moves: the draw is FORM, not verdict, and the oracle's covered totals run over
+#   the line items as they always did. New boxes: `tax_amount` on both pages, `vat_note` on the
+#   platform receipt's reverse-charge form (the invoice's `vat_note` box existed and is now
+#   conditional — absent on the tax-on-top form, whose row is the statement).
+#
+#   ⚠️ WHAT A CONSUMER MUST DO: treat `Σ line_items = amount` as `Σ line_items + tax = amount`
+#   with null-as-zero, and stop reading "no tax row" as a property of the EU classes — it is now
+#   a property of one drawn form. A consumer whose arithmetic guard hard-codes the old equation
+#   flags exactly the honest documents this version exists to produce.version: 39
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
@@ -2531,10 +2566,17 @@ document_types:
       `currency: EUR`, a basket in `line_items` (every amount in the document's own
       currency — nothing on the record is converted), `counterparty` the platform's bare
       mark, `payer` the buyer the page names, `date`, and the three fiscality flags all
-      `false`. `vat_letter` is `null` on every line and no tax row is printed: 📄 the page
-      declares «This is not a VAT invoice.», and Article 226 of Directive 2006/112/EC is
-      the list of particulars that declaration licenses it to omit — the supplier's
-      address, both parties' VAT identification numbers, the rate and the amount of tax.
+      `false`. `vat_letter` is `null` on every line: 📄 the page declares «This is not a
+      VAT invoice.», and Article 226 of Directive 2006/112/EC is the list of particulars
+      that declaration licenses it to omit — the supplier's address and both parties' VAT
+      identification numbers among them.
+
+      SINCE VERSION 39 THE EU VARIANT MAY PRINT A TAX ROW ON TOP, and the declaration
+      stays beside it: the row is a statement about the TAX (the destination tax of the
+      buyer's country, one of the three drawn forms of `eu_tax_treatment` in
+      config/generation.yaml), the declaration a statement about the DOCUMENT, and real
+      receipts carry both at once. On exactly those pages `amount` is the printed total,
+      EXCEEDING the line items by the `tax` field's value — see that field's entry.
 
       🔴 THE NEGATIVE MARKER IS A STRING WITH A POSITION — `not_a_tax_invoice_note` in
       `field_bboxes` — which is the other half of RC-08's argument: the Ukrainian slip's
@@ -2553,6 +2595,12 @@ document_types:
         prints quantity and line total only), `subtotal`, `total`,
         `not_a_tax_invoice_note`. `paid_amount` and `total` are one figure printed twice,
         as `amount` and `amount_due` are on the receipt classes.
+
+        SINCE VERSION 39 the EU variant's drawn tax form may add `tax_amount` (the row's
+        figure, the `tax` label field's box) and, on the reverse-charge form only,
+        `vat_note` (the sentence in the foot, under the same box name the cross-border
+        invoice's tax-status sentence carries). Both are absent from the markup — not
+        empty — on the forms that do not print them, so no box points at nothing.
     undecided: >
       For the reason the slip's role is: the consumer's `other` absorbs it mechanically
       and routes the claim to `in_review`, while this class — unlike anything in `other`
@@ -3339,9 +3387,14 @@ document_label:
                                 from the document's summary block. See
                                 `document_types.bank_statement.the_label_is_one_transaction`.
       invariant: >
-        WHERE THE DOCUMENT LISTS ITEMS, this equals Σ(qty × price) over `line_items`, exactly. Fraud
-        and trap archetypes will break that deliberately, and the break is then named in the claim's
-        `imperfection`.
+        WHERE THE DOCUMENT LISTS ITEMS, this equals Σ(qty × price) over `line_items` PLUS `tax`,
+        exactly — and `tax` is null-as-zero on every page that prints no tax-on-top row, so on
+        the whole Ukrainian corpus the sentence still reads "amount = the line items' sum". Since
+        version 39 the two EU pages may add the destination tax on top, and on exactly those
+        documents `amount` EXCEEDS the line items by the printed tax — honestly, by construction,
+        and stated in `tax` so a consumer's arithmetic guard has the row to reconcile with. Fraud
+        and trap archetypes will break the invariant deliberately, and the break is then named in
+        the claim's `imperfection`.
 
         Two classes list nothing, and on them the invariant is vacuous rather than violated: a
         payment confirmation and a bank statement carry an EMPTY `line_items`, which is the statement
@@ -3525,14 +3578,48 @@ document_label:
           instance of it rather than an exception to it.
 
     # ------------------------------------------------------------------------
-    # EIGHT FIELDS THAT ARE `null` ON A FISCAL RECEIPT — six added in version 10 with the second
-    # document class, two in version 11 with the third. One label model serves every class, so a
-    # field a class does not print is null on its records rather than absent — `required: false`
-    # here means the VALUE may be null, never that the key is missing.
+    # NINE FIELDS THAT ARE `null` ON A FISCAL RECEIPT — six added in version 10 with the second
+    # document class, two in version 11 with the third, one in version 39 with the destination
+    # tax. One label model serves every class, so a field a class does not print is null on its
+    # records rather than absent — `required: false` here means the VALUE may be null, never
+    # that the key is missing.
     #
     # EACH ONE'S `null_on` IS PART OF THE CONTRACT, not a remark: it is what tells a consumer
     # whether a missing value is information or a failure to read.
     # ------------------------------------------------------------------------
+
+    - name: tax
+      type: number or null
+      required: false
+      normalize: money
+      status: emitted
+      meaning: >
+        THE TAX PRINTED ON TOP OF THE LINE ITEMS — the destination tax of a cross-border supply,
+        in a row of its own between the subtotal and the total, so that
+        `amount = Σ line_items + tax` exactly where it is populated. The same contractual shape
+        as `fee`, on the subject side: a charge that never enters the basket and that no
+        coverage rule reads — the oracle's covered totals run over the line items alone, so the
+        tax moves no verdict and no covered fraction.
+      cardinality:
+        emitted: >
+          Drawn per document on the two EU pages — `eu_invoice` and `eu_platform_receipt` — at
+          the FORM shares `eu_tax_treatment` in config/generation.yaml declares: the mass form
+          prints a positive figure, the reverse-charge form prints 0.00 under its own caption
+          (and the label carries that zero, because what is printed is what is labelled), and
+          the out-of-scope form prints no row and carries null. The rate behind the positive
+          figure is a parameter of `tax_on_top` in config/fiscal-rules.yaml, keyed by the
+          BUYER's country — ⛔ a project parameter for reproducing the form, not a statement
+          about any jurisdiction's tax law, with Ukraine's 20% the one cited exception.
+      not_the_contained_vat: >
+        ⛔ THE UKRAINIAN «У т.ч. ПДВ» ROW IS NOT THIS FIELD. That row states the tax CONTAINED
+        in a gross price — information, the total unchanged — and it stays unlabelled, as it
+        always was. A consumer subtracting `tax` from `amount` to reach the lines' sum is right
+        exactly where this field is non-null and would corrupt every VAT-inclusive page it
+        touched otherwise; one key for both meanings is how that mistake becomes invisible.
+      null_on: >
+        every class but `invoice` and `platform_receipt`, and within those on every page whose
+        drawn form prints no row — which is every Ukrainian-jurisdiction page and the
+        out-of-scope share of the EU ones.
 
     - name: fee
       type: number or null

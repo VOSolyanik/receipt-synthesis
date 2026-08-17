@@ -203,6 +203,10 @@ Two things worth knowing before editing:
   so the mapping here is a convention, not a statute.
 - **The same item kind takes different rates in different countries.** Medicines are 7% in Ukraine and 5% in
   Poland, but carry the standard 19% rate in Germany. `item_vat_letter` is per jurisdiction for this reason.
+- **One block is deliberately NOT law: `EU.tax_on_top`.** Its rates are project parameters for reproducing
+  the *form* of a cross-border page — a tax added on top, keyed by the buyer's country — not statements
+  about any jurisdiction's tax rules. The one cited exception (Ukraine's 20%) and the reasoning are in the
+  block's own comment.
 
 The UA block carries a `verified_against_own_receipts` list: layout facts confirmed against real receipts, so
 the provenance of each non-obvious detail is auditable. Only layout facts are ever carried over from a real
