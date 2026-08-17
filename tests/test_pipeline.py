@@ -2155,8 +2155,11 @@ def test_a_covered_claim_carries_the_policy_engines_answer(dataset):
     assert claim.verdict_basis == [VerdictBasis.DOCUMENTS]
     assert claim.imperfection == []
     assert claim.policy_trace[0] == f"category={claim.category} ok"
-    assert claim.policy_trace[-2:] == ["period ok", "coverage 100% (all line items covered)"]
-    assert "1 transaction" in claim.policy_trace[1], claim.policy_trace
+    # "period ok" sits at index 1 since the 2026-08-17 reordering: the period is checked
+    # right after the money-moved slot, before the evidence line is written.
+    assert claim.policy_trace[1] == "period ok"
+    assert claim.policy_trace[-1] == "coverage 100% (all line items covered)"
+    assert "1 transaction" in claim.policy_trace[2], claim.policy_trace
 
 
 # ---------------------------------------------------- many claims, one run --

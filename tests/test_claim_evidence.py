@@ -223,9 +223,9 @@ def test_an_invoice_and_its_payment_are_one_transaction_and_one_amount():
     assert result.verdict_basis == (VerdictBasis.DOCUMENTS,)
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
+        "period ok",
         "evidence: 1 transaction — subject c1_d1 (invoice), payment c1_d2 "
         "(payment_confirmation)",
-        "period ok",
         "coverage 100% (all line items covered)",
     )
 
@@ -366,6 +366,9 @@ def test_a_payment_with_nothing_saying_what_it_bought_is_insufficient_evidence()
     assert result.reimbursable == Decimal("0.00")
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
+        # The period runs before the subject slot since the 2026-08-17 reordering: its
+        # only input is the payment date, which this claim has already established.
+        "period ok",
         "evidence: no document states what was bought — payment_confirmation",
     )
 
@@ -376,6 +379,54 @@ def test_a_fiscal_receipt_alone_establishes_both_facts():
     shape = resolve_evidence([receipt("c1_d1", [item("500.00")])])
     assert shape.proves_subject and shape.proves_payment
     assert evaluate([receipt("c1_d1", [item("500.00")])]).verdict is Verdict.COVERED
+
+
+def test_an_out_of_period_payment_with_no_subject_is_rejected_not_insufficient():
+    """The 2026-08-17 reordering, pinned on the claim that separates the two orders.
+
+    A payment confirmation dated outside the window, with nothing saying what it bought,
+    fails TWO rules at once — the period and the what-was-bought slot — and the period now
+    runs first. `rejected`/`outside_period` is terminal; the old answer,
+    `insufficient_evidence`/`subject_not_evidenced`, is repairable and would invite the
+    claimant to supply a subject document for a claim no document can save.
+
+    The period is read off the payment documents themselves here: with no subject, the
+    claim has NO transactions (`resolve_evidence` composes them only when both facts are
+    established), so a period check reading `shape.transactions` would silently pass.
+    """
+    payment = doc(
+        "c1_d1", DocType.PAYMENT_CONFIRMATION, amount="800.00", when=date(2027, 1, 5)
+    )
+
+    result = evaluate([payment])
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == (OUTSIDE_PERIOD,)
+    assert SUBJECT_NOT_EVIDENCED not in result.imperfection
+    assert result.reimbursable == Decimal("0.00")
+    assert any("period" in line for line in result.policy_trace)
+
+
+def test_an_out_of_period_payment_beats_a_cross_document_disagreement():
+    """The other half of the same pin: the period also outranks the linkage slot.
+
+    An invoice and a payment that disagree on the amount, where the payment is also dated
+    outside the window. Before the reordering this answered
+    `insufficient_evidence`/`amount_mismatch`; the terminal refusal now wins, and the
+    disagreement is never reached.
+    """
+    invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")])
+    payment = doc(
+        "c1_d2", DocType.PAYMENT_CONFIRMATION, amount="1000.00", when=date(2027, 1, 5)
+    )
+
+    result = evaluate([invoice, payment])
+
+    assert result.verdict is Verdict.REJECTED
+    assert result.imperfection == (OUTSIDE_PERIOD,)
+    assert AMOUNT_MISMATCH not in result.imperfection
+    assert not any("disagree" in line for line in result.policy_trace)
+    assert any("period" in line for line in result.policy_trace)
 
 
 # ------------------------------------------------ C, D: dates ------------------
@@ -501,6 +552,7 @@ def test_a_payment_may_not_precede_the_document_it_settles():
     assert OUTSIDE_PERIOD not in result.imperfection, "both dates are inside the window"
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
+        "period ok",
         "evidence: 1 transaction — subject c1_d1 (invoice), payment c1_d2 "
         "(payment_confirmation)",
         "documents disagree: payment c1_d2 dated 2026-06-01 precedes c1_d1 dated 2026-06-10",
@@ -1612,7 +1664,7 @@ def test_the_claim_label_of_a_two_document_claim_is_linked():
     assert label.reimbursable_amount == Decimal("1200.00")
     assert label.imperfection == []
     assert label.verdict_basis == [VerdictBasis.DOCUMENTS]
-    assert label.policy_trace[1] == (
+    assert label.policy_trace[2] == (
         "evidence: 1 transaction — subject p001_c1_d1 (invoice), "
         "payment p001_c1_d2 (payment_confirmation)"
     )
