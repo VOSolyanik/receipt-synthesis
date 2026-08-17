@@ -534,6 +534,40 @@ def invoice_count_range(name: str) -> tuple[int, int]:
     return low, high
 
 
+# --- the EU pages' tax treatment ------------------------------------------------
+#
+# One draw shared by the two EU-page classes — the cross-border invoice and the platform
+# receipt's English variant — split across the two files exactly as every other drawn requisite
+# is: WHAT each form prints is `tax_on_top` in config/fiscal-rules.yaml, HOW OFTEN each form is
+# drawn is `eu_tax_treatment` in config/generation.yaml.
+
+
+@cache
+def tax_on_top_rules() -> dict[str, Any]:
+    """The `tax_on_top` block of the EU jurisdiction — rate parameters and row captions.
+
+    ⛔ THE RATES ARE PROJECT PARAMETERS for reproducing the form of a page, not statements about
+    any jurisdiction's tax law. The block's own comment in config/fiscal-rules.yaml carries the
+    one exception — Ukraine's 20%, cited from published law — and the reasoning; this accessor
+    repeats the boundary so no caller reads a figure here as legal fact.
+    """
+    return jurisdiction("EU")["tax_on_top"]
+
+
+@cache
+def eu_tax_treatment_shares() -> dict[str, float]:
+    """How the three forms of an EU page's totals block are drawn, as weights by form name.
+
+    In file order, which is what keeps a seeded draw over it reproducible — the same rule
+    `initiation_shares` follows, and the same shape: the caller draws by name and the name
+    selects what `content_builder.draw_tax_treatment` prints.
+    """
+    return {
+        str(name): float(share)
+        for name, share in load_generation()["eu_tax_treatment"]["form_shares"].items()
+    }
+
+
 @cache
 def phone_prefixes() -> tuple[str, ...]:
     """📄 The mobile prefixes of the national numbering plan.
