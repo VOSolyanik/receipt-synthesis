@@ -1457,9 +1457,8 @@ def evaluate_claim(
 
     # -- one transaction, settled in parts. AFTER THE PERIOD AND BEFORE COVERAGE, which is a
     # precedence policy.yaml decides and this code follows — `partial_payment.outside_the_period`
-    # there, with the reasoning in the paragraphs above it. In one line: the evidence verdicts come
-    # first because a claim that has established nothing cannot be assessed at all, and among the
-    # POLICY verdicts the period is prior, because it answers whether the plan covers this expense
+    # there, with the reasoning in the paragraphs above it. In one line: among the POLICY
+    # verdicts the period is prior, because it answers whether the plan covers this expense
     # while `partially_paid` is a statement about a claim the plan does cover.
     #
     # 🔴 THE DISCRIMINATION FROM `amount_mismatch` DOES NOT LIVE HERE and is unaffected by this
