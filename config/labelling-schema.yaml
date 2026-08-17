@@ -4660,7 +4660,7 @@ verdicts:
       own; everything from here down is for a reader who has already classified and is checking
       themselves, and that is the only reason it may name another verdict at all. Two other
       artifacts fence this same history the same way: `policy_engine`'s module docstring does it
-      at rule 4, and the `Verdict` class docstring in `schemas.py` does it in the paragraph that
+      at rule 3, and the `Verdict` class docstring in `schemas.py` does it in the paragraph that
       follows this verdict's two axis bullets.
 
       WAS `insufficient_evidence` UNTIL THIS REVISION, AND THE CHANGE IS A CONTRACT CHANGE —
