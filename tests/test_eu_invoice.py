@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import random
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
@@ -26,11 +26,13 @@ from receipt_synth.claim_planner import (
     evidence_of,
 )
 from receipt_synth.config import (
+    eu_tax_treatment_shares,
     jurisdiction,
     load_fx_rates,
     load_generation,
     load_vendors,
     partial_payment_schedules,
+    tax_on_top_rules,
 )
 from receipt_synth.content_builder import (
     build_eu_invoice,
@@ -61,6 +63,23 @@ def make(seed: int = 20260610, vendor: dict = PLATFORM, **kwargs):
         buyer_tax_id="2345678901",
         **kwargs,
     )
+
+
+def form_of(document) -> str:
+    """Which of the three tax forms this page took, read off what it stores — the same three
+    names `eu_tax_treatment` in config/generation.yaml draws by."""
+    if document.tax_amount is None:
+        return "out_of_scope"
+    return "reverse_charge" if document.tax_amount == 0 else "tax_on_top"
+
+
+def seed_in_form(form: str) -> int:
+    """A seed whose drawn treatment is `form` — found by scanning rather than pinned, so a share
+    edit cannot silently leave a test asserting against the wrong form."""
+    for seed in range(400):
+        if form_of(make(seed)) == form:
+            return seed
+    raise AssertionError(f"no seed in 0..399 draws the {form!r} form — the draw is broken")
 
 
 @pytest.fixture(scope="module")
@@ -217,18 +236,120 @@ def test_the_account_that_makes_it_payable_is_the_claims_own(rendered):
     assert document.bank_name in rendered.reference_text
 
 
-def test_no_tax_row_and_a_sentence_saying_under_which_provisions(rendered):
-    """📄 Articles 44 and 59 place this supply outside the scope of EU VAT, so Article 226's tax
-    particulars do not apply. A zero row would assert that a rate was applied; the note asserts
-    that none was, and names what decides it."""
-    text = rendered.reference_text
-
-    assert "vat_note" in rendered.field_bboxes
-    assert "VAT not charged" in text
-    assert "2006/112/EC" in text
+def test_no_seller_identification_at_any_rate_of_drawing(rendered):
+    """⛔ No VAT identification number and no tax code, WHATEVER THE DRAWN TAX FORM — the absences
+    the config block argues for are absences of the class, not of one form of its totals block."""
     assert "vat_amount" not in rendered.field_bboxes
     assert "seller_vat_number" not in rendered.field_bboxes
     assert "seller_tax_code" not in rendered.field_bboxes
+
+
+# ============================================ the tax treatment — three forms of one block ==
+
+
+def test_all_three_tax_forms_are_reachable_and_each_ones_arithmetic_holds():
+    """🔴 THE FORM THE CORPUS LACKED BY CONSTRUCTION, plus the two no-tax forms kept reachable.
+    The mass form adds the destination tax ON TOP, so the printed total EXCEEDS the line items —
+    the honest foreign page a validator holding `Σ lines = total` flags falsely. Which form a
+    seed draws is `eu_tax_treatment` in config/generation.yaml; each form's own invariants are
+    asserted per document, and all three must occur or the draw is broken."""
+    assert set(eu_tax_treatment_shares()) == {"tax_on_top", "out_of_scope", "reverse_charge"}
+
+    seen = set()
+    for seed in range(120):
+        document = make(seed)
+        form = form_of(document)
+        seen.add(form)
+        if form == "tax_on_top":
+            assert document.tax_amount > 0
+            assert document.total == document.subtotal + document.tax_amount
+            assert document.vat_note is None, (
+                "the out-of-scope sentence beside a charged rate would contradict the row"
+            )
+        elif form == "reverse_charge":
+            assert document.tax_amount == Decimal("0.00")
+            assert document.total == document.subtotal
+            assert "reverse charge" in document.tax_label
+            assert document.vat_note == tax_on_top_rules()["reverse_charge_note"]
+        else:
+            assert document.tax_label is None and document.tax_amount is None
+            assert document.total == document.subtotal
+            assert document.vat_note == jurisdiction("EU")["invoice"]["vat_note"]
+    assert seen == {"tax_on_top", "out_of_scope", "reverse_charge"}
+
+
+def test_the_rate_is_the_buyer_countrys_parameter_and_follows_a_relocation():
+    """The treatment is DERIVED from the buyer's country — the persona's own axis, not a new
+    field. Ukraine's 20% is the one figure this repository cites from published law; the other
+    entries are ⛔ project parameters for the form, asserted here only to be what the config
+    declares, never to be anybody's law."""
+    rates = tax_on_top_rules()["rate_by_buyer_country"]
+    seed = seed_in_form("tax_on_top")
+    document = make(seed)
+
+    assert rates["UA"] == 20.0
+    assert document.tax_label == "VAT (20%)"
+    assert document.tax_amount == (document.subtotal * Decimal("20") / 100).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    assert document.buyer_country == "Ukraine"
+
+    # Same seed, same draw stream, one changed axis: the same form comes out — the treatment
+    # draw sits at the same position — with the other country's parameter and exonym.
+    relocated = make(seed, buyer_country=Country.DE)
+    assert form_of(relocated) == "tax_on_top"
+    assert relocated.buyer_country == "Germany"
+    rate = Decimal(str(rates["DE"]))
+    assert relocated.tax_label == f"VAT ({float(rate):g}%)"
+    assert relocated.tax_amount == (relocated.subtotal * rate / 100).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+
+def test_the_tax_on_top_page_prints_the_row_and_no_out_of_scope_sentence(renderer, tmp_path):
+    """What is printed is what is labelled: the row's figure carries its own box, the total is
+    the sum, and the foot is ABSENT — no rule over an empty block, no sentence contradicting the
+    rate above it."""
+    document = make(seed_in_form("tax_on_top"))
+    page = renderer.render(SLUG, document.render_context(), tmp_path / "on-top.png")
+    text = page.reference_text.replace(",", "")
+
+    assert "tax_amount" in page.field_bboxes
+    assert "vat_note" not in page.field_bboxes
+    assert document.tax_label in page.reference_text
+    assert f"{document.tax_amount:.2f}" in text
+    assert f"{document.subtotal:.2f}" in text
+    assert f"{document.total:.2f}" in text
+    assert "VAT not charged" not in page.reference_text
+
+
+def test_the_out_of_scope_page_is_the_old_page_exactly(renderer, tmp_path):
+    """📄 Articles 44 and 59 place this supply outside the scope of EU VAT, so Article 226's tax
+    particulars do not apply: no row, and the note names what decides it — the whole class's only
+    form before the tax-on-top states landed, still reachable at its configured share."""
+    document = make(seed_in_form("out_of_scope"))
+    page = renderer.render(SLUG, document.render_context(), tmp_path / "out-of-scope.png")
+    text = page.reference_text
+
+    assert "vat_note" in page.field_bboxes
+    assert "VAT not charged" in text
+    assert "2006/112/EC" in text
+    assert "tax_amount" not in page.field_bboxes
+
+
+def test_the_reverse_charge_page_prints_a_zero_row_and_says_who_accounts(renderer, tmp_path):
+    """The third form: the row is there, the figure is 0.00, and the foot carries the sentence —
+    a page asserting a mechanism rather than omitting a block, which is a different document from
+    either of the other two."""
+    document = make(seed_in_form("reverse_charge"))
+    page = renderer.render(SLUG, document.render_context(), tmp_path / "reverse.png")
+
+    assert "tax_amount" in page.field_bboxes
+    assert "vat_note" in page.field_bboxes
+    assert document.tax_label in page.reference_text
+    assert "0.00" in page.reference_text
+    assert tax_on_top_rules()["reverse_charge_note"] in page.reference_text
+    assert f"{document.total:.2f}" in page.reference_text.replace(",", "")
 
 
 def test_the_seller_carries_its_own_registers_designation_and_no_ukrainian_code(rendered):
@@ -287,7 +408,6 @@ def test_the_label_is_the_ukrainian_invoices_record_in_another_currency():
     assert truth.doc_type is DocType.INVOICE
     assert truth.currency == "EUR"
     assert truth.language == "en"
-    assert truth.amount == line_items_total(document.line_items)
     assert truth.document_code == document.number
     assert truth.counterparty == "italki"
     assert truth.payer == "Ковальчук Олена Петрівна"
@@ -296,6 +416,23 @@ def test_the_label_is_the_ukrainian_invoices_record_in_another_currency():
     assert truth.qr_is_fiscal is False
     assert truth.has_fiscal_number is False
     assert all(line.vat_letter is None for line in truth.line_items)
+
+
+def test_the_label_amount_is_the_printed_total_and_the_tax_is_labelled_apart():
+    """🔴 `amount` IS WHAT THE PAGE ASKS FOR — the payment document beside it is told exactly this
+    figure (`assembler._amount_the_payment_states`), so the pair stays one transaction whichever
+    form the totals block drew. `tax` is labelled apart so `amount = Σ line items + tax` is a
+    checkable statement rather than a broken invariant, on every form."""
+    for form in ("tax_on_top", "out_of_scope", "reverse_charge"):
+        document = make(seed_in_form(form))
+        truth = document.ground_truth(
+            doc_id="d1", source_file="d1.png", capture=Capture.DIGITAL_PDF, field_bboxes={}
+        )
+        assert truth.amount == document.total, form
+        assert truth.tax == document.tax_amount, form
+        assert truth.amount == line_items_total(document.line_items) + (
+            truth.tax or Decimal(0)
+        ), form
 
 
 def test_the_line_names_are_english():

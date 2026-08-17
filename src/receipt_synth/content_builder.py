@@ -42,6 +42,7 @@ from receipt_synth.config import (
     bank_statement_share,
     banks,
     category,
+    eu_tax_treatment_shares,
     every_vendor,
     excluded_line_counts,
     fiscal_makers,
@@ -61,11 +62,13 @@ from receipt_synth.config import (
     price_range,
     quantity_choices,
     statement_purposes,
+    tax_on_top_rules,
     unprintable_item_kinds,
     vendor_profile,
 )
 from receipt_synth.schemas import (
     Capture,
+    Country,
     Direction,
     DocGroundTruth,
     DocType,
@@ -3997,6 +4000,104 @@ def build_non_fiscal_receipt(
     )
 
 
+# =============================================================================
+# The destination tax of the EU pages — one draw, two document classes
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class TaxTreatment:
+    """What an EU page's totals block says about the tax — one of three drawn FORMS.
+
+    A digital service is taxed where its consumer is, so which form a page takes is DERIVED from
+    the buyer's country rather than being a new fact about the seller or the persona: a Ukrainian
+    resident's page adds the tax on top at the UA rate parameter, a relocated buyer's at their
+    own country's, and a business customer under reverse charge sees no charge at all. The three:
+
+    * `tax_on_top` — a row and a positive figure between the subtotal and the total, so the
+      printed total EXCEEDS the line items: `total = subtotal + tax`. 👁 The form the author's
+      own cross-border platform receipts print, and the one the corpus lacked by construction
+      while every EU page reproduced the out-of-scope convention only;
+    * `out_of_scope` — no row (`label is None`): the old page exactly, whose licence to omit the
+      block each EU class argues in its own terms;
+    * `reverse_charge` — a row whose caption names the mechanism, a figure of 0.00, and the
+      sentence `note()` returns in the foot.
+
+    🔴 FORM, NOT VERDICT, which is what licenses a drawn share at all: the oracle's
+    `policy_engine.covered_total` runs over the LINE ITEMS alone, and the payment document beside
+    a subject page is told the PRINTED total whichever form came out
+    (`assembler._amount_the_payment_states` reads the subject's `amount`) — so the draw moves
+    pixels and the `tax` label field, never a verdict.
+
+    ⛔ THE RATES BEHIND `amount` ARE PROJECT PARAMETERS, not statements about any jurisdiction's
+    tax law — `tax_on_top` in config/fiscal-rules.yaml carries the boundary and the one cited
+    exception (Ukraine's 20%).
+    """
+
+    form: str
+    # `label` and `amount` are None together — a row is a caption AND a figure, and an absent row
+    # is absent whole, exactly as its box is absent from the labelling rather than empty.
+    label: str | None
+    amount: Decimal | None
+
+    def note(self, *, out_of_scope: str | None) -> str | None:
+        """The one tax-status sentence of the page's foot, or None for a foot without one.
+
+        The reverse-charge sentence is the treatment's own — one wording for every EU class,
+        read from config. What the OUT-OF-SCOPE form says is the CLASS's business, which is why
+        it arrives as an argument: the invoice names Articles 44 and 59 there, and the platform
+        receipt says nothing — a receipt records a payment and argues no law.
+        """
+        if self.form == "reverse_charge":
+            return str(tax_on_top_rules()["reverse_charge_note"])
+        if self.form == "out_of_scope":
+            return out_of_scope
+        return None
+
+
+def draw_tax_treatment(
+    rng: random.Random, *, buyer_country: Country, subtotal: Decimal
+) -> TaxTreatment:
+    """Draw which of the three forms this page takes, and compute what its row prints.
+
+    ONE WEIGHTED DRAW WHATEVER THE OUTCOME, so a seed's stream does not depend on which form
+    came out — the same discipline every conditional requisite of this module follows. The
+    weights are `eu_tax_treatment` in config/generation.yaml, in file order; the captions and
+    the rate parameters are `tax_on_top` in config/fiscal-rules.yaml.
+
+    The figure rounds half up at the kopiyka, as `EuInvoice.instalment_amount` does: a derived
+    printed amount takes the module's one explicit rounding rather than the context default.
+    """
+    shares = eu_tax_treatment_shares()
+    form = rng.choices(list(shares), weights=list(shares.values()), k=1)[0]
+    rules = tax_on_top_rules()
+    if form == "tax_on_top":
+        by_country = rules["rate_by_buyer_country"]
+        if buyer_country.value not in by_country:
+            raise KeyError(
+                f"config/fiscal-rules.yaml declares no `tax_on_top.rate_by_buyer_country` entry "
+                f"for {buyer_country.value!r}; it has {sorted(by_country)}"
+            )
+        rate = Decimal(str(by_country[buyer_country.value]))
+        return TaxTreatment(
+            form=form,
+            label=rules["label_format"].format(rate=f"{float(rate):g}"),
+            amount=(subtotal * rate / 100).quantize(KOPIYKA, rounding=ROUND_HALF_UP),
+        )
+    if form == "reverse_charge":
+        return TaxTreatment(
+            form=form, label=str(rules["reverse_charge_label"]), amount=Decimal("0.00")
+        )
+    if form == "out_of_scope":
+        return TaxTreatment(form=form, label=None, amount=None)
+    # A form named in the shares that nothing here prints would silently become a no-row page —
+    # a config edit choosing a form by omission, which is exactly what this refuses.
+    raise KeyError(
+        f"config/generation.yaml draws the tax-treatment form {form!r}, and "
+        "`content_builder.draw_tax_treatment` prints no such form"
+    )
+
+
 @dataclass(frozen=True)
 class PlatformReceipt:
     """One platform receipt — an online platform's own page for a paid order.
@@ -4309,11 +4410,15 @@ class EuInvoice:
     conversion runs through a cross-document check for the first time.
 
     📄 NOT A VAT INVOICE, AND FOR A DIFFERENT REASON FROM THE PLATFORM RECEIPT'S. That page
-    declares itself not to be one; this one IS an invoice, for a supply Articles 44 and 59 of
-    Directive 2006/112/EC place outside the scope of EU VAT — so Article 226's tax particulars do
-    not apply to it and the note in the foot says which provisions decide that. Two documents, two
-    routes to the same absence of a tax row, which is exactly the distinction a consumer that
-    classifies on a tax block has to make.
+    declares itself not to be one; this one IS an invoice, and what its totals block says about
+    the tax is DRAWN — one of the three forms `TaxTreatment` carries, derived from the buyer's
+    country. The mass form adds the destination tax ON TOP, so `total = subtotal + tax` and the
+    printed total exceeds the line items — honestly, which is what the corpus could not show
+    before this form existed. The out-of-scope form is the old page exactly: no row, and the foot
+    names Articles 44 and 59 of Directive 2006/112/EC, the provisions that place the supply
+    outside the scope of EU VAT. The reverse-charge form prints a zero row and says who accounts
+    for the tax. Three forms of one block, which is exactly the variation a consumer that
+    classifies or checks arithmetic on a tax block has to survive.
 
     ⛔ NO PAYMENT STATUS, EVER. The class states an obligation and a date by which it should be
     settled; whether it was is what the document beside it establishes. A "Paid" mark here would
@@ -4341,16 +4446,39 @@ class EuInvoice:
     # It is printed because a document nobody could pay is not an offer to pay.
     iban: str
     bank_name: str
-    vat_note: str
+    # THE ONE TAX-STATUS SENTENCE OF THE FOOT, or None for a foot the template omits whole. Which
+    # sentence follows the drawn form (see `TaxTreatment.note`): the out-of-scope page names
+    # Articles 44 and 59, the reverse-charge page says who accounts for the tax, and the
+    # tax-on-top page prints NO sentence — its row IS the statement, and the out-of-scope wording
+    # beside a charged rate would contradict the figure above it.
+    vat_note: str | None
+    # THE TAX ROW OF THE TOTALS BLOCK — `TaxTreatment`'s caption and figure, None together where
+    # the drawn form prints no row. Kept as two plain fields rather than the treatment object so
+    # the class stores exactly what the page prints, as every other class of this module does.
+    tax_label: str | None = None
+    tax_amount: Decimal | None = None
     # Present exactly when the plan asked for an obligation settled in parts — see
     # `claim_planner.STATES_AN_INSTALMENT_TERM`. Never drawn here: it decides a marker the oracle
     # reads, so a builder that drew it would be choosing a claim's verdict.
     schedule: str | None = None
 
     @property
-    def total(self) -> Decimal:
+    def subtotal(self) -> Decimal:
         """Σ over the line items — derived, for the reason every other total in this module is."""
         return line_items_total(self.line_items)
+
+    @property
+    def total(self) -> Decimal:
+        """What the page asks to be paid: the line items plus any tax printed on top.
+
+        🔴 NO LONGER Σ OVER THE LINE ITEMS ALONE, and that is the whole point of the tax-on-top
+        form: a real cross-border page whose total exceeds its lines is honest, and a corpus in
+        which `Σ lines = total` held on every document could not test a consumer against it.
+        Derived rather than stored so the three figures cannot drift — the same reasoning as
+        `PaymentConfirmation.total_charged`, whose `amount ≠ total_charged` this mirrors on the
+        subject side.
+        """
+        return (self.subtotal + (self.tax_amount or Decimal(0))).quantize(KOPIYKA)
 
     @property
     def instalment_amount(self) -> Decimal | None:
@@ -4405,7 +4533,14 @@ class EuInvoice:
                 }
                 for item in self.line_items
             ],
-            "subtotal": self._amount(self.total),
+            "subtotal": self._amount(self.subtotal),
+            # The row between them — see `TaxTreatment`. A dict or None, so the template's
+            # conditional mirrors the class: an absent row is absent whole.
+            "tax": (
+                None
+                if self.tax_amount is None
+                else {"label": self.tax_label, "amount": self._amount(self.tax_amount)}
+            ),
             "total": self._amount(self.total),
             # A caption and a money value, so the amount carries a box of its own rather than
             # being scored inside a sentence.
@@ -4438,10 +4573,13 @@ class EuInvoice:
     ) -> DocGroundTruth:
         """The label record for this invoice — the Ukrainian invoice's record in another currency.
 
-        Same class, same fields, same meanings: `amount` is the total, `document_code` is the
-        printed number a payment's purpose cites, `instalment_amount` is populated exactly when
-        the page prints the term. What differs is `currency` and `language`, which is the whole
-        point of the archetype.
+        Same class, same fields, same meanings: `amount` is the PRINTED total — the line items
+        plus any tax on top, because the total is what the page asks for and what the payment
+        document beside it states — `document_code` is the printed number a payment's purpose
+        cites, `instalment_amount` is populated exactly when the page prints the term. `tax` is
+        the row between the subtotal and the total, labelled apart so `amount ≠ Σ line items` is
+        measurable where it is true (see the field in `schemas.DocGroundTruth`). What differs
+        from the рахунок is `currency` and `language`, which is the whole point of the archetype.
         """
         rules = jurisdiction("EU")
         return DocGroundTruth(
@@ -4451,6 +4589,7 @@ class EuInvoice:
             language=rules["language"],
             currency=rules["currency"],
             amount=self.total,
+            tax=self.tax_amount,
             instalment_amount=self.instalment_amount,
             date=self.issued_at.date(),
             counterparty=self.seller_name,
@@ -4477,6 +4616,7 @@ def build_eu_invoice(
     identity: PartyIdentity,
     buyer_name: str,
     buyer_tax_id: str,
+    buyer_country: Country = Country.UA,
     address: str = "",
     covered_only: bool = True,
     coverage_target: Decimal | None = None,
@@ -4497,9 +4637,18 @@ def build_eu_invoice(
 
     * `buyer_tax_id` — 📄 the customer's VAT identification number is an Article 226 particular of
       a VAT invoice, and this is not one; the customer is in any case a private individual.
+      ⛔ The reverse-charge form does NOT change this: the drawn note states the mechanism and
+      the page still prints no number for it, because the buyer whose number it would be is a
+      private person whose РНОКПП belongs on no cross-border invoice.
     * `address` — the assembler's address slot holds the CLAIMANT's city, which is the seller's
       own on a domestic claim and nobody's here. ⛔ Inventing a seat for a named real platform is
       a checkable claim about a real firm, which this repository does not make.
+
+    `buyer_country` IS THE AXIS THE TAX TREATMENT DERIVES FROM — the persona's own country,
+    printed under the buyer's name AND deciding which rate parameter a tax-on-top page charges
+    (see `TaxTreatment`). Defaulted to UA because every persona of today's corpus is a Ukrainian
+    resident; the assembler passes the persona's country either way, so a relocated persona
+    changes this page without this builder being touched.
 
     `identity` IS PRINTED, and it is the one identity field this class carries: the seller's IBAN
     and the bank holding it, drawn once for the claim so the payment document settling this
@@ -4521,15 +4670,21 @@ def build_eu_invoice(
         document="an invoice",
         category_id=category_id,
         vendor=vendor,
-        # ⛔ NO LINE CARRIES A VAT LETTER and no tax row is printed: the supply is outside the
-        # scope of EU VAT and the foot says under which provisions. A zero row would assert that
-        # a rate was applied.
+        # ⛔ NO LINE CARRIES A VAT LETTER, whatever the drawn tax treatment: the letter is a
+        # requisite of the Ukrainian fiscal receipt's line, and the tax this page may charge
+        # stands in ONE row of the totals block (see `TaxTreatment`), never per line.
         vat_payer=False,
         covered_only=covered_only,
         coverage_target=coverage_target,
         item_count=item_count,
         language=rules["language"],
         currency=rules["currency"],
+    )
+
+    # The tax treatment, drawn AFTER the basket because its figure is a rate over the lines and
+    # BEFORE the due date so the two draws keep their positions whatever either returns.
+    treatment = draw_tax_treatment(
+        rng, buyer_country=buyer_country, subtotal=line_items_total(items)
     )
 
     due_at = issued_at + timedelta(days=rng.randint(*invoice_count_range("due_days")))
@@ -4540,14 +4695,18 @@ def build_eu_invoice(
         seller_name=vendor["name"],
         seller_display=printed_legal_name(vendor["name"], vendor["legal_form"]),
         buyer_name=buyer_name,
-        buyer_country=rules["country_names"]["UA"],
+        buyer_country=rules["country_names"][buyer_country.value],
         issued_at=issued_at,
         due_at=due_at,
         number=block["number"]["prefix"] + _draw_from_pattern(rng, block["number"]["pattern"]),
         line_items=items,
         iban=identity.account,
         bank_name=identity.bank_name,
-        vat_note=block["vat_note"],
+        # The out-of-scope sentence is this class's own — an invoice argues its tax treatment,
+        # and 📄 Articles 44 and 59 are the provisions the `vat_note` in fiscal-rules names.
+        vat_note=treatment.note(out_of_scope=block["vat_note"]),
+        tax_label=treatment.label,
+        tax_amount=treatment.amount,
         schedule=schedule,
     )
 

@@ -1435,12 +1435,13 @@ jurisdictions:
     #
     # 📄 WHAT THE LAW SAYS AND WHERE IT STOPS. Article 226 of Directive 2006/112/EC lists the
     # particulars of an invoice issued under the VAT Directive, and Articles 44 and 59 place the
-    # supply of these services to a customer OUTSIDE the Community outside the scope of EU VAT —
-    # so no invoice is required under Article 220 and none of Article 226's tax particulars apply.
-    # The page therefore carries the commercially ordinary content and says, in one line, why it
-    # charges no tax. This is the same argument `platform_receipt` above makes for its omissions,
-    # reached from the other end: that document declares itself not a VAT invoice, this one is an
-    # invoice for a supply the tax does not reach.
+    # supply of these services to a customer OUTSIDE the Community outside the scope of EU VAT.
+    # WHAT THE TOTALS BLOCK SAYS ABOUT THE TAX IS DRAWN — one of the three forms of `tax_on_top`
+    # above, derived from the buyer's country: the mass form charges the destination tax ON TOP
+    # of the prices, the out-of-scope form prints no row and states the `vat_note` below, and
+    # the reverse-charge form prints a zero row with its own sentence. The platform receipt
+    # varies the same way; what stays fixed on it is the not-a-tax-invoice declaration, which is
+    # a statement about the DOCUMENT where this block's forms are statements about the TAX.
     #
     # ⛔ WHAT IS NOT PRINTED, and each absence is a decision:
     #
@@ -1448,10 +1449,11 @@ jurisdictions:
     #     is the seller's own on a domestic claim and nonsense on this one. Inventing a seat for
     #     a named real platform would be a checkable claim about a real firm, which this
     #     repository does not make — the same refusal `templates/ua_platform_receipt.html` records.
-    #   * NO VAT IDENTIFICATION NUMBER, on either side. config/vendors.json declares every seller
-    #     of the `EU` pool `vat_payer: false` because the flag drives PRINTED requisites, and the
-    #     customer is a private individual with none to state.
-    #   * NO TAX ROW. A zero row would assert a rate was applied; the note asserts that none was.
+    #   * NO VAT IDENTIFICATION NUMBER, on either side, WHATEVER THE DRAWN TAX FORM.
+    #     config/vendors.json declares every seller of the `EU` pool `vat_payer: false` because
+    #     the flag drives PRINTED Ukrainian requisites, and the customer is a private individual
+    #     with none to state — the reverse-charge form included: its sentence names the
+    #     mechanism, and no number is invented to sit beside it.
     #
     # ⚠️ THE LAYOUT IS ONE ARRANGEMENT and no platform's is reproduced — the limit the whole
     # English page style carries, stated in templates/platform_receipt.css.
@@ -1485,10 +1487,12 @@ jurisdictions:
         bank: "Bank"
         reference: "Payment reference"
 
-      # 📄 The sentence that stands where a rate and a tax amount would. It names the provisions
-      # rather than merely asserting the outcome, which is what Article 226(11) requires of an
-      # invoice that charges no tax under an exemption — the nearest published form for saying
-      # this, applied to a supply the Directive does not reach at all.
+      # 📄 The sentence of the OUT-OF-SCOPE form — printed exactly when the drawn treatment
+      # charges no tax and prints no row (see `tax_on_top` above; the other two forms carry
+      # their own statements). It names the provisions rather than merely asserting the outcome,
+      # which is what Article 226(11) requires of an invoice that charges no tax under an
+      # exemption — the nearest published form for saying this, applied to a supply the
+      # Directive does not reach at all.
       vat_note: >-
         VAT not charged: supply of services to a customer outside the European Union
         (Articles 44 and 59, Directive 2006/112/EC).

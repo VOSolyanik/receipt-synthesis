@@ -12,9 +12,12 @@
 
   📄 WHAT THE LAW REQUIRES AND WHERE IT STOPS is argued once, in the `invoice` block of the EU
   jurisdiction in config/fiscal-rules.yaml, and not repeated here: Article 226 of Directive
-  2006/112/EC lists the particulars of an invoice under the VAT Directive, Articles 44 and 59 put
-  this supply outside its scope, and the foot of the page names those provisions where a rate and
-  a tax amount would otherwise stand.
+  2006/112/EC lists the particulars of an invoice under the VAT Directive. WHAT THE TOTALS BLOCK
+  SAYS ABOUT THE TAX IS DRAWN — `content_builder.TaxTreatment`, derived from the buyer's country:
+  the mass form adds the destination tax ON TOP (`total = subtotal + tax`), the out-of-scope form
+  prints no row and the foot names Articles 44 and 59, and the reverse-charge form prints a zero
+  row with its sentence. The rate parameters and their ⛔ not-legal-fact boundary are `tax_on_top`
+  in config/fiscal-rules.yaml.
 
   ⛔ NO SUPPLIER ADDRESS AND NO VAT NUMBER ON EITHER SIDE — decisions, each recorded where its
   reason lives. ⛔ AND NO PAYMENT STATUS AT ANY RATE OF DRAWING: the page has a date by which it
@@ -119,12 +122,24 @@
 
   {# 🔴 THE CURRENCY CODE TRAVELS WITH EVERY AMOUNT, as it does on the platform receipt: the
      moment a corpus holds two currencies a bare figure is ambiguous on the page in exactly the
-     way it is ambiguous in a label. ⛔ NO TAX ROW — see the note in the foot. #}
+     way it is ambiguous in a label. #}
   <section class="totals">
     <div class="row">
       <span class="caption">{{ labels.subtotal }}</span>
       <span class="mono"><span data-field="subtotal">{{ subtotal }}</span>&nbsp;{{ currency }}</span>
     </div>
+    {# THE TAX ROW — one of three drawn forms of this block (`content_builder.TaxTreatment`):
+       the destination tax added ON TOP, so the total below EXCEEDS the line items; a zero
+       figure under the reverse-charge caption; or no row at all, when the foot's sentence
+       carries the out-of-scope treatment instead. The label `tax` carries exactly what the
+       figure prints, and an absent row is absent from the markup rather than rendered empty,
+       so no bounding box points at nothing. #}
+    {% if tax %}
+    <div class="row">
+      <span class="caption">{{ tax.label }}</span>
+      <span class="mono"><span data-field="tax_amount">{{ tax.amount }}</span>&nbsp;{{ currency }}</span>
+    </div>
+    {% endif %}
     <div class="row grand">
       <span>{{ labels.total }}</span>
       <span class="mono">{{ total }}&nbsp;{{ currency }}</span>
@@ -155,13 +170,18 @@
     <div class="muted">{{ labels.reference }}: <span class="mono" data-field="payment_reference">{{ reference }}</span></div>
   </section>
 
-  {# 📄 THE SENTENCE THAT STANDS WHERE A RATE AND A TAX AMOUNT WOULD, naming the provisions that
-     put the supply outside the scope of the tax. The platform receipt's foot carries the other
-     route to the same absence — a document declaring itself not a VAT invoice — and the pair is
-     what a consumer classifying on a tax block has to tell apart. #}
+  {# THE ONE TAX-STATUS SENTENCE OF THE PAGE, following the drawn form of the totals block:
+     📄 the out-of-scope page names the provisions (Articles 44 and 59) where a rate and a tax
+     amount would otherwise stand, the reverse-charge page says who accounts for the tax, and
+     the tax-on-top page prints NO sentence — its row is the statement, so the whole foot is
+     conditional. An unconditional <footer> would draw its top rule over an empty block on
+     every tax-on-top page — the platform receipt's foot learned this first and states it in
+     the same words. #}
+  {% if vat_note %}
   <footer class="foot">
     <div class="notice" data-field="vat_note">{{ vat_note }}</div>
   </footer>
+  {% endif %}
 
 </div>
 </body>
