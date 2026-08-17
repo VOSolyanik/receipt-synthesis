@@ -3556,6 +3556,7 @@ def build_invoice(
     identity: PartyIdentity,
     buyer_name: str,
     buyer_tax_id: str,
+    buyer_country: Country = Country.UA,
     address: str = "м. Київ",
     covered_only: bool = True,
     coverage_target: Decimal | None = None,
@@ -3599,6 +3600,11 @@ def build_invoice(
     `amount_mismatch`, so drawing it would let the builder choose a claim's verdict. It is a
     keyword of `claim_planner.ClaimPlan`, and `None` is the ordinary invoice payable in one.
     """
+    # Accepted, never printed: the assembler hands the buyer's country to every class that names
+    # the buyer, because the EU pages derive their tax treatment from it — 👁 the observed рахунок
+    # names its buyer by name and РНОКПП and states no country, and the domestic page's tax is
+    # the seller's own ПДВ, contained in the price whoever is buying.
+    del buyer_country
     rules = jurisdiction(country)
     block = rules["invoice"]
     if schedule is not None and schedule not in partial_payment_schedules():

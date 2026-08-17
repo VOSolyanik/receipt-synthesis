@@ -15,9 +15,12 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
+from receipt_synth.assembler import _amount_the_payment_states
 from receipt_synth.claim_planner import (
     ARCHETYPES,
     STATES_AN_INSTALMENT_TERM,
+    ClaimPlan,
+    DocumentPlan,
     Evidence,
     _pairable_subjects,
     _payment_archetypes,
@@ -41,7 +44,7 @@ from receipt_synth.content_builder import (
     vendor_can_carry,
 )
 from receipt_synth.renderer import Renderer
-from receipt_synth.schemas import Capture, Country, DocType
+from receipt_synth.schemas import Capture, Country, DocType, Verdict
 
 SLUG = "eu_invoice"
 CATEGORY = "language_courses"
@@ -335,6 +338,33 @@ def test_the_out_of_scope_page_is_the_old_page_exactly(renderer, tmp_path):
     assert "VAT not charged" in text
     assert "2006/112/EC" in text
     assert "tax_amount" not in page.field_bboxes
+
+
+def test_the_payment_beside_it_is_told_the_printed_total_on_every_form():
+    """🔴 THE PAIR STAYS ONE TRANSACTION WHICHEVER FORM THE TOTALS BLOCK DREW.
+    `policy_engine._cross_checks` compares the subject's and the payment's amounts EXACTLY, and
+    the assembler sizes the payment off the subject's `amount` — so `amount` carrying the
+    PRINTED total is what keeps an honest tax-on-top claim `covered` instead of
+    `insufficient_evidence` with the cause `amount_mismatch`: the buyer pays what the page asks,
+    tax included."""
+    payment = ARCHETYPES["ua_bank_payment_confirmation_eur"]
+    for form in ("tax_on_top", "out_of_scope", "reverse_charge"):
+        document = make(seed_in_form(form))
+        record = document.ground_truth(
+            doc_id="c1_d1", source_file="c1_d1.png",
+            capture=Capture.DIGITAL_PDF, field_bboxes={},
+        )
+        plan = ClaimPlan(
+            claim_id="c1", persona_id="p001", category=CATEGORY,
+            verdict=Verdict.COVERED, issued_at=datetime(2026, 6, 15, 12, 0),
+            documents=(
+                DocumentPlan(archetype=ARCHETYPES[SLUG], issued_at=datetime(2026, 6, 10, 9, 0)),
+                DocumentPlan(archetype=payment, issued_at=datetime(2026, 6, 15, 12, 0)),
+            ),
+        )
+
+        assert record.amount == document.total, form
+        assert _amount_the_payment_states(random.Random(0), plan, record) == record.amount, form
 
 
 def test_the_reverse_charge_page_prints_a_zero_row_and_says_who_accounts(renderer, tmp_path):

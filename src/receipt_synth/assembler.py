@@ -798,8 +798,17 @@ def _render_document(
         if archetype.doc_type in _NAMES_THE_BUYER:
             # AN OFFER TO PAY HAS TO SAY TO WHOM IT IS MADE. Keyed by class rather than by
             # evidence — see `_NAMES_THE_BUYER`, which is where the change of predicate is
-            # explained.
-            basket |= {"buyer_name": persona.full_name, "buyer_tax_id": persona.tax_id}
+            # explained. The COUNTRY travels with the name: it is the axis the EU classes derive
+            # their tax treatment from (`content_builder.TaxTreatment`) and the value their pages
+            # print under the buyer's name — a derived attribute of the persona's jurisdiction,
+            # not a new persona field, so a relocated persona changes the page with no builder
+            # touched. The Ukrainian рахунок accepts and ignores it, as it does the tax id it
+            # prints and the EU pages do not.
+            basket |= {
+                "buyer_name": persona.full_name,
+                "buyer_tax_id": persona.tax_id,
+                "buyer_country": persona.location.country,
+            }
         if archetype.doc_type in _PRINTS_A_TERM_BOUND_BY_THE_PAYMENT:
             # 🔴 `plan.issued_at` AND NOT `document_plan.issued_at`: the claim's date is the date
             # its money moved (see `ClaimPlan`), while this document's own date is when the offer
