@@ -4110,16 +4110,23 @@ class PlatformReceipt:
     🔴 WHAT IT LACKS IS ITSELF EVIDENCED, by the method the non-fiscal slip used on the
     Ukrainian fiscal form. 📄 Article 226 of Directive 2006/112/EC lists the particulars a
     VAT invoice must carry — the supplier's address, the supplier's and the customer's VAT
-    identification numbers, the rate and the amount of tax — and this document declares
-    itself not to be one («This is not a VAT invoice.», 👁 four independent commentators
-    describe the wording on real platform receipts) and carries none of them. So the
-    seller block is one line, the mark; there is no `Seller` here at all, because every
-    other field of that class is a requisite this page is licensed to omit.
+    identification numbers — and this document declares itself not to be one («This is not
+    a VAT invoice.», 👁 four independent commentators describe the wording on real
+    platform receipts) and carries none of them. So the seller block is one line, the
+    mark; there is no `Seller` here at all, because every other field of that class is a
+    requisite this page is licensed to omit.
 
-    ⛔ NO QR, NO FISCAL IDENTITY, NO AMOUNT IN WORDS, NO TAX BLOCK — absences, not gaps.
-    The class establishes both facts of `document_evidence` (the lines say what was
-    bought, the paid caption and the card say money moved) while being fiscal like
-    neither receipt class: that pairing is what the archetype puts into the data.
+    ⚠️ A TAX ROW IS NOT ONE OF THOSE ABSENCES ANY MORE. The EU variant draws one of the
+    three forms of `TaxTreatment` — 👁 the author's own cross-border receipts add the
+    destination tax ON TOP of net prices and still say they are not a VAT invoice, the
+    declaration being about the DOCUMENT and the row about the TAX. So the total may
+    exceed the line items, `tax_amount` below says by how much, and the declaration
+    stays printed whatever the form.
+
+    ⛔ NO QR, NO FISCAL IDENTITY, NO AMOUNT IN WORDS — absences, not gaps. The class
+    establishes both facts of `document_evidence` (the lines say what was bought, the
+    paid caption and the card say money moved) while being fiscal like neither receipt
+    class: that pairing is what the archetype puts into the data.
     """
 
     # The vendors.json jurisdiction block the page's captions, formats, language and
@@ -4138,6 +4145,10 @@ class PlatformReceipt:
     # digits identify nothing: four digits are a tail every issued range shares.
     card_masked: str
     line_items: list[LineItem]
+    # THE PRINTED GRAND TOTAL — the line items PLUS any destination tax the EU variant added on
+    # top (`tax_amount` below), so `total > Σ lines` exactly where a tax row is printed. The
+    # subtotal is not stored: it is Σ over `line_items` by construction, and `render_context`
+    # derives it so the two figures cannot drift.
     total: Decimal
     # What the header prints where the EU page prints the bare mark alone: the seller's
     # legal name («ТОВ «Prometheus»»), address, identification code and ПН — ordinary
@@ -4157,6 +4168,18 @@ class PlatformReceipt:
     # words; no Ukrainian equivalent was found in any public source, so the UA variant
     # carries None rather than a translation nothing evidences.
     not_a_tax_invoice_note: str | None = None
+    # THE DESTINATION TAX THE EU VARIANT MAY ADD ON TOP — `TaxTreatment`'s caption and figure,
+    # None together where the drawn form prints no row, and None on the UA variant always.
+    # ⛔ DISTINCT FROM `vat_label`/`vat_amount` ABOVE, deliberately: that pair states the tax
+    # CONTAINED in a Ukrainian gross price and never moves the total, this pair is ADDED and
+    # does — one field for both would give a key two meanings, and a consumer subtracting it
+    # would corrupt exactly the documents where the subtraction is wrong.
+    tax_label: str | None = None
+    tax_amount: Decimal | None = None
+    # The reverse-charge sentence of the foot (`TaxTreatment.note`), under the same box name the
+    # invoice's tax-status sentence carries. ⛔ The out-of-scope form prints NOTHING here: a
+    # receipt records a payment and argues no law, which is where it differs from the invoice.
+    vat_note: str | None = None
     # UA draws its decimal separator per document, as every Ukrainian class does; the EU
     # block declares exactly one, so the draw collapses there.
     decimal_separator: str = "."
@@ -4211,17 +4234,27 @@ class PlatformReceipt:
                 }
                 for item in self.line_items
             ],
-            "subtotal": self._amount(self.total),
-            # 📄 Present only where the supplier charges the tax: the UA seller states the
-            # tax its gross prices contain, the EU page declares it charges none — and a
-            # zero row there would assert a treatment rather than omit one.
+            # Derived, not read from `total`: the subtotal is the LINE ITEMS' sum on both
+            # variants, and the total below may exceed it by the EU variant's tax on top.
+            "subtotal": self._amount(line_items_total(self.line_items)),
+            # 📄 Present only where the supplier states the contained tax: the UA seller's gross
+            # prices carry it, and the row never moves the total.
             "vat": (
                 {"label": self.vat_label, "amount": self._amount(self.vat_amount)}
                 if self.vat_amount is not None
                 else None
             ),
+            # The EU variant's drawn row — see `TaxTreatment`. Never present beside `vat` above:
+            # one states a tax added, the other a tax contained, and a page asserting both would
+            # contradict itself.
+            "tax": (
+                {"label": self.tax_label, "amount": self._amount(self.tax_amount)}
+                if self.tax_amount is not None
+                else None
+            ),
             "total": self._amount(self.total),
             "not_a_tax_invoice_note": self.not_a_tax_invoice_note,
+            "vat_note": self.vat_note,
             "support_note": None,
             "qr_payload": None,
         }
@@ -4246,7 +4279,10 @@ class PlatformReceipt:
         claim's `fx_rates` — rather than refusing, which is the decision that let this
         archetype into the corpus at all. `payer` carries the buyer the page names; the
         three fiscality flags are false, as on the slip, and for the same reason: a
-        consumer classifying on a fiscal marker must find none here.
+        consumer classifying on a fiscal marker must find none here. `amount` is the
+        PRINTED total and `tax` the row the EU variant may add on top — labelled apart so
+        `amount ≠ Σ line items` is measurable where it is true; ⛔ the UA variant's
+        contained-VAT row is NOT `tax` (see the field in `schemas.DocGroundTruth`).
         """
         rules = jurisdiction(self.jurisdiction_code)
         return DocGroundTruth(
@@ -4256,6 +4292,7 @@ class PlatformReceipt:
             language=rules["language"],
             currency=rules["currency"],
             amount=self.total,
+            tax=self.tax_amount,
             date=self.issued_at.date(),
             counterparty=self.seller_name,
             payer=self.buyer_name,
@@ -4280,6 +4317,7 @@ def build_platform_receipt(
     identity: PartyIdentity,
     buyer_name: str,
     buyer_tax_id: str,
+    buyer_country: Country = Country.UA,
     address: str = "",
     covered_only: bool = True,
     coverage_target: Decimal | None = None,
@@ -4305,8 +4343,15 @@ def build_platform_receipt(
       is a domestic company and prints them.
     * `buyer_tax_id` — 📄 the customer's VAT identification number is on the same Article
       226 list, and 👁 a platform account has a name and a country, not a tax number.
-      Printed by NEITHER variant.
+      Printed by NEITHER variant, ⛔ the reverse-charge form included.
     * `address` — the seller's address slot. Blank on the EU page; the UA page prints it.
+
+    `buyer_country` IS THE AXIS THE EU VARIANT'S TAX TREATMENT DERIVES FROM — the persona's own
+    country, printed under the buyer's name on both variants and deciding which rate parameter a
+    tax-on-top page charges (see `TaxTreatment`). Defaulted to UA because every persona of
+    today's corpus is a Ukrainian resident. ⛔ The UA variant reads it for the printed name only:
+    its tax statement is the contained-VAT row, a fact of the SELLER's registration, not of the
+    buyer's country.
     """
     del buyer_tax_id  # accepted, never printed — see the docstring
 
@@ -4373,8 +4418,21 @@ def build_platform_receipt(
         )
     else:
         del identity, address  # not printed on the EU page — see the docstring
+        # The drawn tax treatment — the same draw the cross-border invoice makes, at the same
+        # point relative to the basket, so the two classes vary the same way. The tax-on-top
+        # form lifts the PRINTED total above the line items; the not-a-tax-invoice declaration
+        # stays whatever the form, because it is a statement about the DOCUMENT, not the tax.
+        treatment = draw_tax_treatment(
+            rng, buyer_country=buyer_country, subtotal=total
+        )
+        total = (total + (treatment.amount or Decimal(0))).quantize(KOPIYKA)
         seller_extras = dict(
             not_a_tax_invoice_note=block["not_a_tax_invoice_note"],
+            tax_label=treatment.label,
+            tax_amount=treatment.amount,
+            # A receipt records a payment and argues no law, so the out-of-scope form prints no
+            # sentence — only the reverse-charge form carries one here.
+            vat_note=treatment.note(out_of_scope=None),
             decimal_separator=rules["number_format"]["decimal_separator_variants"][0],
         )
 
@@ -4384,7 +4442,7 @@ def build_platform_receipt(
         # authoritative form on every class of this dataset.
         seller_name=vendor["name"],
         buyer_name=buyer_name,
-        buyer_country=rules["country_names"]["UA"],
+        buyer_country=rules["country_names"][buyer_country.value],
         issued_at=issued_at,
         receipt_number=receipt_number,
         card_masked=block["card_mask_format"].format(tail=f"{rng.randint(0, 9999):04d}"),
