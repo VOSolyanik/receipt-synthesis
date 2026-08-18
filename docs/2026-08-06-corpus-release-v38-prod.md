@@ -18,7 +18,7 @@ or a digest recomputed over the shipped directory on that date.
 | Contract | `config/labelling-schema.yaml` **version 38** |
 | Policy | `config/policy.yaml`, `policy_version: 1` |
 | Jurisdiction | UA (the default; no other is built) |
-| Shipped to | `~/Documents/Projects/Personal/receipt-synth-datasets/v38-prod` (outside this repository) |
+| Shipped to | `$RV_DATASETS/v38-prod` (outside this repository) |
 
 **The command is RP-06's, verbatim.** Seed, persona count, claims per persona and split fraction were
 deliberately not refreshed, so every shift against that run is attributable to the generator and to nothing
