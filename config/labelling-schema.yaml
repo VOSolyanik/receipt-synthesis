@@ -1309,7 +1309,9 @@
 #   ⚠️ WHAT A CONSUMER MUST DO: treat `Σ line_items = amount` as `Σ line_items + tax = amount`
 #   with null-as-zero, and stop reading "no tax row" as a property of the EU classes — it is now
 #   a property of one drawn form. A consumer whose arithmetic guard hard-codes the old equation
-#   flags exactly the honest documents this version exists to produce.version: 39
+#   flags exactly the honest documents this version exists to produce.
+
+version: 40
 
 # One status vocabulary. Every section that describes a LABEL carries a `status`, and
 # wherever anything below says whether a thing exists yet or is disputed it uses these five
