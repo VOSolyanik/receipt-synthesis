@@ -9,10 +9,17 @@
 name: check
 
 on:
+  # Unqualified `push` never paired with `pull_request` the way the concurrency group below
+  # assumed. The two events carry different refs — `refs/heads/<branch>` against
+  # `refs/pull/<n>/merge` — so they land in different groups and both survive, and every push
+  # to a branch with an open pull request ran this workflow twice. Narrowing push to main
+  # leaves one run per pull request and one per merge. The cost is that a branch pushed
+  # without a pull request gets no CI; opening the pull request is what asks for it.
   push:
+    branches: [main]
   pull_request:
 
-# A push to a branch that also has an open pull request would otherwise run this twice.
+# Successive pushes to the same branch: only the newest one is worth finishing.
 concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: true
