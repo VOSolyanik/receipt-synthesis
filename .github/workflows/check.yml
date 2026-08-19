@@ -33,6 +33,12 @@ env:
 jobs:
   check:
     runs-on: ubuntu-24.04
+    # A step that hangs has to fail as a hang. Without a bound here the job instead runs to
+    # GitHub's own six-hour ceiling, which is exactly what an apt mirror that stopped
+    # answering did to "Install Chromium" on 18.08.2026 — six hours of runner spent before
+    # the platform killed it. This bound is deliberately loose against the real work; it
+    # exists only to cap the pathological case.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -57,8 +63,15 @@ jobs:
       # Chromium is not a Python dependency, so `uv sync` alone leaves the renderer unable to
       # run and a large part of the suite unable to pass. The build is chosen by the pinned
       # playwright version, so this line inherits its pin from uv.lock.
+      #
+      # Deliberately without `--with-deps`. That flag is not what fetches the browser: it
+      # drops to root and runs apt across every source the runner image configures, which is
+      # both the slow half of this step and the half that hung for six hours. The ubuntu-24.04
+      # image already carries the shared libraries this build links against, and `make install`
+      # has always installed the browser without the flag. Should a library turn out to be
+      # missing, install that library by name — do not hand the job back to apt wholesale.
       - name: Install Chromium
-        run: uv run playwright install --with-deps chromium
+        run: uv run playwright install chromium
 
       - name: make check
         run: make check
