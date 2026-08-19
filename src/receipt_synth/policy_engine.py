@@ -15,11 +15,13 @@ that itself, against `covered_items` and `excluded_items`, and treats the `cover
 input to be trusted. An oracle that could not disagree with the thing it is labelling
 would be a pass-through with a docstring.
 
-Six rules, in the order they are applied — seven branches, rule 4a having been inserted
-BETWEEN two of them rather than appended, because where it sits is what it says. The numbering
-is not renumbered for it: a dozen cross-references in this file and in
-config/labelling-schema.yaml point at these numbers, and shifting them all to place one branch
-would make every one of those references silently wrong in the git history.
+Seven rules, in the order they are applied — eight branches, rule 5a having been inserted
+BETWEEN two of them rather than appended, because where it sits is what it says. The letter
+keeps an insertion from renumbering its neighbours: a dozen cross-references in this file and
+in config/labelling-schema.yaml point at these numbers, and shifting them all to place one
+branch would make every one of those references silently wrong in the git history. The
+revision of 2026-08-17 that moved the period up to rule 3 DID renumber, and moved every one
+of those references with it.
 
 1. **Currency.** Limits are expressed in `reporting_currency`. A document in another
    currency is CONVERTED — at the rate config/fx-rates.yaml states for the document's
@@ -42,18 +44,45 @@ would make every one of those references silently wrong in the git history.
    claim's subject documents and the cross-document axes compare amounts between its
    documents, and policy.yaml states no rule for doing either across two currencies —
    such a claim is refused, not guessed at.
-2. **Evidence.** A claim's documents are resolved into transactions against
-   `document_evidence` in policy.yaml — see `resolve_evidence`. That table carries TWO
-   facts a reimbursement rests on, plus the LINKAGE between them: three slots, and each
-   slot has its own name. Rules 2 and 3 answer them in order.
+2. **Evidence, the money-moved slot.** A claim's documents are resolved into transactions
+   against `document_evidence` in policy.yaml — see `resolve_evidence`. That table carries
+   TWO facts a reimbursement rests on, plus the LINKAGE between them: three slots, and each
+   slot has its own name. Rules 2, 4 and 5 answer them, with the period (rule 3) standing
+   between the first and the rest — see its own entry for why.
 
-   The **money-moved** slot: every document is of a type whose `proves_payment` is false,
+   The slot itself: every document is of a type whose `proves_payment` is false,
    so nothing the claim carries attests a movement of money → `not_proof_of_payment`, with
    no cause, because there is one slot and one way to fail it.
+3. **Period**, checked on the PAYMENT date and on no other, and failing it is `rejected`
+   with the cause `outside_period`. A limit is consumed when money moves, so a December
+   invoice paid in January is an ordinary January expense and not a period failure. The
+   subject document's date is checked for order instead (rule 5), which is a different
+   defect with a different name — and a different verdict.
 
-   The **what-was-bought** slot: no document is of a type that states it →
+   POSITIONED DIRECTLY AFTER RULE 2 since the revision of 2026-08-17, and the position is
+   an argument in two halves: the payment date EXISTS the moment rule 2 establishes that a
+   payment happened, so nothing later than rule 2 is needed to answer this question; and
+   `outside_period` is a TERMINAL refusal while the evidence causes of rules 4 and 5 are
+   repairable ones, so answering the evidence first would invite a claimant to supply
+   documents for a claim no document can save. The dates are read off the payment
+   documents themselves rather than off the transactions, which need not exist at this
+   position — `resolve_evidence` composes a transaction only where BOTH facts are
+   established. Where transactions do exist, their payments are exactly the payment
+   documents, so deeper claims read bit-for-bit the same.
+
+   HISTORY of this branch, not part of the rule above. It answered
+   `insufficient_evidence` until the revision that moved it to `rejected`. It moved because
+   an out-of-window claim can leave every evidence slot ESTABLISHED — the purchase
+   happened, the proof is flawless, the documents agree — while the policy still does not
+   cover it, by *when* rather than by *what*, symmetrically to the wrong-subject case of
+   rule 6. Nothing was collapsed: a CASE moved to the verdict whose own subject matter
+   covers it, and both verdicts kept every mechanism that is theirs. The alternative — a
+   seventh enum member meaning "outside period" — was rejected because it would pull a
+   share into `verdict_mix` and cost the downstream contract another revision, for no gain
+   in precision over a named cause on a verdict that already fits.
+4. **Evidence, the what-was-bought slot**: no document is of a type that states it →
    `insufficient_evidence`, cause `subject_not_evidenced`.
-3. **The linkage slot**: a subject document and the payment that settles it both exist and
+5. **The linkage slot**: a subject document and the payment that settles it both exist and
    have to describe the same purchase. ON WHICH AXES THEY ARE COMPARED IS READ FROM
    policy.yaml — `cross_document_agreement` declares them, and today they are the same amount,
    the payment not before the subject, and the same counterparty. Failing one →
@@ -75,35 +104,19 @@ would make every one of those references silently wrong in the git history.
    would swallow that cause whole. See `_settles_one_instalment` and `partial_payment` in
    policy.yaml, which states the rule for a consumer building its own engine from that file.
 
-   WHAT SUCH A CLAIM IS LABELLED is decided further down, at rule 4a, and NOT here: the
-   exemption and the label are separate steps on purpose, so that the period can come between
-   them.
+   WHAT SUCH A CLAIM IS LABELLED is decided further down, at rule 5a, and NOT here: the
+   exemption and the label are separate steps on purpose, so that the label can sit where
+   the order needs it without moving the exemption.
 
    Each slot is decided from the claim's own documents and never by comparison with
    another verdict. That construction is deliberate: while two of these were written as
    "the one that is not the other", editing either silently moved the other, and it went
    wrong twice. The rule and its history live in
    `config/labelling-schema.yaml`, `verdict_notes.definitions_name_their_own_slot`.
-4. **Period**, checked on the PAYMENT date and on no other, and failing it is `rejected`
-   with the cause `outside_period`. A limit is consumed when money moves, so a December
-   invoice paid in January is an ordinary January expense and not a period failure. The
-   subject document's date is checked for order instead (rule 3), which is a different
-   defect with a different name — and now a different verdict.
-
-   HISTORY of this branch, not part of the rule above. It answered
-   `insufficient_evidence` until the revision that moved it here. It moved because an
-   out-of-window claim leaves every slot of rule 2 and rule 3 ESTABLISHED — the purchase
-   happened, the proof is flawless, the documents agree — while the policy still does not
-   cover it, by *when* rather than by *what*, symmetrically to the wrong-subject case of
-   rule 5. Nothing was collapsed: a CASE moved to the verdict whose own subject matter
-   covers it, and both verdicts kept every mechanism that is theirs. The alternative — a
-   seventh enum member meaning "outside period" — was rejected because it would pull a
-   share into `verdict_mix` and cost the downstream contract another revision, for no gain
-   in precision over a named cause on a verdict that already fits.
-4a. **A transaction exempted by rule 3** — a payment equal to an instalment its subject
+5a. **A transaction exempted by rule 5** — a payment equal to an instalment its subject
    document prints — is `partially_paid`, with no cause: one mechanism, one way to reach it.
 
-   NUMBERED 4a BECAUSE THE POSITION IS THE RULE. It sits AFTER the period deliberately, so a
+   NUMBERED 5a BECAUSE THE POSITION IS THE RULE. It sits AFTER the period deliberately, so a
    partial settlement paid outside the window is `rejected` and not this. That precedence is
    policy.yaml's — `partial_payment.outside_the_period` — and it is stated there rather than
    left to the order these branches happen to be written in, because a consumer builds its own
@@ -112,20 +125,21 @@ would make every one of those references silently wrong in the git history.
    the plan covers this expense at all, and `partially_paid` is a statement about a claim the
    plan does cover.
 
-   ⚠️ AND IT COULD NOT HAVE BEEN FOLDED INTO RULE 3. The exemption there decides whether the
-   documents AGREE; this decides what an agreeing pair is called. Keeping them one step would
-   have put the label before the period with no way to say why.
-5. **The verdict.** STRICT, as the prose of the `coverage` block states it: *any*
+   ⚠️ AND IT COULD NOT HAVE BEEN FOLDED INTO RULE 5. The exemption there decides whether the
+   documents AGREE; this decides what an agreeing pair is called. They are different
+   questions, and keeping them one step would have tied the label's position to the
+   exemption's with no way to say why they must move together.
+6. **The verdict.** STRICT, as the prose of the `coverage` block states it: *any*
    non-covered line makes the claim `partially_covered`, however small — the fraction is
    reported, never used as a tolerance. Everything covered is `covered`, and
    `full_threshold` is kept alive as a **self-check** on that case (see `verdict_for`),
    which is the role its own comment gives it. A claim whose covered amount is 0 is
    `rejected` — the third branch that block declares, decided from the line items and from
-   nothing else. This is the SECOND route to `rejected`, rule 4 being the first; they are
+   nothing else. This is the SECOND route to `rejected`, rule 3 being the first; they are
    told apart by `imperfection`, which the coverage route leaves empty. Note that this rule
-   reads amounts, and rule 2 reads document types: neither can answer the other's question,
-   which is why they are separate rules rather than one with a branch.
-6. **The cumulative annual limit.** Claims are processed per persona per category in date
+   reads amounts, and rules 2 and 4 read document types: neither can answer the other's
+   question, which is why they are separate rules rather than one with a branch.
+7. **The cumulative annual limit.** Claims are processed per persona per category in date
    order, carrying the balance. When what remains is less than what the document covers,
    the claim is `partially_covered`, and the verdict then also depends on the persona's
    history — which is what `verdict_basis` records.
@@ -188,7 +202,7 @@ LIMIT_EXHAUSTED = "limit_exhausted"
 # reads.
 
 # Causes of `insufficient_evidence`, which owns two of the three slots of `document_evidence`
-# (see the module docstring, rules 2 and 3): the WHAT-WAS-BOUGHT slot, unestablished when no
+# (see the module docstring, rules 4 and 5): the WHAT-WAS-BOUGHT slot, unestablished when no
 # document is of a type that states it, and the LINKAGE slot, unestablished when a subject
 # document and its payment both exist and fail a cross-check. Each is read off the claim's own
 # documents.
@@ -221,7 +235,7 @@ SUBJECT_MISMATCH = "subject_mismatch"
 # the second is worth naming: the first is the whole of what the verdict already says,
 # while the second says the claim is uncovered by WHEN rather than by WHAT. So a `rejected`
 # claim carries either this cause or none, which is how the two mechanisms are told apart
-# without parsing `policy_trace`. See the module docstring, rules 4 and 5, for why this case
+# without parsing `policy_trace`. See the module docstring, rules 3 and 6, for why this case
 # is not `insufficient_evidence`.
 OUTSIDE_PERIOD = "outside_period"
 
@@ -1375,6 +1389,44 @@ def evaluate_claim(
     if not shape.proves_payment:
         trace.append(f"evidence: no document proves payment — {_types(documents)}")
         return refused(Verdict.NOT_PROOF_OF_PAYMENT, ())
+
+    # -- the period, on the payment date and on no other. `rejected`, not
+    # `insufficient_evidence`: nothing here is unestablished, the policy simply does not
+    # cover a payment made outside its window. See the module docstring, rule 3 — including
+    # for why this is checked HERE, before the remaining evidence slots: the payment date
+    # exists the moment payment is proved, and a terminal refusal must not hide behind a
+    # repairable one. The dates are read off `payment_documents` rather than off the
+    # transactions, which need not exist yet — `resolve_evidence` composes a transaction
+    # only where BOTH facts are established. Where transactions exist, their payments are
+    # exactly the payment documents, so deeper claims read the same.
+    start, end = active_period()
+    late = [d for d in shape.payment_documents if not start <= d.date <= end]
+    if late:
+        # 🔴 THE ONE CASE WHERE THIS BRANCH AND THE INSTALMENT ONE BELOW BOTH APPLY, and
+        # policy.yaml decides which wins. The order these two are written in IS the answer this
+        # engine gives, so the order is checked against the file rather than assumed to still
+        # agree with it: a consumer building its own engine from that file must not be able to
+        # reach a different LABEL while reading the same rules. Flipping the declared precedence
+        # is a real edit somebody may make; it has to move this code too, and this is what says
+        # so instead of a comment.
+        if any(_settles_one_instalment(t) for t in shape.transactions):
+            declared = partial_payment_outside_the_period()
+            if declared is not Verdict.REJECTED:
+                raise PolicyGapError(
+                    f"policy.yaml says a partial settlement paid outside the benefit period is "
+                    f"{declared.value!r} (`partial_payment.outside_the_period`), and this engine "
+                    "checks the period first, which answers 'rejected'. The two would label the "
+                    "same claim differently. Move the partial-settlement branch above the period "
+                    "check, or restore the declared precedence."
+                )
+        first = min(late, key=lambda document: document.date)
+        trace.append(
+            f"period: payment {first.doc_id} dated {first.date} falls outside "
+            f"{start}..{end}"
+        )
+        return refused(Verdict.REJECTED, (OUTSIDE_PERIOD,))
+    trace.append("period ok")
+
     if not shape.proves_subject:
         trace.append(f"evidence: no document states what was bought — {_types(documents)}")
         return refused(Verdict.INSUFFICIENT_EVIDENCE, (SUBJECT_NOT_EVIDENCED,))
@@ -1403,41 +1455,10 @@ def evaluate_claim(
             disagreements[0][0], tuple(cause for _, cause, _ in disagreements)
         )
 
-    # -- the period, on the payment date and on no other. `rejected`, not
-    # `insufficient_evidence`: nothing here is unestablished, the policy simply does not
-    # cover a payment made outside its window. See the module docstring, rule 4.
-    start, end = active_period()
-    late = [t.payment for t in shape.transactions if not start <= t.payment.date <= end]
-    if late:
-        # 🔴 THE ONE CASE WHERE THIS BRANCH AND THE ONE BELOW BOTH APPLY, and policy.yaml decides
-        # which wins. The order these two are written in IS the answer this engine gives, so the
-        # order is checked against the file rather than assumed to still agree with it: a consumer
-        # building its own engine from that file must not be able to reach a different LABEL while
-        # reading the same rules. Flipping the declared precedence is a real edit somebody may
-        # make; it has to move this code too, and this is what says so instead of a comment.
-        if any(_settles_one_instalment(t) for t in shape.transactions):
-            declared = partial_payment_outside_the_period()
-            if declared is not Verdict.REJECTED:
-                raise PolicyGapError(
-                    f"policy.yaml says a partial settlement paid outside the benefit period is "
-                    f"{declared.value!r} (`partial_payment.outside_the_period`), and this engine "
-                    "checks the period first, which answers 'rejected'. The two would label the "
-                    "same claim differently. Move the partial-settlement branch above the period "
-                    "check, or restore the declared precedence."
-                )
-        first = min(late, key=lambda document: document.date)
-        trace.append(
-            f"period: payment {first.doc_id} dated {first.date} falls outside "
-            f"{start}..{end}"
-        )
-        return refused(Verdict.REJECTED, (OUTSIDE_PERIOD,))
-    trace.append("period ok")
-
     # -- one transaction, settled in parts. AFTER THE PERIOD AND BEFORE COVERAGE, which is a
     # precedence policy.yaml decides and this code follows — `partial_payment.outside_the_period`
-    # there, with the reasoning in the paragraphs above it. In one line: the evidence verdicts come
-    # first because a claim that has established nothing cannot be assessed at all, and among the
-    # POLICY verdicts the period is prior, because it answers whether the plan covers this expense
+    # there, with the reasoning in the paragraphs above it. In one line: among the POLICY
+    # verdicts the period is prior, because it answers whether the plan covers this expense
     # while `partially_paid` is a statement about a claim the plan does cover.
     #
     # 🔴 THE DISCRIMINATION FROM `amount_mismatch` DOES NOT LIVE HERE and is unaffected by this

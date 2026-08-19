@@ -429,8 +429,8 @@ def test_a_wholly_non_covered_basket_is_rejected():
     assert result.verdict_basis == (VerdictBasis.DOCUMENTS,)
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
-        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "period ok",
+        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "coverage 0% (2 of 2 line items not covered)",
     )
 
@@ -988,8 +988,8 @@ def test_the_trace_justifies_a_partially_covered_verdict():
     result = evaluate([item("997.00", True), item("3.00", False)])
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
-        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "period ok",
+        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "coverage 99.7% (1 of 2 line items not covered)",
     )
 
@@ -1001,8 +1001,8 @@ def test_the_trace_names_the_limit_when_the_limit_is_the_reason():
 
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
-        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "period ok",
+        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "coverage 100% (all line items covered)",
         "annual limit vitamins_nutrition 12000.00 UAH: 10500.00 already reimbursed, "
         "1500.00 remaining",
@@ -1063,8 +1063,8 @@ def test_the_trace_justifies_a_rejected_verdict_with_the_coverage_line():
     assert result.verdict is Verdict.REJECTED
     assert result.policy_trace == (
         "category=vitamins_nutrition ok",
-        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "period ok",
+        "evidence: 1 transaction — d1 (fiscal_receipt) proves both",
         "coverage 0% (1 of 1 line items not covered)",
     )
     assert not any("limit" in line for line in result.policy_trace)
