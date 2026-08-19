@@ -29,10 +29,12 @@
     * language — `labels`;
     * currency — the amounts and the code beside them;
     * TAX TREATMENT. 📄 A domestic Ukrainian supplier registered for ПДВ prints its identifiers
-      and a 20% tax line. A platform receipt in the English-speaking practice is 👁 commonly a
-      RECEIPT AND NOT A TAX INVOICE, and says so in as many words. The conditional blocks below
-      are that axis, and the README declares it rather than pretending the pair is a clean
-      two-variable comparison.
+      and a CONTAINED-tax line — «У т.ч. ПДВ», information about a gross price. A platform
+      receipt in the English-speaking practice is 👁 commonly a RECEIPT AND NOT A TAX INVOICE,
+      says so in as many words, and may still ADD the destination tax on top of net prices in a
+      row of its own (`content_builder.TaxTreatment` — drawn, three forms). The conditional
+      blocks below are that axis, and the README declares it rather than pretending the pair is
+      a clean two-variable comparison.
 
   🔴 WHAT AN EU RECEIPT LACKS IS ITSELF EVIDENCED, and by the same method the non-fiscal slip
   used. 📄 Article 226 of Directive 2006/112/EC gives an exhaustive list of the particulars a VAT
@@ -166,13 +168,25 @@
       <span class="mono"><span data-field="subtotal">{{ subtotal }}</span>&nbsp;{{ currency }}</span>
     </div>
 
-    {# 📄 Present only where the supplier charges the tax. A Ukrainian company registered for ПДВ
-       prints the rate and the amount; the receipt that declares itself not a tax invoice prints
-       neither, and printing a zero row there would assert a tax treatment rather than omit one. #}
+    {# 📄 The CONTAINED tax, present only where a Ukrainian seller registered for ПДВ states it:
+       «У т.ч. ПДВ» is information about a gross price and never moves the total below. #}
     {% if vat %}
     <div class="row">
       <span class="caption">{{ vat.label }}</span>
       <span class="mono"><span data-field="vat_amount">{{ vat.amount }}</span>&nbsp;{{ currency }}</span>
+    </div>
+    {% endif %}
+
+    {# The ADDED tax — the EU variant's drawn row (`content_builder.TaxTreatment`): the
+       destination tax on top, so the total below EXCEEDS the subtotal; or a zero figure under
+       the reverse-charge caption; or no row at all. ⛔ Never printed beside the contained-VAT
+       row above — one states a tax added, the other a tax contained, and a page asserting both
+       would contradict itself. An absent row is absent from the markup, not rendered empty, so
+       no bounding box points at nothing. #}
+    {% if tax %}
+    <div class="row">
+      <span class="caption">{{ tax.label }}</span>
+      <span class="mono"><span data-field="tax_amount">{{ tax.amount }}</span>&nbsp;{{ currency }}</span>
     </div>
     {% endif %}
 
@@ -187,16 +201,23 @@
      nothing under it — a line announcing an empty block. The A4 confirmation learned the same
      thing and states it in the same words; correct and ugly is still a defect on every image of
      a class. #}
-  {% if not_a_tax_invoice_note or support_note %}
+  {% if not_a_tax_invoice_note or vat_note or support_note %}
   <footer class="foot">
     {# 🔴 THE NEGATIVE MARKER, AND IT IS A STRING WITH A POSITION — which the Ukrainian
        non-fiscal slip's marker was not. 👁 Four independent commentators describe this wording
        as printed on real platform receipts. Where the contract's «marker text plus its position»
        field could not represent an absence, it represents THIS exactly. The two mock-ups
        together are therefore an argument about the SHAPE of that field rather than about one
-       document — see templates/README.md. #}
+       document — see templates/README.md. Printed WHATEVER the drawn tax form: it is a claim
+       about the document, and 👁 real receipts carry it beside a charged tax row. #}
     {% if not_a_tax_invoice_note %}
     <div class="notice" data-field="not_a_tax_invoice_note">{{ not_a_tax_invoice_note }}</div>
+    {% endif %}
+    {# The reverse-charge sentence, under the same box name the invoice's tax-status sentence
+       carries — one meaning, one name across the two EU classes. Absent on every other form:
+       a receipt records a payment and argues no law. #}
+    {% if vat_note %}
+    <div class="notice" data-field="vat_note">{{ vat_note }}</div>
     {% endif %}
     {% if support_note %}
     <div class="muted small">{{ support_note }}</div>

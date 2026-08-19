@@ -57,8 +57,10 @@ controlled comparison the pair exists for is now generated rather than mocked. S
   absence.
 * **Look for:** «This is not a VAT invoice.» at the foot of the English page, and its **absence**
   on the Ukrainian one, which prints a ПДВ line instead. Then the number formats, which run
-  opposite ways — `397.05` against `5 713,03`. Nothing on either page states a rate: the
-  conversion this pair implies is **nowhere on paper**, and that is deliberate.
+  opposite ways — `397.05` against `5 713,03`. Nothing on either page states a **conversion**
+  rate: the conversion this pair implies is **nowhere on paper**, and that is deliberate. (A
+  **tax** rate is another matter since the tax-on-top forms landed — the shipped EU variant may
+  print one in its drawn tax row; see `content_builder.TaxTreatment`.)
 
 **5 · `ua_insurance_contract`** — a three-page voluntary health insurance contract.
 * **File:** `ua_insurance_contract.png` · 794 × 3401 px, fixed — three A4 sheets in one image.
@@ -423,10 +425,11 @@ conversion no code performs. `tools/render_mockups.py` is the first caller in th
 even there the converted figure is printed to the console, never onto a page, because there is no
 document behind it.
 
-**Nothing on either receipt states a rate or an equivalent.** No public source found shows such a
-receipt doing so, so neither does this one. That is what makes the pair useful rather than what
-makes it incomplete: a claim evidenced by a EUR receipt and a UAH bank payment carries its
-conversion **nowhere on paper**, which is the abstract sentence in the policy engine made concrete.
+**Nothing on either receipt states a conversion rate or an equivalent in the other currency.** No
+public source found shows such a receipt doing so, so neither does this one. That is what makes
+the pair useful rather than what makes it incomplete: a claim evidenced by a EUR receipt and a UAH
+bank payment carries its conversion **nowhere on paper**, which is the abstract sentence in the
+policy engine made concrete.
 
 ### Sources, counted honestly
 
@@ -440,8 +443,11 @@ conversion **nowhere on paper**, which is the abstract sentence in the policy en
 2. **📄 UA law — Law № 1525-IX with ст. 208¹ ПКУ and Section VIII of the VAT-registration
    regulation**: a non-resident supplying electronic services to Ukrainian individuals registers
    for ПДВ, receives an individual tax number and charges 20%. Several tax-service pages and three
-   professional outlets restate it; again **one source**, the law. Used to decide what is *not*
-   built — see the limit below.
+   professional outlets restate it; again **one source**, the law. Used two ways: to decide what
+   is *not* built — see the limit below — and, since the tax-on-top forms landed, as the citation
+   behind the one attributable rate in `tax_on_top` of `config/fiscal-rules.yaml`: the shipped EU
+   variant may charge a Ukrainian buyer 20% **on top**, in a row, while still printing **no**
+   Ukrainian tax registration for the seller.
 3. **Vendor documentation — the payment platform's own published guidance on what a receipt
    contains**: business information, receipt number and date, an itemized list, and payment
    information including the total, the method and any tax. That field set is what both variants
@@ -482,7 +488,10 @@ block caused. The three:
 * **tax treatment**, which is **law and not noise**. The Ukrainian seller is a domestic company
   registered for ПДВ, so it prints its identifiers and a «У т.ч. ПДВ» line — the Ukrainian
   convention of a VAT-inclusive price — and makes no statement about not being a tax document. The
-  English one carries the denial and none of those requisites.
+  English one carries the denial and none of those requisites — and, since the shipped variant
+  draws its tax treatment (`content_builder.TaxTreatment`), it may **add** the destination tax on
+  top of net prices in a row of its own, the denial standing beside the row: one is a claim about
+  the document, the other about the tax.
 
 ### Narrower than reality: the platform receipt
 

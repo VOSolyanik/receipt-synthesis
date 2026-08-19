@@ -877,6 +877,37 @@ partial_payment:
 
 
 # =============================================================================
+# The EU pages' tax treatment — the draw over three FORMS of the totals block
+# =============================================================================
+#
+# 🔴 SHARES OF FORM, NOT OF ANY LABELLED BUCKET, which is what licenses a drawn share in this
+# file at all. No verdict, cause or coverage figure reads the tax row: the oracle's
+# `policy_engine.covered_total` runs over the LINE ITEMS alone, and the payment document beside
+# an invoice is told the PRINTED total whichever form came out
+# (`assembler._amount_the_payment_states` reads the subject's `amount`) — so these weights move
+# pixels and the `tax` label field, never a verdict. A weight that sized a labelled bucket would
+# live in config/policy.yaml beside `verdict_mix`.
+#
+# The mass state is the destination tax printed ON TOP — the form the corpus lacked BY
+# CONSTRUCTION while every EU page reproduced the out-of-scope convention only, so an honest
+# foreign document whose total exceeds its line items existed downstream and nowhere in the
+# data. The two minority states keep the no-tax forms reachable: `out_of_scope` is the old page
+# exactly (no row; the invoice's foot names Articles 44 and 59), `reverse_charge` prints a zero
+# row with the reverse-charge caption and sentence. WHAT each form prints is `tax_on_top` in
+# config/fiscal-rules.yaml.
+#
+# ⚠️ JUDGED SHARES, NOT OBSERVED FREQUENCIES: no public corpus of platform receipts was
+# surveyed, and 👁 the author's own cross-border receipts are too few to state a rate. The split
+# is a difficulty knob a consumer can read here — most pages carry the row, and both absences
+# stay common enough to appear in a small run.
+eu_tax_treatment:
+  form_shares:
+    tax_on_top: 0.75
+    out_of_scope: 0.15
+    reverse_charge: 0.10
+
+
+# =============================================================================
 # Invoice — the draw inputs
 # =============================================================================
 #

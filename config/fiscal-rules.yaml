@@ -1308,6 +1308,44 @@ jurisdictions:
     tax_line_label_format: "VAT {rate:g}%"
     line_item_letter_position: none
 
+    # ------------------------------------------------------------ tax on top --
+    # 🔴 THE TAX AN EU PAGE MAY ADD ON TOP OF ITS PRICES, KEYED BY THE BUYER'S COUNTRY. A digital
+    # service is taxed where its consumer is, so the printed treatment is a DERIVED attribute of
+    # the buyer's jurisdiction, not a new fact about the seller: a Ukrainian resident's page adds
+    # one rate, a relocated buyer's another, and a business customer under reverse charge none.
+    # 👁 The author's own cross-border platform receipts print exactly this form — net line items,
+    # the tax in a row of its own with the rate in the caption, and a total that is their sum —
+    # where every Ukrainian page of this corpus prices gross and states «У т.ч. ПДВ» for
+    # information. WHICH of the three forms a page draws is `eu_tax_treatment` in
+    # config/generation.yaml; WHAT each form prints is decided here, because captions and rates
+    # on a page are this file's subject.
+    #
+    # ⛔ THE RATE VALUES ARE PROJECT PARAMETERS FOR REPRODUCING THE FORM OF THE DOCUMENT — NOT
+    # STATEMENTS ABOUT THE TAX LAW OF ANY JURISDICTION. The one exception is Ukraine's 20%,
+    # which this repository already cites from published law (📄 Law № 1525-IX with ст. 208¹
+    # ПКУ: a non-resident supplying electronic services to Ukrainian individuals registers for
+    # ПДВ and charges 20% — templates/README.md, source family 2, where the citation lives).
+    # The PL/DE/ES figures are deliberately NOT the standard VAT rates in force anywhere: any
+    # plausible value reproduces the form, and a real rate here would read as an assertion about
+    # place-of-supply rules that this generator does not make. ⚠️ Only the UA entry is reachable
+    # today — the corpus is generated with `--country UA` — the others are the axis itself,
+    # wired for the day a persona's country moves.
+    tax_on_top:
+      rate_by_buyer_country:
+        UA: 20.0
+        PL: 18.0
+        DE: 16.0
+        ES: 15.0
+      # The row caption of the tax-on-top form; `rate` arrives pre-formatted, as
+      # `platform_receipt.vat_label_format` takes it in the UA block.
+      label_format: "VAT ({rate}%)"
+      # The zero row of the reverse-charge form: the caption names the mechanism, the figure is
+      # 0.00, and the foot carries the sentence below. ⚠️ DERIVED WORDING, not quoted — it states
+      # the practice's standard content (the recipient accounts for the tax) without reproducing
+      # any platform's own sentence.
+      reverse_charge_label: "VAT (reverse charge)"
+      reverse_charge_note: "VAT reverse charged: tax to be accounted for by the recipient."
+
     identifiers:
       iban: { pattern: "[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}", checksum: iban, label: "IBAN" }
       bic: { pattern: "[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?", label: "BIC" }
@@ -1331,9 +1369,14 @@ jurisdictions:
 
     # The English exonym per country code — the same table the UA block carries in Ukrainian, and
     # the reason it sits at this level rather than under a class. The buyer's own country code is
-    # the lookup key on every page that names it.
+    # the lookup key on every page that names it. ⚠️ Only UA is reachable today, exactly as for
+    # `tax_on_top.rate_by_buyer_country` above and for the same reason; the other three entries
+    # are plain exonyms and assert nothing beyond a name.
     country_names:
       UA: "Ukraine"
+      PL: "Poland"
+      DE: "Germany"
+      ES: "Spain"
 
     receipt:
       title: "VAT INVOICE"
@@ -1392,12 +1435,13 @@ jurisdictions:
     #
     # 📄 WHAT THE LAW SAYS AND WHERE IT STOPS. Article 226 of Directive 2006/112/EC lists the
     # particulars of an invoice issued under the VAT Directive, and Articles 44 and 59 place the
-    # supply of these services to a customer OUTSIDE the Community outside the scope of EU VAT —
-    # so no invoice is required under Article 220 and none of Article 226's tax particulars apply.
-    # The page therefore carries the commercially ordinary content and says, in one line, why it
-    # charges no tax. This is the same argument `platform_receipt` above makes for its omissions,
-    # reached from the other end: that document declares itself not a VAT invoice, this one is an
-    # invoice for a supply the tax does not reach.
+    # supply of these services to a customer OUTSIDE the Community outside the scope of EU VAT.
+    # WHAT THE TOTALS BLOCK SAYS ABOUT THE TAX IS DRAWN — one of the three forms of `tax_on_top`
+    # above, derived from the buyer's country: the mass form charges the destination tax ON TOP
+    # of the prices, the out-of-scope form prints no row and states the `vat_note` below, and
+    # the reverse-charge form prints a zero row with its own sentence. The platform receipt
+    # varies the same way; what stays fixed on it is the not-a-tax-invoice declaration, which is
+    # a statement about the DOCUMENT where this block's forms are statements about the TAX.
     #
     # ⛔ WHAT IS NOT PRINTED, and each absence is a decision:
     #
@@ -1405,10 +1449,11 @@ jurisdictions:
     #     is the seller's own on a domestic claim and nonsense on this one. Inventing a seat for
     #     a named real platform would be a checkable claim about a real firm, which this
     #     repository does not make — the same refusal `templates/ua_platform_receipt.html` records.
-    #   * NO VAT IDENTIFICATION NUMBER, on either side. config/vendors.json declares every seller
-    #     of the `EU` pool `vat_payer: false` because the flag drives PRINTED requisites, and the
-    #     customer is a private individual with none to state.
-    #   * NO TAX ROW. A zero row would assert a rate was applied; the note asserts that none was.
+    #   * NO VAT IDENTIFICATION NUMBER, on either side, WHATEVER THE DRAWN TAX FORM.
+    #     config/vendors.json declares every seller of the `EU` pool `vat_payer: false` because
+    #     the flag drives PRINTED Ukrainian requisites, and the customer is a private individual
+    #     with none to state — the reverse-charge form included: its sentence names the
+    #     mechanism, and no number is invented to sit beside it.
     #
     # ⚠️ THE LAYOUT IS ONE ARRANGEMENT and no platform's is reproduced — the limit the whole
     # English page style carries, stated in templates/platform_receipt.css.
@@ -1442,10 +1487,12 @@ jurisdictions:
         bank: "Bank"
         reference: "Payment reference"
 
-      # 📄 The sentence that stands where a rate and a tax amount would. It names the provisions
-      # rather than merely asserting the outcome, which is what Article 226(11) requires of an
-      # invoice that charges no tax under an exemption — the nearest published form for saying
-      # this, applied to a supply the Directive does not reach at all.
+      # 📄 The sentence of the OUT-OF-SCOPE form — printed exactly when the drawn treatment
+      # charges no tax and prints no row (see `tax_on_top` above; the other two forms carry
+      # their own statements). It names the provisions rather than merely asserting the outcome,
+      # which is what Article 226(11) requires of an invoice that charges no tax under an
+      # exemption — the nearest published form for saying this, applied to a supply the
+      # Directive does not reach at all.
       vat_note: >-
         VAT not charged: supply of services to a customer outside the European Union
         (Articles 44 and 59, Directive 2006/112/EC).
