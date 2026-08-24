@@ -297,7 +297,7 @@ about **pixels** rather than about labels. Denominator: **37 155 labelled boxes 
 | statement | boxes measured | findings |
 | --- | ---: | ---: |
 | survival — the shipped JPEG kept the marks | 37 124 | **1** |
-| evidence — a box's pixels are its own field's | **not run on this corpus** | — |
+| evidence — a box's pixels are its own field's | **27 933** | **0** |
 
 31 boxes are unmeasured for survival, each with a reason: 30 the render left blank, one lying outside
 the frame.
@@ -308,10 +308,21 @@ of 0.700. It is the corpus's smallest box, 22×14 px, on a washed-out patch span
 repaired and no floor was raised to swallow it — a floor that clears the hardest photograph could not
 go red where the damage is easiest to see, which is the whole reason the floors are per channel.
 
-**The evidence statement was not run on this corpus**, and that is stated rather than left to be
-assumed: it costs three renders a page. It *was* run at the same seed and command on the corpus this
-one replaced — 28 433 boxes, no findings, over the same eleven archetypes. That is evidence about the
-templates, which nothing between the two runs touched; it is not a measurement of these 37 155 boxes.
+**The evidence statement WAS run on this corpus** — 🔴 corrected 24.08.2026, and the paragraph that stood
+here said the opposite. `docs/pixel-gate-evidence-rp07.log`, committed beside this file, is the run: seed 42,
+`documents observed 1360`, `files observed 1122`, `labelled boxes seen 37155`, `documents in the manifest
+1241` — this corpus and no other. It reports `boxes measured: evidence 27933` and **no evidence findings**;
+the single finding in it is the survival one named above.
+
+9 222 boxes are unmeasured for evidence, each with a reason the log prints: 7 417 where the element holds no
+editable text, 1 707 where the edited box moved, 98 where the edit resized the page.
+
+⚠️ **The retracted claim was not a hedge but a stronger statement made weaker.** It said the evidence
+statement cost three renders a page and had been run only on the corpus this one replaced (28 433 boxes),
+so what stood here was evidence about the templates rather than a measurement of these boxes. The log
+disproves it: the measurement of these boxes exists. The survival row and the single finding in the table
+above were already being read from this same log, so the file was quoting one half of a run while denying
+the other half happened.
 
 ## Other properties of this corpus
 
