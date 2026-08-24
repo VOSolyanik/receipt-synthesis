@@ -245,12 +245,11 @@ def _grey(image: np.ndarray) -> np.ndarray:
 # would close it and would re-open the calibration above, which is why it is recorded rather than
 # tuned here.
 #
-# 🔴 And in either direction, which the first version got wrong and the coverage report caught. Two
-# archetypes of this corpus are banking-app screens in a dark theme — light text on a dark panel —
-# so "darker than the paper" found no marks in any of their boxes and nine of them went unmeasured
-# on a single seed. They were counted and printed rather than passed over, which is the only reason
-# the gap was visible at all; a gate that had reported them as clean would have been silent about
-# two whole archetypes.
+# 🔴 And in either direction. Two archetypes of this corpus are banking-app screens in a dark theme
+# — light text on a dark panel — so "darker than the paper" finds no marks in any of their boxes,
+# and nine went unmeasured on a single seed. Counting and printing them rather than passing over
+# them is the only reason that gap is visible at all; reporting them as clean would be silent
+# about two whole archetypes.
 _INK_CONTRAST = 25
 
 

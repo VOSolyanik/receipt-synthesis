@@ -177,8 +177,8 @@ def _confirmation_fields(text: str) -> dict[str, str | None]:
     ⚠️ the payer block can be a hyphen. On the internet-acquiring mode the payer is not
     identified at all, and a pattern that simply took "the next Код after Платник" would run
     on into the recipient's block and report the payee's code as the payer's. That is not a
-    hypothetical: the first version of this reader did exactly that and manufactured 32
-    disagreements out of a corpus that had none.
+    hypothetical: a reader that did exactly that manufactured 32 disagreements out of a corpus
+    that had none.
     """
     parties = {
         match.group("role"): match for match in CONFIRMATION_PARTY.finditer(text + "\n")
