@@ -104,8 +104,17 @@ class Archetype:
     # to be refused.
     #
     # DECLARED HERE AND PRINTED BY THE BUILDER, exactly as `language` is, so the two can drift.
-    # `tests/test_archetype_currency.py` builds one document per archetype and compares the
-    # label's `currency` against this field, which is what stops them.
+    # ⚠️ NOTHING GUARDS THAT DRIFT TODAY, and this comment used to claim otherwise: it cited
+    # `tests/test_archetype_currency.py` as building one document per archetype and comparing the
+    # label's `currency` against this field. THAT FILE HAS NEVER EXISTED (checked 24.08.2026), and
+    # no other test sweeps the registry for this property — `test_claim_currency.py` asserts the
+    # registry pairs within a currency, which is a different statement, and the euro archetypes are
+    # covered one at a time in `test_eu_invoice.py` and `test_payment_confirmation_eur.py`.
+    #
+    # The risk is concrete rather than theoretical: several builders in `content_builder` write
+    # `currency="UAH"` literally instead of reading this field, so an archetype registered with a
+    # non-UAH currency whose builder was not updated would print a label contradicting its own
+    # declaration, and the suite would stay green. Three of the thirteen archetypes are EUR.
     currency: str = "UAH"
     # 🔴 `country` IS THE CLAIMANT'S JURISDICTION — the key `archetypes_for` selects by,
     # which is the persona's — and the SELLER need not share it: a Ukrainian employee

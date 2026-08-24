@@ -132,9 +132,16 @@ linked claims come from (an order screenshot plus an account statement) and wher
 invoice on its own proves nothing was paid). A fiscal receipt is the only common document establishing both
 at once.
 
-These are type-level defaults. A specific archetype may override them — a bank payment confirmation whose
-payment purpose spells out what was bought does prove the subject, unlike a bare transfer. That override
-belongs to the archetype registration, not to this file.
+These are type-level facts, and **there is no per-archetype override** — `claim_planner.evidence_of` returns
+`document_evidence(archetype.doc_type)` and nothing else, and `Archetype` carries no field that could say
+otherwise. A template whose evidence differs from its class must not be registered until a document's role is
+carried in the label rather than derived from its type; `docs/architecture.md` states the same rule under
+"Extending the generator".
+
+⚠️ This paragraph previously said an archetype *may* override the defaults — a bank confirmation whose
+payment purpose spells out what was bought proving the subject, unlike a bare transfer. **No such mechanism
+exists.** The example is a real limitation of the type-level model rather than a feature: such a confirmation
+is labelled as proving payment only, and the corpus contains no way to say otherwise.
 
 **`verdict_mix` is a dataset-balance decision, not an estimate of anything.** In production the `covered`
 class would dominate heavily. Over-representing the harder verdicts is what makes per-class F1 meaningful,

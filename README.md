@@ -16,7 +16,7 @@ detection in multi-document files, deduplication, and reimbursement-decision log
 ## Status
 
 The Ukrainian side is built and produces delivered corpora; the European side is not started. The pipeline
-runs end to end, and the labelling contract (`config/labelling-schema.yaml`) is at **version 38**. See
+runs end to end, and the labelling contract (`config/labelling-schema.yaml`) is at **version 40**. See
 [docs/architecture.md](docs/architecture.md) for the full design.
 
 | Component | State |
@@ -29,13 +29,16 @@ runs end to end, and the labelling contract (`config/labelling-schema.yaml`) is 
 | Multi-document files and multi-page documents | in place — a file may carry several documents, a statement several sheets |
 | Cross-document identity | in place, and audited from the rendered text by `tools/cross_document_audit.py` |
 | Pixel↔label gate | in place — `tools/pixel_label_gate.py`, evidence and survival per labelled box |
-| Invariant test suite | in place — 34 test modules under `tests/` |
+| Invariant test suite | in place — 37 test modules under `tests/` |
 
-**The 11 archetypes and the 6 classes they build.** `fiscal_receipt` — a software cash register (ПРРО) on
+**The 13 archetypes and the 6 classes they build.** `fiscal_receipt` — a software cash register (ПРРО) on
 80 mm and on 58 mm paper and a classic hardware register (РРО), which prints a different set of fiscal
-requisites; `payment_confirmation` — an A4 bank confirmation plus two screen-native app archetypes;
-`bank_statement`; `invoice`; `non_fiscal_receipt` — the товарний чек, which proves the subject and not the
+requisites; `payment_confirmation` — an A4 bank confirmation, two screen-native app archetypes, and a
+euro-denominated confirmation; `bank_statement`; `invoice` — a Ukrainian рахунок and a European one;
+`non_fiscal_receipt` — the товарний чек, which proves the subject and not the
 payment; `platform_receipt` — a Ukrainian and a European variant, the latter pricing in a foreign currency.
+Three of the thirteen are stated in euro (`eu_invoice`, `eu_platform_receipt`,
+`ua_bank_payment_confirmation_eur`); the other ten in hryvnia.
 Two `DocType` members are declared and **not** built — `act` and `order_screenshot`.
 
 **What is not here.** The European rows of the catalogue (PL, DE, ES) have no templates.
@@ -102,9 +105,10 @@ zero.
 
 [`docs/balance-report.md`](docs/balance-report.md) is that report for the **production corpus**, written for a
 reader rather than for a terminal: what the run produced, which per-class figures may be quoted and which may
-not, and what the corpus is not. Its machine-readable twin is profile `RP-06` under `run_profiles` in
+not, and what the corpus is not. Its machine-readable twin is profile `RP-07` under `run_profiles` in
 `config/labelling-schema.yaml` — the one profile there marked authoritative, because it is the corpus a
-consumer receives. The others are examples of how a quantity behaves, and the file says so where the numbers
+consumer receives. **RP-06 was authoritative one contract version ago and is not any more**; it is demoted
+in writing at its own `superseded_by` key, and `run_profiles.authoritative_profile` names the current one. The others are examples of how a quantity behaves, and the file says so where the numbers
 are.
 
 Generation is **deterministic under `--seed`**: the repository ships the generator, its configuration and the
