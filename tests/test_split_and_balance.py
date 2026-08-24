@@ -621,10 +621,10 @@ def test_an_unrealized_cause_at_the_guideline_reads_as_worth_investigating():
 
 
 def test_the_finding_prints_the_probability_its_own_guideline_is_derived_at():
-    """🔴 the finding used to assert more than the derivation supports. It read "LIKELY A
-    DESIGN/MECHANISM DEFECT", i.e. better than even odds, while policy.yaml derives the guideline
-    at the 95% level — so a zero at the guideline is a ~5% event and the word was wrong by an
-    order of magnitude, in the direction that costs somebody an investigation.
+    """🔴 the finding must not assert more than the derivation supports. "LIKELY A
+    DESIGN/MECHANISM DEFECT" claims better than even odds, while policy.yaml derives the guideline
+    at the 95% level — so a zero at the guideline is a ~5% event, and the word is wrong by an
+    order of magnitude in the direction that costs somebody an investigation.
 
     Asserted against the arithmetic rather than against the printed string: (1 − p)^N for the
     rarest declared cause, computed here from policy.yaml on both sides of the comparison — the

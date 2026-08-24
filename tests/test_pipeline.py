@@ -339,14 +339,13 @@ def test_a_verdict_no_archetype_can_carry_is_refused_not_faked():
     ordinary basket would write a wrong label rather than fail. The message has to say what the
     verdict actually needs, not merely that it is unavailable.
 
-    ⚠️ driven by a patched registry since `partially_paid` became realizable, and it used to be
-    parametrized over the verdicts that were not. The list emptied one member at a time —
-    `insufficient_evidence` when its cross-check causes became drawable, `rejected` when its period
-    route did, `not_proof_of_payment` when `EvidenceIntent.PAYMENT_GAP` landed, and `partially_paid`
-    when an archetype learned to print an instalment term — so there is no live case left to drive
-    it with. The capability is not obsolete with them: the enum grows, and the next member added
-    before its mechanism exists is who this protects. Patching is what keeps the branch under test
-    without an unrealizable verdict in the enum that nothing needs.
+    ⚠️ driven by a patched registry, because no unrealizable verdict is left to parametrize over:
+    `insufficient_evidence` went when its cross-check causes became drawable, `rejected` when its
+    period route did, `not_proof_of_payment` when `EvidenceIntent.PAYMENT_GAP` landed, and
+    `partially_paid` when an archetype learned to print an instalment term. The capability is not
+    obsolete with them — the enum grows, and the next member added before its mechanism exists is
+    who this protects — so patching is what keeps the branch under test without carrying an
+    unrealizable verdict nothing needs.
 
     The reason table is patched alongside the subset, because the two are a pair: a verdict removed
     from `REALIZABLE_VERDICTS` with no entry beside it gets the fallback message, which is the
@@ -441,11 +440,10 @@ def test_a_realizable_verdict_with_no_share_cannot_be_drawn_from():
     the failure is named here rather than left to surface as a TypeError inside the standard
     library.
 
-    ⚠️ driven by a patched mix since `rejected` gained a share. It used to be driven by
-    policy.yaml, which declared exactly this combination as long as nothing drew that verdict; now
-    every declared member carries a number, and the guard would be untestable — and untested —
-    without patching one back out. Whoever adds the next verdict to `REALIZABLE_VERDICTS` before
-    giving it a share is who this still protects.
+    ⚠️ driven by a patched mix. policy.yaml declared exactly this combination as long as nothing
+    drew `rejected`; every declared member now carries a number, so the guard is untestable — and
+    untested — without patching one back out. Whoever adds the next verdict to
+    `REALIZABLE_VERDICTS` before giving it a share is who this still protects.
     """
     from receipt_synth import claim_planner
 
@@ -783,10 +781,10 @@ def test_only_an_outside_period_rejected_plan_dates_its_payment_outside_the_peri
     mechanism the claim was built to exercise is absent from the corpus under a label that says
     it is there.
 
-    🔴 the biconditional used to read "outside == rejected", and must never again: that equality
-    was the corpus's most expensive degeneracy — the payment date alone predicted the verdict —
-    and the zero-coverage route exists precisely to break it. The equality below is per route,
-    which is the statement that survives.
+    🔴 the biconditional must never read "outside == rejected". That equality is the corpus's
+    most expensive degeneracy — the payment date alone predicting the verdict — and the
+    zero-coverage route exists precisely to break it. The equality below is per route, which is
+    the statement that survives.
 
     ⚠️ the claim's date, not every document's. policy.yaml checks the period against the payment
     and against nothing else, so a subject document dated inside the window on a `rejected` claim
@@ -1447,12 +1445,10 @@ def test_a_capture_channel_with_no_recipe_raises_rather_than_borrowing_one():
     channel's artefacts would put documents in the corpus labelled as one channel and degraded as
     another, which no test of either channel could see.
 
-    🔴 each table is checked by itself, and the first version of this test was not. There are two
-    recipe tables — one for the paper effects and one for the geometry — and `degrade` calls them in
-    order. Asserting only that `degrade` raises means the second table's guard is enough to keep the
-    test green while the first one is gone: a mutation that deleted the paper table's refusal
-    survived exactly that way, and it was the test that was weak rather than the mutation that was
-    mis-aimed. The denominator is two.
+    🔴 each table is checked by itself. There are two recipe tables — one for the paper effects
+    and one for the geometry — and `degrade` calls them in order, so asserting only that `degrade`
+    raises lets the second table's guard keep the test green while the first one is gone. A
+    mutation deleting the paper table's refusal survives exactly that way. The denominator is two.
     """
     from receipt_synth.degrader import _geometry, _paper_pipeline
 
@@ -1530,10 +1526,10 @@ def test_images_and_labels_are_written(dataset):
 
 def test_the_claim_points_at_the_documents_that_were_written(dataset):
     """The join from a claim to its evidence, asserted against the run rather than against the
-    number one. It used to read `== [result.documents[0].doc_id]` and to pin the type as a fiscal
-    receipt — true while every registered archetype proved both facts, and false the moment the
-    invoice made a split pair buildable. A constant that was a property of the registry is exactly
-    what the test above it warns about."""
+    number one. Reading `== [result.documents[0].doc_id]` and pinning the type as a fiscal receipt
+    holds only while every registered archetype proves both facts, and breaks the moment the
+    invoice makes a split pair buildable — a constant that is really a property of the registry,
+    which is what the test above it warns about."""
     result, _ = dataset
     claim = result.claims[0]
 
@@ -2861,10 +2857,10 @@ def test_the_balance_report_names_the_verdicts_it_could_not_generate(multi_claim
     and look balanced. Naming what is absent is the point of the block — and the smaller that
     figure gets, the more a silent renormalization would look like the whole truth.
 
-    ⚠️ driven by a patched registry, and it used to be driven by the live one: `partially_paid`
-    was the last absent member and is now built. The capability outlives the case — the next
-    verdict added to the enum is absent from every corpus until its mechanism lands — so the block
-    is exercised against a registry narrowed to what it looked like a commit ago.
+    ⚠️ driven by a patched registry: `partially_paid` was the last absent member and is now built,
+    so no live case is left. The capability outlives the case — the next verdict added to the enum
+    is absent from every corpus until its mechanism lands — so the block is exercised against a
+    registry narrowed by one member.
     """
     from receipt_synth import assembler as assembler_module
 
@@ -2896,8 +2892,8 @@ def test_a_verdict_with_no_share_is_named_and_does_not_enter_the_arithmetic(
     to be called a lower bound. Silently summing a `None` as zero would leave a complete-looking
     figure on the page.
 
-    ⚠️ driven by a patched mix, and it used to be driven by policy.yaml — `rejected` carried no
-    share there until the planner learned to aim at it. The capability is not obsolete with it:
+    ⚠️ driven by a patched mix: `rejected` carried no share in policy.yaml until the planner
+    learned to aim at it. The capability is not obsolete with it:
     the loader still returns `None`, `verdict_mix` documents the case, and the next verdict
     declared before its mechanism exists arrives the same way. Patching is what keeps the branch
     under test without a `null` in the policy that nothing needs.

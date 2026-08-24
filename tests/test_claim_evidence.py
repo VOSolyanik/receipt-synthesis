@@ -1139,12 +1139,11 @@ def test_a_disagreeing_claim_consumes_no_balance():
 def test_a_bank_statement_now_pairs_with_a_subject_document_like_any_other_payment():
     """What replaced the blanket refusal of a statement, and it is the same test inverted.
 
-    A statement used to be refused outright here, on the ground that it lists several
-    transactions while its label carried one amount for the whole document, so nothing pointed
-    at the row the claim was about. Its label now describes one transaction — the row's amount,
-    date, counterparty and direction, with `relevant_transaction` naming the row — so the
-    claim's money is identified exactly as well as it is on a confirmation, and the type is an
-    ordinary payment document to this function.
+    The blanket refusal rested on a statement listing several transactions while its label
+    carried one amount for the whole document, so nothing pointed at the row the claim was about.
+    Its label describes one transaction — the row's amount, date, counterparty and direction, with
+    `relevant_transaction` naming the row — so the claim's money is identified as well as it is on
+    a confirmation, and the type is an ordinary payment document to this function.
 
     Asserted on the shape rather than on a verdict, because that is what changed: one
     transaction, the invoice as its subject and the statement as its payment.
@@ -1749,14 +1748,14 @@ def test_document_ids_are_numbered_from_the_plan_and_not_fixed_at_one(tmp_path):
 
 
 def test_a_planned_archetype_with_no_builder_fails_by_name():
-    """The other assumption the loop used to carry: every document was built by
+    """The other assumption a dispatch loop can carry: that every document is built by
     `build_prro_receipt`, whatever the plan said. An archetype nothing can produce has to say so
     rather than be handed to the one builder that exists.
 
-    ⚠️ the subject of this test had to move. It planned a `ua_invoice`, which had no builder; it has
-    one now, so the archetype stopped being unproducible and the test began asserting that a real
-    builder raises on an empty vendor — a different thing entirely, and one nothing needed. An `act`
-    takes its place: 📄 a type policy.yaml gives evidence for and no template produces. The
+    ⚠️ the subject has to be a class that stays unproducible. `ua_invoice` served until it gained a
+    builder, at which point the test silently became one about a real builder raising on an empty
+    vendor. An `act` takes its place: 📄 a type policy.yaml gives evidence for and no template
+    produces. The
     assertion below checks that it genuinely has no builder, so the day one lands this test says so
     instead of passing while measuring nothing.
     """

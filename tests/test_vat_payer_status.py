@@ -236,9 +236,9 @@ def test_every_ukrainian_vendor_entry_declares_its_status():
     entries = [(name, entry) for name, block in categories.items() for entry in block]
     assert len(categories) == 7
 
-    # A floor, not a count. This used to be `len(entries) == 44`, which reddened on every
-    # legitimate vendor addition — including a correctly flagged one — and a test that fails
-    # on correct work teaches its reader to edit the number rather than to look.
+    # A floor, not a count. An exact `len(entries) == 44` reddens on every legitimate vendor
+    # addition, including a correctly flagged one, and a test that fails on correct work teaches
+    # its reader to edit the number rather than to look.
     #
     # What the count caught, and it is exactly one thing: the `missing` check below is empty
     # both when every entry declares the flag and when the comprehension found no entries at

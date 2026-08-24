@@ -65,10 +65,10 @@ def rendered(renderer, tmp_path_factory):
 def printed_values(markup: str) -> list[str]:
     """The inner text of every marked field, as a reader would see it.
 
-    ⚠️ entities are unescaped, and the first version of this helper did not: Jinja autoescapes, so
-    an apostrophe reaches the markup as `&#39;` while `innerText` returns the character. Comparing
-    the two raw made this file report a generator defect that was its own — the amount in words
-    was "missing" from the page it is printed on.
+    ⚠️ entities are unescaped. Jinja autoescapes, so an apostrophe reaches the markup as `&#39;`
+    while `innerText` returns the character; comparing the two raw makes this file report a
+    generator defect that is its own — the amount in words "missing" from the page it is
+    printed on.
     """
     return [
         unescape(re.sub(r"<[^>]+>", "", body)).strip()
@@ -118,8 +118,8 @@ def test_the_text_is_what_a_reader_sees_and_not_the_markup(slug, rendered):
     characters over 134 lines with 102 and 121 of them. A mutation swapping the two survived a test
     that only asked whether a newline appeared anywhere.
 
-    ⚠️ blank lines are not one of the signals, and the first version of this test used them. The
-    bank statement's `innerText` legitimately carries 18 — its table has empty cells, and an empty
+    ⚠️ blank lines are not one of the signals. The bank statement's `innerText` legitimately
+    carries 18 — its table has empty cells, and an empty
     cell is an empty line to a reader. Measured across the registry: 0 blank lines on five
     archetypes and 18 on the statement, against 0 four-space runs and 0 indented lines on all six.
     A signal that fires on a correct document is not a signal.

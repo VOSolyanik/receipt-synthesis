@@ -1,12 +1,12 @@
 """One bank name, one bank code — everywhere it is drawn, not only within one call.
 
 🔴 the defect this file exists for: `draw_party_identity`, `build_payment_confirmation` and
-`build_bank_statement` each used to draw a bank's name and its МФО (`bank_code`) independently.
-Every single call was internally consistent — the account it built really did carry the code it
-drew — so nothing local to one call could see the problem. What broke is the fact two different
-calls have no reason to agree: measured on a delivered run, 7 claims of 60 printed one real bank
-name with two different codes, because the payer's own bank (drawn in the payment document) and
-the claim's payee bank (drawn in `draw_party_identity`) happened to name the same institution.
+`build_bank_statement` each drawing a bank's name and its МФО (`bank_code`) independently. Every
+such call is internally consistent — the account it builds really does carry the code it drew — so
+nothing local to one call can see the problem. Two different calls have no reason to agree:
+measured on a delivered run, 7 claims of 60 printed one real bank name with two different codes,
+because the payer's own bank (drawn in the payment document) and the claim's payee bank (drawn in
+`draw_party_identity`) happened to name the same institution.
 
 The fix is a lookup, not a stricter draw. `config.bank_codes` is a fixed, invented name → code
 table (`config/vendors.json` `banks.<country>[].bank_code`); every site above draws the name with

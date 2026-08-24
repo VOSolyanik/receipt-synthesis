@@ -57,8 +57,8 @@ def _px(key: str) -> int:
     """A declared paper dimension in millimetres, as the rendered pixel count.
 
     Rounded rather than truncated, which is what the browser does with a fractional CSS pixel:
-    297 mm is 1122.5 px and the page is 1123 px wide. Truncating gave 1122 and the first version of
-    the page-size test failed on its own arithmetic rather than on the render.
+    297 mm is 1122.5 px and the page is 1123 px wide. Truncating gives 1122, and the page-size
+    test then fails on its own arithmetic rather than on the render.
     """
     return round(Decimal(BLOCK["page"][key]) * DPI / MM_PER_INCH)
 
@@ -753,11 +753,11 @@ def test_the_bank_charges_its_own_service_fee_on_every_statement():
     recurs monthly, so its presence within a period is expected, and ⛔ one document cannot give a
     rate. It also gives the page a debit that is not a payment to a vendor.
 
-    🔴 the code, not only the name. This row used to draw its own МФО instead of printing the
-    header's, so a delivered statement could name «АТ «Сенс Банк», код 686743» in the header and
-    the same bank with code 399161 two lines later — three requisites of one bank on one page, two
-    of them disagreeing. `counterparty_code` and the МФО inside `counterparty_account` (an IBAN
-    carries it at `[4:10]`) both have to equal the document's own `bank_code`.
+    🔴 the code, not only the name. A row drawing its own МФО instead of printing the header's
+    lets a delivered statement name «АТ «Сенс Банк», код 686743» in the header and the same bank
+    with code 399161 two lines later — three requisites of one bank on one page, two of them
+    disagreeing. `counterparty_code` and the МФО inside `counterparty_account` (an IBAN carries it
+    at `[4:10]`) both have to equal the document's own `bank_code`.
     """
     fee_purpose = statement_purposes("uk", "service_fee")[0]
     for seed in range(12):
@@ -781,12 +781,11 @@ def test_a_statement_purpose_is_filled_only_from_a_document_reference():
     from an invoice number and date and from nothing else — never from the placeholder vocabulary
     that prints merchandise on a receipt.
 
-    What this test does not do, said plainly because the first version of it did nothing at all.
-    "The purpose does not name the expense" is a property of the words in config/generation.yaml,
-    and a test reading them to check a claim about them compares the file with itself —
-    the defect `lessons.md` records as moving the oracle and the subject together. The first version
-    asserted that no `item_kind` slug appeared in a Ukrainian sentence, which is true of every
-    Ukrainian sentence ever written, and would have passed whatever the pool said.
+    What this test does not do. "The purpose does not name the expense" is a property of the words
+    in config/generation.yaml, and a test reading them to check a claim about them compares the
+    file with itself — the defect `lessons.md` records as moving the oracle and the subject
+    together. Asserting that no `item_kind` slug appears in a Ukrainian sentence is true of every
+    Ukrainian sentence ever written, and passes whatever the pool says.
 
     What is checkable is the agreement between the two sides: every template's placeholder set
     against the arguments `purpose_of` supplies. A template naming a fourth placeholder raises, and

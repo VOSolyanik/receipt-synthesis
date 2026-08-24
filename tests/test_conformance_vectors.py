@@ -199,9 +199,8 @@ def canonical_failures(record: dict) -> list[str]:
 
     # `party_name` additionally makes the bare name authoritative, so a label carrying a printed
     # legal form is not in canonical form. Checked on the prefixes content_builder can print, and
-    # on the trimmed value: the first version tested the raw string, so a name that was both
-    # untrimmed and prefixed reported only the whitespace and the more serious fault was masked by
-    # the lesser one.
+    # on the trimmed value: testing the raw string reports only the whitespace for a name that is
+    # both untrimmed and prefixed, masking the more serious fault behind the lesser one.
     counterparty = record.get("counterparty")
     if isinstance(counterparty, str):
         for prefix in ("ТОВ ", "ФОП ", "ПрАТ "):

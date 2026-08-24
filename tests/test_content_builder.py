@@ -484,11 +484,10 @@ def fills(template: str, kind: str, language: str) -> bool:
 def test_every_name_template_in_the_policy_can_be_filled():
     """The gate that stops the vocabulary narrowing again.
 
-    A template whose placeholder had no vocabulary used to be skipped, silently, which
-    made the printed vocabulary of the dataset a subset of the one policy.yaml declares —
-    with nothing anywhere saying which subset. Filling every template is now the invariant,
-    and a new template naming a new placeholder fails here rather than at generation time
-    on a machine nobody is watching.
+    Skipping a template whose placeholder has no vocabulary — silently — makes the printed
+    vocabulary of the dataset a subset of the one policy.yaml declares, with nothing anywhere
+    saying which subset. Filling every template is the invariant, so a new template naming a new
+    placeholder fails here rather than at generation time on a machine nobody is watching.
 
     The exception is enumerated, not open: `unprintable_item_kinds` in generation.yaml names
     the kinds that cannot be filled and why, and the test below holds that list to being
@@ -806,8 +805,8 @@ def test_the_receipt_number_format_follows_the_kind_of_register():
     """👁 A ПРРО issues a short alphanumeric id; a hardware register counts its receipts, so
     the number is a short sequence of digits. Both patterns are read from
     `receipt.receipt_number` in config/fiscal-rules.yaml, so a length written into the builder
-    beside the pattern cannot drift from it — the alphanumeric length used to be an `11` in
-    code with a `{11}` in config and nothing tying them together.
+    beside the pattern cannot drift from it — an `11` in code beside a `{11}` in config has
+    nothing tying the two together.
     """
     patterns = jurisdiction("UA")["receipt"]["receipt_number"]
     for kind, rules in registrars().items():

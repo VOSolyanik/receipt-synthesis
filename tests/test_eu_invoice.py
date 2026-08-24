@@ -1,9 +1,10 @@
 """The cross-border invoice — the subject half of a euro claim.
 
 The archetype's reason to exist is a selection fact, not a document one, and the first group below
-is about that: a euro claim used to be a `platform_receipt`, which proves both facts and is
-therefore the whole of its claim, so the oracle's conversion never ran across a pair and never
-landed on a class a consumer extracts. The rest of the file is what the page states — an offer to
+is about that: the only other euro class is `platform_receipt`, which proves both facts and is
+therefore the whole of its claim, so without this archetype the oracle's conversion never runs
+across a pair and never lands on a class a consumer extracts. The rest of the file is what the
+page states — an offer to
 pay and never a record of payment — and what it deliberately does not.
 """
 

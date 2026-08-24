@@ -169,12 +169,11 @@ def test_verdict_mix_names_every_verdict_and_every_one_now_carries_a_share():
 
         0.40 + 0.20 + 0.10 + 0.10 + 0.10 + 0.10 = 1.00
 
-    ⚠️ `rejected` used to be the exception, declared as `null` while nothing could build such a
-    claim. It gained 0.10 when the planner learned to date a payment outside the benefit period,
-    and `covered` gave up exactly that much — which is why the sum is unchanged and why the
-    realizable subset still totals 0.80. The undecided-share mechanism is untouched and still
-    tested, one test below: the next verdict declared before its mechanism exists arrives the
-    same way.
+    ⚠️ `rejected` was the exception, declared as `null` while nothing could build such a claim.
+    It took 0.10 when the planner learned to date a payment outside the benefit period, and
+    `covered` gave up exactly that much, which is why the sum is unchanged and the realizable
+    subset still totals 0.80. The undecided-share mechanism is untouched and still tested, one
+    test below: the next verdict declared before its mechanism exists arrives the same way.
     """
     mix = verdict_mix()
     assert set(mix) == set(Verdict), "every verdict is named in the mix"
@@ -406,8 +405,8 @@ def test_a_wholly_non_covered_basket_is_rejected():
         total   500.00
         fraction    0  ->  rejected
 
-    policy.yaml's `coverage` block sends a zero covered fraction to `rejected`, and the
-    enum now carries that member, so there is one answer where there used to be a slash.
+    policy.yaml's `coverage` block sends a zero covered fraction to `rejected`, and the enum
+    carries that member, so the answer is single-valued.
 
     The whole claim, hand-derived:
         verdict             rejected — nothing on the document belongs to the category
