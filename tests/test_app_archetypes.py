@@ -1,10 +1,10 @@
 """The banking application's two carriers of the payment_confirmation class.
 
 Two archetypes, one phone, opposite arguments. `ua_bank_app_transaction` is the negative
-example by LACK of requisites — it looks like proof of payment and carries none of the
+example by lack of requisites — it looks like proof of payment and carries none of the
 marks proof of payment is recognized by — so its tests are mostly about what is absent,
 checked on the collected fields and the label. `ua_bank_receipt_in_app` is the A4
-confirmation itself inside the app's frame, so its tests are about IDENTITY: the same
+confirmation itself inside the app's frame, so its tests are about identity: the same
 builder, the same label, one document on two carriers — asserted by construction, not by
 resemblance.
 
@@ -101,7 +101,7 @@ def test_the_payment_pool_is_fully_listed_in_the_share_table():
 
 
 def test_a_half_declared_pool_is_refused_and_an_undeclared_one_draws_uniformly():
-    """The all-or-none rule itself, on hand-built pools: a table listing SOME members of
+    """The all-or-none rule itself, on hand-built pools: a table listing some members of
     a pool is a distribution nobody chose."""
     listed = ARCHETYPES["ua_bank_payment_confirmation"]
     unlisted = ARCHETYPES["ua_prro_receipt"]
@@ -154,8 +154,8 @@ def test_the_screen_carries_none_of_the_requisites_proof_is_recognized_by():
 
 
 def test_the_descriptor_is_a_public_prefix_and_the_label_keeps_the_bare_name():
-    """🔴 The split the archetype exists for: the PAGE prints `PREFIX*NAME` — the
-    counterparty as the card network carries it — while the LABEL keeps the bare trade
+    """🔴 The split the archetype exists for: the page prints `PREFIX*NAME` — the
+    counterparty as the card network carries it — while the label keeps the bare trade
     name every other document of the claim agrees on. The prefix comes from the public
     processor pools of config/vendors.json, never invented."""
     document = make_transaction()
@@ -167,7 +167,7 @@ def test_the_descriptor_is_a_public_prefix_and_the_label_keeps_the_bare_name():
 
 def test_the_amount_is_the_claims_where_given_and_drawn_only_for_the_gap():
     """A payment that drew its own amount beside a subject would disagree with it on
-    every claim — so the assembler's amount is used verbatim. `None` is the EVIDENCE-GAP
+    every claim — so the assembler's amount is used verbatim. `None` is the evidence-gap
     claim, which carries this document alone: the transfer is then drawn from the same
     declared range the A4 confirmation draws its own in that case. 🔴 A first version
     refused `None` outright and crashed the one verification seed whose gap claim drew
@@ -215,8 +215,8 @@ def test_the_same_seed_builds_the_same_screen():
 
 
 def test_the_inner_document_is_the_a4_confirmation_itself():
-    """THE CARRIER-INVARIANCE ARGUMENT, by construction: the framed builder consumes the
-    same keywords through the same inner builder, so the same seed yields the SAME
+    """the carrier-invariance argument, by construction: the framed builder consumes the
+    same keywords through the same inner builder, so the same seed yields the same
     confirmation — equal content object, equal label — and the frame adds only chrome
     draws after it. If these two ever diverge, the archetype has lost its reason to
     exist."""
@@ -256,7 +256,7 @@ def test_the_frame_collects_the_documents_fields_and_its_own_chrome(tmp_path):
     assert set(on_paper.field_bboxes) <= set(on_screen.field_bboxes)
     assert "screen_title" in on_screen.field_bboxes
     assert framed.inner.document_code in on_screen.reference_text
-    # The screen heading repeats the document's number under the APP'S word for it.
+    # The screen heading repeats the document's number under the app's word for it.
     assert f"Квитанція № {framed.inner.document_code}" in on_screen.reference_text
 
 

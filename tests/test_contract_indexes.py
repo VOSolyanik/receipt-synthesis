@@ -1,19 +1,19 @@
 """Every index `config/labelling-schema.yaml` offers a consumer resolves.
 
-🔴 WHY THIS FILE EXISTS, because it decides what belongs in it. The contract stored several of
-its indexes as PROSE — a rule's `applies_to` list, a status slot holding a sentence, a
+🔴 why this file exists, because it decides what belongs in it. The contract stored several of
+its indexes as prose — a rule's `applies_to` list, a status slot holding a sentence, a
 `generator:` cell mixing field names with commentary — and prose is not checked. A
-hand-maintained reverse index over the `normalize:` keys diverged from them EIGHT TIMES while
+hand-maintained reverse index over the `normalize:` keys diverged from them eight times while
 under active attention, including inside the very version that added the fields it missed. The
 repair in contract version 21 was structural: delete the duplicate index, make the remaining ones
 data, and hold them here.
 
-⚠️ SO THESE ARE NOT TESTS OF THE GENERATOR. `src/` reads nothing in that file; every assertion
+⚠️ so these are not tests of the generator. `src/` reads nothing in that file; every assertion
 below is about the contract's internal consistency, and the denominator of each is derived from
 the file itself rather than listed here — a field, a rule or a table row added there is covered
 without anyone remembering to extend a list.
 
-WHAT THEY CANNOT SEE, said plainly: whether a rule is the RIGHT rule for a field. That is a
+What they cannot see, said plainly: whether a rule is the right rule for a field. That is a
 judgement no index check reaches, and `conformance_vectors` is where it is pinned instead.
 """
 
@@ -64,7 +64,7 @@ def _slots(slot: str, node, path: str = "") -> list[tuple[str, str]]:
 
 
 def test_every_field_normalize_names_a_real_rule():
-    """🔴 THE ONE THAT BLOCKS A CONSUMER. `normalization[field["normalize"]]` is how a scorecard
+    """🔴 the one that blocks a consumer. `normalization[field["normalize"]]` is how a scorecard
     looks a field's comparison rule up, so a `normalize:` value that is not a key of
     `normalization` raises `KeyError` on a contract that is otherwise valid — and it raises at the
     consumer, on a file it vendored, with nothing here having gone red.
@@ -89,7 +89,7 @@ def test_every_field_normalize_names_a_real_rule():
 
 def test_every_normalization_rule_is_named_by_at_least_one_field():
     """The other direction, and the only thing the deleted `applies_to` index could ever have
-    revealed: an ORPHAN RULE. A rule no field names is either a field that lost its `normalize:`
+    revealed: an orphan rule. A rule no field names is either a field that lost its `normalize:`
     key or a rule kept past the removal of what it governed, and both read as maintained.
 
     Written against the rules rather than against a list here, so a rule added there is covered.
@@ -121,8 +121,8 @@ def test_a_rule_that_delegates_to_another_names_a_real_one():
 
 
 def test_every_status_is_a_word_of_the_vocabulary():
-    """🔴 `status:` IS A RESERVED WORD WITH EXACTLY ONE MEANING. A consumer branches on it, so a
-    value outside `status_vocabulary` compares against nothing — and a whole SENTENCE in the slot
+    """🔴 `status:` is a reserved word with exactly one meaning. A consumer branches on it, so a
+    value outside `status_vocabulary` compares against nothing — and a whole sentence in the slot
     ("done in version 10, and NARROWER than it was asked for") is not a further vocabulary word
     but a value no branch can reach.
 
@@ -153,9 +153,9 @@ def test_every_vocabulary_word_is_used():
 
 
 def test_every_blocked_on_is_a_word_of_the_vocabulary():
-    """🔴 THE SAME DEFECT AS `status:`, ONE KEY OVER, AND WITH A WORSE FAILURE. `blocked_on:` is
+    """🔴 the same defect as `status:`, one key over, and with a worse failure. `blocked_on:` is
     how a consumer sorts `required_changes` into what can be picked up and what waits on the
-    author, so a paragraph in the slot does not merely fail to compare — it compares FALSE.
+    author, so a paragraph in the slot does not merely fail to compare — it compares false.
     Three of the sixteen entries held one until contract version 22, and two of those three begin
     with the word `decision`, so `blocked_on == "decision"` was false for entries blocked on
     precisely a decision and a consumer filtering for mechanical work silently mis-sorted them.
@@ -182,7 +182,7 @@ def test_every_blocked_on_vocabulary_word_is_used():
 
     It has teeth here rather than being symmetry for its own sake: `done` was added in contract
     version 22 for a single entry, RC-06, whose slot had been reading `nothing` — the word this
-    file declares to mean WITHDRAWN — while the change had in fact been made. If that entry is
+    file declares to mean withdrawn — while the change had in fact been made. If that entry is
     ever the last one carrying the word, this is what says so instead of the word quietly becoming
     a fifth meaning nobody asserts.
     """
@@ -194,8 +194,8 @@ def test_every_blocked_on_vocabulary_word_is_used():
 # ------------------------------------------------------------- the hurts vocabulary --
 #
 # Indexed off `known_limitations` rather than walked structurally, and the difference is the
-# contract's own: `status:` and `blocked_on:` are FILE-WIDE reserved words, so the walk exists to
-# find the slot nobody remembered. `hurts:` is a COLUMN OF ONE TABLE, like the `generator:` cell
+# contract's own: `status:` and `blocked_on:` are file-wide reserved words, so the walk exists to
+# find the slot nobody remembered. `hurts:` is a column of one table, like the `generator:` cell
 # below, and the table is the honest denominator.
 
 
@@ -204,10 +204,10 @@ def _hurts() -> list[tuple[str, object]]:
 
 
 def test_every_hurts_is_a_list_of_declared_words():
-    """🔴 THE SLOT THE FILE'S OWN HEADER TOLD A CONSUMER TO COMPARE AGAINST A WORD. Ten of the
-    thirteen entries held one word and three held `training, evaluation` — a comma-joined STRING —
+    """🔴 the slot the file's own header told a consumer to compare against a word. Ten of the
+    thirteen entries held one word and three held `training, evaluation` — a comma-joined string —
     so `entry["hurts"] == "evaluation"`, which the section header instructed in so many words, was
-    FALSE for all three entries that carry two. A consumer selecting what reaches its scorecard
+    false for all three entries that carry two. A consumer selecting what reaches its scorecard
     dropped three live limitations while following the instructions exactly.
 
     Both halves are asserted here because either alone permits the defect: a list of unknown words
@@ -241,7 +241,7 @@ def test_every_hurts_vocabulary_word_is_used():
     consumer to write a branch that can never be taken.
 
     `reporting` is why this is not symmetry for its own sake. It was carried by three entries while
-    the section header described only TWO kinds of consumer, so it was a word in use and defined
+    the section header described only two kinds of consumer, so it was a word in use and defined
     nowhere — the declaration in version 23 is what closed that, and this is what keeps the two
     halves from drifting apart again in either direction.
     """
@@ -263,7 +263,7 @@ def _prd_rows() -> list[tuple[str, dict]]:
 
 @pytest.mark.parametrize("doc_type", sorted(CONTRACT["document_types"]))
 def test_the_generator_column_is_a_list_of_names(doc_type):
-    """🔴 PUNCTUATION WAS STRUCTURAL WHILE THE CELL WAS PROSE. `has_qr, qr_is_fiscal (two
+    """🔴 punctuation was structural while the cell was prose. `has_qr, qr_is_fiscal (two
     booleans)` rearranged into `has_qr (boolean), qr_is_fiscal` reads as a stylistic edit and
     drops a field from the schema — a reader sees tidying, a parser sees one fewer field. As a
     list the same rearrangement is a no-op or a parse error, never a silent loss.
@@ -287,7 +287,7 @@ def test_every_generator_name_is_a_real_label_field():
     that left this table behind, and the list shape alone would not catch either.
 
     `document_label` is the right denominator because the column names what the generator emits
-    PER DOCUMENT, which is that record and no other.
+    per document, which is that record and no other.
     """
     label_fields = {field["name"] for field in CONTRACT["document_label"]["fields"]}
     rows = _prd_rows()
@@ -307,9 +307,9 @@ def test_every_generator_name_is_a_real_label_field():
 # ----------------------------------------- the extraction-schema union, version 36 --
 #
 # The contract's answer to "which label fields must a consumer's extraction schema for a type
-# contain" is a UNION of two indexed slots: the type's `prd_required_fields[].generator` cells,
+# contain" is a union of two indexed slots: the type's `prd_required_fields[].generator` cells,
 # and every `label_field:` value under the type's block whose carrying block is `status: emitted`.
-# The second half exists because the first alone cannot be complete BY CONVENTION: the prd table
+# The second half exists because the first alone cannot be complete by convention: the prd table
 # mirrors the requirement's own field table, so a label field the requirement never asked for by
 # name — `instalment_amount`, on which `partially_paid` rests — has no row to stand in, and a
 # consumer generating its schema from the column alone never learns the field exists. That is not
@@ -321,7 +321,7 @@ def _label_field_carriers() -> list[tuple[str, dict]]:
     """Every dict under `document_types` carrying a `label_field:` key, with its document type.
 
     A structural walk for the same reason `_slots` is one: the point is to find the slot nobody
-    remembered. Not folded into `_slots` because the gate needs the CARRYING BLOCK — its
+    remembered. Not folded into `_slots` because the gate needs the carrying block — its
     `status:` decides whether the slot declares a schema member — and `_slots` returns only the
     path and the value.
     """
@@ -381,13 +381,13 @@ def test_every_label_field_slot_names_a_real_document_label_field():
 
 
 def test_every_field_a_verdict_rests_on_is_reachable_by_an_extraction_schema():
-    """🔴 THE GATE THE VERSION-28 PROSE NEVER HAD. A field a verdict depends on but that no
+    """🔴 the gate the version-28 prose never had. A field a verdict depends on but that no
     indexed slot offers to a consumer is ground truth nobody can be scored against: the label is
     right, the engine's rule is right, and every claim of the verdict still scores as a failure,
     because the extractor was never asked for the field. `instalment_amount` spent seven contract
     versions in exactly that state behind a warning sentence nothing enforced.
 
-    The denominator is DECLARED dependence: the fields of `document_label` carrying the marker
+    The denominator is declared dependence: the fields of `document_label` carrying the marker
     key `a_verdict_rests_on_it`. ⛔ A verdict-bearing field added without the marker is outside
     this gate — the marker's convention at the `document_label` header says the key travels with
     the verdict, and no walk can derive dependence from prose.

@@ -1,9 +1,9 @@
 """The cross-border invoice — the subject half of a euro claim.
 
-THE ARCHETYPE'S REASON TO EXIST IS A SELECTION FACT, not a document one, and the first group below
+The archetype's reason to exist is a selection fact, not a document one, and the first group below
 is about that: a euro claim used to be a `platform_receipt`, which proves both facts and is
 therefore the whole of its claim, so the oracle's conversion never ran across a pair and never
-landed on a class a consumer extracts. The rest of the file is what the page states — an OFFER to
+landed on a class a consumer extracts. The rest of the file is what the page states — an offer to
 pay and never a record of payment — and what it deliberately does not.
 """
 
@@ -112,13 +112,13 @@ def test_it_proves_the_subject_and_no_payment_like_every_invoice():
 
 
 def test_the_category_it_is_registered_for_is_one_that_still_has_a_pair():
-    """🔴 THE CHOICE THE WHOLE REGISTRATION TURNS ON. `_select_documents` PREFERS a document that
+    """🔴 the choice the whole registration turns on. `_select_documents` prefers a document that
     proves both facts wherever one is registered, so a category carrying one never gets an
     invoice-plus-payment pair at any seed. `professional_development` — where the `EU` sellers
     already were — carries the two platform receipts; `language_courses` does not carry any
     such archetype, which is why the euro pair can be drawn there and only there.
 
-    ⛔ THIS IS THE ASSERTION THAT WOULD HAVE CAUGHT THE MISTAKE. The pair was first registered
+    ⛔ this is the assertion that would have caught the mistake. The pair was first registered
     for `professional_development`, rendered correctly in every test, and could not have reached
     a corpus."""
     assert ARCHETYPES[SLUG].categories == (CATEGORY,)
@@ -145,12 +145,12 @@ def test_the_euro_payment_document_beside_it_is_registered_for_the_same_category
 
 
 def test_the_seller_pool_spans_both_baskets_and_both_trades():
-    """🔴 THE POOL, NOT THE SELLER, IS WHAT HAS TO SPAN THE CATEGORY — the same shape as
+    """🔴 the pool, not the seller, is what has to span the category — the same shape as
     professional_development, where the marketplace carries the mixed basket the learning platform
     cannot. An online platform sells tuition and nothing printed, so it cannot carry a line
     `language_courses` excludes; the exam institutes can.
 
-    ⚠️ AND THE POOL HAS TO SPAN BOTH TRADES, which is a measurement rather than a taste. With the
+    ⚠️ and the pool has to span both trades, which is a measurement rather than a taste. With the
     platforms alone no euro basket could draw `language_exam` — 6 000–9 000 UAH a line, which four
     of the six domestic sellers draw — and a euro claim came out systematically smaller than a
     hryvnia one in the same category. Currency was then a proxy for the seller's trade, and a
@@ -197,7 +197,7 @@ def test_every_kind_this_seller_sells_has_a_euro_price_that_nests_in_its_hryvnia
 
 
 def test_the_page_asks_for_money_and_never_records_that_it_moved(rendered):
-    """🔴 THE CLASS'S WHOLE CONTENT. 📄 An invoice is an offer to pay; the fact of payment is
+    """🔴 the class's whole content. 📄 An invoice is an offer to pay; the fact of payment is
     established by the document beside it. A «Paid» mark here would make the class prove both
     facts and contradict `document_evidence` in config/policy.yaml."""
     text = rendered.reference_text
@@ -231,7 +231,7 @@ def test_the_number_the_payment_will_cite_is_printed_and_labelled(rendered):
 def test_the_account_that_makes_it_payable_is_the_claims_own(rendered):
     """⚠️ Bank details are ordinary commercial content and not an Article 226 particular. They are
     printed because an offer to pay that names no account is not payable — and because the account
-    is the CLAIM's, so the transfer beside it settles this obligation rather than resembling one."""
+    is the claim's, so the transfer beside it settles this obligation rather than resembling one."""
     document = make()
 
     assert document.iban.startswith("DE")
@@ -240,7 +240,7 @@ def test_the_account_that_makes_it_payable_is_the_claims_own(rendered):
 
 
 def test_no_seller_identification_at_any_rate_of_drawing(rendered):
-    """⛔ No VAT identification number and no tax code, WHATEVER THE DRAWN TAX FORM — the absences
+    """⛔ No VAT identification number and no tax code, whatever the drawn tax form — the absences
     the config block argues for are absences of the class, not of one form of its totals block."""
     assert "vat_amount" not in rendered.field_bboxes
     assert "seller_vat_number" not in rendered.field_bboxes
@@ -251,8 +251,8 @@ def test_no_seller_identification_at_any_rate_of_drawing(rendered):
 
 
 def test_all_three_tax_forms_are_reachable_and_each_ones_arithmetic_holds():
-    """🔴 THE FORM THE CORPUS LACKED BY CONSTRUCTION, plus the two no-tax forms kept reachable.
-    The mass form adds the destination tax ON TOP, so the printed total EXCEEDS the line items —
+    """🔴 the form the corpus lacked by construction, plus the two no-tax forms kept reachable.
+    The mass form adds the destination tax on top, so the printed total exceeds the line items —
     the honest foreign page a validator holding `Σ lines = total` flags falsely. Which form a
     seed draws is `eu_tax_treatment` in config/generation.yaml; each form's own invariants are
     asserted per document, and all three must occur or the draw is broken."""
@@ -282,7 +282,7 @@ def test_all_three_tax_forms_are_reachable_and_each_ones_arithmetic_holds():
 
 
 def test_the_rate_is_the_buyer_countrys_parameter_and_follows_a_relocation():
-    """The treatment is DERIVED from the buyer's country — the persona's own axis, not a new
+    """The treatment is derived from the buyer's country — the persona's own axis, not a new
     field. Ukraine's 20% is the one figure this repository cites from published law; the other
     entries are ⛔ project parameters for the form, asserted here only to be what the config
     declares, never to be anybody's law."""
@@ -311,7 +311,7 @@ def test_the_rate_is_the_buyer_countrys_parameter_and_follows_a_relocation():
 
 def test_the_tax_on_top_page_prints_the_row_and_no_out_of_scope_sentence(renderer, tmp_path):
     """What is printed is what is labelled: the row's figure carries its own box, the total is
-    the sum, and the foot is ABSENT — no rule over an empty block, no sentence contradicting the
+    the sum, and the foot is absent — no rule over an empty block, no sentence contradicting the
     rate above it."""
     document = make(seed_in_form("tax_on_top"))
     page = renderer.render(SLUG, document.render_context(), tmp_path / "on-top.png")
@@ -341,10 +341,10 @@ def test_the_out_of_scope_page_is_the_old_page_exactly(renderer, tmp_path):
 
 
 def test_the_payment_beside_it_is_told_the_printed_total_on_every_form():
-    """🔴 THE PAIR STAYS ONE TRANSACTION WHICHEVER FORM THE TOTALS BLOCK DREW.
-    `policy_engine._cross_checks` compares the subject's and the payment's amounts EXACTLY, and
+    """🔴 the pair stays one transaction whichever form the totals block drew.
+    `policy_engine._cross_checks` compares the subject's and the payment's amounts exactly, and
     the assembler sizes the payment off the subject's `amount` — so `amount` carrying the
-    PRINTED total is what keeps an honest tax-on-top claim `covered` instead of
+    printed total is what keeps an honest tax-on-top claim `covered` instead of
     `insufficient_evidence` with the cause `amount_mismatch`: the buyer pays what the page asks,
     tax included."""
     payment = ARCHETYPES["ua_bank_payment_confirmation_eur"]
@@ -384,7 +384,7 @@ def test_the_reverse_charge_page_prints_a_zero_row_and_says_who_accounts(rendere
 
 def test_the_seller_carries_its_own_registers_designation_and_no_ukrainian_code(rendered):
     """«italki Inc.» and not «INC «italki»» — the Ukrainian quotation marks are a rule about a
-    Ukrainian firm's name. The bare mark is what the LABEL carries, on every class."""
+    Ukrainian firm's name. The bare mark is what the label carries, on every class."""
     document = make()
 
     assert document.seller_display == "italki Inc."
@@ -393,9 +393,9 @@ def test_the_seller_carries_its_own_registers_designation_and_no_ukrainian_code(
 
 
 def test_the_due_date_never_falls_before_the_payment_that_settles_it():
-    """🔴 A TERM BOUND BY THE CLAIM'S OWN MONEY. An offer whose date has passed is not the
+    """🔴 A term bound by the claim's own money. An offer whose date has passed is not the
     obligation the payment discharged — the Ukrainian invoice's validity line follows the same
-    rule, and the drawn window is a FLOOR on the span rather than the whole of it."""
+    rule, and the drawn window is a floor on the span rather than the whole of it."""
     settled = datetime(2026, 9, 30, 12, 0)
 
     for seed in range(50):
@@ -409,7 +409,7 @@ def test_the_due_date_never_falls_before_the_payment_that_settles_it():
 
 
 def test_the_instalment_term_is_printed_only_when_the_plan_named_one(rendered):
-    """⛔ NEVER DRAWN HERE. It decides the marker `policy_engine` reads to tell `partially_paid`
+    """⛔ never drawn here. It decides the marker `policy_engine` reads to tell `partially_paid`
     from `amount_mismatch`, so a builder that drew it would be choosing a claim's verdict."""
     assert make().instalment_amount is None
     assert "instalment_amount" not in rendered.field_bboxes
@@ -423,7 +423,7 @@ def test_the_instalment_term_is_printed_only_when_the_plan_named_one(rendered):
 
 
 def test_the_class_can_state_an_instalment_term_at_all():
-    """`claim_planner` selects the subject of a `partially_paid` claim by CLASS, so an invoice
+    """`claim_planner` selects the subject of a `partially_paid` claim by class, so an invoice
     archetype whose page could not print the term would be planned and then print nothing."""
     assert ARCHETYPES[SLUG].doc_type in STATES_AN_INSTALMENT_TERM
     assert "instalment_caption_format" in jurisdiction("EU")["invoice"]
@@ -449,7 +449,7 @@ def test_the_label_is_the_ukrainian_invoices_record_in_another_currency():
 
 
 def test_the_label_amount_is_the_printed_total_and_the_tax_is_labelled_apart():
-    """🔴 `amount` IS WHAT THE PAGE ASKS FOR — the payment document beside it is told exactly this
+    """🔴 `amount` is what the page asks for — the payment document beside it is told exactly this
     figure (`assembler._amount_the_payment_states`), so the pair stays one transaction whichever
     form the totals block drew. `tax` is labelled apart so `amount = Σ line items + tax` is a
     checkable statement rather than a broken invariant, on every form."""

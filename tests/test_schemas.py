@@ -1,7 +1,7 @@
 """`DocGroundTruth`'s region/page fields: two independent relations.
 
-ONE DOCUMENT ACROSS SEVERAL PAGES (`page_count` / `page_regions`) and SEVERAL DOCUMENTS
-IN ONE FILE (`file_region`) are orthogonal — a file can hold more than this document, this
+One document across several pages (`page_count` / `page_regions`) and several documents
+in one file (`file_region`) are orthogonal — a file can hold more than this document, this
 document can span more than one page inside it, and the two can combine. Nothing here
 draws or builds a multi-document file yet; this only pins the label shape and the
 invariant between `page_count` and `page_regions`.
@@ -78,7 +78,7 @@ def test_page_regions_longer_than_page_count_is_rejected():
 
 def test_page_regions_present_with_the_default_page_count_is_rejected():
     """`page_count` defaults to 1, and a `page_regions` list must not sneak in beside it —
-    the mismatch is on the PAIR, not only on an explicitly stated `page_count`."""
+    the mismatch is on the pair, not only on an explicitly stated `page_count`."""
     with pytest.raises(ValidationError):
         a_document(page_regions=[(0.0, 0.0, 10.0, 10.0)])
 

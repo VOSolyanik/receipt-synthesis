@@ -124,7 +124,7 @@ def test_all_invariants_hold(seed):
 
     assert validate_line_item_sum(receipt.line_items, receipt.total)
     assert validate_amount_in_words(receipt.amount_in_words, receipt.total)
-    # A registered ПДВ payer prints its identification code under "ІД" AND its VAT-payer number
+    # A registered ПДВ payer prints its identification code under "ІД" and its VAT-payer number
     # under "ПН" — two lines, not one. Which lines a seller carries, their lengths and the whole
     # of the VAT block are tests/test_vat_payer_status.py.
     assert receipt.seller.tax_code_label == "ІД"
@@ -196,7 +196,7 @@ def test_a_mixed_basket_lands_on_the_partially_covered_side_of_the_threshold(see
     """What the builder actually owes the planner. The realized ratio only approaches the
     target — prices are clamped into each item kind's own range so the receipt stays
     plausible — but the verdict it produces has to be the one that was asked for. Under
-    the STRICT rule that is guaranteed by the existence of a non-covered line rather than
+    the strict rule that is guaranteed by the existence of a non-covered line rather than
     by where the ratio lands, which is exactly why the clamp is tolerable."""
     receipt = mixed(seed)
     items = receipt.line_items
@@ -258,7 +258,7 @@ def test_a_mixed_basket_refuses_to_guess_its_coverage():
 @pytest.mark.parametrize("target", ["1", "-0.5", "1.5"])
 def test_a_coverage_target_outside_the_permitted_interval_is_refused(target):
     """At 1 there is no non-covered line, which is `covered`, reached by `covered_only`; above
-    and below the interval nothing is meant at all. ⚠️ ZERO LEFT THIS LIST: it is the
+    and below the interval nothing is meant at all. ⚠️ zero left this list: it is the
     zero-coverage route to `rejected` now, asserted below rather than refused here."""
     with pytest.raises(ValueError):
         mixed(1, coverage_target=target)
@@ -269,7 +269,7 @@ def test_a_coverage_target_outside_the_permitted_interval_is_refused(target):
 
 @pytest.mark.parametrize("seed", range(30))
 def test_a_zero_coverage_basket_contains_no_covered_line(seed):
-    """The realizing step of the `rejected` route by WHAT WAS BOUGHT, in isolation: every line
+    """The realizing step of the `rejected` route by what was bought, in isolation: every line
     from `excluded_items`, every flag False. A single covered line here would hand the engine a
     `partially_covered` claim under a `rejected` target — the drift that looks like a draw that
     missed, which is why it is asserted per seed rather than once."""
@@ -343,7 +343,7 @@ def test_a_drawn_surname_comes_from_the_narrowed_pool_and_not_from_faker():
 
     `personal_surname` falls back to Faker where a language declares no pool, and a fallback
     that silently swallowed the Ukrainian pool would still produce a plausible ФОП name —
-    nothing downstream would notice. So this asserts that every surname drawn for UA is IN
+    nothing downstream would notice. So this asserts that every surname drawn for UA is in
     the configured set, which the fallback cannot satisfy: Faker's uk_UA pool and this set
     overlap only partly, and its 524 surnames include the rare ones the narrowing removed.
 
@@ -386,7 +386,7 @@ def test_a_sole_trader_name_is_drawn_once_per_vendor_instance_and_carried():
     differ from itself — and nothing had to enforce it or test it. A drawn name can differ,
     and the requirement did not change, so the guarantee has to be built and checked.
 
-    The vendor instance is resolved ONCE by the assembler when it picks a vendor for the
+    The vendor instance is resolved once by the assembler when it picks a vendor for the
     claim, and carried into every document; here the same instance is asked for two receipts
     with different generators, which is what a second document of the claim would do.
     """
@@ -544,7 +544,7 @@ def test_every_excluded_kind_of_a_generating_category_can_be_drawn():
     """The positive counterpart to the declaration above, and the invariant KL-02 in
     config/labelling-schema.yaml is measured against.
 
-    A kind declared unprintable is excluded from every draw, so a NON-COVERED kind that lands
+    A kind declared unprintable is excluded from every draw, so a non-covered kind that lands
     in that list narrows the non-covered vocabulary of every document the generator produces —
     which is a property of the corpus that no label mentions. `hygiene` was in it, so the
     excluded vocabulary of the only category with an archetype was three kinds where the policy
@@ -555,21 +555,21 @@ def test_every_excluded_kind_of_a_generating_category_can_be_drawn():
     Scoped to the (jurisdiction, category) pairs some registered archetype carries: a category
     no template can document reaches no dataset either way, and holding one to this would fail
     on the PL / DE / ES lists, which are seeded rather than filled. The union is taken over the
-    vendors of THAT jurisdiction only — pooling every country's vendors would let a Polish entry
+    vendors of that jurisdiction only — pooling every country's vendors would let a Polish entry
     cover a kind no Ukrainian receipt can print.
 
-    ⚠️ AND ITS SCOPE WIDENED WHEN THE INVOICE LANDED, which is how `hobby` came into it. Until then
+    ⚠️ and its scope widened when the invoice landed, which is how `hobby` came into it. Until then
     the only subject-proving archetypes were the three fiscal receipts, all carrying one category;
     the invoice carries every category, so six more (jurisdiction, category) pairs are now swept.
     The first sweep of `hobby` failed on `electronics`, which config/generation.yaml declares
     unprintable — a real narrowing of that category's non-covered vocabulary, now excluded from the
-    expectation and DECLARED as KL-06 rather than asserted away.
+    expectation and declared as KL-06 rather than asserted away.
 
-    AND SCOPED TO ARCHETYPES THAT STATE WHAT WAS BOUGHT, which is narrower than "registered" now
+    And scoped to archetypes that state what was bought, which is narrower than "registered" now
     that the registry holds a second class. A line item reaches a document only through a document
     that lists items: a bank payment confirmation carries every benefit category — nothing on it
     can contradict one, since 👁 it lists nothing at all — so scoping by registration alone would
-    ask which vendors can print the excluded kinds of SEVEN categories onto a document that
+    ask which vendors can print the excluded kinds of seven categories onto a document that
     prints no kinds whatever. The property is about baskets, so the scope is documents with
     baskets.
     """
@@ -593,9 +593,9 @@ def test_every_excluded_kind_of_a_generating_category_can_be_drawn():
                 spec["excluded_items"], vendor if "name" in vendor else {**vendor, "name": "x"}
             )
         }
-        # 🔴 THE EXPECTATION EXCLUDES KINDS DECLARED UNPRINTABLE, and that is not a weakening —
+        # 🔴 The expectation excludes kinds declared unprintable, and that is not a weakening —
         # `unprintable_item_kinds` in config/generation.yaml is the enumerated, tested statement
-        # that a kind cannot be printed, WITH ITS CAUSE. Asserting a kind reachable while another
+        # that a kind cannot be printed, with its cause. Asserting a kind reachable while another
         # file declares it unreachable would make the two files contradict each other and one of
         # them would have to be wrong. What the declaration costs the corpus is measured below.
         declared_unprintable = unprintable_item_kinds()
@@ -743,19 +743,19 @@ def test_fiscal_device_number_is_ten_digits():
 
 
 def test_the_title_is_the_bare_wording_while_no_tag_pairing_is_public():
-    """REWRITTEN, AND THE OLD ASSERTION PINNED SOMETHING UNGROUNDED. It required a tagged title
+    """rewritten, and the old assertion pinned something ungrounded. It required a tagged title
     to occur — "ФІСКАЛЬНИЙ ЧЕК" plus a short abbreviation — over a pool of tags paired with
-    NOTHING, which was harmless only while no maker was printed beside them.
+    nothing, which was harmless only while no maker was printed beside them.
 
     👁 The tag itself is observed and the observation stands, recorded under
     `verified_against_own_receipts` in config/fiscal-rules.yaml. What no published source gives is
-    the PAIRING: which provider prints which tag. Now that 📄 line 35's maker name is printed, a
-    tag beside a NAMED provider would assert a pairing nobody established, so none is printed and
+    the pairing: which provider prints which tag. Now that 📄 line 35's maker name is printed, a
+    tag beside a named provider would assert a pairing nobody established, so none is printed and
     every title is the bare wording.
 
     This is the tripwire for that regression: a tag reappearing without a pairing to justify it
     turns this red. The mechanism is not dead — the patched-pool test below exercises it — so this
-    asserts a state of the DATA, not a missing feature.
+    asserts a state of the data, not a missing feature.
     """
     titles = {build(seed).title for seed in range(40)}
     assert titles == {"ФІСКАЛЬНИЙ ЧЕК"}, (
@@ -766,7 +766,7 @@ def test_the_title_is_the_bare_wording_while_no_tag_pairing_is_public():
 
 # ------------------------------------------------- which kind of cash register --
 #
-# ⚠️ «ЗН» and «ФН» are NOT a pair. 👁 The observed ПРРО receipts print the fiscal number
+# ⚠️ «ЗН» and «ФН» are not a pair. 👁 The observed ПРРО receipts print the fiscal number
 # alone; 👁 the two published hardware samples print the factory serial as well. The set of
 # fiscal identity lines follows the kind of register, and the tests below are what stops the
 # generator from printing a combination no observed receipt of either kind carries.
@@ -816,7 +816,7 @@ def test_the_receipt_number_format_follows_the_kind_of_register():
             number = build(seed, registrar=kind).receipt_number
             assert re.fullmatch(pattern, number), f"{kind}: {number!r} against {pattern}"
 
-    # The sequential format states a RANGE of lengths, and a corpus printing one of them would
+    # The sequential format states a range of lengths, and a corpus printing one of them would
     # teach a consumer that width rather than the field.
     lengths = {len(build(seed, registrar="rro").receipt_number) for seed in range(40)}
     assert len(lengths) > 1, "every hardware receipt number is the same length"
@@ -831,7 +831,7 @@ def test_only_a_prro_prints_the_online_marker():
 
 
 def test_the_title_tag_and_the_maker_name_come_from_one_pool_entry():
-    """📄 Line 35 of the form is ONE requisite — the wording «ФІСКАЛЬНИЙ ЧЕК» together with the
+    """📄 Line 35 of the form is one requisite — the wording «ФІСКАЛЬНИЙ ЧЕК» together with the
     maker's name — and 👁 the title may also carry the maker's own short tag. So the tag and the
     name are two printed forms of one fact, and this is the test that they cannot name different
     makers: drawn from two independent lists, a receipt could show one provider's tag above
@@ -841,11 +841,11 @@ def test_the_title_tag_and_the_maker_name_come_from_one_pool_entry():
     names a pool of config/vendors.json and an entry carries both fields. The pools differ per
     kind, so a maker drawn for a hardware receipt cannot come from the software list.
 
-    ⚠️ THIS TEST CANNOT DISCRIMINATE A MISPAIRING ON TODAY'S DATA, and saying so is the point.
+    ⚠️ this test cannot discriminate a mispairing on today's data, and saying so is the point.
     Every entry's tag is empty, so ("", any name in the pool) satisfies the assertion and code
     that printed one entry's tag beside another's name would pass here. Verified rather than
     assumed: overriding the drawn name with the pool's first entry left this test green. What it
-    still catches is a maker drawn from OUTSIDE the pool. The mispairing itself is caught by
+    still catches is a maker drawn from outside the pool. The mispairing itself is caught by
     `test_a_configured_tag_is_printed_beside_its_own_maker`, on a pool whose tags differ — which
     is the only shape in which the failure is observable at all.
     """
@@ -881,12 +881,12 @@ def test_the_two_kinds_of_register_draw_makers_from_different_pools():
 
 
 def test_a_configured_tag_is_printed_beside_its_own_maker():
-    """The tag mechanism, exercised on a PATCHED pool because no real entry carries a tag.
+    """The tag mechanism, exercised on a patched pool because no real entry carries a tag.
 
-    TWO JOBS, and the second is the one the real-data test above cannot do. First, the wiring:
+    Two jobs, and the second is the one the real-data test above cannot do. First, the wiring:
     without this the mechanism would be untested for as long as the data declines to use it, and
     the bare-wording tripwire would pass equally on a build that had lost the ability to print a
-    tag at all. Second, THE MISPAIRING — a pool whose two entries carry DIFFERENT tags is the only
+    tag at all. Second, the mispairing — a pool whose two entries carry different tags is the only
     shape in which one maker's tag beside another's name is observable, because with every tag
     empty the mispaired result is indistinguishable from the correct one.
 
@@ -1072,7 +1072,7 @@ def test_every_covered_kind_can_appear_on_a_partially_covered_document():
     """Item-kind leakage: a covered kind sold only by profiles that stock nothing the
     category excludes can never share a document with a non-covered line.
 
-    The tell is then the LINE ITEM rather than the counterparty, which is worse — a
+    The tell is then the line item rather than the counterparty, which is worse — a
     consumer picks it up without ever looking at the seller. `online_course` had exactly
     this shape: both profiles selling it were covered-only, so an online course on a
     receipt guaranteed a fully covered claim.
@@ -1154,7 +1154,7 @@ def test_every_category_has_a_vendor_that_can_carry_a_mixed_basket():
 def test_price_ranges_are_ordered_and_within_a_coarse_sanity_band():
     """Ordering, and an outer band no article this generator prints leaves.
 
-    NOT a guard against a range written in minor units by habit, and it was described as
+    Not a guard against a range written in minor units by habit, and it was described as
     one until a reviewer wrote `stationery: ["1500.00", "8000.00"]` and watched the suite
     stay green. A hundredfold slip on a cheap kind lands inside the band, so the band
     cannot see it; a third of the kinds are priced under 1000 UAH and are invisible to it
@@ -1175,7 +1175,7 @@ def test_price_ranges_are_ordered_and_within_a_coarse_sanity_band():
 def test_no_covered_article_costs_more_in_one_line_than_a_year_of_the_benefit():
     """The one price check with an anchor outside config/generation.yaml: `annual_limit`.
 
-    A covered kind whose CHEAPEST form already exceeds what the plan allows for a whole year
+    A covered kind whose cheapest form already exceeds what the plan allows for a whole year
     is wrong on its own terms — no claim in that category could ever be fully reimbursed,
     and every document would be `partially_covered` by an exhausted limit. It also happens
     to catch a hundredfold slip on 20 of the 21 covered kinds, which is where the previous

@@ -1,12 +1,12 @@
-"""🔴 THE KNOWN-ANSWER GATE: a box must land where the pixels it describes landed.
+"""🔴 the known-answer gate: a box must land where the pixels it describes landed.
 
-Every expectation in this file is computed BY HAND from the geometry of the transform, and
+Every expectation in this file is computed by hand from the geometry of the transform, and
 none of it was read off a run. That is the whole value of the file: an expectation copied
 from the code's own output cannot detect the defect it is here for.
 
 **Why this is a gate and not a test at the end of the step.** A bounding box that does not
-follow its pixels corrupts the ground truth of every image in the dataset AND IS INVISIBLE
-IN EVERY METRIC — downstream it reads as poor extraction accuracy rather than as a
+follow its pixels corrupts the ground truth of every image in the dataset and is invisible
+in every metric — downstream it reads as poor extraction accuracy rather than as a
 coordinate defect, so nothing in a scorecard points back here. With three capture channels
 in place a single desync produces three different wrong answers, and separating "the
 transform is wrong" from "this channel is wrong" then costs a day. So: one transform, one
@@ -14,10 +14,10 @@ rectangle, one answer worked out on paper, before any channel fanned out.
 
 It exercises `degrader.carry_boxes` — the production carrier — with transforms of its own
 choosing. A test that assembled its own `A.Compose` would be measuring whether
-Albumentations is correct, which is not what is at risk; what is at risk is whether THIS
+Albumentations is correct, which is not what is at risk; what is at risk is whether this
 repository's box parameters, rounding and rebuild-by-label keep a box on top of its ink.
 
-THE FIXTURE. A 200 × 100 black image with one white rectangle:
+The fixture. A 200 × 100 black image with one white rectangle:
 
     columns 20 … 59  (40 wide)      rows 30 … 39  (10 tall)
 
@@ -74,13 +74,13 @@ def ink_extent(image: np.ndarray) -> tuple[int, int, int, int]:
 
 
 def test_a_mirrored_document_carries_its_box_to_the_mirrored_place():
-    """HAND-COMPUTED. A horizontal flip maps column c to W - 1 - c, so the marker's columns
+    """hand-computed. A horizontal flip maps column c to W - 1 - c, so the marker's columns
     20 … 59 become 200 - 1 - 59 = 140 … 200 - 1 - 20 = 179. That is 40 pixels beginning at
     140, and the rows are untouched:
 
         (20, 30, 40, 10)  ->  (140, 30, 40, 10)
 
-    A flip is used because it is LOSSLESS — no resampling, so the ink after the transform is
+    A flip is used because it is lossless — no resampling, so the ink after the transform is
     exactly as crisp as before it and the pixel measurement has no interpolation slack to
     hide a one-pixel disagreement in.
     """
@@ -93,7 +93,7 @@ def test_a_mirrored_document_carries_its_box_to_the_mirrored_place():
 
 
 def test_a_translated_document_carries_its_box_by_the_same_offset():
-    """HAND-COMPUTED. A translation of +12 columns and -8 rows moves the marker's columns
+    """hand-computed. A translation of +12 columns and -8 rows moves the marker's columns
     20 … 59 to 32 … 71 and its rows 30 … 39 to 22 … 31:
 
         (20, 30, 40, 10)  ->  (32, 22, 40, 10)
@@ -121,14 +121,14 @@ def test_a_translated_document_carries_its_box_by_the_same_offset():
 
 
 def test_a_box_pushed_off_the_edge_is_reported_off_the_edge_and_not_trimmed():
-    """HAND-COMPUTED, and the case `content_complete` rests on. A translation of -30 columns
+    """hand-computed, and the case `content_complete` rests on. A translation of -30 columns
     moves the marker's columns 20 … 59 to -10 … 29, so ten of its forty columns are outside
     the image and thirty remain:
 
         the box, untrimmed:  (-10, 30, 40, 10)
         the ink that is left:  columns 0 … 29, rows 30 … 39  ->  (0, 30, 30, 10)
 
-    THE TWO DISAGREE ON PURPOSE. A pipeline that clipped the box to the frame would return
+    the two disagree on purpose. A pipeline that clipped the box to the frame would return
     (0, 30, 30, 10) — indistinguishable from a document that never lost anything, which is
     precisely how a crop would come to be reported as complete. `carry_boxes` sets
     `clip=False` for this reason, and this is the test that says so.
@@ -158,7 +158,7 @@ def test_a_box_wholly_inside_the_frame_crosses_no_edge():
 @pytest.mark.parametrize(
     ("box", "expected"),
     [
-        # HAND-COMPUTED against a 200 × 100 frame. Each case puts the box one pixel over one
+        # Hand-computed against a 200 × 100 frame. Each case puts the box one pixel over one
         # edge and nowhere else, so a mixed-up comparison shows as the wrong edge name rather
         # than as no finding at all.
         ((-1.0, 30.0, 40.0, 10.0), ("left",)),

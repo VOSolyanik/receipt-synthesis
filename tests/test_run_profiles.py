@@ -1,9 +1,9 @@
 """A limitation is a property of the corpus; a figure is a measurement of one run.
 
-🔴 THE SPLIT THIS MODULE GUARDS. While the two shared a record, every change to the draw forced
+🔴 the split this module guards. While the two shared a record, every change to the draw forced
 rewriting the description of a property that had not changed — and `known_limitations` had
 accumulated six "re-measured for version N" notes saying so. A limitation now describes itself
-qualitatively and REFERENCES a profile; a profile is self-describing, and adding one rewrites
+qualitatively and references a profile; a profile is self-describing, and adding one rewrites
 nothing.
 
 The tests below hold the boundary in both directions: no limitation may quote a run's counts, and
@@ -24,11 +24,11 @@ LIMITATIONS = CONTRACT["known_limitations"]
 PROFILES = CONTRACT["run_profiles"]
 
 # Counts of a corpus look like "36 of 143" or a bare three-digit total. Two things that look like
-# them are NOT them, and both are exempted by name rather than by a loose pattern:
+# them are not them, and both are exempted by name rather than by a loose pattern:
 #
-#   an OBSERVATION about real documents — 👁 "1 of 3 real receipts", "1 of 8 confirmations" — which
+#   an observation about real documents — 👁 "1 of 3 real receipts", "1 of 8 confirmations" — which
 #   is evidence and belongs with the limitation it supports;
-#   a VOCABULARY property — how many distinct strings a template set can produce — which is a
+#   a vocabulary property — how many distinct strings a template set can produce — which is a
 #   property of config/generation.yaml and does not move when a seed does.
 _OBSERVATION = re.compile(r"👁[^.]{0,120}?\d+ of \d+")
 _RUN_COUNT = re.compile(r"\b\d+ of \d{2,}\b")
@@ -56,7 +56,7 @@ def test_no_limitation_carries_a_run_figure_key():
 def test_every_limitation_describes_itself_and_points_at_a_profile():
     """Qualitative first, reference second. An entry with a reference and no description would have
     moved the problem rather than solved it: a consumer reading it would still have to open a
-    profile to learn what the limitation IS."""
+    profile to learn what the limitation is."""
     for limitation in LIMITATIONS:
         assert limitation["see_profile"] == "run_profiles", limitation["id"]
         described = limitation.get("how_a_consumer_detects_it", "")
@@ -89,7 +89,7 @@ def test_no_limitation_quotes_a_count_from_a_run():
 
 def test_the_observation_exemption_exempts_something():
     """The test above would be weaker if nothing used the exemption — a filter that never fires
-    hides the fact that it is there. 👁 KL-05 and KL-09 both rest on counts of REAL documents."""
+    hides the fact that it is there. 👁 KL-05 and KL-09 both rest on counts of real documents."""
     using = [k["id"] for k in LIMITATIONS if _OBSERVATION.search(body_of(k))]
 
     assert using, (
@@ -102,11 +102,11 @@ def test_the_observation_exemption_exempts_something():
 
 
 def test_exactly_one_profile_is_authoritative_and_the_prose_names_it():
-    """🔴 THE SENTENCE THAT STOPS TWO SETS OF NUMBERS READING AS A CONTRADICTION.
+    """🔴 the sentence that stops two sets of numbers reading as a contradiction.
 
-    Until the production run there was no delivered corpus, so the invariant was that NOTHING here
+    Until the production run there was no delivered corpus, so the invariant was that nothing here
     was authoritative. A dataset has now been generated and handed over, and the invariant inverts
-    rather than disappears: EXACTLY ONE profile describes it, and the prose says which. Zero would
+    rather than disappears: exactly one profile describes it, and the prose says which. Zero would
     leave a consumer without an answer; two would leave them with the contradiction this key exists
     to prevent — and a flag nobody restated in prose would be a fact only a parser could find.
     """
@@ -124,7 +124,7 @@ def test_exactly_one_profile_is_authoritative_and_the_prose_names_it():
 
 
 def test_the_authoritative_profile_can_be_checked_against_a_corpus():
-    """A profile that cannot say WHICH corpus it describes will one day be read as describing a
+    """A profile that cannot say which corpus it describes will one day be read as describing a
     different one, and the delivered corpus is the case where that costs something.
 
     The dataset is not committed — it is reproduced from the seed — so identity is the only thing
@@ -155,15 +155,15 @@ def test_every_profile_names_the_run_it_measured(profile):
 
 
 def test_a_command_that_cannot_be_run_says_so_where_it_is_recorded():
-    """🔴 `--split` IS REQUIRED, SO A RECORDED COMMAND WITHOUT ONE NO LONGER EXECUTES.
+    """🔴 `--split` is required, so a recorded command without one no longer executes.
 
     A `command` here has two jobs: it says what was run, and it is the handle by which a reader
     reproduces the run. Requiring the flag put those in conflict for the profiles taken before the
-    partition existed — their commands are ACCURATE AND NOT RUNNABLE, and neither resolution is
+    partition existed — their commands are accurate and not runnable, and neither resolution is
     available: inventing a fraction would make a run claim a partition it never had, and deleting
     the profile would destroy the record that the run happened.
 
-    So the tension is recorded rather than resolved, and this holds the CLASS rather than the three
+    So the tension is recorded rather than resolved, and this holds the class rather than the three
     entries that have it today. A profile added later whose command omits the flag is either a run
     that inherited a default — in which case the value is knowable and belongs in the command — or
     one that predates the flag, in which case it has to say so. Silence is the only outcome ruled
@@ -213,7 +213,7 @@ def test_every_distribution_in_a_profile_carries_its_denominator(profile):
 
 def test_a_profile_can_be_added_without_touching_a_limitation():
     """The point of the whole split, asserted as a property of the shape rather than as a promise:
-    a limitation references the SECTION, never a profile id, so adding `RP-03` changes nothing in
+    a limitation references the section, never a profile id, so adding `RP-03` changes nothing in
     `known_limitations`. Were a limitation to name a profile, step 10 would have to rewrite every
     entry that mentioned the old one."""
     ids = [p["id"] for p in PROFILES["profiles"]]
@@ -221,7 +221,7 @@ def test_a_profile_can_be_added_without_touching_a_limitation():
 
     for limitation in LIMITATIONS:
         assert limitation["see_profile"] == "run_profiles"
-        # THE WHOLE ENTRY, INCLUDING ITS `name`. The first version scanned only the body, and a
+        # The whole entry, including its `name`. The first version scanned only the body, and a
         # mutation putting a profile id into the name survived — the id would then be just as much
         # of an edit for step 10 to make, and just as invisible.
         everywhere = " ".join(str(value) for value in limitation.values())

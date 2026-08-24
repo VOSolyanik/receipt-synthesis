@@ -4,14 +4,14 @@ Two requisites of a Ukrainian receipt follow from whether the seller is register
 (податок на додану вартість — value added tax), and both were wrong on every rendered document
 until this suite existed:
 
-* THE ПН LINE — the VAT-payer number. A registered seller prints it IN ADDITION to its ІД
-  identification code, not instead of it: a payer carries one line MORE, never a different one.
+* the ПН line — the VAT-payer number. A registered seller prints it in addition to its ІД
+  identification code, not instead of it: a payer carries one line more, never a different one.
   The number is twelve digits for a legal entity and the same ten-digit РНОКПП as its ІД for a
-  sole trader, so the length follows the TYPE OF PERSON rather than the prefix.
-* THE VAT BLOCK. A non-payer's line ends at the amount: no ПДВ-літера (the per-line VAT rate
+  sole trader, so the length follows the type of person rather than the prefix.
+* the VAT block. A non-payer's line ends at the amount: no ПДВ-літера (the per-line VAT rate
   code), no tax-summary row, and no "Без ПДВ" in their place.
 
-WHAT THIS SUITE ONCE ASSERTED AND WHY IT WAS FALSE. Its first version had the two identifier
+What this suite once asserted and why it was false. Its first version had the two identifier
 lines mutually exclusive, and a payer printing ПН *instead of* ІД with twelve digits whatever
 the seller was. That came from a published table of the form, which lists them as rows 4 and 5
 with alternative example values. Real ПРРО output refuted it in two ways at once: a registered
@@ -53,12 +53,12 @@ IDENTIFIERS = UA["identifiers"]
 
 PAYER = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
 
-# THE COMPANY NON-PAYER EXISTS AS A FIXTURE AND NOT AS A VENDOR ENTRY, and the name is a
+# The company non-payer exists as a fixture and not as a vendor entry, and the name is a
 # documentation placeholder — «Приклад» is Ukrainian for "example", the same convention as the
 # example.com payloads in config/fiscal-rules.yaml. A stored trading name here would assert
 # that the firm bearing it is not registered for ПДВ, which is a claim about a real company's
 # tax affairs; a placeholder asserts nothing and nothing is rendered into a dataset from it.
-# config/vendors.json deliberately configures NO company non-payer — see
+# config/vendors.json deliberately configures no company non-payer — see
 # `$note_vat_payer_departures` — while the Положення still prescribes the requisite, so the
 # builder has to produce it and this is where that is checked.
 NON_PAYER_COMPANY = {
@@ -68,7 +68,7 @@ NON_PAYER_COMPANY = {
     "vat_payer": False,
 }
 
-# Both sole traders, differing ONLY in status — which is the point: the status is a property
+# Both sole traders, differing only in status — which is the point: the status is a property
 # of the vendor, so a ФОП on the general system prints «ПН» and a ФОП on the simplified
 # system prints «ІД», and nothing about the legal form decides it.
 NON_PAYER_SOLE_TRADER = resolve_vendor(
@@ -83,7 +83,7 @@ PAYER_SOLE_TRADER = resolve_vendor(
 )
 
 # The non-payer used wherever the tests need one and its legal form is beside the point. A
-# DRAWN sole trader, because that is the only unregistered seller config/vendors.json
+# drawn sole trader, because that is the only unregistered seller config/vendors.json
 # configures, so the tests exercise the variety the dataset actually contains.
 NON_PAYER = NON_PAYER_SOLE_TRADER
 
@@ -114,11 +114,11 @@ def build(seed: int, vendor: dict, **kwargs):
 def test_a_registered_seller_prints_pn_IN_ADDITION_to_its_id_code(
     vendor, id_register, pn_length, seed
 ):
-    """REWRITTEN. The old assertion — a payer prints «ПН» of twelve digits and nothing else —
+    """rewritten. The old assertion — a payer prints «ПН» of twelve digits and nothing else —
     was false twice over: it dropped the ІД line that a real registered company prints beside
     it, and it gave a sole trader's ПН twelve digits when 👁 it is the ten-digit РНОКПП.
 
-    What is pinned now: both lines present, each carrying the length its OWN register defines,
+    What is pinned now: both lines present, each carrying the length its own register defines,
     with the prefixes read from the configuration rather than restated here.
     """
     seller = build(seed, vendor).seller
@@ -134,12 +134,12 @@ def test_a_registered_seller_prints_pn_IN_ADDITION_to_its_id_code(
 
 @pytest.mark.parametrize("seed", range(5))
 def test_a_companys_pn_begins_with_its_id_code(seed):
-    """👁 ONE OBSERVATION, encoded as a construction. On the company receipt seen, the ІД value
+    """👁 one observation, encoded as a construction. On the company receipt seen, the ІД value
     is the first eight digits of the twelve-digit ПН, so the builder appends to the ЄДРПОУ
     instead of drawing an unrelated number — the two printed lines then agree by construction
     rather than by luck, and a consumer cross-checking them cannot fail on an honest document.
 
-    Only the LENGTH is certain; the prefix relation rests on a single document and no source
+    Only the length is certain; the prefix relation rests on a single document and no source
     states it as a requirement.
     """
     seller = build(seed, PAYER).seller
@@ -150,7 +150,7 @@ def test_a_companys_pn_begins_with_its_id_code(seed):
 
 
 def test_a_registered_sole_trader_prints_one_number_under_both_prefixes():
-    """👁 For a sole trader the relation is IDENTITY, not prefix: the ПН *is* the РНОКПП. So the
+    """👁 For a sole trader the relation is identity, not prefix: the ПН *is* the РНОКПП. So the
     two lines carry the same ten digits, and anything assuming they differ is wrong."""
     seller = build(3, PAYER_SOLE_TRADER).seller
 
@@ -161,7 +161,7 @@ def test_a_registered_sole_trader_prints_one_number_under_both_prefixes():
 
 def test_a_non_payer_prints_its_id_code_and_no_pn():
     """The half that is unchanged in substance: no registration, no ПН line. What changed is
-    that the ІД line is no longer evidence of NON-registration — every seller prints one.
+    that the ІД line is no longer evidence of non-registration — every seller prints one.
     """
     for vendor in (NON_PAYER_COMPANY, NON_PAYER_SOLE_TRADER):
         seller = build(3, vendor).seller
@@ -175,7 +175,7 @@ def test_a_non_payer_prints_its_id_code_and_no_pn():
 
 def test_the_id_code_does_not_reveal_the_status():
     """🔴 The leak the old model had by construction. While «ІД» was printed only by non-payers,
-    the PREFIX alone settled the seller's tax status — and a consumer could read registration
+    the prefix alone settled the seller's tax status — and a consumer could read registration
     off it without reading the ПН line or the VAT block. Now both varieties print «ІД» with the
     same prefix and the same length, so only the presence of ПН says anything.
     """
@@ -199,7 +199,7 @@ def test_a_non_payer_company_prints_its_edrpou_under_id():
 
 
 def test_the_status_is_not_derived_from_the_legal_form():
-    """REWRITTEN ASSERTION, SAME PROPERTY. It used to compare the two sole traders' PREFIXES,
+    """rewritten assertion, same property. It used to compare the two sole traders' prefixes,
     which only distinguished them while the lines were exclusive. The property it exists for is
     unchanged: two sellers of one legal form, differing only in `vat_payer`, must differ on the
     document — so a ФОП on the general system stays representable."""
@@ -209,7 +209,7 @@ def test_the_status_is_not_derived_from_the_legal_form():
 
 
 def test_a_seller_carries_both_identifier_fields_each_independently_optional():
-    """REWRITTEN. The old version asserted that `Seller` had NO `vat_number` field, on the
+    """rewritten. The old version asserted that `Seller` had no `vat_number` field, on the
     mutual-exclusivity reading — so the model could not express the receipt a registered company
     actually prints. Both fields exist now and both are optional: `vat_number` is None for an
     unregistered seller, and `tax_code` is None for a receipt that omits the ІД line, which no
@@ -236,13 +236,13 @@ def test_every_ukrainian_vendor_entry_declares_its_status():
     entries = [(name, entry) for name, block in categories.items() for entry in block]
     assert len(categories) == 7
 
-    # A FLOOR, NOT A COUNT. This used to be `len(entries) == 44`, which reddened on every
+    # A floor, not a count. This used to be `len(entries) == 44`, which reddened on every
     # legitimate vendor addition — including a correctly flagged one — and a test that fails
     # on correct work teaches its reader to edit the number rather than to look.
     #
-    # WHAT THE COUNT CAUGHT, AND IT IS EXACTLY ONE THING: the `missing` check below is empty
-    # both when every entry declares the flag AND when the comprehension found no entries at
-    # all, so it passes VACUOUSLY if the vendor file is ever restructured beneath it. A count
+    # What the count caught, and it is exactly one thing: the `missing` check below is empty
+    # both when every entry declares the flag and when the comprehension found no entries at
+    # all, so it passes vacuously if the vendor file is ever restructured beneath it. A count
     # noticed that; nothing else here did. Requiring every category to contribute keeps that
     # guard and drops the brittleness — the emptiness is what mattered, never the 44.
     empty = [name for name, block in categories.items() if not block]
@@ -310,12 +310,12 @@ def test_a_letter_on_a_non_payers_receipt_is_a_builder_bug_too():
 
 
 def test_the_zero_rate_letter_exists_but_is_not_the_non_payers_answer():
-    """«Г» is the zero-rate group of a seller that IS registered. Using it for a non-payer
+    """«Г» is the zero-rate group of a seller that is registered. Using it for a non-payer
     would print a "ПДВ Г=0,00%" row that no observed receipt carries.
 
-    SECOND ASSERTION REPLACED, THE OLD ONE WAS NEAR-VACUOUS. It read
+    Second assertion replaced, the old one was near-vacuous. It read
     `"Г" not in {item.vat_letter for item in build(4, NON_PAYER).line_items}` — but for a
-    non-payer EVERY letter is already None, asserted more strongly one test above, so that
+    non-payer every letter is already None, asserted more strongly one test above, so that
     check would have passed just as well had the builder emitted an arbitrary wrong letter.
     It could only ever fail on the single value it named.
 
@@ -355,18 +355,18 @@ def test_amount_due_equals_the_total_while_discount_and_rounding_are_zero(seed, 
 
 
 def test_amount_due_is_the_total_less_the_discount_plus_the_rounding():
-    """🔴 THE ARITHMETIC AND ITS SIGNS, pinned while the inputs are still free.
+    """🔴 the arithmetic and its signs, pinned while the inputs are still free.
 
     Every receipt the generator builds fixes `discount` and `rounding` at zero, so the
     derivation is invisible to every other test in this suite: replacing the whole expression
-    with `return self.total` leaves them all green, and the SIGN of `rounding` — added, not
+    with `return self.total` leaves them all green, and the sign of `rounding` — added, not
     subtracted — is unobservable too. `PrroReceipt.amount_due` claims to be derived so that the
     two amounts cannot drift apart, and a claim of protection nothing exercises is an untested
     assertion.
 
     So this test states the arithmetic directly, on a receipt whose two adjustments are set by
     hand. It needs no policy decision: what the policy has to settle is how a discount is
-    DISTRIBUTED across covered and non-covered lines (RC-16), not what subtracting one does.
+    distributed across covered and non-covered lines (RC-16), not what subtracting one does.
 
     Computed by hand, not from the code: 1 000.00 − 5.00 + 0.03 = 995.03.
     """
@@ -388,14 +388,14 @@ def test_amount_due_is_the_total_less_the_discount_plus_the_rounding():
 
 
 def test_the_payment_row_states_what_is_payable_and_not_the_basket():
-    """🔴 WHAT IS TENDERED IS «ДО СПЛАТИ», AND THE TWO RECEIPT TEMPLATES DISAGREED ABOUT IT. The
+    """🔴 what is tendered is «ДО СПЛАТИ», and the two receipt templates disagreed about it. The
     fiscal body printed `total` on its «ГОТІВКА»/«КАРТКА» row while the товарний чек printed
     `amount_due` from the same basket — a difference no render could show and no test could see,
     because both adjustments are fixed at zero and the two amounts coincide on every document this
     generator builds. That is exactly the defect a discount draw would ship: a receipt whose payment
     row states an amount that does not settle its own last line.
 
-    Read off the RENDERED PAGE and on a receipt whose adjustments are set BY HAND — the arithmetic
+    Read off the rendered page and on a receipt whose adjustments are set by hand — the arithmetic
     test above is set the same way, and for the same reason: an assertion over two equal numbers
     would be the tautology this file already had one of.
     """

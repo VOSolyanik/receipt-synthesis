@@ -1,6 +1,6 @@
-"""Do the two documents of one claim agree — measured on the PAGE, not on the builder.
+"""Do the two documents of one claim agree — measured on the page, not on the builder.
 
-🔴 THE TRAP THIS MODULE EXISTS TO AVOID, stated first because it is the whole design. A test that
+🔴 the trap this module exists to avoid, stated first because it is the whole design. A test that
 checked identifiers by reading `invoice.supplier.code` against `confirmation.payee.code` would be
 comparing one object with itself: both fields are set from the same `PartyIdentity` instance, so
 the assertion holds for every implementation that passes the instance along — including one that
@@ -13,14 +13,14 @@ recorded by the layout engine before rasterization — and pulls the value out w
 measured from: 587 invoice-plus-payment pairs of the delivered corpus, and the seller's tax code
 and IBAN disagreed on 587 of them.
 
-WHY THE READERS ARE SHARED WITH THE AUDIT TOOL, AND WHY THAT IS NOT CIRCULAR. A broken reader could
+Why the readers are shared with the audit tool, and why that is not circular. A broken reader could
 in principle make both the tool and this module wrong in the same way — so every row is asserted
-against a KNOWN ANSWER as well as against the other document: the value read off each page must
+against a known answer as well as against the other document: the value read off each page must
 equal the `PartyIdentity` the claim was built with, which is a value computed outside the reader.
 A reader that returned a constant, or the wrong capture group, fails that immediately.
 
-HOW THIS DIFFERS FROM `test_pipeline.test_no_claim_contradicts_itself_across_its_own_documents`,
-which asks the same question one level up. That test compares LABEL fields across a generated run —
+How this differs from `test_pipeline.test_no_claim_contradicts_itself_across_its_own_documents`,
+which asks the same question one level up. That test compares label fields across a generated run —
 `counterparty`, `amount`, `payer`, the date order. None of the identifiers below is a label field,
 so it could not see them, and did not: the divergence survived it for the whole life of the
 archetype. Labels there, printed text here.
@@ -56,13 +56,13 @@ CLAIMANT_CODE = "2345678901"
 SUBJECT_AT = datetime(2026, 6, 3, 10, 15)
 PAYMENT_AT = datetime(2026, 6, 11, 14, 33)
 
-# `transfer` is the initiation mode that prints a purpose AND identifies the payer. The third mode,
+# `transfer` is the initiation mode that prints a purpose and identifies the payer. The third mode,
 # internet acquiring, prints neither — that absence is a row of the table in its own right and has
 # its own test below, rather than being the mode every other test silently runs under.
 IDENTIFYING_MODE = "transfer"
 
 PAYMENT_CLASSES = ("payment_confirmation", "bank_statement")
-# 🔴 FOUR SEEDS AND NOT ONE. See the `claims` fixture: a mutation survived the single-seed version
+# 🔴 Four seeds and not one. See the `claims` fixture: a mutation survived the single-seed version
 # of the seller rows because the bank name is drawn from a four-name list and coincided.
 SEEDS = (20260603, 20260604, 20260605, 20260606)
 PAYMENT_SLUGS = {
@@ -72,7 +72,7 @@ PAYMENT_SLUGS = {
 
 # ------------------------------------------------------------ the rows of the table --
 #
-# One entry per row of docs/cross-document-fields.md that BOTH documents of a claim print, with the
+# One entry per row of docs/cross-document-fields.md that both documents of a claim print, with the
 # payment classes that print it. A row keyed on a field the audit reader does not know fails
 # `test_every_field_the_reader_knows_is_accounted_for` below, and so does a field the reader gains
 # without being placed here — the sweep is over the reader's vocabulary, not over today's list.
@@ -81,7 +81,7 @@ SELLER_ROWS = {
     "seller_tax_code": PAYMENT_CLASSES,
     "seller_account": PAYMENT_CLASSES,
     "seller_bank_name": PAYMENT_CLASSES,
-    # ⛔ A statement's counterparty block prints name, code, IBAN and bank and NO bank code, so
+    # ⛔ A statement's counterparty block prints name, code, IBAN and bank and no bank code, so
     # there is nothing on that class to compare. Narrower than the confirmation on purpose.
     "seller_bank_code": ("payment_confirmation",),
 }
@@ -91,7 +91,7 @@ CLAIMANT_ROWS = {
 }
 REFERENCE_ROWS = {"invoice_number": PAYMENT_CLASSES}
 
-# What each seller row must equal on BOTH pages — the known answer, taken from the identity the
+# What each seller row must equal on both pages — the known answer, taken from the identity the
 # claim was built with rather than from either document.
 EXPECTED_FROM_IDENTITY = {
     "seller_tax_code": lambda identity: identity.tax_code,
@@ -176,13 +176,13 @@ class Claim:
 
 @pytest.fixture(scope="module")
 def claims(renderer, tmp_path_factory):
-    """Several claims per payment class, built once. Parametrized over the CLASSES rather than over
+    """Several claims per payment class, built once. Parametrized over the classes rather than over
     the slugs: a second template for a class would not add a cross-document question.
 
-    🔴 SEVERAL SEEDS AND NOT ONE, AND A MUTATION IS WHY. The first version pinned a single seed and
-    a mutation that made a statement row draw its own bank name SURVIVED it: the bank comes from a
+    🔴 several seeds and not one, and a mutation is why. The first version pinned a single seed and
+    a mutation that made a statement row draw its own bank name survived it: the bank comes from a
     four-name list, so a document drawing independently prints the claim's bank about a quarter of
-    the time, and that seed was one of them. A field's CARDINALITY decides how many samples an
+    the time, and that seed was one of them. A field's cardinality decides how many samples an
     equality assertion needs before it means anything — at four values, one sample is a coin that
     lands right too often — and the assertion looked identical either way. Four seeds put the
     survival probability of that same mutation under a percent, and the mutation now reddens.
@@ -209,7 +209,7 @@ def test_both_documents_of_a_claim_name_the_seller_by_the_same_requisite(
 ):
     """One row of the seller block of docs/cross-document-fields.md, asserted on both pages.
 
-    THE KNOWN ANSWER COMES FIRST. Each page's printed value is compared against the claim's
+    The known answer comes first. Each page's printed value is compared against the claim's
     `PartyIdentity` — a value neither document produced — and only then against the other page. An
     assertion of equality alone would also hold if the reader returned `None` from both, or the
     same wrong capture group from both; comparing against the identity is what makes it an
@@ -219,10 +219,10 @@ def test_both_documents_of_a_claim_name_the_seller_by_the_same_requisite(
     for claim in claims[payment_class]:
         subject, payment = claim.read()
         if field in ("seller_bank_name", "seller_bank_code") and payment[field] is None:
-            # 👁 A confirmation's payee bank is sometimes a CAPTION WITH NOTHING UNDER IT, which is
-            # observed and deliberate. 🔴 BOTH FIELDS, NOT ONLY THE NAME: `payee.bank` is one
+            # 👁 A confirmation's payee bank is sometimes a caption with nothing under it, which is
+            # observed and deliberate. 🔴 both fields, not only the name: `payee.bank` is one
             # optional string, "name, Код банку code" or nothing at all, so the name and the code
-            # are empty TOGETHER — a version of this guard naming only `seller_bank_name` skipped
+            # are empty together — a version of this guard naming only `seller_bank_name` skipped
             # the right claim for the wrong field and failed `seller_bank_code` outright the first
             # time a draw actually landed on the empty case for it. Every other requisite is
             # printed on every document of both classes, and a missing one there is a defect.
@@ -250,7 +250,7 @@ def test_both_documents_of_a_claim_name_the_seller_by_the_same_requisite(
 def test_a_sole_traders_identifiers_agree_too_and_come_from_the_other_register(
     renderer, tmp_path
 ):
-    """The register a code comes from follows the LEGAL FORM, and the claim-level draw must not have
+    """The register a code comes from follows the legal form, and the claim-level draw must not have
     flattened that: a ФОП has no ЄДРПОУ, so an eight-digit code beside a sole trader's name would be
     an identifier no register could resolve to the party printed next to it.
 
@@ -269,7 +269,7 @@ def test_a_sole_traders_identifiers_agree_too_and_come_from_the_other_register(
 
 def test_the_printed_bank_code_is_the_one_inside_the_printed_account(claims):
     """An IBAN carries its bank's МФО in the clear, so the bank code beside it is not an independent
-    value. It is asserted on the PAGE rather than on the identity, because that is where the two
+    value. It is asserted on the page rather than on the identity, because that is where the two
     would contradict each other: a document drawing its own bank while printing the claim's account
     is a defect no cross-document comparison catches and every reader of one page sees.
     """
@@ -289,13 +289,13 @@ def test_the_printed_bank_code_is_the_one_inside_the_printed_account(claims):
 
 def test_the_bank_identity_reader_agrees_with_what_the_document_was_built_with(claims):
     """`cross_document_audit.bank_identity_pairs` is the reader the new corpus-wide "one name, one
-    code" axis (see that module) is built on — if IT misread the page, the axis could report a
+    code" axis (see that module) is built on — if it misread the page, the axis could report a
     false disagreement across the whole corpus, or worse, a false agreement. Checked here against
-    the KNOWN ANSWER, each document's own `bank_name`/`bank_code`, on the RENDERED page rather than
+    the known answer, each document's own `bank_name`/`bank_code`, on the rendered page rather than
     the object the builder returned — the same discipline every other row of this module follows.
 
-    On a bank statement this is also what proves the reader finds BOTH occurrences the new axis
-    needs — the header AND the service-charge row — since `test_the_bank_charges_its_own_service
+    On a bank statement this is also what proves the reader finds both occurrences the new axis
+    needs — the header and the service-charge row — since `test_the_bank_charges_its_own_service
     _fee_on_every_statement` in test_bank_statement.py already covers their agreement at the
     builder level and this file exists to cover it on the page.
     """
@@ -347,11 +347,11 @@ def test_both_documents_of_a_claim_name_the_same_claimant(field, payment_class, 
 
 def test_an_unidentified_payer_is_an_absence_and_not_a_disagreement(renderer, tmp_path):
     """👁 On the internet-acquiring mode the confirmation does not identify the payer at all and
-    prints a HYPHEN. The claimant then cannot be matched by name across the claim — which is a real
+    prints a hyphen. The claimant then cannot be matched by name across the claim — which is a real
     property of the corpus, declared as KL-09, and not a defect for the row above to catch.
 
     It is asserted so that the row above stays honest: the parametrized test runs under the mode
-    that DOES identify the payer, and without this test that choice would look like an oversight
+    that does identify the payer, and without this test that choice would look like an oversight
     rather than the deliberate split of two cases.
     """
     claim = Claim(renderer, tmp_path, "payment_confirmation", seed=20260603, vendor=VENDOR)
@@ -375,7 +375,7 @@ def test_an_unidentified_payer_is_an_absence_and_not_a_disagreement(renderer, tm
 
     assert payment["payer_name"] != CLAIMANT
     assert CLAIMANT not in text, "this mode must not name the claimant anywhere on the page"
-    # And the SELLER is still the claim's, which is what makes this an absence on one side rather
+    # And the seller is still the claim's, which is what makes this an absence on one side rather
     # than a document about a different transaction.
     assert payment["seller_tax_code"] == claim.identity.tax_code
 
@@ -387,12 +387,12 @@ def test_an_unidentified_payer_is_an_absence_and_not_a_disagreement(renderer, tm
 def test_where_the_payment_names_an_invoice_it_names_the_claims_own_invoice(
     payment_class, renderer, tmp_path
 ):
-    """The reference row. Swept over seeds rather than pinned to one, because THE PURPOSE LINE IS
-    DRAWN: some templates name no document at all and some name a ВН, so a single seed would test
+    """The reference row. Swept over seeds rather than pinned to one, because the purpose line is
+    drawn: some templates name no document at all and some name a ВН, so a single seed would test
     whichever case it happened to land on and go silently vacuous when the pool changed.
 
     Two things are asserted, and the second is what stops the first from being vacuous: every
-    purpose that names a рахунок names THIS claim's invoice, and at least one seed produced such a
+    purpose that names a рахунок names this claim's invoice, and at least one seed produced such a
     purpose at all.
     """
     cited = 0
@@ -412,12 +412,12 @@ def test_where_the_payment_names_an_invoice_it_names_the_claims_own_invoice(
 def test_a_purpose_naming_a_delivery_note_does_not_carry_the_invoices_number(
     renderer, tmp_path
 ):
-    """🔴 A ВН IS A DIFFERENT CLASS OF DOCUMENT, and no claim holds one. Both placeholders were
+    """🔴 A ВН is a different class of document, and no claim holds one. Both placeholders were
     `{invoice_no}` until the cross-document work, so filling the claim's invoice number here would
     have manufactured a reference resolving to the wrong class — and a linker matching on «№» alone
     would have scored a correct-looking hit on it.
 
-    Swept for the same reason as the test above, and it asserts that the case OCCURS: a pool with
+    Swept for the same reason as the test above, and it asserts that the case occurs: a pool with
     no ВН template left would make this test pass while checking nothing.
     """
     seen = 0
@@ -434,7 +434,7 @@ def test_a_purpose_naming_a_delivery_note_does_not_carry_the_invoices_number(
 
 
 def test_the_two_pages_write_the_invoices_date_in_different_scripts(renderer, tmp_path):
-    """👁 THE INVOICE'S TITLE WRITES ITS DATE IN WORDS and a purpose line writes it in digits, so the
+    """👁 the invoice's title writes its date in words and a purpose line writes it in digits, so the
     reference cannot be resolved by string equality on the whole citation. That is what makes this
     row a resolvable one rather than another giveaway, and it is asserted rather than assumed
     because a later edit that printed digits in the title would remove the difficulty in silence.
@@ -454,11 +454,11 @@ def test_the_two_pages_write_the_invoices_date_in_different_scripts(renderer, tm
     pytest.fail("no confirmation in 12 seeds printed the invoice's date — nothing was asserted")
 
 
-# ------------------------------------------- what must NOT agree, and completeness --
+# ------------------------------------------- what must not agree, and completeness --
 
 
 def test_only_the_labelled_row_of_a_statement_carries_the_claims_identity(claims):
-    """A statement lists a dozen operations and the claim is ONE of them. If every row printed the
+    """A statement lists a dozen operations and the claim is one of them. If every row printed the
     claim's payee the page would not pose a problem — finding the right row is the task — so the
     identity must appear exactly once on it, and every other row must carry its own.
     """
@@ -470,12 +470,12 @@ def test_only_the_labelled_row_of_a_statement_carries_the_claims_identity(claims
         assert text.count(claim.identity.tax_code) == 1, (
             f"the claim's code appears {text.count(claim.identity.tax_code)} times on the statement"
         )
-        # ⚠️ THE HOLDER MAY APPEAR TWICE AND NOBODY ELSE MAY. 👁 A credit can be a transfer from
-        # ANOTHER ACCOUNT OF THE HOLDER'S, whose counterparty is the holder — so a page carrying
+        # ⚠️ The holder may appear twice and nobody else may. 👁 A credit can be a transfer from
+        # another account of the holder's, whose counterparty is the holder — so a page carrying
         # two of them prints one code twice, correctly. The first version of this line asserted
         # that every row's code was distinct; it passed on one seed and failed on the fourth, on a
         # statement with two «Переказ коштів між власними рахунками» rows. The property that is
-        # actually true, and the one that matters for linking, is that a REPEAT means the holder.
+        # actually true, and the one that matters for linking, is that a repeat means the holder.
         codes = [row.counterparty_code for row in claim.payment.rows]
         repeated = {code for code in codes if codes.count(code) > 1}
         assert repeated <= {CLAIMANT_CODE}, (
@@ -488,7 +488,7 @@ def test_only_the_labelled_row_of_a_statement_carries_the_claims_identity(claims
 def test_the_two_documents_agree_about_the_money(payment_class, claims):
     """The control row, and it is here to keep the module honest rather than to guard the amount —
     `policy_engine._cross_checks` compares the two exactly, and a run-level test already covers it.
-    What it establishes for THIS module is that the pair really is one claim: a fixture that had
+    What it establishes for this module is that the pair really is one claim: a fixture that had
     quietly built two unrelated documents would fail here first.
     """
     for claim in claims[payment_class]:
@@ -499,7 +499,7 @@ def test_the_two_documents_agree_about_the_money(payment_class, claims):
 
 
 def test_every_field_the_reader_knows_is_accounted_for():
-    """🔴 THE SWEEP IS OVER THE READER'S VOCABULARY, NOT OVER TODAY'S ROWS. A field added to
+    """🔴 the sweep is over the reader's vocabulary, not over today's rows. A field added to
     `cross_document_audit` — a new requisite that two classes print — would otherwise be measured
     by the tool and asserted by nothing, and the gap would be invisible: every test in this module
     would still pass.

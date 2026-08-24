@@ -1,15 +1,15 @@
 """The товарний чек: a page that reads like a fiscal receipt and carries no fiscal identity.
 
-🔴 WHAT THIS CLASS IS FOR, AND WHAT THESE TESTS THEREFORE HAVE TO PROTECT. Every other archetype
+🔴 what this class is for, and what these tests therefore have to protect. Every other archetype
 of this corpus can be told apart from a fiscal receipt by its layout — an A4 sheet, a table of
 transactions, a title in the wrong place. This one cannot: 📄 the tax service's rule is that its
-content is the FISCAL RECEIPT'S OWN FORM less the fiscal number of the register and the wording
+content is the fiscal receipt's own form less the fiscal number of the register and the wording
 «ФІСКАЛЬНИЙ ЧЕК», so the basket, the arithmetic, the four totals and the columns are identical and
 the whole difference is a set of requisites left out. A change that quietly printed one of them
 back would destroy the only negative example the fiscality rule has, and no metric would move: the
 document would still render, still label, still be read correctly field by field.
 
-So the assertions below are mostly ABOUT WHAT IS ABSENT, checked on the rendered markup rather than
+So the assertions below are mostly about what is absent, checked on the rendered markup rather than
 on the content object, because absence is a property of the page.
 """
 
@@ -42,7 +42,7 @@ SLUG = "ua_non_fiscal_receipt"
 SEED = 20260615
 ISSUED_AT = datetime(2026, 6, 15, 17, 41, 9)
 
-# THE ONLY KIND OF SELLER THIS DOCUMENT MAY HAVE: 📄 a registered ПДВ payer is obliged to use a
+# The only kind of seller this document may have: 📄 a registered ПДВ payer is obliged to use a
 # cash register, so a slip is issued by a non-payer. Resolved once, as the assembler resolves a
 # claim's vendor, because a sole trader's printed name is drawn rather than stored.
 NON_PAYER = resolve_vendor(
@@ -68,13 +68,13 @@ def make(seed: int = SEED, vendor: dict = NON_PAYER, **kwargs):
 
 @pytest.fixture(scope="module")
 def markup() -> str:
-    """The built page, as HTML, WITH THE INLINED STYLESHEET STRIPPED — `test_renderer.printed_text`
+    """The built page, as HTML, with the inlined stylesheet stripped — `test_renderer.printed_text`
     does the stripping and the reason is its own: the shared receipt stylesheet defines a
     `.vat-letter` rule and explains the fiscal requisites in Ukrainian comments, so a search over
     the whole document would find every word this file asserts is absent.
 
     Rendered through `build_html` rather than screenshotted: every question below is about what the
-    page SAYS, and a browser adds nothing to that.
+    page says, and a browser adds nothing to that.
     """
     with Renderer() as renderer:
         return printed_text(renderer.build_html(SLUG, make().render_context()))
@@ -89,7 +89,7 @@ def test_a_registered_vat_payer_cannot_issue_one():
     «ПН» line, no letter on any line, no tax block) would then contradict the vendor record behind
     it.
 
-    THE REFUSAL IS THE MECHANISM, not a comment: the caller chooses the vendor, and a builder that
+    The refusal is the mechanism, not a comment: the caller chooses the vendor, and a builder that
     accepted a payer would print the contradiction silently on every such claim.
     """
     with pytest.raises(ValueError, match="cash register"):
@@ -97,22 +97,22 @@ def test_a_registered_vat_payer_cannot_issue_one():
 
 
 def test_the_archetype_carries_exactly_the_categories_a_non_payer_can_sell_in():
-    """🔴 THE REGISTRY AND config/vendors.json HAVE TO AGREE, and neither can be read off the
+    """🔴 the registry and config/vendors.json have to agree, and neither can be read off the
     other by a reader. The archetype declares six categories of seven; which six is a consequence
     of the rule above — a category served only by registered sellers cannot produce this document —
     and `medical_insurance` is served in config/vendors.json by insurers alone, every one of them
     registered.
 
-    ⚠️ BOTH DIRECTIONS. A category dropped from the tuple while a non-payer sells there would
+    ⚠️ both directions. A category dropped from the tuple while a non-payer sells there would
     silently remove a document class from that part of the corpus; a category added while every
     seller is registered would make `assembler._pick_vendor` raise mid-run, on the claim that
     happened to draw it.
 
-    🔴 THE CONDITION IS A CONJUNCTION AND WAS ONE CLAUSE SHORT. `_pick_vendor` filters by
-    `vendor_can_carry` FIRST and by the VAT status second, so what the tuple has to encode is a
-    non-payer that can also SELL something the category covers — not merely a non-payer. The
+    🔴 the condition is a conjunction and was one clause short. `_pick_vendor` filters by
+    `vendor_can_carry` first and by the VAT status second, so what the tuple has to encode is a
+    non-payer that can also sell something the category covers — not merely a non-payer. The
     difference is not hypothetical arithmetic: a vendors.json edit that gave a category a
-    non-payer selling nothing it covers would have made this test demand that category be ADDED,
+    non-payer selling nothing it covers would have made this test demand that category be added,
     and every slip claim drawn there would then raise inside `_pick_vendor`, a stage away from the
     edit that caused it. `mixed=False` because a claim aimed at `not_proof_of_payment` carries no
     coverage target, which is what the assembler passes for it.
@@ -130,8 +130,8 @@ def test_the_archetype_carries_exactly_the_categories_a_non_payer_can_sell_in():
 
 
 def test_the_registration_says_what_the_document_proves_and_not_what_it_is_offered_as():
-    """🔴 A SUBJECT-CLASS DOCUMENT. The claim shape it realizes is "submitted in place of a proof
-    of payment", and that belongs to the PLANNER; registering the archetype as a payment class
+    """🔴 A subject-class document. The claim shape it realizes is "submitted in place of a proof
+    of payment", and that belongs to the planner; registering the archetype as a payment class
     would contradict policy.yaml's `document_evidence` and relabel every claim carrying one.
     """
     assert evidence_of(ARCHETYPES[SLUG]) == (True, False)
@@ -143,16 +143,16 @@ def test_the_registration_says_what_the_document_proves_and_not_what_it_is_offer
 
 
 def test_the_page_carries_no_requisite_of_the_fiscal_form(markup):
-    """🔴 THE ARCHETYPE IS ITS ABSENCES, and this is the test that says so. Each string below is a
+    """🔴 the archetype is its absences, and this is the test that says so. Each string below is a
     requisite of 📄 the published fiscal form that this document may not carry: the fiscal wording,
     the fiscal number of the register with either prefix, the «ЗН» factory serial, the online /
     offline marker, and the QR. A rendered slip carrying any of them is a fiscal receipt with a
     different title.
 
-    THE PROBE IS THE CONFIGURED WORDING, not a literal typed here, so a jurisdiction that renames a
+    The probe is the configured wording, not a literal typed here, so a jurisdiction that renames a
     requisite cannot leave this test looking for a string nothing prints.
 
-    ⚠️ AND IT IS MATCHED AS A WHOLE WORD, which is not fussiness: «ЗН» is a substring of «ЗНИЖКА»,
+    ⚠️ and it is matched as a whole word, which is not fussiness: «ЗН» is a substring of «ЗНИЖКА»,
     the discount label this document legitimately prints as one of 📄 the form's four amount lines.
     A plain `in` reported the slip as carrying a factory serial it does not have — a false finding
     on a correct page, which is the kind that gets a real assertion deleted.
@@ -164,8 +164,8 @@ def test_the_page_carries_no_requisite_of_the_fiscal_form(markup):
         rules["receipt"]["registrars"]["rro"]["fiscal_number_label"],
         rules["identifiers"]["device_serial"]["label"],
         *rules["receipt"]["mode_markers"],
-        # ⚠️ AND THE STRING THE CONTRACT CALLS THE NEGATIVE MARKER, for the opposite reason: no
-        # public source shows «НЕ ФІСКАЛЬНИЙ ЧЕК» on a Ukrainian SALES document, so printing it
+        # ⚠️ And the string the contract calls the negative marker, for the opposite reason: no
+        # public source shows «НЕ ФІСКАЛЬНИЙ ЧЕК» on a Ukrainian sales document, so printing it
         # would be inventing an observation. See RC-08 — the decision is the author's and pending.
         rules["receipt"]["non_fiscal_marker"],
     ]
@@ -188,7 +188,7 @@ def test_the_page_identifies_itself_positively(markup):
 
 def test_no_line_carries_a_vat_letter_and_no_tax_row_is_printed(markup):
     """A non-payer has assigned no rate group to anything, so 👁 the line ends with the amount —
-    not a zero-rate letter, not "Без ПДВ". The LABEL and the PAGE have to agree about that: a
+    not a zero-rate letter, not "Без ПДВ". The label and the page have to agree about that: a
     letter in the ground truth that no reader can see would be a value extracted from nowhere."""
     document = make()
     assert document.line_items, "the slip lists nothing — nothing was checked"
@@ -221,7 +221,7 @@ def test_the_money_on_the_page_is_the_money_in_the_label():
     """Three statements of one amount — the stored total, the line items, and the amount in words —
     checked against each other by the invariant validators rather than by re-deriving them here.
 
-    ⛔ THIS ARCHETYPE DOES NOT BREAK INVARIANTS. It is a negative example about EVIDENCE, not a
+    ⛔ this archetype does not break invariants. It is a negative example about evidence, not a
     fraud archetype: its arithmetic is exactly as sound as a fiscal receipt's, which is what makes
     it hard — nothing about the numbers gives it away.
     """
@@ -234,26 +234,26 @@ def test_the_money_on_the_page_is_the_money_in_the_label():
 
 @pytest.mark.parametrize("seed", range(6))
 def test_the_amount_column_is_one_column(seed, tmp_path_factory):
-    """🔴 THE CHECK THAT DID NOT EXIST WHEN AN OUTSIDE READER REPORTED THE AMOUNTS AS STANDING IN
-    THE WRONG COLUMNS OF THIS ARCHETYPE. Nothing in the suite read a coordinate off this template:
-    every other assertion in this file is about what the page SAYS, and a money column that had
+    """🔴 the check that did not exist when an outside reader reported the amounts as standing in
+    the wrong columns of this archetype. Nothing in the suite read a coordinate off this template:
+    every other assertion in this file is about what the page says, and a money column that had
     drifted would say all the same things.
 
-    WHAT A COLUMN IS, HERE. 📄 The form this class follows prints one amount column, flush right,
+    What a column is, here. 📄 The form this class follows prints one amount column, flush right,
     and 👁 an amount on a thermal roll is right-aligned against the paper's edge. So every line total
-    and every line of the totals block must END at one x — the `qty × price` group is inline text on
+    and every line of the totals block must end at one x — the `qty × price` group is inline text on
     the left of its own row and is not part of that column. A shift of a cell into a neighbouring
     column, of the kind reported, breaks this by construction: the moved amount ends where its
     neighbour's column ends.
 
-    ⚠️ A PIXEL OF SLACK AND NO MORE: a bold row's advance width rounds a coordinate up one column on
+    ⚠️ A pixel of Slack and no more: a bold row's advance width rounds a coordinate up one column on
     some seeds, which is `font-weight` and not a layout. Anything wider is a column.
 
-    ⛔ WHAT IT CANNOT SEE, established by running both mutations rather than reasoned about. A
+    ⛔ what it cannot see, established by running both mutations rather than reasoned about. A
     `margin-right` on the line-total cell moves the box and is caught (570 against 610). A
-    `padding-right` of the same size moves the INK and leaves the box where it was — and this test
+    `padding-right` of the same size moves the ink and leaves the box where it was — and this test
     passes, because it reads boxes. That case is not a defect of the label: the promised rectangle
-    still contains the value, so a consumer cropping it still reads the amount. What WOULD be a
+    still contains the value, so a consumer cropping it still reads the amount. What would be a
     defect is a box with no marks in it at all, and that is the pixel gate's question
     (`tools/pixel_label_gate.py`), not this one's.
     """
@@ -282,7 +282,7 @@ def test_the_amount_column_is_one_column(seed, tmp_path_factory):
 
 
 def test_the_payment_method_is_cash():
-    """🔴 THE FIRST DOCUMENT OF THE CORPUS TO PRINT «ГОТІВКА», and it is a consequence rather than
+    """🔴 the first document of the corpus to print «ГОТІВКА», and it is a consequence rather than
     a preference: 📄 a card sale is a settlement operation that obliges the seller to use a
     register, so a slip issued without one records cash. Read from config — the second entry of
     `payment_method_labels`, which was unreachable until this class landed."""
@@ -295,7 +295,7 @@ def test_a_mixed_basket_is_drawn_when_the_plan_asks_for_one():
     """The class takes the same basket knobs as every other subject document, and the coverage a
     basket comes to must not depend on which class carries it — see `content_builder._draw_basket`.
 
-    Asserted through the KNOB rather than the arithmetic: what has to hold here is that this
+    Asserted through the knob rather than the arithmetic: what has to hold here is that this
     builder honours it at all, since a claim planned as `partially_covered` may be documented by
     any subject class the registry offers.
     """

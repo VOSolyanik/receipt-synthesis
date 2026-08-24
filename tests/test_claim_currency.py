@@ -1,12 +1,12 @@
 """One claim, one currency — as a rule about which documents may be planned together.
 
-`policy_engine._one_claim_one_currency` refuses to LABEL a claim whose documents are stated in two
+`policy_engine._one_claim_one_currency` refuses to label a claim whose documents are stated in two
 currencies, and `tests/test_claim_evidence.py` pins that refusal. This file is the other end of the
 same fact: the planner must not build such a claim, because the refusal it would meet is not a
 verdict — it is the oracle saying policy.yaml answers no question about the pair at all.
 
-⚠️ EVERY REGISTRY HERE IS HAND-BUILT. The shipped one is checked separately, in
-`test_the_shipped_registry_pairs_only_within_a_currency`, and these fixtures pin the MECHANISM: it
+⚠️ every registry here is hand-built. The shipped one is checked separately, in
+`test_the_shipped_registry_pairs_only_within_a_currency`, and these fixtures pin the mechanism: it
 has to hold for any set of archetypes, not for the set that happens to be registered this week.
 """
 
@@ -88,7 +88,7 @@ def test_a_pair_in_one_currency_is_buildable_again():
 
 
 def test_every_pair_drawn_from_a_two_currency_registry_states_one_currency():
-    """🔴 THE PROPERTY THE ORACLE DEPENDS ON. A registry holding both buckets draws from both,
+    """🔴 the property the oracle depends on. A registry holding both buckets draws from both,
     and no draw ever crosses them — the subject is drawn first and the payment from the
     subject's own currency, so a EUR invoice cannot pick up a UAH transfer at any seed."""
     candidates = [UAH_INVOICE, UAH_TRANSFER, EUR_INVOICE, EUR_TRANSFER]
@@ -109,7 +109,7 @@ def test_every_pair_drawn_from_a_two_currency_registry_states_one_currency():
 
 
 def test_the_narrowing_leaves_a_single_currency_registry_drawing_exactly_as_before():
-    """⚠️ THE COMPATIBILITY CLAIM, WRITTEN DOWN. The filter drops nothing when every archetype
+    """⚠️ the compatibility claim, written down. The filter drops nothing when every archetype
     shares one currency, and the two draws happen in the order they always have — so a run over
     the UAH registry takes the same values from the generator as it did before the rule existed.
     Pinned by the seed stream itself: three values are taken — the lead, the subject, the payment
@@ -130,7 +130,7 @@ def test_the_narrowing_leaves_a_single_currency_registry_drawing_exactly_as_befo
 
 
 def test_an_instalment_subject_no_payment_can_settle_is_not_plannable():
-    """`partially_paid` needs a subject that STATES the arrangement and a payment that can
+    """`partially_paid` needs a subject that states the arrangement and a payment that can
     settle a part of it. The currency narrowing composes with the class narrowing rather than
     replacing it, and either one alone would admit this registry."""
     candidates = [EUR_INVOICE, UAH_TRANSFER]
@@ -143,9 +143,9 @@ def test_an_instalment_subject_no_payment_can_settle_is_not_plannable():
 
 
 def test_the_shipped_registry_pairs_only_within_a_currency():
-    """Every currency the registry states a SUBJECT in has a payment document beside it.
+    """Every currency the registry states a subject in has a payment document beside it.
 
-    ⛔ Not a restatement of the rule — it is the check that the registry can actually USE every
+    ⛔ Not a restatement of the rule — it is the check that the registry can actually use every
     subject it holds. A subject archetype in a currency no payment document is stated in is a
     template that renders and never reaches a complete claim, which is a gap in the registry
     rather than in the planner.
@@ -163,7 +163,7 @@ def test_the_shipped_registry_pairs_only_within_a_currency():
 
 
 def test_a_currency_coherent_pair_is_also_a_single_vendor_pool():
-    """🔴 THE SECOND CONSTRAINT ON A PAIR, AND IT IS ENFORCED SOMEWHERE ELSE. `assembler` draws one
+    """🔴 the second constraint on a pair, and it is enforced somewhere else. `assembler` draws one
     seller per claim and refuses a plan whose documents name two pools; the planner does not model
     vendors at all. The two rules are independent and they must not disagree, so this asserts the
     registry satisfies both at once — a EUR pair split across an `EU` and a domestic pool would
@@ -184,7 +184,7 @@ def test_a_currency_coherent_pair_is_also_a_single_vendor_pool():
 
 
 def test_a_self_contained_document_is_unaffected_by_the_currency_rule():
-    """⛔ The rule is about PAIRS. A document proving both facts is the whole claim, so there is no
+    """⛔ The rule is about pairs. A document proving both facts is the whole claim, so there is no
     second currency for it to disagree with — `eu_platform_receipt` goes on being drawn alone."""
     receipt = ARCHETYPES["eu_platform_receipt"]
     assert evidence_of(receipt) == Evidence(True, True)

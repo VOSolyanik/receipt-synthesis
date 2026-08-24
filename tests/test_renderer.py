@@ -54,10 +54,10 @@ PIXELS_PER_MM = 8
 # here is impossible.
 REGISTERED_SLUGS = sorted(ARCHETYPES)
 
-# AND THE SAME SET SPLIT BY DOCUMENT CLASS, because the registry no longer holds one class. A
+# And the same set split by document class, because the registry no longer holds one class. A
 # receipt is printed on a till roll whose width is one the jurisdiction's suppliers sell and
 # carries a fiscal foot; a bank payment confirmation is an A4 page with neither, and a statement is
-# an A4 page the long way round. Every test below that asserts a receipt fact reads THIS list, so
+# an A4 page the long way round. Every test below that asserts a receipt fact reads this list, so
 # registering another class cannot make a receipt-shaped assertion quietly apply to it — and a
 # class nobody assigned cannot slip through either, because `context_for` refuses to build a
 # context for it and every whole-registry test goes through that function.
@@ -78,7 +78,7 @@ INVOICE_SLUGS = sorted(
 def template_source(template_name: str) -> str:
     """A template's own source plus the source of every template it includes.
 
-    FOLLOWING INCLUDES IS WHAT KEEPS THE SOURCE-LEVEL GUARDS BELOW HONEST, and it is not a
+    Following includes is what keeps the source-level guards below honest, and it is not a
     convenience. Three archetypes share one body — `templates/ua_fiscal_receipt.jinja` — so
     each `<slug>.html` is a comment and one `{% include %}`. A guard that read `<slug>.html`
     alone would inspect a file with no markup in it and pass on anything whatsoever, while
@@ -109,10 +109,10 @@ def template_source(template_name: str) -> str:
     return re.sub(r"\{#.*?#\}", "", "\n".join(sources), flags=re.DOTALL)
 
 # A registered ПДВ payer and an unregistered seller. Both are ordinary — a pharmacy chain is
-# registered, a sole trader on the simplified system is not — and the two print DIFFERENT
-# REQUISITES, which is what the pair is here to exercise.
+# registered, a sole trader on the simplified system is not — and the two print different
+# requisites, which is what the pair is here to exercise.
 #
-# The unregistered one is a SOLE TRADER with a DRAWN name, matching the only unregistered
+# The unregistered one is a sole trader with a drawn name, matching the only unregistered
 # variety config/vendors.json configures. Nothing rendered from it names a firm, which matters
 # because an «ІД» line asserts that its seller is not VAT-registered.
 PAYER = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
@@ -121,7 +121,7 @@ NON_PAYER = resolve_vendor(
     {"legal_form": "FOP", "profile": "nutrition_practice", "vat_payer": False},
     "UA",
 )
-# A REGISTERED sole trader — on the general system rather than the simplified one. Its ПН is its
+# A registered sole trader — on the general system rather than the simplified one. Its ПН is its
 # РНОКПП, so both identifier lines carry the same ten digits.
 PAYER_SOLE_TRADER = resolve_vendor(
     random.Random(11),
@@ -143,7 +143,7 @@ def identity_for(vendor: dict, seed: int = 606) -> PartyIdentity:
     """Who a seller is on paper, for a module that renders single documents.
 
     Drawn from a generator of its own rather than from the builder's, which is the arrangement the
-    assembler uses for a real claim: the identity belongs to the CLAIM and the page is handed it.
+    assembler uses for a real claim: the identity belongs to the claim and the page is handed it.
     A test that needs two documents to name the same seller passes the same instance to both — see
     test_cross_document_identity.py, which is where that is asserted.
     """
@@ -165,7 +165,7 @@ def make_receipt(seed: int = 20260803, vendor: dict = PAYER, registrar: str = "p
         identity=identity_for(vendor),
         address="м. Київ, вул. Хрещатик, 22",
         registrar=registrar,
-        # STATED AT EVERY CALL SITE since the builder's default was removed: the channel decides
+        # Stated at every call site since the builder's default was removed: the channel decides
         # the VAT row's form, and a default equal to the only live value hid a wiring break.
         capture=capture,
     )
@@ -258,7 +258,7 @@ def make_invoice(seed: int = 20260512, vendor: dict = PAYER):
 def make_non_fiscal_receipt(seed: int = 20260615, vendor: dict = NON_PAYER):
     """One товарний чек, for the whole-registry tests below.
 
-    🔴 THE VENDOR DEFAULT IS THE NON-PAYER AND CANNOT BE `PAYER`, unlike every factory above. 📄 A
+    🔴 the vendor default is the non-payer and cannot be `PAYER`, unlike every factory above. 📄 A
     registered ПДВ payer is obliged to use a cash register, so the builder refuses a payer outright
     — the class's own tests are in test_content_builder.py, and this exists so that every sweep of
     the registry sweeps this archetype too.
@@ -278,7 +278,7 @@ def make_platform_receipt(
 ):
     """One platform receipt, for the whole-registry tests below.
 
-    THE VENDOR DEFAULT FOLLOWS THE JURISDICTION: an EU platform for the English variant
+    The vendor default follows the jurisdiction: an EU platform for the English variant
     (the class's seller draws from the `EU` pool — `claim_planner.Archetype.vendor_pool`)
     and the domestic learning platform for the Ukrainian one. The class's own tests are
     in test_platform_receipt.py; this exists so that every sweep of the registry sweeps
@@ -335,13 +335,13 @@ def make_bank_receipt_in_app(seed: int = 20260417, vendor: dict = PAYER):
 def context_for(slug: str) -> dict:
     """A render context for any registered archetype, built by its document class.
 
-    THE ONE PLACE THAT KNOWS WHICH BUILDER FEEDS WHICH TEMPLATE, so the whole-registry tests
+    The one place that knows which builder feeds which template, so the whole-registry tests
     below stay whole-registry as classes are added. Before the second class landed they all built
     a fiscal receipt, which was correct only because every archetype was one — and a payment
     confirmation rendered from a receipt's context would raise on the first missing key rather
     than assert anything about the page.
     """
-    # BY SLUG BEFORE BY CLASS: three archetypes render templates their class siblings do
+    # By slug before by class: three archetypes render templates their class siblings do
     # not — the phone carriers need chrome keys the A4 context lacks, and the domestic
     # platform receipt fills requisites the English one disclaims — so the class alone
     # stopped naming the context the day a class gained a second rendering.
@@ -415,8 +415,8 @@ def test_every_template_declares_exactly_one_document_root(template_path):
     downstream would report it, so it is asserted here, for every template — including
     the ones still to be written.
 
-    Counted over the template AND its includes, because three archetypes carry their root
-    through a shared body. EXACTLY one either way: a root in the body and another in an
+    Counted over the template and its includes, because three archetypes carry their root
+    through a shared body. Exactly one either way: a root in the body and another in an
     including template would frame the image on whichever the browser met first.
     """
     assert template_source(template_path.name).count("data-document") == 1, (
@@ -424,7 +424,7 @@ def test_every_template_declares_exactly_one_document_root(template_path):
     )
 
 
-# A CSS `content:` declaration, matched on the PROPERTY rather than on the substring, so
+# A CSS `content:` declaration, matched on the property rather than on the substring, so
 # `justify-content` / `align-content` — properties, not this one — cannot trip a false positive.
 # The value is captured whichever quote character wraps it.
 _CSS_CONTENT_DECLARATION = re.compile(
@@ -436,12 +436,12 @@ _CSS_CONTENT_DECLARATION = re.compile(
     "css_path", sorted(TEMPLATES_DIR.glob("*.css")), ids=lambda path: path.stem
 )
 def test_no_stylesheet_prints_text_through_a_pseudo_element(css_path):
-    """A non-empty CSS `content:` paints TEXT that exists nowhere in the markup — no `data-field`
+    """A non-empty CSS `content:` paints text that exists nowhere in the markup — no `data-field`
     can mark it and `renderer`'s `reference_text` (sourced from the rendered DOM, not the
     stylesheet) cannot record it either — so a rule like `.foo::after { content: "тис."; }` would
     print a character on every image of its class that no ground-truth field or reference text
     accounts for. `content: "";`, used to give a pseudo-element a box for a border or spacing
-    trick without painting anything, stays permitted — only a NON-EMPTY string is a regression.
+    trick without painting anything, stays permitted — only a non-empty string is a regression.
     """
     stylesheet = css_path.read_text(encoding="utf-8")
     offending = [
@@ -461,11 +461,11 @@ _ROOT_SELECTORS = ("receipt", "page")
 def declared_width_px(slug: str) -> int:
     """The width `<slug>.css` gives the document root.
 
-    Read out of the archetype's OWN stylesheet, which is where the paper width lives: the
+    Read out of the archetype's own stylesheet, which is where the paper width lives: the
     shared stylesheet the three fiscal archetypes layer it over sets no width at all, so a width
     that migrated there would leave one archetype silently taking another's paper.
 
-    EXACTLY ONE root rule may declare a width, over both spellings. A file declaring neither
+    Exactly one root rule may declare a width, over both spellings. A file declaring neither
     would leave the paper to the browser; one declaring both would make this function report
     whichever came first, and the test built on it would pass while measuring the wrong rule.
     """
@@ -504,8 +504,8 @@ def test_every_fiscal_archetype_is_rendered_on_a_paper_width_the_jurisdiction_se
     per template: if the two widths mapped through different scales the ratio between the images
     would mean nothing.
 
-    SCOPED TO THE FISCAL CLASS, and the scope is the point rather than a caveat. `widths_mm` is
-    the widths a thermal ROLL is sold in; a bank payment confirmation is an A4 page, and holding
+    Scoped to the fiscal class, and the scope is the point rather than a caveat. `widths_mm` is
+    the widths a thermal roll is sold in; a bank payment confirmation is an A4 page, and holding
     it to this list would fail on a document that is correct — or, worse, pass if somebody
     "fixed" it by adding 210 mm to a list of till-roll widths.
     """
@@ -549,7 +549,7 @@ def test_every_registered_archetype_renders_with_every_box_on_the_paper(renderer
     together they are what "it fits on the paper" means: every marked field has a box, every box
     lies inside the image, and no box has zero area.
 
-    NOT A SUBSTITUTE FOR LOOKING AT THE IMAGE. Text that overflows its own element still reports
+    Not a substitute for looking at the image. Text that overflows its own element still reports
     a box inside the paper, so this catches the collapse and the overrun and cannot catch
     ugliness. The renders were also inspected by eye when this archetype landed.
     """
@@ -639,9 +639,9 @@ def test_indexed_fields_follow_the_line_items(renderer, tmp_path):
 
 
 def test_the_total_box_sits_below_the_line_items(rendered):
-    """LINE-ITEM names only, matched on the indexed key. `endswith("_name")` also caught
+    """line-item names only, matched on the indexed key. `endswith("_name")` also caught
     `seller_name` — harmlessly, being above the total — and then `provider_name`, which sits
-    in the foot BELOW it, so the loose filter turned a true property into a failing test. A
+    in the foot below it, so the loose filter turned a true property into a failing test. A
     filter that happens to work is a filter that stops working when a field is added."""
     item_names = [name for name in rendered.field_bboxes if re.fullmatch(r"item_\d+_name", name)]
     assert item_names, "no line-item name boxes — this test would assert nothing"
@@ -671,7 +671,7 @@ def rendered_non_payer(renderer, tmp_path_factory):
 
 
 def marked_fields(html: str) -> set[str]:
-    """The `data-field` names present in a RENDERED page — which is what exists on this
+    """The `data-field` names present in a rendered page — which is what exists on this
     document, as opposed to what the template can print for some other seller."""
     return set(re.findall(r'data-field="([^"]+)"', html))
 
@@ -693,7 +693,7 @@ def test_the_identifier_prefix_is_not_written_into_the_template(slug):
     cannot hold.
 
     «ФН» and «ЗН» are in the sweep for the same reason and it was earned the same way. «ФН
-    ПРРО» WAS a literal in this markup, so the hardware archetype would have printed a ПРРО's
+    ПРРО» was a literal in this markup, so the hardware archetype would have printed a ПРРО's
     prefix on a document from a machine that has no ПРРО — the identical defect one requisite
     over.
     """
@@ -710,7 +710,7 @@ def test_the_totals_labels_come_from_the_configuration():
     `receipt.totals_labels` in config/fiscal-rules.yaml beside the acquiring-block labels and
     the tax-row label — not as literals in the markup.
 
-    It is not tidiness: ONE OF THE FOUR VARIES BETWEEN SOURCES. `ЗАОКРУГЛЕННЯ` is what the
+    It is not tidiness: one of the four varies between sources. `ЗАОКРУГЛЕННЯ` is what the
     observed receipt prints and `ОКРУГЛЕННЯ` is what the published table of the form writes, and
     a config value can carry that alternative with the evidence for each side while a literal
     cannot. Asserted from the config rather than restated here, so the two cannot drift.
@@ -737,7 +737,7 @@ def test_a_tax_row_puts_its_amount_in_the_receipts_amount_column(renderer, rende
     `1 545,70` flush right two lines above — correct and ugly, which is still a defect on every
     image of a registered seller.
 
-    TWO CHECKS, because neither alone is enough. The geometric one says the row's box spans to
+    Two checks, because neither alone is enough. The geometric one says the row's box spans to
     the amount column — but a full-width box would satisfy that however its text were laid out,
     so it cannot see the alignment on its own. The structural one says why the amount lands
     there: the row is a `row` like the totals beside it, and the amount is its own trailing
@@ -775,13 +775,13 @@ def test_a_tax_row_puts_its_amount_in_the_receipts_amount_column(renderer, rende
     ids=["payer", "non_payer"],
 )
 def test_a_registered_seller_renders_both_identifier_lines(renderer, vendor, expected):
-    """REWRITTEN, AND THE OLD ASSERTION WAS FALSE. This test used to require EXACTLY ONE
+    """rewritten, and the old assertion was false. This test used to require exactly one
     identifier line, on a published table of the form that lists the VAT-payer number and the
     identification code as rows 4 and 5 with alternative examples. 👁 Real ПРРО output prints
     both on a registered company's receipt, so the old assertion forbade the very document the
     generator must produce.
 
-    A payer carries one line MORE than a non-payer; a non-payer still carries its ІД.
+    A payer carries one line more than a non-payer; a non-payer still carries its ІД.
     """
     context = make_receipt(vendor=vendor).render_context()
     fields = marked_fields(renderer.build_html(TEMPLATE, context))
@@ -847,13 +847,13 @@ def test_a_non_payers_boxes_lack_exactly_what_is_not_on_the_document(
     renderer, rendered, rendered_non_payer
 ):
     """The bbox invariant, and the distinction it turns on: a key is absent because the
-    ELEMENT DOES NOT EXIST on this document, never because a box was lost.
+    element does not exist on this document, never because a box was lost.
 
-    Those two are told apart by comparing each document's boxes against ITS OWN rendered
+    Those two are told apart by comparing each document's boxes against its own rendered
     markup — the template is the authority on what that document contains. The delta between
     the two documents is then checked against the model rather than against whatever was
     produced: a non-payer loses the ПН line, every per-line letter and every tax row, and gains
-    NOTHING, because its ІД line is on the payer's document too.
+    nothing, because its ІД line is on the payer's document too.
 
     That last clause is the part this round corrected. While the two identifier lines were
     modelled as alternatives the non-payer was expected to gain `seller_tax_code`, and asserting
@@ -887,12 +887,12 @@ def test_a_non_payers_boxes_lack_exactly_what_is_not_on_the_document(
 
 @pytest.mark.parametrize("slug", FISCAL_SLUGS)
 def test_the_maker_name_is_printed_immediately_after_the_fiscal_title(renderer, tmp_path, slug):
-    """📄 Line 35 of the published form is ONE requisite — the wording «ФІСКАЛЬНИЙ ЧЕК»
+    """📄 Line 35 of the published form is one requisite — the wording «ФІСКАЛЬНИЙ ЧЕК»
     together with the name or logo of the maker — and 👁 11 of 11 open receipts print such a
     name directly after the wording, which makes it the best-evidenced layout fact available.
     The title was printed alone until this version.
 
-    IMMEDIATELY, asserted as "nothing between them": the maker's box starts below the title's
+    Immediately, asserted as "nothing between them": the maker's box starts below the title's
     and no other field of the document begins in the gap. Checking only that it comes after
     would pass with the QR, the mode marker and the thanks line wedged in between.
     """
@@ -915,7 +915,7 @@ def test_only_the_hardware_archetype_puts_a_factory_serial_on_the_page(renderer)
     """The rendered half of ⚠️ «ЗН» and «ФН» are not a pair, asserted on the fields the page
     actually carries rather than on the builder's own attributes.
 
-    The delta is checked in BOTH directions and against the model rather than against whatever
+    The delta is checked in both directions and against the model rather than against whatever
     came out: the hardware page gains «ЗН» and loses the online marker, and nothing else about
     the two documents differs. A page that simply printed every line for everyone would satisfy
     a one-directional check.
@@ -932,7 +932,7 @@ def test_only_the_hardware_archetype_puts_a_factory_serial_on_the_page(renderer)
 
 
 def test_the_two_prro_archetypes_carry_the_same_requisites(renderer):
-    """The 58 mm variant differs in the PAPER and in nothing else. Worth pinning, because the
+    """The 58 mm variant differs in the paper and in nothing else. Worth pinning, because the
     two share a body: a conditional added for one width would silently drop a requisite from
     that archetype's every image while the other stayed correct."""
     context = make_receipt().render_context()
@@ -968,19 +968,19 @@ def test_the_stylesheet_falls_back_to_noto(renderer, slug):
     """The house rule from fonts/README.md: Roboto has no ₴ glyph, so a Noto face must
     always be reachable for Chromium to substitute from.
 
-    Asserted on the BUILT PAGE and for every archetype, rather than on one `<slug>.css`. The
+    Asserted on the built page and for every archetype, rather than on one `<slug>.css`. The
     font stack now lives in a shared stylesheet that each archetype's own file is layered over,
     so reading one file could report the rule kept while an archetype that overrode the stack
     shipped without a fallback. What has to hold is that the fallback reaches the page.
 
-    IT ASSERTS ON THE `font-family` DECLARATIONS, not on the page text, and two false passes are
+    It asserts on the `font-family` declarations, not on the page text, and two false passes are
     the reason. Searching the raw page for the name is green however the stack is written: each
-    vendored face is DECLARED with `font-family: "Noto Sans"` in an `@font-face` block, and the
+    vendored face is declared with `font-family: "Noto Sans"` in an `@font-face` block, and the
     shared stylesheet's own comment explains the rule in the same words. Both survived stripping
     the other. Declaring a face makes it available; only the stack makes it reachable, so the
     stack is what has to be read — a stack being the declarations that list more than one family.
 
-    EVERY stack, not merely one of them, and that too was a false pass. The shared stylesheet
+    Every stack, not merely one of them, and that too was a false pass. The shared stylesheet
     always supplies a correct stack, so "some stack on the page names Noto" stayed green when an
     archetype's own `<slug>.css` overrode `.receipt`'s font with a Noto-less one — the very case
     the per-archetype parametrization is here for, since the override wins the cascade. Any stack

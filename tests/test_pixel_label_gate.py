@@ -1,10 +1,10 @@
 """The gate that reads pixels, and the teeth that keep it able to bite.
 
-🔴 WHY THIS FILE IS NOT LIKE THE OTHER GATE TESTS. Every measuring instrument in this repository
+🔴 why this file is not like the other gate tests. Every measuring instrument in this repository
 has been wrong at least once, and an image-side instrument is the easiest kind to be wrong quietly:
 a threshold that never fires reads exactly like a corpus with nothing wrong in it. So the file is in
 two halves. The first drives the measures with hand-made pixels whose answer is known. The second
-runs the gate over a real generated corpus TWICE — once as the pipeline ships, where it must find
+runs the gate over a real generated corpus twice — once as the pipeline ships, where it must find
 nothing, and once with every channel's JPEG quality forced to 3–5, where it must go red. The second
 half is the whole point: it is the mutation that passed all 1524 tests before this gate existed.
 """
@@ -117,7 +117,7 @@ def test_only_the_named_leaf_fields_are_edited():
 def _screenshot_pair(quality: tuple[int, int] | None) -> tuple[np.ndarray, np.ndarray]:
     """A page and what the screenshot channel does to it, optionally at a forced quality.
 
-    The screenshot recipe is `A.NoOp` plus one JPEG step, so a compression applied here IS that
+    The screenshot recipe is `A.NoOp` plus one JPEG step, so a compression applied here is that
     channel — which is what lets this half of the file run without a browser.
     """
     page = a_page_of_text()
@@ -208,7 +208,7 @@ def test_the_shipped_corpus_has_no_findings(real_run):
 
 
 def test_a_bundled_document_s_field_is_a_labelled_box_and_its_frame_is_not():
-    """🔴 THE DISTINCTION THAT COST THIS GATE A FIFTH OF THE PRODUCTION CORPUS.
+    """🔴 the distinction that cost this gate a fifth of the production corpus.
 
     Both names begin `__`, and only one of them is geometry. `__doc_1__amount` is document 1's
     amount, offset into the composed page — a rectangle that reaches a consumer's label.
@@ -233,7 +233,7 @@ def test_a_bundled_document_s_field_is_a_labelled_box_and_its_frame_is_not():
 def test_the_gate_sees_every_box_the_run_wrote_including_the_bundled_ones():
     """The denominator, checked against the corpus rather than against itself.
 
-    The bundle share is forced to 1 so that every eligible claim files as ONE composed page: on a
+    The bundle share is forced to 1 so that every eligible claim files as one composed page: on a
     run of this size the ordinary 0.25 draws too few bundles for their absence to be visible, which
     is how the shortfall survived four seeds of sweeping. `boxes_seen` must then equal the
     `field_bboxes` count of the written labels exactly — not "at least", because the gate exceeding
@@ -259,7 +259,7 @@ def test_the_gate_sees_every_box_the_run_wrote_including_the_bundled_ones():
 
 
 def test_the_gate_measured_something(real_run):
-    """The empty-denominator guard, and it is not ceremony: the gate reaches a run by WRAPPING two
+    """The empty-denominator guard, and it is not ceremony: the gate reaches a run by wrapping two
     functions, so a rename would leave it observing nothing and reporting a clean corpus."""
     _, coverage = real_run
     assert coverage.documents >= 4
@@ -268,13 +268,13 @@ def test_the_gate_measured_something(real_run):
 
 
 def test_the_gate_goes_red_when_the_channels_compress_at_three_to_five(monkeypatch):
-    """🔴 THE MUTATION THIS GATE EXISTS FOR, run through the whole pipeline rather than on hand-made
+    """🔴 the mutation this gate exists for, run through the whole pipeline rather than on hand-made
     pixels: every channel's JPEG quality forced to 3–5, which is what passed the entire suite before
     this file was written.
 
-    ⚠️ THE SAMPLE HAS TO CONTAIN A LOSSY CHANNEL, and it used to hold one by luck. `digital_pdf`
+    ⚠️ the sample has to contain a lossy channel, and it used to hold one by luck. `digital_pdf`
     applies no compression at all — the mutation has nothing to bite on — so a run whose every
-    document happens to be drawn on that channel makes this test measure NOTHING while looking
+    document happens to be drawn on that channel makes this test measure nothing while looking
     like it passed. That is exactly what a redrawn seed stream produced: one persona and two
     claims came back as two digital PDFs. Three claims is the smallest sample that still draws a
     photo or a scan at this seed. The assertion below is what says so out loud rather than

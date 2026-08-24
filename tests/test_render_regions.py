@@ -1,7 +1,7 @@
 """The renderer's collection pass: `[data-region]` and `[data-field]` boxes, and the images the
 page had to have loaded for either of them to describe the picture.
 
-A SEPARATE MODULE FROM `test_renderer.py`, and deliberately so: this file needs its own
+A separate module from `test_renderer.py`, and deliberately so: this file needs its own
 `Renderer`, pointed at a fixture template directory rather than `templates/`, and
 Playwright's sync API refuses to run two instances in one process at once — `renderer` in
 `test_renderer.py` is a module-scoped fixture that stays alive for that module's whole run,
@@ -18,7 +18,7 @@ import pytest
 
 from receipt_synth.renderer import Renderer
 
-# A page carrying TWO documents, each with fields nested inside its `[data-region]` box — the
+# A page carrying two documents, each with fields nested inside its `[data-region]` box — the
 # shape a multi-document file will have once a later task starts building one. `data-document`
 # still marks the page root, one level above both regions.
 _REGIONS_HTML = """
@@ -47,7 +47,7 @@ _DUPLICATE_REGION_HTML = """
 </div>
 """
 
-# Two elements claiming ONE field name, which is the same defect one level down and is the one a
+# Two elements claiming one field name, which is the same defect one level down and is the one a
 # template reaches by accident: a per-sheet counter on a paginated document names its rows from 1
 # on every sheet, and the second sheet's boxes would then quietly replace the first's.
 _DUPLICATE_FIELD_HTML = """
@@ -145,7 +145,7 @@ def test_an_image_that_did_not_load_is_refused_by_the_basename_it_was_asked_for(
     with pytest.raises(ValueError, match="no_such_sheet.png") as raised:
         renderer.render("fixture_broken_image", region_context(), tmp_path / "broken.png")
 
-    # ⛔ THE MESSAGE NAMES THE FILE AND NOT WHERE IT LIVES: a local path in an exception is a path
+    # ⛔ The message names the file and not where it lives: a local path in an exception is a path
     # in a log, and the redaction gate holds for what this repository prints as much as for what it
     # commits. No separator anywhere in the sentence is the cheapest statement of that.
     message = str(raised.value)

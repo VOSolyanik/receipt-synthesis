@@ -107,7 +107,7 @@ def persona(seed: int = SEED, country: Country = Country.UA):
 
 
 def test_persona_is_deterministic_under_seed():
-    """⚠️ TWO CALLS IN ONE PROCESS CANNOT SEE A CLOCK DEPENDENCE, which is why the two tests below
+    """⚠️ two calls in one process cannot see a clock dependence, which is why the two tests below
     exist beside this one. Both calls here happen at the same instant, so a value anchored on
     `datetime.now()` is identical in both — and one was: `Faker.date_of_birth` drew the persona's
     birth date, the РНОКПП encodes it, and this assertion held every day while the identifier
@@ -116,15 +116,15 @@ def test_persona_is_deterministic_under_seed():
 
 
 def test_the_birth_date_the_identifier_encodes_is_anchored_on_THE_BENEFIT_PERIOD():
-    """🔴 THE DISCRIMINATING TEST, and the mutation it exists for is the code that was there.
+    """🔴 the discriminating test, and the mutation it exists for is the code that was there.
 
-    A birth date anchored on the CLOCK is invisible to every same-process assertion and moves the
+    A birth date anchored on the clock is invisible to every same-process assertion and moves the
     corpus at midnight. Measured, not argued: two production runs of the identical command two
     hours apart across midnight moved 36 of 96 personas' `tax_id` and 352 of 1141 images, because
     `Faker.date_of_birth` takes its offset from the seed and its anchor from `datetime.now()`.
 
-    So the property asserted is not "deterministic" — that one passes either way. It is WHICH
-    ANCHOR: move `policy.yaml`'s benefit period and the identifier must move with it. Under the
+    So the property asserted is not "deterministic" — that one passes either way. It is which
+    anchor: move `policy.yaml`'s benefit period and the identifier must move with it. Under the
     clock-anchored draw this patch changes nothing at all and the assertion fails immediately.
     """
     with pytest.MonkeyPatch.context() as patch:
@@ -140,7 +140,7 @@ def test_the_birth_date_the_identifier_encodes_is_anchored_on_THE_BENEFIT_PERIOD
 
 
 def test_the_drawn_birth_date_lands_inside_the_declared_age_band():
-    """The positive half, computed OUTSIDE the code: the РНОКПП's first five digits are days since
+    """The positive half, computed outside the code: the РНОКПП's first five digits are days since
     the epoch, so the birth date can be read back off the identifier and checked against the band
     the period implies. Without this the test above is satisfied by an anchor that moves with the
     period and puts personas at any age at all."""
@@ -224,10 +224,10 @@ def test_plan_is_deterministic_under_seed():
 
 
 def test_plan_dates_fall_inside_the_active_period():
-    """A payment date outside the window drives `rejected`. Landing outside it BY ACCIDENT would
+    """A payment date outside the window drives `rejected`. Landing outside it by accident would
     attach that document to a `covered` label, which is the defect this guards.
 
-    ⚠️ `rejected` PLANS ARE EXCLUDED, NOT EXEMPTED. They leave the window on purpose, and the
+    ⚠️ `rejected` plans are excluded, not exempted. They leave the window on purpose, and the
     biconditional — outside if and only if `rejected` — is asserted over a run sized from the draw
     in `test_only_a_rejected_plan_dates_its_payment_outside_the_benefit_period`. Here the excluded
     plans are counted, so a change that made every plan `rejected` would empty this loop rather
@@ -266,10 +266,10 @@ def test_plan_picks_archetypes_that_can_carry_the_category():
 
 def test_a_category_whose_archetypes_cannot_prove_both_facts_is_refused():
     """A claim needs both facts — what was bought and that it was paid for — so a category whose
-    only registered archetype supplies ONE of them is refused rather than half-built.
+    only registered archetype supplies one of them is refused rather than half-built.
 
-    REWRITTEN WITH THE SECOND DOCUMENT CLASS, and the old form no longer described anything. It
-    looked for a category NO archetype covers, which was every category but one while the registry
+    Rewritten with the second document class, and the old form no longer described anything. It
+    looked for a category no archetype covers, which was every category but one while the registry
     held fiscal receipts alone. A bank payment confirmation carries every category — 👁 it lists no
     items, so nothing on it can contradict one — and the refusal now comes from the evidence being
     incomplete rather than from the category having no template at all. Same guard, reached through
@@ -305,7 +305,7 @@ def test_a_payment_only_category_is_not_reported_as_documentable():
     ]
     assert payment_archetypes, "no payment-proving archetype is registered at all"
 
-    # A registry holding ONLY payment-proving archetypes. Every category is then covered by
+    # A registry holding only payment-proving archetypes. Every category is then covered by
     # archetypes and none is completable, which is exactly the state the rule is about.
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(
@@ -339,18 +339,18 @@ def test_a_verdict_no_archetype_can_carry_is_refused_not_faked():
     ordinary basket would write a wrong label rather than fail. The message has to say what the
     verdict actually needs, not merely that it is unavailable.
 
-    ⚠️ DRIVEN BY A PATCHED REGISTRY SINCE `partially_paid` BECAME REALIZABLE, and it used to be
+    ⚠️ driven by a patched registry since `partially_paid` became realizable, and it used to be
     parametrized over the verdicts that were not. The list emptied one member at a time —
     `insufficient_evidence` when its cross-check causes became drawable, `rejected` when its period
     route did, `not_proof_of_payment` when `EvidenceIntent.PAYMENT_GAP` landed, and `partially_paid`
     when an archetype learned to print an instalment term — so there is no live case left to drive
-    it with. THE CAPABILITY IS NOT OBSOLETE WITH THEM: the enum grows, and the next member added
+    it with. The capability is not obsolete with them: the enum grows, and the next member added
     before its mechanism exists is who this protects. Patching is what keeps the branch under test
     without an unrealizable verdict in the enum that nothing needs.
 
     The reason table is patched alongside the subset, because the two are a pair: a verdict removed
     from `REALIZABLE_VERDICTS` with no entry beside it gets the fallback message, which is the
-    NEXT test's subject and not this one's.
+    next test's subject and not this one's.
     """
     verdict = Verdict.PARTIALLY_PAID
     narrowed = tuple(v for v in claim_planner.REALIZABLE_VERDICTS if v is not verdict)
@@ -375,14 +375,14 @@ def test_a_verdict_no_archetype_can_carry_is_refused_not_faked():
 
 
 def test_the_planner_realizes_exactly_the_verdicts_the_engine_can_be_asked_for():
-    """`insufficient_evidence` MOVED SIDES when the cross-check causes became drawable, `rejected`
+    """`insufficient_evidence` moved sides when the cross-check causes became drawable, `rejected`
     when the planner learned to date a payment outside the benefit period, and `partially_paid`
-    when an archetype learned to print the instalment term a payment can settle one of. EVERY
-    MEMBER OF THE ENUM IS NOW REALIZABLE, which is what makes the second assertion below the
+    when an archetype learned to print the instalment term a payment can settle one of. Every
+    member of the enum is now realizable, which is what makes the second assertion below the
     interesting one: it is empty, and it has never been empty before.
 
-    `_UNREALIZABLE_ROUTES` is where a route to a REALIZABLE verdict explains itself, and it is
-    asserted EMPTY now: `rejected` became buildable by WHAT was bought as well as by WHEN it was
+    `_UNREALIZABLE_ROUTES` is where a route to a realizable verdict explains itself, and it is
+    asserted empty now: `rejected` became buildable by what was bought as well as by when it was
     paid the day `_draw_basket` accepted a coverage target of zero, so every route to every
     realizable verdict is drawn — a promise the corpus keeps for the first time, and one this
     test exists to catch anyone quietly breaking.
@@ -403,11 +403,11 @@ def test_the_planner_realizes_exactly_the_verdicts_the_engine_can_be_asked_for()
 
 
 def test_every_cause_the_policy_declares_a_share_for_can_actually_be_planned():
-    """🔴 THE OTHER DIRECTION, AND THE ONE THAT WOULD BREAK SILENTLY. A share whose cause
+    """🔴 the other direction, and the one that would break silently. A share whose cause
     `plan_claim` refuses raises only on the run where the draw happens to land on it, which is a
     failure that arrives by luck rather than by test.
 
-    ASSERTED BY BUILDING A PLAN, not by looking the cause up in a table. Its first form checked
+    Asserted by building a plan, not by looking the cause up in a table. Its first form checked
     membership of the unrealizable-route table, which the assertion two lines above had just
     pinned — a check that could not fail, which is the dominant defect class in this repository.
     The only thing that establishes a cause is plannable is planning it.
@@ -441,7 +441,7 @@ def test_a_realizable_verdict_with_no_share_cannot_be_drawn_from():
     the failure is named here rather than left to surface as a TypeError inside the standard
     library.
 
-    ⚠️ DRIVEN BY A PATCHED MIX SINCE `rejected` GAINED A SHARE. It used to be driven by
+    ⚠️ driven by a patched mix since `rejected` gained a share. It used to be driven by
     policy.yaml, which declared exactly this combination as long as nothing drew that verdict; now
     every declared member carries a number, and the guard would be untestable — and untested —
     without patching one back out. Whoever adds the next verdict to `REALIZABLE_VERDICTS` before
@@ -460,7 +460,7 @@ def test_a_realizable_verdict_with_no_share_cannot_be_drawn_from():
 
 def test_the_drawn_mix_is_the_target_mix_renormalized_over_the_realizable_subset():
     """verdict_mix gives covered 0.40, partially_covered 0.20 and 0.10 to each of the four
-    negatives. EVERY MEMBER IS NOW REALIZABLE, so the subset sums to 1.00 and the renormalization
+    negatives. Every member is now realizable, so the subset sums to 1.00 and the renormalization
     is the identity:
 
         covered                0.40 / 1.00 = 0.400
@@ -470,13 +470,13 @@ def test_the_drawn_mix_is_the_target_mix_renormalized_over_the_realizable_subset
         partially_paid         0.10 / 1.00 = 0.100
         rejected               0.10 / 1.00 = 0.100
 
-    ⚠️ THE DENOMINATOR MOVED TWICE WITHOUT ANY SHARE MOVING — 0.80, then 0.90 when
+    ⚠️ the denominator moved twice without any share moving — 0.80, then 0.90 when
     `not_proof_of_payment` became realizable, now 1.00 with `partially_paid`. Each verdict carried
     its declared share throughout and each one is drawn slightly rarer after every move. That is
     the conditioning this table exists to make visible, and it is why policy.yaml's
     `insufficient_evidence_causes_min_run_size` moved 75 → 85 → 90 across the same revisions.
 
-    🔴 THE IDENTITY IS THE WEAKEST STATE THIS TEST HAS EVER BEEN IN, and it is worth saying so:
+    🔴 the identity is the weakest state this test has ever been in, and it is worth saying so:
     while the subset was a strict subset, a renormalization bug showed up as a wrong share here.
     It cannot today — dividing by 1.00 hides the operation — so what still bites is the ±0.04
     window on each declared share, and what would catch the next regression is this file's other
@@ -484,7 +484,7 @@ def test_the_drawn_mix_is_the_target_mix_renormalized_over_the_realizable_subset
 
     Over 4000 draws each realized share should sit near its target. The window is wide (±0.04) on
     purpose: this asserts the weights are the policy's, not that a pseudo-random draw hits a mean.
-    EVERY member is checked, because checking only `covered` would pass unchanged when a member
+    Every member is checked, because checking only `covered` would pass unchanged when a member
     joins the denominator.
     """
     rng = random.Random(20260803)
@@ -511,7 +511,7 @@ def test_every_insufficient_evidence_cause_is_reachable_by_the_draw():
     payment_precedes_subject 0.33 — thirds to the nearest hundredth, and policy.yaml says why
     equality is the position rather than the default.
 
-    🔴 THE REACHABILITY IS THE ASSERTION, THE SHARES ARE THE CHECK ON IT. A cause the draw cannot
+    🔴 the reachability is the assertion, the shares are the check on it. A cause the draw cannot
     reach is a bucket of the corpus nothing fills, and it fails silently: every claim still gets a
     label, the balance report still adds up, and one mechanism of three is simply never exercised.
     So every declared cause must come out of the generator, and each within a wide window of its
@@ -575,11 +575,11 @@ def test_a_cause_without_a_partially_covered_verdict_is_refused():
 
 
 def test_claims_for_one_persona_come_out_in_date_order():
-    """Cumulative limits bind in date order, so the plans that SPEND have to be in it: a persona
+    """Cumulative limits bind in date order, so the plans that spend have to be in it: a persona
     whose claims arrived unordered would exhaust its balance on whichever claim happened
     to be planned last rather than on the one that happened last.
 
-    ⚠️ A `rejected` PLAN IS NOT IN THAT SEQUENCE, and it is dropped rather than tolerated. Its
+    ⚠️ A `rejected` plan is not in that sequence, and it is dropped rather than tolerated. Its
     payment is displaced a whole benefit period out of the window, so it sorts before or after
     everything; it also reimburses nothing, which is why the order it breaks is one that does not
     describe it. The property that survives is the one the order exists for — the claims that
@@ -633,14 +633,14 @@ def test_plan_claims_is_deterministic_under_seed():
 
 # ------------------------------------------------- a run large enough to bind --
 #
-# 🔴 WHY A PLANNER-ONLY RUN EXISTS AT ALL, because the alternative is what this replaced. Whether
-# every declared cause is REALIZED is a property of the draw, and the rarest of them lands on about
+# 🔴 Why a planner-only run exists at all, because the alternative is what this replaced. Whether
+# every declared cause is realized is a property of the draw, and the rarest of them lands on about
 # one claim in twenty-four. The rendered fixture below builds ~32 claims, so a cause missing from it
 # is an ordinary outcome and not a defect — config/policy.yaml says exactly that, and names the run
 # size at which a zero stops being sampling noise. A suite that enforced at 32 what the policy
 # declares unmeasurable below 75 would go red on the next change to the seed stream, for nothing.
 #
-# Planning is cheap: no template, no browser, no image. So the EXISTENCE questions are asked here,
+# Planning is cheap: no template, no browser, no image. So the existence questions are asked here,
 # at a size derived from the draw rather than chosen, and the rendered fixture is left to answer the
 # questions only a built document can — what the label of such a claim actually says.
 
@@ -649,19 +649,19 @@ def _run_size_for(rate: float, threshold: float = 1e-3) -> int:
     """How many planned claims make an event drawn at `rate` practically certain to occur.
 
     An event drawn at rate p is absent from N claims with probability (1 - p)^N, so
-    N = ln(threshold) / ln(1 - p). The rate is always DERIVED from policy.yaml by a caller below
+    N = ln(threshold) / ln(1 - p). The rate is always derived from policy.yaml by a caller below
     and never written down, so a share that moves resizes the run instead of quietly making a
     test weaker.
 
     `threshold` is 1e-3 rather than the 0.05 policy.yaml uses for its own guideline. That guideline
-    tells a READER of one corpus when to be suspicious of a zero; this is a TEST, and a test that
+    tells a reader of one corpus when to be suspicious of a zero; this is a test, and a test that
     fails once in twenty runs of a shifted seed stream is a test nobody trusts.
     """
     return math.ceil(math.log(threshold) / math.log(1 - rate))
 
 
 def _drawn_at(verdict: Verdict) -> float:
-    """The share of BUILT claims that aim at `verdict`, i.e. the mix renormalized over the
+    """The share of built claims that aim at `verdict`, i.e. the mix renormalized over the
     realizable subset — the same conditioning `draw_verdict` applies and the balance report
     prints."""
     mix = verdict_mix()
@@ -669,7 +669,7 @@ def _drawn_at(verdict: Verdict) -> float:
 
 
 def _claims_for_certainty(threshold: float = 1e-3) -> int:
-    """How many planned claims make the RAREST declared cause practically certain to occur.
+    """How many planned claims make the rarest declared cause practically certain to occur.
 
     Derived from the policy, never written down: the chance a claim aims at
     `insufficient_evidence`, split by `insufficient_evidence_causes`.
@@ -679,12 +679,12 @@ def _claims_for_certainty(threshold: float = 1e-3) -> int:
 
 
 def _plans_from_many_personas(count: int) -> list:
-    """`count` or more claim PLANS, over as many fresh personas as it takes.
+    """`count` or more claim plans, over as many fresh personas as it takes.
 
     Each persona gets its own generator derived from one root, as `assembler` does, and its own
     empty `Ledger` — which is never recorded into, so no balance is ever exhausted and no persona
     stops short. That is the difference from a real run and it is the right one here: what is being
-    measured is the DRAW, and a ledger binding would remove claims for a reason that has nothing to
+    measured is the draw, and a ledger binding would remove claims for a reason that has nothing to
     do with the cause under test.
     """
     root = random.Random(SEED)
@@ -699,10 +699,10 @@ def _plans_from_many_personas(count: int) -> list:
 
 
 def test_every_declared_cause_is_planned_in_a_run_large_enough_to_require_it():
-    """🔴 THE REQUIREMENT IS ON THE RESULT, NOT ON THE SHARE. A verdict's share says nothing about
+    """🔴 the requirement is on the result, not on the share. A verdict's share says nothing about
     which mechanism realized it, so ten percent of a corpus arriving through one cause would leave
     the vocabulary promising three and the data holding one. What has to hold is that each declared
-    cause OCCURS — and it is asked at a size where a zero cannot be luck.
+    cause occurs — and it is asked at a size where a zero cannot be luck.
 
     The run is planner-only. A cause the planner never draws is a bucket of the corpus nothing
     fills, and it fails silently: every claim still gets a label and the balance report still adds
@@ -775,20 +775,20 @@ def test_rejected_is_planned_in_a_run_large_enough_to_require_it():
 def test_only_an_outside_period_rejected_plan_dates_its_payment_outside_the_period():
     """Both directions, claim by claim, because one route's label rests entirely on this date.
 
-    A plan on the `outside_period` route whose payment stayed INSIDE the window is a claim the
+    A plan on the `outside_period` route whose payment stayed inside the window is a claim the
     engine labels `covered` while the plan says otherwise — the drift the balance report would
-    report as a builder shortfall, on a mechanism that never fired. A plan of any OTHER verdict —
-    or of the ZERO-COVERAGE route, whose date is deliberately ordinary — whose payment left the
+    report as a builder shortfall, on a mechanism that never fired. A plan of any other verdict —
+    or of the zero-coverage route, whose date is deliberately ordinary — whose payment left the
     window is worse: the engine refuses it on the period before it ever reads the basket, so the
     mechanism the claim was built to exercise is absent from the corpus under a label that says
     it is there.
 
-    🔴 THE BICONDITIONAL USED TO READ "outside == rejected", AND MUST NEVER AGAIN: that equality
+    🔴 the biconditional used to read "outside == rejected", and must never again: that equality
     was the corpus's most expensive degeneracy — the payment date alone predicted the verdict —
-    and the zero-coverage route exists precisely to break it. The equality below is per ROUTE,
+    and the zero-coverage route exists precisely to break it. The equality below is per route,
     which is the statement that survives.
 
-    ⚠️ THE CLAIM'S DATE, NOT EVERY DOCUMENT'S. policy.yaml checks the period against the payment
+    ⚠️ the claim's date, not every document's. policy.yaml checks the period against the payment
     and against nothing else, so a subject document dated inside the window on a `rejected` claim
     is correct and expected — an invoice issued in December and settled in the next benefit year.
     """
@@ -806,7 +806,7 @@ def test_only_an_outside_period_rejected_plan_dates_its_payment_outside_the_peri
 
 
 def test_a_zero_coverage_plan_keeps_an_ordinary_date_and_an_empty_basket_target():
-    """The route by WHAT WAS BOUGHT, named explicitly: an in-window date and a coverage target
+    """The route by what was bought, named explicitly: an in-window date and a coverage target
     of exactly zero, which is what `content_builder._draw_basket` reads as "no covered line".
 
     The date staying inside the window is not incidental — it is the property the route was
@@ -840,7 +840,7 @@ def test_both_rejected_routes_occur_in_a_run_large_enough_to_require_them():
 
 
 def test_a_rejected_payment_falls_on_both_sides_of_the_benefit_period():
-    """🔴 A CORPUS WHERE EVERY REFUSED CLAIM IS LATE TEACHES "LATE", NOT "OUTSIDE".
+    """🔴 A corpus where every refused claim is late teaches "late", NOT "outside".
 
     The displacement draws its sign, and this is what that draw is for: were it fixed, the payment
     date of every `rejected` claim would sort after every other claim in the dataset, and a
@@ -849,7 +849,7 @@ def test_a_rejected_payment_falls_on_both_sides_of_the_benefit_period():
     and a run this size misses either one about once in a thousand.
     """
     start, end = active_period()
-    # Two halvings, not one: the sign draw splits the OUT-OF-PERIOD route's dates, and that
+    # Two halvings, not one: the sign draw splits the out-of-period route's dates, and that
     # route is itself `rejected_routes["outside_period"]` of the verdict's bucket.
     size = _run_size_for(_drawn_at(Verdict.REJECTED) * rejected_routes()[OUTSIDE_PERIOD] * 0.5)
     plans = _plans_from_many_personas(size)
@@ -863,10 +863,10 @@ def test_a_rejected_payment_falls_on_both_sides_of_the_benefit_period():
 def test_not_proof_of_payment_is_planned_in_a_run_large_enough_to_require_it():
     """The verdict `verdict_mix` has always given a share to has to be one the planner aims at.
 
-    ⚠️ THE SHARE DID NOT MOVE AND THE BUCKET WAS EMPTY, which is the failure mode this size is
+    ⚠️ the share did not move and the bucket was empty, which is the failure mode this size is
     chosen against: 0.10 of the mix has been declared since the file was written, every report
     printed the number, and nothing filled it. Nothing about a run said so except the balance
-    report's "NOT GENERATED IN THIS RUN" line.
+    report's "not generated in this run" line.
 
     Sized from the policy rather than picked, exactly as the `rejected` test above is.
     """
@@ -899,15 +899,15 @@ def test_partially_paid_is_planned_in_a_run_large_enough_to_require_it():
     """The last member of `verdict_mix` to get a mechanism, sized from the policy exactly as the
     two tests above are.
 
-    ⚠️ ITS SHARE HAS BEEN DECLARED SINCE THE FILE WAS WRITTEN and nothing filled it, for longer
-    than any other verdict's: the bucket needed an archetype to PRINT something no archetype
+    ⚠️ its share has been declared since the file was written and nothing filled it, for longer
+    than any other verdict's: the bucket needed an archetype to print something no archetype
     printed, so no reordering of the planner could have opened it. That is the state this size is
     chosen against.
 
     Every plan is checked for all three things the mechanism consists of — a schedule the
     configuration declares, no cause, and a subject document whose class can state the term —
     because a plan short of any one of them builds a claim the engine labels `amount_mismatch`,
-    which is a WRONG LABEL rather than a failure.
+    which is a wrong label rather than a failure.
     """
     size = _run_size_for(_drawn_at(Verdict.PARTIALLY_PAID))
     plans = _plans_from_many_personas(size)
@@ -940,7 +940,7 @@ def test_partially_paid_is_planned_in_a_run_large_enough_to_require_it():
 
 def test_only_a_partially_paid_plan_names_a_payment_schedule():
     """Both directions, claim by claim. A `partially_paid` plan without a schedule builds an
-    ordinary agreeing pair and comes back `covered`; a plan of any OTHER verdict carrying one
+    ordinary agreeing pair and comes back `covered`; a plan of any other verdict carrying one
     prints an instalment term on a claim whose payment settles the whole invoice, and the corpus
     then contains the marker on a claim that is not partly paid — which is precisely what would
     teach a consumer to ignore it."""
@@ -969,11 +969,11 @@ def test_every_declared_schedule_is_reached_by_the_draw():
 
 
 def test_the_non_fiscal_slip_is_reached_by_the_draw_and_only_through_this_verdict():
-    """🔴 THE ARCHETYPE THIS TASK EXISTS FOR, ASSERTED ON BOTH SIDES.
+    """🔴 the archetype this task exists for, asserted on both sides.
 
-    It must be REACHED — a registered archetype the draw never selects is a template with a test
+    It must be reached — a registered archetype the draw never selects is a template with a test
     suite and no corpus, which is what it was for as long as it was a mock-up. And it must be
-    reached ONLY as the whole evidence of a `not_proof_of_payment` claim: nothing settles a
+    reached only as the whole evidence of a `not_proof_of_payment` claim: nothing settles a
     товарний чек, so a pair built from one would assert a settlement relation no observation
     supports. See `claim_planner._SETTLED_BY_A_PAYMENT`.
 
@@ -999,11 +999,11 @@ def test_the_non_fiscal_slip_is_reached_by_the_draw_and_only_through_this_verdic
 
 
 def test_the_subject_half_of_a_pair_is_always_a_document_a_payment_can_settle():
-    """The same rule from the other end, and over the SHAPE rather than over one archetype: every
+    """The same rule from the other end, and over the shape rather than over one archetype: every
     two-document plan's subject is of a class `_SETTLED_BY_A_PAYMENT` names.
 
-    🔴 IT IS THE ASSERTION THAT WOULD FAIL FIRST IF THE PAIR BRANCH WENT BACK TO DRAWING FROM
-    EVERY SUBJECT-ONLY ARCHETYPE, which is what it did before this class landed and what the
+    🔴 it is the assertion that would fail first if the pair branch went back to drawing from
+    every subject-only archetype, which is what it did before this class landed and what the
     obvious reading of `document_evidence` still suggests. The pair would then print a payment
     purpose citing nothing, on about half the split claims of six categories.
     """
@@ -1038,7 +1038,7 @@ def test_the_payment_gap_is_planned_for_exactly_the_verdict_that_needs_it():
     `not_proof_of_payment` while the plan named something else; the verdict planned without the gap
     would come back `covered`, and the corpus would promise a bucket it does not contain.
 
-    ⚠️ AND IT IS THE OTHER GAP'S MIRROR IMAGE. `EVIDENCE_GAP` is the subject gap, asserted the same
+    ⚠️ and it is the other gap's mirror image. `EVIDENCE_GAP` is the subject gap, asserted the same
     way against `subject_not_evidenced` above. Two members of one enum with opposite meanings are
     exactly the pair a later reader will confuse, so each is pinned to its own verdict.
     """
@@ -1065,7 +1065,7 @@ def test_a_cause_named_for_not_proof_of_payment_is_refused():
 
 
 def test_a_category_documented_by_a_receipt_alone_cannot_realize_not_proof_of_payment():
-    """🔴 THE NARROWING THAT EXCLUDES NOTHING IN THE LIVE REGISTRY, exercised against a hand-built
+    """🔴 the narrowing that excludes nothing in the live registry, exercised against a hand-built
     one — which is the only way to exercise it and the reason it is written at all.
 
     A fiscal receipt proves its own payment, so a category documented by receipts alone leaves no
@@ -1073,7 +1073,7 @@ def test_a_category_documented_by_a_receipt_alone_cannot_realize_not_proof_of_pa
     category also carries the invoice today, so `plannable_categories` filters nothing out of the
     live registry and a test against it would assert the absence of an effect.
 
-    WITHOUT THE FILTER such a category would be drawn and then refused inside `_select_documents`,
+    Without the filter such a category would be drawn and then refused inside `_select_documents`,
     mid-run, on whichever claim happened to draw it — the failure landing a stage from its cause.
     """
     receipts = {
@@ -1106,13 +1106,13 @@ def test_a_category_documented_by_a_receipt_alone_cannot_realize_not_proof_of_pa
 
 
 def test_a_subject_mismatch_plan_carries_a_payment_that_can_print_the_citation():
-    """🔴 THE SHAPE HALF OF THE `subject_mismatch` MECHANISM: the cause needs a page with a
+    """🔴 the shape half of the `subject_mismatch` mechanism: the cause needs a page with a
     purpose line, and the app-transaction screen has none — a plan that drew it would build a
     claim whose builder refuses `must_cite`, a stage away from the choice that broke it.
 
-    DIRECT CALLS, SIZED AGAINST THE MUTATION RATHER THAN THE DRAW. A planner that dropped the
+    Direct calls, sized against the mutation rather than the draw. A planner that dropped the
     narrowing hands the cause to the citation-less archetype only at that archetype's own draw
-    weight — 8% today — so a sweep sized merely to CONTAIN the cause once passes such a mutation
+    weight — 8% today — so a sweep sized merely to contain the cause once passes such a mutation
     more often than not (measured: it did). The seed count is derived from that weight the way
     `_run_size_for` derives everything else: absence of a violation across it clears the
     once-in-a-thousand bar, from the weight as configured rather than as remembered.
@@ -1157,7 +1157,7 @@ def test_a_rejected_route_the_policy_does_not_declare_is_refused_by_name():
     """`rejected` has exactly the two routes `rejected_routes` declares, so a caller naming a
     third has to be told what the two are rather than handed an ordinary claim under its name.
 
-    ⚠️ THE CALL THAT USED TO SIT HERE ASSERTED THE OPPOSITE: `cause="zero_coverage"` was refused
+    ⚠️ the call that used to sit here asserted the opposite: `cause="zero_coverage"` was refused
     while nothing could build the basket, and it builds now — that flip is deliberate and is
     covered by `test_a_zero_coverage_plan_keeps_an_ordinary_date_and_an_empty_basket_target`.
     """
@@ -1183,20 +1183,20 @@ def test_documentable_categories_is_the_intersection():
 
 
 def test_the_category_narrowing_for_insufficient_evidence_is_per_verdict():
-    """🔴 THE SUBTLE PART OF C, ASSERTED DIRECTLY RATHER THAN THROUGH A RUN.
+    """🔴 the subtle part of C, asserted directly rather than through a run.
 
-    `insufficient_evidence` is realized by a claim whose SUBJECT and PAYMENT documents disagree, so
-    it needs a category documented by a PAIR. A category holding a fiscal receipt gets one
+    `insufficient_evidence` is realized by a claim whose subject and payment documents disagree, so
+    it needs a category documented by a pair. A category holding a fiscal receipt gets one
     self-sufficient document — the planner prefers that shape — and one document cannot contradict
     itself, so such a category can never realize the verdict.
 
-    AND THE NARROWING IS PER VERDICT, NOT GLOBAL: `covered` and `partially_covered` are realizable
+    And the narrowing is per verdict, not global: `covered` and `partially_covered` are realizable
     in both shapes, so a receipt category stays plannable for them. Narrowing globally would remove
     the only `fiscal_receipt` documents the corpus has, to satisfy a constraint belonging to one
     verdict out of three.
 
-    ⚠️ WHY THIS IS A UNIT TEST AND NOT A RUN. A mutation that removed the narrowing survived every
-    run-based test, and the reason was not a weak test: NO PERSONA of the pipeline fixture holds
+    ⚠️ why this is a unit test and not a run. A mutation that removed the narrowing survived every
+    run-based test, and the reason was not a weak test: no persona of the pipeline fixture holds
     `vitamins_nutrition`, the only category with a both-proving archetype, so no run there can reach
     the branch at all. A property that a draw may or may not exercise has to be asserted where it is
     decided.
@@ -1233,7 +1233,7 @@ def test_the_category_narrowing_for_insufficient_evidence_is_per_verdict():
 
 def test_a_persona_holding_only_a_receipt_category_cannot_realize_the_disagreement_verdict():
     """The other side of the same rule, and what `realizable_verdicts_for` exists for: such a
-    persona's draw must EXCLUDE the verdict rather than produce a plan that has to be refused a
+    persona's draw must exclude the verdict rather than produce a plan that has to be refused a
     stage later. The conditioning is declared — a share conditioned on the persona is not the share
     policy.yaml states."""
     receipt_only = next(
@@ -1248,15 +1248,15 @@ def test_a_persona_holding_only_a_receipt_category_cannot_realize_the_disagreeme
     assert plannable_categories(holder, Ledger()) == [receipt_only]
     assert plannable_categories(holder, Ledger(), Verdict.INSUFFICIENT_EVIDENCE) == []
     assert Verdict.INSUFFICIENT_EVIDENCE not in realizable_verdicts_for(holder, Ledger())
-    # `rejected` IS realizable for this persona, and the contrast is the point: it is the one
-    # verdict whose mechanism is a DATE, so it asks nothing of the shape of the evidence and a
+    # `rejected` is realizable for this persona, and the contrast is the point: it is the one
+    # verdict whose mechanism is a date, so it asks nothing of the shape of the evidence and a
     # self-sufficient receipt realizes it as readily as a pair does.
     #
-    # AND SO IS `not_proof_of_payment`, WHICH IS A DIFFERENT CONTRAST AND A SHARPER ONE. It DOES
+    # And so is `not_proof_of_payment`, which is a different contrast and a sharper one. It does
     # ask something of the shape of the evidence — a subject document with no payment beside it —
     # and this category satisfies that not because it has a receipt but because it also has the
     # invoice and the товарний чек. The receipt is useless to it: a document that proves its own
-    # payment leaves no gap. So the verdict is here on the strength of the OTHER archetypes of the
+    # payment leaves no gap. So the verdict is here on the strength of the other archetypes of the
     # same category, which is exactly what `plannable_categories` narrows on.
     assert set(realizable_verdicts_for(holder, Ledger())) == {
         Verdict.COVERED,
@@ -1323,7 +1323,7 @@ def test_a_verdict_with_no_recorded_reason_still_fails_cleanly():
     absent from the reasons table gets a `NotImplementedError` naming itself, never a `KeyError`
     out of the table.
 
-    Simulated by narrowing the realizable subset, because the reasons table is EMPTY now — every
+    Simulated by narrowing the realizable subset, because the reasons table is empty now — every
     member of the enum is realizable — so there is no live combination to drive it with and no
     seventh member to add. The patch is the whole point: the state it fabricates is exactly the
     state whoever adds the next verdict to the enum will be in for one commit.
@@ -1403,7 +1403,7 @@ def test_non_geometric_degradation_leaves_boxes_where_they_were():
 
 @pytest.mark.parametrize("capture", list(Capture))
 def test_every_capture_channel_is_deterministic_under_its_seed(capture):
-    """🔴 THE TRIPWIRE THAT CAUGHT `DirtyRollers`. Determinism under `--seed` is an invariant of
+    """🔴 the tripwire that caught `DirtyRollers`. Determinism under `--seed` is an invariant of
     this generator, and an Augraphy effect is free to ignore `random_seed` — one of the three
     that were tried does, so the first `scan` recipe produced different pixels on every call
     while every other test stayed green. Parametrized over the whole enum so a channel added
@@ -1447,9 +1447,9 @@ def test_a_capture_channel_with_no_recipe_raises_rather_than_borrowing_one():
     channel's artefacts would put documents in the corpus labelled as one channel and degraded as
     another, which no test of either channel could see.
 
-    🔴 EACH TABLE IS CHECKED BY ITSELF, AND THE FIRST VERSION OF THIS TEST WAS NOT. There are TWO
+    🔴 each table is checked by itself, and the first version of this test was not. There are two
     recipe tables — one for the paper effects and one for the geometry — and `degrade` calls them in
-    order. Asserting only that `degrade` raises means the SECOND table's guard is enough to keep the
+    order. Asserting only that `degrade` raises means the second table's guard is enough to keep the
     test green while the first one is gone: a mutation that deleted the paper table's refusal
     survived exactly that way, and it was the test that was weak rather than the mutation that was
     mis-aimed. The denominator is two.
@@ -1508,7 +1508,7 @@ def dataset(tmp_path_factory):
 
 
 def test_the_run_builds_exactly_the_documents_its_plans_asked_for(dataset):
-    """One document per claim is a property of the ARCHETYPE REGISTRY — the one template
+    """One document per claim is a property of the archetype registry — the one template
     registered proves both facts, so a claim needs no second document — and not of a
     dataset. Asserted against the plans rather than against the number 1, so that the day
     a claim plans two this test measures the run instead of failing on a constant."""
@@ -1529,7 +1529,7 @@ def test_images_and_labels_are_written(dataset):
 
 
 def test_the_claim_points_at_the_documents_that_were_written(dataset):
-    """The join from a claim to its evidence, ASSERTED AGAINST THE RUN rather than against the
+    """The join from a claim to its evidence, asserted against the run rather than against the
     number one. It used to read `== [result.documents[0].doc_id]` and to pin the type as a fiscal
     receipt — true while every registered archetype proved both facts, and false the moment the
     invoice made a split pair buildable. A constant that was a property of the registry is exactly
@@ -1543,12 +1543,12 @@ def test_the_claim_points_at_the_documents_that_were_written(dataset):
 
 
 def test_every_document_of_a_claim_names_the_same_persona_and_the_same_vendor(dataset):
-    """THE WIRING BETWEEN THE PERSONA AND THE DOCUMENTS, which nothing asserted until a mutation
+    """the wiring between the persona and the documents, which nothing asserted until a mutation
     survived and said so.
 
-    A claim's documents must agree about WHO. The invoice is addressed to the claimant and the
+    A claim's documents must agree about who. The invoice is addressed to the claimant and the
     payment document is drawn on the claimant's account, so `payer` is the persona's name on every
-    document that names one; and the seller must be the SAME vendor instance on both, which used to
+    document that names one; and the seller must be the same vendor instance on both, which used to
     hold because a claim had one document and is now a constraint somebody has to keep — a sole
     trader's name is drawn rather than stored, so two calls would print two sellers.
 
@@ -1572,11 +1572,11 @@ def test_every_document_of_a_claim_names_the_same_persona_and_the_same_vendor(da
 
 
 def test_the_assembler_builds_a_fiscal_receipt_and_tells_it_the_capture_channel(tmp_path):
-    """🔴 THE RECEIPT BRANCH OF THE ASSEMBLER, EXERCISED DIRECTLY — because no run-based fixture
+    """🔴 the receipt branch of the assembler, exercised directly — because no run-based fixture
     reaches it any more.
 
     Measured rather than assumed: the only category with a both-proving archetype is
-    `vitamins_nutrition`, and NO PERSONA of either pipeline fixture holds it. Since the invoice
+    `vitamins_nutrition`, and no persona of either pipeline fixture holds it. Since the invoice
     activated the pair, every fixture claim is a two-document claim, so the whole
     "one self-sufficient document" branch — including the `capture=` the receipt builder now
     requires — runs in no test that drives `generate_dataset`.
@@ -1612,7 +1612,7 @@ def test_the_assembler_builds_a_fiscal_receipt_and_tells_it_the_capture_channel(
     assert reference is None
 
     assert document.doc_type is DocType.FISCAL_RECEIPT
-    # The channel reached the builder: the VAT row's form is one the document's OWN capture allows.
+    # The channel reached the builder: the VAT row's form is one the document's own capture allows.
     allowed = jurisdiction("UA")["tax_line_forms_by_medium"][document.capture.medium.value]
     assert document.vat_row_form in allowed, (
         f"{document.vat_row_form!r} is not a form a {document.capture.value} may print"
@@ -1621,20 +1621,20 @@ def test_the_assembler_builds_a_fiscal_receipt_and_tells_it_the_capture_channel(
 
 
 def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_dataset):
-    """🔴 A THIRD CLASS OF CHECK, and it exists because two other classes could not see the defect
+    """🔴 A third class of check, and it exists because two other classes could not see the defect
     that produced it.
 
-    A claim's documents describe ONE transaction between ONE pair of parties. Every field they
-    share must therefore agree — and agree BEFORE NORMALIZATION, on the raw string, which is the
+    A claim's documents describe one transaction between one pair of parties. Every field they
+    share must therefore agree — and agree before normalization, on the raw string, which is the
     whole point.
 
-    WHY PER-DOCUMENT ASSERTIONS CANNOT SEE THIS. `counterparty` was labelled as the PRINTED form on
-    two classes («ТОВ «Ключ»») and as the BARE trade name on two others («Ключ»), for three commits.
+    Why per-document assertions cannot see this. `counterparty` was labelled as the printed form on
+    two classes («ТОВ «Ключ»») and as the bare trade name on two others («Ключ»), for three commits.
     Every per-document assertion passed: each class was internally consistent. The contract's
-    comparison rule strips the legal form, so both spellings compare EQUAL for any consumer — no
+    comparison rule strips the legal form, so both spellings compare equal for any consumer — no
     scorecard could have shown it either.
 
-    AND WHY MUTATION TESTING CANNOT SEE IT. There was nothing to break: no assertion existed whose
+    And why mutation testing cannot see it. There was nothing to break: no assertion existed whose
     reddening would reveal the divergence, so a mutation of either side left the suite green. A gap
     of this shape is invisible to a technique that measures whether existing assertions bite.
 
@@ -1642,7 +1642,7 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
     every field they share. It is checked here, on a run, rather than per class, because no single
     class can be wrong about it alone.
 
-    THE THREE DELIBERATE DISAGREEMENTS ARE EXCLUDED BY THE CLAIM'S OWN CAUSE, never by a tolerance:
+    The three deliberate disagreements are excluded by the claim's own cause, never by a tolerance:
     a claim planned as `amount_mismatch` must disagree about the amount and about nothing else, one
     planned as `payment_precedes_subject` about the order and about nothing else, and one planned
     as `counterparty_mismatch` about the party and about nothing else. Their exclusion is therefore
@@ -1662,11 +1662,11 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
         if len(documents) < 2:
             continue
 
-        # Fields that must agree on the RAW value, whatever the claim's cause. `counterparty` left
+        # Fields that must agree on the raw value, whatever the claim's cause. `counterparty` left
         # this list when it became an axis a claim can be built to fail — it is checked below,
         # against the claim's own cause, exactly as the amount and the order are.
         #
-        # 🔴 CURRENCY IS THE HARD ONE AND IT IS THE ORACLE'S RULE, not this test's opinion:
+        # 🔴 Currency is the hard one and it is the oracle's rule, not this test's opinion:
         # `policy_engine._one_claim_one_currency` refuses to label a claim stated in two, because
         # coverage pools line items across documents and every cross-document axis compares
         # amounts between them. The planner pairs within a currency so this can never be reached.
@@ -1675,17 +1675,17 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
             assert len(values) == 1, f"{claim.claim_id} disagrees about {field}: {values}"
             checked[field] += 1
 
-        # 🔴 LANGUAGE IS NOT ONE OF THEM ANY MORE, AND THE EXCEPTION IS ASSERTED RATHER THAN
-        # DROPPED. It sat in the tuple above while every document of the corpus was Ukrainian, and
+        # 🔴 Language is not one of them any more, and the exception is asserted rather than
+        # dropped. It sat in the tuple above while every document of the corpus was Ukrainian, and
         # the euro pair falsified it: a Ukrainian employee who buys from a foreign platform submits
-        # THAT PLATFORM's English invoice and THEIR OWN bank's Ukrainian confirmation of the
+        # that platform's English invoice and their own bank's Ukrainian confirmation of the
         # transfer. That is not a defect to be tolerated — it is the ordinary shape of a
         # cross-border claim, and a corpus in which every claim is monolingual would be missing it.
         #
         # ⛔ The licence is narrow and this is where it is stated: a claim may hold two languages
         # exactly when it is stated in a currency that is not the reporting one. A mixed-language
         # claim in hryvnias would be two domestic documents disagreeing, which nothing builds and
-        # nothing would explain. Nothing about the CONTRACT changes — `language` is a per-document
+        # nothing would explain. Nothing about the contract changes — `language` is a per-document
         # field with a per-language reporting slice, and no statement of it is about a claim.
         languages = {document.language for document in documents}
         currencies = {document.currency for document in documents}
@@ -1695,11 +1695,11 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
         )
         checked["language" if len(languages) == 1 else "language_cross_border"] += 1
 
-        # 🔴 THE PAYER IS NARROWER, AND THIS CHECK IS WHAT ESTABLISHED IT. Its first run failed on
+        # 🔴 The payer is narrower, and this check is what established it. Its first run failed on
         # `{'-', 'Олекса Семенюк'}`: an internet-acquiring confirmation 👁 does not identify the
-        # payer and prints a HYPHEN as the value, while the invoice beside it names the claimant.
-        # The DOCUMENT is right — that emptiness is observed and deliberate — so the rule is that
-        # every document which NAMES a payer names the same one, and the exemption is keyed on the
+        # payer and prints a hyphen as the value, while the invoice beside it names the claimant.
+        # The document is right — that emptiness is observed and deliberate — so the rule is that
+        # every document which names a payer names the same one, and the exemption is keyed on the
         # configured empty value rather than on a tolerance. The consequence for a consumer is that
         # the payer cannot be cross-checked across such a claim at all; declared as KL-09.
         named = [d for d in documents if d.payer not in (None, _UNIDENTIFIED_PAYER)]
@@ -1716,8 +1716,8 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
         )
 
         # The amount, unless the claim's own label says the two were built to disagree — or says
-        # the payment settles ONE PART of the subject, which is a third case and not a weaker
-        # version of either. `partially_paid` is a claim whose documents AGREE: the payment is
+        # the payment settles one part of the subject, which is a third case and not a weaker
+        # version of either. `partially_paid` is a claim whose documents agree: the payment is
         # exactly what the subject printed as an instalment, so the equality that holds is against
         # that field rather than against the total. Checking it against `amount` would have made
         # this sweep read the intended pair as a defect; skipping the claim would have left the
@@ -1740,7 +1740,7 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
             assert payment.date >= subject.date, claim.claim_id
         checked["date_order"] += 1
 
-        # The party, on the same principle. 🔴 THE ONLY FIELD THAT DIFFERS ON SUCH A CLAIM, which
+        # The party, on the same principle. 🔴 the only field that differs on such a claim, which
         # is what makes the negative worth building: an invoice from one seller beside a payment to
         # another agrees about everything else, so a consumer cannot reach the label by any route
         # but the names.
@@ -1761,17 +1761,17 @@ def test_no_claim_contradicts_itself_across_its_own_documents(multi_claim_datase
 
 
 def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_claim_dataset):
-    """The test above, one layer down: on the PAGE rather than on the label.
+    """The test above, one layer down: on the page rather than on the label.
 
-    🔴 IT IS HERE AND NOT ONLY IN test_cross_document_identity.py BECAUSE OF WHAT THAT MODULE
-    CANNOT SEE. That module builds a pair the way the assembler builds one and asserts on the two
+    🔴 it is here and not only in test_cross_document_identity.py because of what that module
+    cannot see. That module builds a pair the way the assembler builds one and asserts on the two
     rendered pages — which proves the builders honour a shared identity, and proves nothing about
-    whether the ASSEMBLER hands them one. `identity=` is a required parameter, so dropping it fails
+    whether the assembler hands them one. `identity=` is a required parameter, so dropping it fails
     loudly; `cites=` is not, so an assembler that stopped passing it would go on producing valid
     documents whose purpose lines cite a stranger, and every assertion in that module would still
     pass. This one runs the whole pipeline and reads what came out.
 
-    ⚠️ AND IT IS THE MEASUREMENT THAT FOUND THE DEFECT, with the same reader — `fields_of` of
+    ⚠️ and it is the measurement that found the defect, with the same reader — `fields_of` of
     tools/cross_document_audit.py, regexes over `reference_text`. On the delivered corpus that
     measurement returned 587 pairs and 0 agreements on the seller's tax code and IBAN; the same
     instrument runs here so the number cannot quietly go back.
@@ -1795,12 +1795,12 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
                 documents, key=lambda d: not document_evidence(d.doc_type).proves_subject
             )
         )
-        # 🔴 THE ONE CLAIM WHOSE PAGES NAME TWO SELLERS ON PURPOSE, and it leaves this sweep with an
-        # ASSERTION rather than with a skip: a claim planned as `counterparty_mismatch` was built
-        # so that the payment went to another party, so its seller rows MUST disagree, and one that
+        # 🔴 The one claim whose pages name two sellers on purpose, and it leaves this sweep with an
+        # assertion rather than with a skip: a claim planned as `counterparty_mismatch` was built
+        # so that the payment went to another party, so its seller rows must disagree, and one that
         # agreed would be the negative silently not built. It is excluded from the denominator
         # afterwards because the rows below measure the opposite property — that a claim describing
-        # ONE purchase names one seller by one set of numbers.
+        # one purchase names one seller by one set of numbers.
         if COUNTERPARTY_MISMATCH in claim.imperfection:
             assert subject["seller_name"] and payment["seller_name"], (
                 f"{claim.claim_id}: a seller's name was not readable on both pages, so the "
@@ -1809,12 +1809,12 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
             assert subject["seller_name"] != payment["seller_name"], claim.claim_id
             readable["seller_name_disagrees_on_purpose"] += 1
             continue
-        # 🔴 THE SECOND DELIBERATE EXCLUSION, COUNTED AND VERIFIED RATHER THAN SKIPPED: a claim
-        # whose payment page is the app's transaction screen prints NO party block at all — that
+        # 🔴 The second deliberate exclusion, counted and verified rather than skipped: a claim
+        # whose payment page is the app's transaction screen prints no party block at all — that
         # absence is the archetype's entire argument — so the requisite rows below have nothing
         # to read on it by design, not by defect. The discriminator is the box vocabulary
         # (`merchant_descriptor` is printed by that archetype and no other), and the branch
-        # ASSERTS the absence it excuses: a party requisite turning up on such a page would mean
+        # asserts the absence it excuses: a party requisite turning up on such a page would mean
         # the archetype stopped being the negative example it is registered as.
         payment_document = max(
             documents, key=lambda d: document_evidence(d.doc_type).proves_payment
@@ -1828,13 +1828,13 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
             readable["payment_prints_no_party_block"] += 1
             continue
         pairs += 1
-        # 🔴 THE THIRD DELIBERATE EXCLUSION, AND — like the two above — IT ASSERTS WHAT IT EXCUSES.
-        # A cross-border pair names a seller OUTSIDE the Ukrainian register: it has no ЄДРПОУ and
+        # 🔴 The third deliberate exclusion, and — like the two above — it asserts what it excuses.
+        # A cross-border pair names a seller outside the Ukrainian register: it has no ЄДРПОУ and
         # its bank has no МФО, so neither page prints a tax code and there is nothing for the row
         # below to compare. Printing the code drawn for the claim would put an eight-digit
         # Ukrainian identifier under a foreign company's name, which is the defect this exclusion
         # exists to keep visible. The discriminator is the seller's own IBAN — a foreign account is
-        # what says the party is foreign — and the two requisites that ARE printed stay strict.
+        # what says the party is foreign — and the two requisites that are printed stay strict.
         if subject["seller_tax_code"] is None and payment["seller_tax_code"] is None:
             assert subject["seller_account"] and not subject["seller_account"].startswith("UA"), (
                 f"{claim.claim_id}: neither page printed a seller's tax code and the seller banks "
@@ -1849,13 +1849,13 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
             readable[field] += 1
             agree[field] += subject[field] == payment[field]
         if payment["invoice_number"] is not None:
-            # 🔴 AND THE CITATION HAS ITS OWN DELIBERATE DISAGREEMENT, which is not the party's:
-            # a claim planned as `subject_mismatch` prints a purpose naming ANOTHER рахунок, and
-            # that wrong number IS the negative. So it is asserted to disagree rather than counted
+            # 🔴 And the citation has its own deliberate disagreement, which is not the party's:
+            # a claim planned as `subject_mismatch` prints a purpose naming another рахунок, and
+            # that wrong number is the negative. So it is asserted to disagree rather than counted
             # among the pairs that must agree — the same shape as the `counterparty_mismatch`
             # branch above, on the axis beside it.
             #
-            # ⚠️ IT WAS NOT ASSERTED HERE UNTIL A REDRAWN RUN HAPPENED TO CONTAIN ONE. The cause
+            # ⚠️ It was not asserted here until a redrawn run happened to contain one. The cause
             # lands on about one built claim in forty, this fixture builds a few dozen, and the
             # row read `agree == readable` for as long as no such claim was drawn — a gap in the
             # test that only a change of the seed stream could expose, and did.
@@ -1876,16 +1876,16 @@ def test_the_documents_of_a_run_agree_on_the_sellers_PRINTED_identity(multi_clai
                 )
 
     assert pairs, "no claim of this run carries two documents — nothing was measured"
-    # 👁 THE PAYEE'S BANK IS SOMETIMES A CAPTION WITH NOTHING UNDER IT, observed on the recipient's
+    # 👁 The payee's bank is sometimes a caption with nothing under it, observed on the recipient's
     # bank of a real confirmation, so that row is readable on most pairs and not on all. The two
     # bounds are therefore different assertions rather than one loosened to fit: three requisites
-    # are printed on every pair, and the fourth must AGREE wherever it is printed at all.
+    # are printed on every pair, and the fourth must agree wherever it is printed at all.
     for field in ("seller_name", "seller_account"):
         assert readable[field] == pairs, (
             f"{field} was readable on {readable[field]} of {pairs} pairs; a field the audit "
             "cannot read is a field it cannot report on either"
         )
-    # The tax code is measured over the pairs that HAVE one — see the cross-border branch above,
+    # The tax code is measured over the pairs that have one — see the cross-border branch above,
     # where the denominator is split and the absence is asserted rather than tolerated.
     assert readable["seller_tax_code"] == domestic_pairs, (
         f"seller_tax_code was readable on {readable['seller_tax_code']} of {domestic_pairs} "
@@ -1914,7 +1914,7 @@ def test_a_built_claim_carries_exactly_one_insufficient_evidence_cause(multi_cla
     claim with no subject document has no pair to cross-check — so a claim carrying two would mean
     the builder had realized a cause nobody planned. That holds claim by claim, at any run size.
 
-    ⚠️ WHETHER EVERY CAUSE OCCURS IS ASKED ELSEWHERE, AND THAT IS NOT A WEAKENING. Each cause
+    ⚠️ whether every cause occurs is asked elsewhere, and that is not a weakening. Each cause
     lands on about one built claim in forty, so at this fixture's size a zero is ordinary
     sampling — config/policy.yaml says so and names the run size at which it stops being
     (`insufficient_evidence_causes_min_run_size`). Enforcing existence here would make the suite go
@@ -1923,7 +1923,7 @@ def test_a_built_claim_carries_exactly_one_insufficient_evidence_cause(multi_cla
     question at a size where the answer means something. The clause below still enforces it if this
     fixture ever grows past the guideline.
 
-    ⚠️ THE DENOMINATOR IS DERIVED FROM THE POLICY, not written here. The count of declared causes
+    ⚠️ the denominator is derived from the policy, not written here. The count of declared causes
     moved from two to three when `subject_not_evidenced` gained a mechanism, and a test pinned to
     the number would have had to be edited for a change it is meant to cover.
     """
@@ -1953,7 +1953,7 @@ def test_a_built_claim_carries_exactly_one_insufficient_evidence_cause(multi_cla
 
 
 def test_a_claim_drawn_as_insufficient_evidence_is_labelled_as_one(multi_claim_dataset):
-    """🔴 THE PLAN AND THE LABEL MUST AGREE FOR THIS VERDICT, and that is NOT true of the other two.
+    """🔴 the plan and the label must agree for this verdict, and that is not true of the other two.
 
     A claim drawn as `covered` may legitimately come back `partially_covered` — the ledger
     overrules the plan, which is the cumulative-limit mechanism working, and
@@ -1962,7 +1962,7 @@ def test_a_claim_drawn_as_insufficient_evidence_is_labelled_as_one(multi_claim_d
     deterministically, and there is no third party to overrule anything. So a drawn claim that
     comes back `covered` means the builder did not do what it was told, silently.
 
-    FOUND BY A SURVIVING MUTATION. `plannable_categories` was made to ignore the verdict, so claims
+    Found by a surviving mutation. `plannable_categories` was made to ignore the verdict, so claims
     drawn as `insufficient_evidence` could be planned in the one category holding fiscal receipts —
     a single self-sufficient document, nothing to disagree with — and came back `covered`. Every
     test passed: the causes that did occur still occurred. Nothing asserted that a claim aimed at
@@ -1989,9 +1989,9 @@ def test_a_claim_drawn_as_insufficient_evidence_is_labelled_as_one(multi_claim_d
 
 
 def test_a_claim_evidenced_by_a_payment_alone_is_labelled_as_one(multi_claim_dataset):
-    """🔴 THE CASE THE THESIS RESTS ON, READ OFF THE LABEL A CONSUMER RECEIVES: a claim carrying a
+    """🔴 the case the thesis rests on, read off the label a consumer receives: a claim carrying a
     bank document and nothing that says what was bought. No single document proves both facts, and
-    until `EvidenceIntent.EVIDENCE_GAP` the corpus could not show a system meeting an ABSENT
+    until `EvidenceIntent.EVIDENCE_GAP` the corpus could not show a system meeting an absent
     subject — only two documents contradicting each other.
 
     What is checked is the claim as it is written to disk, not the plan: one document, of a type
@@ -1999,12 +1999,12 @@ def test_a_claim_evidenced_by_a_payment_alone_is_labelled_as_one(multi_claim_dat
     `subject_not_evidenced`, nothing reimbursed, and no coverage fraction because there is no line
     to compute one from. `linked` is false: one document is not a linked claim.
 
-    ⚠️ EXISTENCE IS NOT ASSERTED AT THIS SIZE, AND THE REASON IS THE POLICY'S OWN. Such a claim
+    ⚠️ existence is not asserted at this size, and the reason is the policy's own. Such a claim
     arrives on about one built claim in twenty-four, so requiring one in ~32 would be requiring at
     n≈32 what config/policy.yaml declares unmeasurable below
     `insufficient_evidence_causes_min_run_size`. That the planner draws them is asserted where it
     binds, in `test_every_declared_cause_is_planned_in_a_run_large_enough_to_require_it` and
-    `test_the_evidence_gap_is_planned_for_exactly_one_cause_and_no_other`; that the ENGINE labels
+    `test_the_evidence_gap_is_planned_for_exactly_one_cause_and_no_other`; that the engine labels
     one correctly is asserted on a hand-built claim in
     `tests/test_claim_evidence.py::test_a_payment_with_nothing_saying_what_it_bought_is_insufficient_evidence`.
     What only a run can add is that the two meet — so the shape is checked on whatever this run
@@ -2042,7 +2042,7 @@ def test_a_claim_evidenced_by_a_payment_alone_is_labelled_as_one(multi_claim_dat
 
 def test_an_insufficient_evidence_claim_pays_nothing_and_spends_no_balance(multi_claim_dataset):
     """A claim whose documents contradict each other is not a claim whose money is merely capped.
-    It reimburses NOTHING, and — the part that would go unnoticed — it must leave the persona's
+    It reimburses nothing, and — the part that would go unnoticed — it must leave the persona's
     annual balance untouched, or every later claim of theirs is sized against money that was never
     paid out. The ledger is what a cumulative limit is, so a leak here would move other claims'
     verdicts rather than its own."""
@@ -2059,20 +2059,20 @@ def test_an_insufficient_evidence_claim_pays_nothing_and_spends_no_balance(multi
 
 
 def test_a_claim_evidenced_by_a_subject_alone_is_labelled_as_one(multi_claim_dataset):
-    """🔴 THE OTHER GAP, READ OFF THE LABEL A CONSUMER RECEIVES: a claim carrying a document that
+    """🔴 the other gap, read off the label a consumer receives: a claim carrying a document that
     says what was bought and nothing that says the money moved. It is the case rule RC-08 rests on
     — an employee submits what they have, and the policy says it is not proof of payment.
 
     Checked on what landed on disk rather than on the plan: one document, of a type policy.yaml
-    says proves no payment, `not_proof_of_payment` with an EMPTY `imperfection` (one slot, one way
+    says proves no payment, `not_proof_of_payment` with an empty `imperfection` (one slot, one way
     to fail it), nothing reimbursed, `linked` false — and a `covered_fraction` that is a real
     number rather than `null`, which is the sharpest contrast with the subject gap. Such a claim
-    HAS line items: the basket is ordinary and typically wholly covered, and none of it is payable.
+    has line items: the basket is ordinary and typically wholly covered, and none of it is payable.
 
-    ⚠️ EXISTENCE IS NOT ASSERTED AT THIS SIZE, and the reason is the same one the payment-alone
+    ⚠️ existence is not asserted at this size, and the reason is the same one the payment-alone
     test gives: at ~32 built claims a zero is ordinary sampling. That the planner draws them is
     asserted at a size derived from the mix, in
-    `test_not_proof_of_payment_is_planned_in_a_run_large_enough_to_require_it`; that the ENGINE
+    `test_not_proof_of_payment_is_planned_in_a_run_large_enough_to_require_it`; that the engine
     labels one correctly is asserted per document type in
     `tests/test_claim_evidence.py::test_every_type_that_proves_no_payment_reaches_the_same_verdict_alone`.
     What only a run can add is that the two meet.
@@ -2138,12 +2138,12 @@ def test_a_covered_claim_carries_the_policy_engines_answer(dataset):
     )
 
     assert claim.covered_fraction == 1.0
-    # 🔴 THE CLAIM'S AMOUNT IS ONE DOCUMENT'S, NOT THE SUM. On a split pair the invoice and the
-    # payment describe ONE movement of money, and adding them would count it twice — which is what
+    # 🔴 The claim's amount is one document's, not the sum. On a split pair the invoice and the
+    # payment describe one movement of money, and adding them would count it twice — which is what
     # `resolve_evidence` exists to prevent and what this line now measures rather than assumes.
     assert claim.reimbursable_amount == subject.amount
     if len(result.documents) > 1:
-        # THE ARITHMETIC THAT WOULD HAVE GONE UNNOTICED. Both documents of a pair state the same
+        # The arithmetic that would have gone unnoticed. Both documents of a pair state the same
         # amount — the payment settles the invoice — so a claim that summed its documents would
         # report exactly twice the money and would still come out `covered`. The reimbursable
         # amount is what gives it away, which is the same shape as
@@ -2212,28 +2212,28 @@ def test_the_single_claim_default_is_still_reachable(dataset):
 
 
 def test_every_claim_of_a_persona_is_in_date_order(multi_claim_dataset):
-    """By THE PAYMENT DATE, which is what a claim takes its place in the ledger by — see
-    `ClaimInput.dated`. Read off the document whose TYPE proves payment, resolved through
+    """By the payment date, which is what a claim takes its place in the ledger by — see
+    `ClaimInput.dated`. Read off the document whose type proves payment, resolved through
     policy.yaml's `document_evidence` exactly as `policy_engine.resolve_evidence` does.
 
-    🔴 IT USED TO TAKE THE LATEST DATE OF THE CLAIM'S DOCUMENTS, and that was wrong on a
+    🔴 it used to take the latest date of the claim's documents, and that was wrong on a
     mechanism this repository deliberately generates. A claim planned with the cause
-    `payment_precedes_subject` is dated BACKWARDS on purpose — its subject document is later
+    `payment_precedes_subject` is dated backwards on purpose — its subject document is later
     than its payment — so the latest date is the subject's, and ordering by it compares a
     claim's subject against the next claim's payment. It passed only while no such claim
     happened to be adjacent to a later one; the check was never testing what it said. It also
     said "every document of this dataset is a fiscal receipt", which stopped being true when
     the invoice archetype landed.
 
-    ⚠️ AND A `rejected` CLAIM IS OUT OF THE SEQUENCE ALTOGETHER, for the same kind of reason and a
+    ⚠️ and A `rejected` claim is out of the sequence altogether, for the same kind of reason and a
     different mechanism: its payment is displaced a whole benefit period out of the window on
     purpose, and it reimburses nothing, so it takes no place in the ledger this order exists to
     keep honest. Dropping it is not a weakening — the claims that consume a balance are still
     required to be ordered by the date they consume it on.
 
-    🔴 AND A `not_proof_of_payment` CLAIM HAS NO SUCH DATE AT ALL, which is a stronger statement
+    🔴 and A `not_proof_of_payment` claim has no such date at all, which is a stronger statement
     than being out of the sequence: it carries no document of a payment-proving type, so there is
-    nothing to read a payment date OFF. It is dropped by that property rather than by its verdict
+    nothing to read a payment date off. It is dropped by that property rather than by its verdict
     — the sequence is over payment dates and it has none — and the drop is asserted to be exactly
     those claims below, so a claim that lost its payment document for some other reason cannot
     slip out of the ordering unnoticed.
@@ -2289,17 +2289,17 @@ def test_the_limit_flag_is_recomputable_from_the_dataset_alone(multi_claim_datas
         key = (claim.persona_id, claim.category)
         limit = annual_limit(claim.category)
         remaining = limit - spent[key]
-        # Over the claim's SUBJECT documents, which is where the line items of a claim
+        # Over the claim's subject documents, which is where the line items of a claim
         # live — see `policy_engine.resolve_evidence`. Taking them from the evidence
         # table rather than from every document is what keeps this re-derivation honest
         # when the two sets stop coinciding.
         #
-        # 🔴 CONVERTED EXACTLY WHERE THE LABEL SAYS A CONVERSION APPLIED, and by the
+        # 🔴 Converted exactly where the label says a conversion applied, and by the
         # label's own rate — this loop is the consumer's half of the currency decision. A
         # document whose doc_id appears in the claim's `fx_rates` has its covered sum
         # multiplied by that recorded rate and quantized once, at the point
         # config/fx-rates.yaml declares (sum-then-convert-then-quantize, 0.01, half-up),
-        # implemented HERE rather than imported from the engine: two independent
+        # implemented here rather than imported from the engine: two independent
         # implementations of one declared constant is what the symmetry claim means. A
         # KeyError on the rate lookup is itself a finding — a foreign-currency document
         # whose claim label failed to prove the conversion it underwent.
@@ -2316,30 +2316,30 @@ def test_the_limit_flag_is_recomputable_from_the_dataset_alone(multi_claim_datas
             covered += doc_covered
         reimbursed = min(covered, remaining)
 
-        # 🔴 A CLAIM WHOSE EVIDENCE IS INSUFFICIENT PAYS NOTHING AND CONSUMES NOTHING, so the
+        # 🔴 A claim whose evidence is insufficient pays nothing and consumes nothing, so the
         # coverage arithmetic above does not describe it: its documents contradict each other, and
         # what its lines cover is beside the point. It was unreachable until the cross-check causes
         # became drawable, and the re-derivation asserted the covered amount against a
         # `reimbursable_amount` of zero the first time one appeared.
         #
-        # THE LEDGER IS THE PART THAT MATTERS: such a claim must leave the balance untouched, or a
+        # The ledger is the part that matters: such a claim must leave the balance untouched, or a
         # persona's later claims would be sized against money nothing ever paid out. That is
-        # asserted here by NOT adding to `spent` and by the running total staying within the limit.
+        # asserted here by not adding to `spent` and by the running total staying within the limit.
         #
-        # 🔴 A `rejected` CLAIM IS THE SECOND OF THAT KIND AND REACHES IT DIFFERENTLY: its evidence
+        # 🔴 A `rejected` claim is the second of that kind and reaches it differently: its evidence
         # is complete and its lines may cover the whole basket — `covered` above is a real number
         # for it — and the policy still pays nothing, because the payment fell outside the benefit
         # period. So the coverage arithmetic does not describe it either, and the ledger claim is
         # the same one: a claim outside the window consumes none of a balance that belongs to the
         # window. That neutrality is what lets the planner displace such a claim's date out of the
         # ascending order the other tests check.
-        # 🔴 A `not_proof_of_payment` CLAIM IS THE THIRD OF THAT KIND AND REACHES ZERO BY A THIRD
+        # 🔴 A `not_proof_of_payment` claim is the third of that kind and reaches zero by a third
         # route: it carries no payment document at all, so nothing on it says the money the lines
         # add up to ever moved. The other two have a payment whose relation to the purchase fails
         # a check. The ledger claim is identical for all three and is the part this test is about
         # — a claim that pays nothing consumes nothing.
-        # 🔴 A `partially_paid` CLAIM IS THE FOURTH, AND THE ONLY ONE OF THE FOUR WHOSE DOCUMENTS
-        # ARE IN PERFECT ORDER. Its evidence is complete, its pair agrees — the payment is exactly
+        # 🔴 A `partially_paid` claim is the fourth, and the only one of the four whose documents
+        # are in perfect order. Its evidence is complete, its pair agrees — the payment is exactly
         # the instalment the subject printed — and it still pays nothing, because policy.yaml has
         # not decided how much of a partly settled obligation is payable and the engine will not
         # invent a figure. The ledger claim is the same as for the other three, and it is the one
@@ -2390,16 +2390,16 @@ def _subject(amount: str, instalment: str | None = None) -> DocGroundTruth:
 
 
 def test_the_payment_of_a_partly_settled_claim_states_the_instalment_the_page_printed():
-    """🔴 THE HALF OF THE MECHANISM THAT LIVES IN THE ASSEMBLER, tested where it is rather than
-    through a rendered run. A payment that stated the invoice's TOTAL beside an invoice printing an
+    """🔴 the half of the mechanism that lives in the assembler, tested where it is rather than
+    through a rendered run. A payment that stated the invoice's total beside an invoice printing an
     instalment term is not a broken document and not an exception: it is a pair that agrees, so the
-    engine labels it `covered`, the corpus silently contains ZERO claims of this verdict, and the
+    engine labels it `covered`, the corpus silently contains zero claims of this verdict, and the
     only trace is a drift line in the balance report. That is the failure this asserts against.
 
-    READ OFF THE BUILT DOCUMENT, NOT RECOMPUTED. The invoice divided its own total and printed the
+    Read off the built document, not recomputed. The invoice divided its own total and printed the
     result; a second division here would round apart from it on the first total that does not
     divide evenly, and the payment would then disagree with the term beside it by a kopiyka —
-    which the engine labels `amount_mismatch`. So a subject whose printed instalment is NOT the
+    which the engine labels `amount_mismatch`. So a subject whose printed instalment is not the
     quotient of its own amount is used deliberately below, and the payment has to follow the page.
     """
     from receipt_synth.assembler import _amount_the_payment_states
@@ -2417,7 +2417,7 @@ def test_the_payment_of_a_partly_settled_claim_states_the_instalment_the_page_pr
 
 
 def test_a_plan_settled_in_parts_whose_subject_printed_no_term_is_refused():
-    """The plan and the page have come apart, and the failure must land HERE rather than as a
+    """The plan and the page have come apart, and the failure must land here rather than as a
     wrong label two stages later: the payment would state a part nothing on the page names, and the
     engine would answer `insufficient_evidence` with the cause `amount_mismatch` on a claim that
     was planned as a lawful partial settlement."""
@@ -2431,7 +2431,7 @@ def test_a_plan_settled_in_parts_whose_subject_printed_no_term_is_refused():
 
 def _plan_for_cause(cause: str | None) -> ClaimPlan:
     """A minimal `insufficient_evidence` plan, for the party rule below. Hand-built for the reason
-    `_plan_for_schedule` is: what is under test is what the assembler does with a plan's CAUSE, and
+    `_plan_for_schedule` is: what is under test is what the assembler does with a plan's cause, and
     a drawn plan would make the case depend on a seed landing on it."""
     from receipt_synth.claim_planner import ARCHETYPES, DocumentPlan
 
@@ -2447,16 +2447,16 @@ def _plan_for_cause(cause: str | None) -> ClaimPlan:
 
 
 def test_the_payment_of_a_mismatched_party_claim_names_a_seller_the_invoice_does_not():
-    """🔴 THE HALF OF THIS MECHANISM THAT LIVES IN THE ASSEMBLER, tested where it is rather than
+    """🔴 the half of this mechanism that lives in the assembler, tested where it is rather than
     through a rendered run — the lesson `partially_paid` left behind. A payment handed the claim's
-    OWN vendor is not a broken document and not an exception: it is a pair that agrees, so the
-    engine labels it `covered`, the corpus silently contains ZERO claims of this cause, and the
+    own vendor is not a broken document and not an exception: it is a pair that agrees, so the
+    engine labels it `covered`, the corpus silently contains zero claims of this cause, and the
     only trace is a drift line in the balance report nobody diffs.
 
-    SWEPT OVER SEEDS, NOT PINNED TO ONE. `sport` is served by five sellers in config/vendors.json,
+    Swept over seeds, not pinned to one. `sport` is served by five sellers in config/vendors.json,
     so a step that returned the claim's own vendor would still differ from it four times in five by
     luck at a single seed; the sweep is what makes the assertion about the code. The second half —
-    that an ordinary claim gets the SAME OBJECT back — is the one that would take the whole corpus
+    that an ordinary claim gets the same object back — is the one that would take the whole corpus
     with it, since every other claim's two documents must name one seller.
     """
     from receipt_synth.assembler import _payee_the_payment_names, _pick_vendor
@@ -2476,13 +2476,13 @@ def test_the_payment_of_a_mismatched_party_claim_names_a_seller_the_invoice_does
 
 
 def test_the_payment_of_a_subject_mismatch_claim_cites_an_invoice_the_claim_does_not_hold():
-    """🔴 THE HALF OF THE `subject_mismatch` MECHANISM THAT LIVES IN THE ASSEMBLER, tested where
+    """🔴 the half of the `subject_mismatch` mechanism that lives in the assembler, tested where
     it is — the sibling of the payee sweep above, on the transaction's last dimension. A step
     that returned the claim's own reference would leave the pair agreeing, the engine answering
-    `covered`, and the corpus with ZERO claims of the cause — the `partially_paid` lesson.
+    `covered`, and the corpus with zero claims of the cause — the `partially_paid` lesson.
 
-    SWEPT OVER SEEDS for the collision half — the drawn number must differ from the subject's own
-    at every seed — and the ordinary half asserts the SAME OBJECT comes back, since every honest
+    Swept over seeds for the collision half — the drawn number must differ from the subject's own
+    at every seed — and the ordinary half asserts the same object comes back, since every honest
     claim's citation must stay resolvable.
     """
     from receipt_synth.assembler import _reference_the_payment_cites
@@ -2503,9 +2503,9 @@ def test_the_payment_of_a_subject_mismatch_claim_cites_an_invoice_the_claim_does
 
 
 def test_a_forced_subject_mismatch_plan_comes_back_with_the_citation_on_the_page(tmp_path):
-    """🔴 THE PLAN → LABEL LOOP FOR THE SUBJECT AXIS, through the real assembler, builders and
+    """🔴 the plan → label loop for the subject axis, through the real assembler, builders and
     renderer. Three things have to conspire — the wrong reference drawn, the purpose formula
-    forced to CITE, and the engine reading both label ends — and a failure of any one leaves the
+    forced to cite, and the engine reading both label ends — and a failure of any one leaves the
     claim `covered` here while every unit test above stays green.
     """
     from receipt_synth import assembler
@@ -2546,17 +2546,17 @@ def test_a_forced_subject_mismatch_plan_comes_back_with_the_citation_on_the_page
 
 
 def test_the_party_a_document_names_follows_what_that_document_ESTABLISHES(tmp_path):
-    """🔴 THE OTHER HALF OF THE MECHANISM: WHICH DOCUMENT RECEIVES WHICH PARTY. The sweep above
-    asserts only which party is DRAWN; the claim loop then has to hand the invoice's seller to the
+    """🔴 the other half of the mechanism: which document receives which party. The sweep above
+    asserts only which party is drawn; the claim loop then has to hand the invoice's seller to the
     document that states what was bought and the second party to the one that proves the payment,
-    and a loop that handed both documents the same party would leave the corpus with ZERO claims of
+    and a loop that handed both documents the same party would leave the corpus with zero claims of
     this cause while every engine test stayed green — the `partially_paid` lesson exactly.
 
-    🔴 AND IT MUST NOT DEPEND ON A DRAW LANDING ON A 2.5% CAUSE. The plan is FORCED — `plan_claims`
+    🔴 and it must not depend on a draw landing on A 2.5% cause. The plan is forced — `plan_claims`
     is replaced by one hand-built plan — so this runs the real assembler loop, the real builders and
     the real renderer on a claim that is a party mismatch by construction, at any seed.
 
-    THE TWO SELLERS ARE FIXED TOO, and that is what makes the assertion about the DISPATCH rather
+    The two sellers are fixed too, and that is what makes the assertion about the dispatch rather
     than about two names being different: `_pick_vendor` is stubbed to answer the claim's draw with
     the first seller and the payee's draw — the one that excludes a name — with the second. So an
     inverted dispatch prints two different names and still fails here, which it could not do if the
@@ -2617,13 +2617,13 @@ def test_the_party_a_document_names_follows_what_that_document_ESTABLISHES(tmp_p
 
 
 def test_a_forced_zero_coverage_plan_comes_back_rejected_with_no_cause(tmp_path):
-    """🔴 THE PLAN → LABEL LOOP FOR THE ROUTE BY WHAT WAS BOUGHT, through the real assembler,
+    """🔴 the plan → label loop for the route by what was bought, through the real assembler,
     builders and renderer — the `partially_paid` lesson applied on arrival rather than after the
     incident. A realizing step that silently stopped firing — a basket that drew one covered line
     after all — would come back `partially_covered` here, not `rejected`, and the corpus would
-    hold ZERO claims of the route while every engine test stayed green.
+    hold zero claims of the route while every engine test stayed green.
 
-    FORCED, NOT DRAWN: the route is a 5% draw, so a run this size would miss it more often than
+    Forced, not drawn: the route is a 5% draw, so a run this size would miss it more often than
     not — `plan_claims` is replaced by one hand-built plan, which also pins the claim's date
     inside the window, the property the route exists for.
     """
@@ -2672,7 +2672,7 @@ def test_a_party_mismatch_cannot_be_planned_where_the_category_has_one_seller():
     sellers, and `claim_planner` does not model vendors at all — so the refusal is here, naming the
     cause and the category, rather than surfacing as a pair that agrees and a label that drifted.
 
-    ⚠️ UNREACHABLE AGAINST config/vendors.json, where every Ukrainian category carries five sellers
+    ⚠️ unreachable against config/vendors.json, where every Ukrainian category carries five sellers
     or more, and driven by a patched vendor file for that reason."""
     from receipt_synth import assembler
 
@@ -2694,21 +2694,21 @@ def test_a_party_mismatch_cannot_be_planned_where_the_category_has_one_seller():
 
 
 def test_a_partly_settled_claim_carries_its_term_on_the_rendered_page(multi_claim_dataset):
-    """END TO END, on documents that were actually rendered: the marker the verdict rests on is on
-    the PAGE and not only in the label, its box is there for a consumer to read it by, and the
+    """end to end, on documents that were actually rendered: the marker the verdict rests on is on
+    the page and not only in the label, its box is there for a consumer to read it by, and the
     payment states exactly it.
 
-    ⚠️ VACUOUS IF THIS FIXTURE HAPPENS TO CONTAIN NO SUCH CLAIM, and the honest place to say so is
+    ⚠️ vacuous if this fixture happens to contain no such claim, and the honest place to say so is
     here. The fixture builds about 32 claims and this verdict is drawn on a tenth of them, so a run
-    without one is a 3% event rather than a defect — too likely to assert against. EXISTENCE IS
-    ESTABLISHED ELSEWHERE, at a size derived from the policy:
+    without one is a 3% event rather than a defect — too likely to assert against. Existence is
+    established elsewhere, at a size derived from the policy:
     `test_partially_paid_is_planned_in_a_run_large_enough_to_require_it` plans enough claims that
-    absence is a one-in-a-thousand event. What THIS test adds is the half that only a built
+    absence is a one-in-a-thousand event. What this test adds is the half that only a built
     document can answer.
     """
     result, _ = multi_claim_dataset
 
-    # 🔴 THE MECHANISM ALWAYS REALIZES, and this is where that is asserted rather than assumed.
+    # 🔴 The mechanism always realizes, and this is where that is asserted rather than assumed.
     # Nothing about a partly settled claim can be defeated by the draw — the term is printed, the
     # payment is read off it, the date is inside the window — so a plan aimed here that came back
     # under another verdict means the payment stopped following the page, which the balance report
@@ -2770,16 +2770,16 @@ def test_the_per_line_covered_flags_agree_with_the_claim_fraction(multi_claim_da
     """The end-to-end statement for the oracle: the claim label a consumer reads is
     recomputable from the per-line labels in the same file.
 
-    🔴 AND A CLAIM WITH NO LINE AT ALL READS `null`, NEVER `0`. A claim planned as an evidence gap
+    🔴 and a claim with no line at all reads `null`, never `0`. A claim planned as an evidence gap
     carries a payment document and nothing that lists items, so there is no fraction to recompute —
     and `0` would say the lines were read and none of them was covered, which is the label of a
     `rejected` claim.
 
-    ⚠️ THE BRANCH IS NOT REQUIRED TO BE TAKEN AT THIS SIZE. Such a claim arrives on about one built
+    ⚠️ the branch is not required to be taken at this size. Such a claim arrives on about one built
     claim in twenty-four, and demanding one in ~32 would go red on a shifted seed stream for no
     defect. The property itself is pinned where it cannot be missed — on a hand-built claim in
     tests/test_claim_evidence.py, `test_a_payment_with_nothing_saying_what_it_bought_is_...` — and
-    what this adds is that a RUN carries it through the assembler and into the label file unchanged.
+    what this adds is that a run carries it through the assembler and into the label file unchanged.
     """
     result, _ = multi_claim_dataset
     for claim, documents in documents_of(result):
@@ -2835,10 +2835,10 @@ def test_the_dataset_labels_are_reproducible_from_the_documents_alone(multi_clai
 
 
 def test_the_balance_report_says_nothing_is_missing_when_nothing_is(multi_claim_dataset):
-    """🔴 THE OTHER SIDE OF THE ABSENT-MIX BLOCK, AND THE STATE THE REPORT HAS NEVER BEEN IN
-    BEFORE. Every member of `verdict_mix` is realizable, so the whole mix is drawn and the block
-    must be SILENT: a report still announcing a missing fraction over a complete corpus would send
-    a reader looking for a bucket that is there, and the "CONDITIONAL" warning would tell them not
+    """🔴 the other side of the absent-mix block, and the state the report has never been in
+    before. Every member of `verdict_mix` is realizable, so the whole mix is drawn and the block
+    must be silent: a report still announcing a missing fraction over a complete corpus would send
+    a reader looking for a bucket that is there, and the "conditional" warning would tell them not
     to read shares that are now unconditional.
 
     The rows themselves are asserted as before, so this is not merely an assertion of absence.
@@ -2858,10 +2858,10 @@ def test_the_balance_report_says_nothing_is_missing_when_nothing_is(multi_claim_
 
 def test_the_balance_report_names_the_verdicts_it_could_not_generate(multi_claim_dataset):
     """A report that renormalized silently would print a tidy table over part of the target mix
-    and look balanced. Naming what is absent is the point of the block — and the SMALLER that
+    and look balanced. Naming what is absent is the point of the block — and the smaller that
     figure gets, the more a silent renormalization would look like the whole truth.
 
-    ⚠️ DRIVEN BY A PATCHED REGISTRY, and it used to be driven by the live one: `partially_paid`
+    ⚠️ driven by a patched registry, and it used to be driven by the live one: `partially_paid`
     was the last absent member and is now built. The capability outlives the case — the next
     verdict added to the enum is absent from every corpus until its mechanism lands — so the block
     is exercised against a registry narrowed to what it looked like a commit ago.
@@ -2892,20 +2892,20 @@ def test_a_verdict_with_no_share_is_named_and_does_not_enter_the_arithmetic(
     """A member of `verdict_mix` may be declared with no share — `null`, which the loader returns
     as `None` — and the report has to survive that twice over: it must not print a percentage
     where there is none, since `0.0%` would read as a decision somebody took, and the absent
-    fraction it prints is then only what the SHARE-CARRYING absent verdicts account for, so it has
+    fraction it prints is then only what the share-carrying absent verdicts account for, so it has
     to be called a lower bound. Silently summing a `None` as zero would leave a complete-looking
     figure on the page.
 
-    ⚠️ DRIVEN BY A PATCHED MIX, and it used to be driven by policy.yaml — `rejected` carried no
+    ⚠️ driven by a patched mix, and it used to be driven by policy.yaml — `rejected` carried no
     share there until the planner learned to aim at it. The capability is not obsolete with it:
     the loader still returns `None`, `verdict_mix` documents the case, and the next verdict
     declared before its mechanism exists arrives the same way. Patching is what keeps the branch
     under test without a `null` in the policy that nothing needs.
 
-    ⚠️ THE REGISTRY IS PATCHED TOO, SINCE `partially_paid` BECAME REALIZABLE. A share of `None` is
+    ⚠️ the registry is patched too, since `partially_paid` became realizable. A share of `None` is
     only coherent on a verdict nothing draws — `draw_verdict` raises otherwise — and the absent-mix
     block that prints the lower bound is reached only when something is absent. So the fabricated
-    state is the one that was live a commit ago: this member unrealizable AND undeclared.
+    state is the one that was live a commit ago: this member unrealizable and undeclared.
     """
     from receipt_synth import assembler as assembler_module
 
@@ -2926,8 +2926,8 @@ def test_a_verdict_with_no_share_is_named_and_does_not_enter_the_arithmetic(
     assert "partially_paid (0.0%)" not in report
     # 0.0%, and it is the interesting number rather than a degenerate one: `partially_paid` is the
     # only absent member of the mix and the patch removes its share, so what the share-carrying
-    # absent verdicts account for is nothing at all — which the report must still print as a LOWER
-    # BOUND rather than as "the mix is fully covered".
+    # absent verdicts account for is nothing at all — which the report must still print as a lower
+    # bound rather than as "the mix is fully covered".
     assert "0.0% of the target mix is absent" in report
     assert "LOWER BOUND" in report
     assert "no share for partially_paid" in report
@@ -2989,8 +2989,8 @@ def test_the_report_states_how_many_claims_were_ordered_and_how_many_were_built(
     skipped = sum(result.claims_skipped.values())
 
     assert ordered == 4 * 8
-    # ⚠️ THE EARLY STOP IS NO LONGER EXERCISED BY THIS RUN, and that is a measurement rather than a
-    # regression: until the invoice landed a persona had ONE documentable category, so eight claims
+    # ⚠️ The early stop is no longer exercised by this run, and that is a measurement rather than a
+    # regression: until the invoice landed a persona had one documentable category, so eight claims
     # against one annual limit exhausted it. Every category is completable now, so a persona has
     # several balances to spend and thirty-two claims fit. The assertion moved from
     # "built < ordered" — a property of a one-template registry — to the accounting identity, which
@@ -3078,7 +3078,7 @@ def test_a_verdict_the_planner_cannot_draw_is_still_given_a_row():
     that would be the defect, so the row is asserted directly on a hand-built Dataset rather than
     waited for.
 
-    ⚠️ THE SUBSET IS PATCHED NOW, AND THE TEST USED TO TAKE ITS VERDICT FROM
+    ⚠️ the subset is patched now, and the test used to take its verdict from
     `unrealizable_verdicts()`. That list is empty — every member of the enum is realizable — so
     there is no verdict left to name and none to read off the planner either. Narrowing the
     registry is what supplies one, and the reason the branch is kept at all is unchanged: the enum
@@ -3132,7 +3132,7 @@ def test_the_draw_can_reach_every_capture_channel():
 
 
 def test_a_run_of_any_size_contains_more_than_one_capture_channel(multi_claim_dataset):
-    """🔴 THE CHANNEL IS DRAWN, NOT FIXED. Every earlier version of this generator produced a
+    """🔴 the channel is drawn, not fixed. Every earlier version of this generator produced a
     corpus of screenshots only, and nothing in the labels distinguished "this channel was chosen"
     from "this channel is the only one there is". The draw is per class now (`capture_mix` in
     policy.yaml), and the run's majority classes each give their thinnest declared channel at
@@ -3141,7 +3141,7 @@ def test_a_run_of_any_size_contains_more_than_one_capture_channel(multi_claim_da
     being unlucky. (The per-class shape itself — a zero-weight channel never drawn, a screen-born
     archetype always a screenshot — is tests/test_capture_mix.py's job.)
 
-    It matters beyond variety: the two paper channels are the ONLY route by which the electronic
+    It matters beyond variety: the two paper channels are the only route by which the electronic
     side of the VAT-row rule stops being the whole corpus. See `test_vat_row_form.py`.
     """
     result, _ = multi_claim_dataset
@@ -3150,13 +3150,13 @@ def test_a_run_of_any_size_contains_more_than_one_capture_channel(multi_claim_da
 
 
 def test_a_capture_channel_with_no_documents_is_reported_ABSENT_and_never_as_zero():
-    """🔴 ABSENT AND ZERO ARE DIFFERENT STATEMENTS AND ONLY ONE OF THEM CAN BE TRUE.
+    """🔴 absent and zero are different statements and only one of them can be true.
 
     `0.0%` complete says a measurement was taken and came out at nothing; absence says no
     measurement exists. Folding the first into the second is how an empty cell becomes a data point
     in somebody's table, and nobody re-derives it afterwards.
 
-    Asserted in BOTH directions: the channel that has documents must carry a completeness fraction,
+    Asserted in both directions: the channel that has documents must carry a completeness fraction,
     and the two that have none must carry the word rather than a share. A test on the word alone
     would pass for a report that printed both.
     """
@@ -3246,8 +3246,8 @@ def test_manifest_is_valid_json_and_declares_its_provenance(dataset):
 
 
 def test_every_document_of_a_claim_is_on_the_claim_s_side_of_the_partition(multi_claim_dataset):
-    """🔴 THE INTEGRITY THE PARTITION EXISTS TO KEEP. An invoice in train and the payment that
-    settles it in validation is ONE TRANSACTION split across the boundary — the model would see the
+    """🔴 the integrity the partition exists to keep. An invoice in train and the payment that
+    settles it in validation is one transaction split across the boundary — the model would see the
     amount, the date and the counterparty of a validation document while training. It holds because
     the unit is the persona, which sits above both; this is the assertion that says it holds in the
     data rather than in the reasoning."""
@@ -3275,10 +3275,10 @@ def test_every_claim_of_a_persona_is_on_one_side(multi_claim_dataset):
 
 
 def test_the_partition_reaches_the_written_labels_and_the_manifest(multi_claim_dataset):
-    """On disk, not only in memory — a consumer reads the files. BOTH record kinds, because they are
+    """On disk, not only in memory — a consumer reads the files. Both record kinds, because they are
     populated by two separate statements and only one of them was checked at first.
 
-    🔴 THE TOTALS ARE COMPARED AGAINST THE CORPUS SIZE, NOT AGAINST THE RECORDS. Comparing the
+    🔴 the totals are compared against the corpus size, not against the records. Comparing the
     manifest's realized counts with `sum(1 for c in claims if c.split is side)` looks stricter and
     is not: both sides of that comparison read the same field, so a defect that stopped populating
     it moves both to zero and the assertion still holds. A mutation that dropped the claims' split
@@ -3297,7 +3297,7 @@ def test_the_partition_reaches_the_written_labels_and_the_manifest(multi_claim_d
     assert written["split"] == document.split.value
     assert written_claim["split"] == claim.split.value
     assert manifest["split"]["unit"] == "persona"
-    # 0.5 because THIS FIXTURE PASSED 0.5, not because anything defaults to it — nothing does any
+    # 0.5 because this fixture passed 0.5, not because anything defaults to it — nothing does any
     # more. The comparison is stronger for it: the test now chooses the input and checks that the
     # manifest echoes the request, where before both sides read one constant the code supplied.
     assert manifest["split"]["train_fraction_requested"] == 0.5
@@ -3362,7 +3362,7 @@ def test_cli_requires_a_seed(capsys):
     """A default seed would let a run look reproducible without anyone having recorded
     what to reproduce it with.
 
-    🔴 `--split` IS SUPPLIED SO THAT ONLY THE SEED IS MISSING. It became required too, and a call
+    🔴 `--split` is supplied so that only the seed is missing. It became required too, and a call
     omitting both raises `SystemExit` whichever of them argparse is enforcing — so the test would
     have stayed green with `--seed` defaulted again, asserting nothing. The message is checked for
     the same reason: the raise alone does not say which argument produced it.
