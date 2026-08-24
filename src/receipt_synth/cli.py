@@ -7,7 +7,7 @@ that produced it is something the caller chose and can write down; a default wou
 run look reproducible without anyone having recorded what to reproduce it with.
 
 `--split` is required for the same reason, and it is the same reason rather than a similar
-one. The split fraction is a DECISION ABOUT THE MEASUREMENT — which documents a figure may
+one. The split fraction is a decision about the measurement — which documents a figure may
 be quoted on — so a default would let a run be performed without that decision ever having
 been declared, and the resulting partition would carry the authority of something chosen.
 The argument for a half is guidance on what to pass, not the reason for a default; it lives

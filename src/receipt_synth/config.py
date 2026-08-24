@@ -117,7 +117,7 @@ def unprintable_item_kinds() -> frozenset[str]:
     """Item kinds config/generation.yaml declares it cannot print, and why — see the block
     of that name for the reasons.
 
-    A DECLARED hole rather than a silent one. Skipping a template because nobody filled its
+    A declared hole rather than a silent one. Skipping a template because nobody filled its
     vocabulary is what the loud failure in `placeholder_values` exists to stop; this is the
     opposite — an enumerated, tested statement that a kind cannot be printed, with the cause
     written down. The test suite checks both directions, so an entry that has quietly become
@@ -130,7 +130,7 @@ def unprintable_item_kinds() -> frozenset[str]:
 def price_range(item_kind: str, currency: str = "UAH") -> tuple[Decimal, Decimal]:
     """The retail price range of an item kind, in whole currency units, bounds included.
 
-    WHAT "INCLUDED" MEANS HERE, because one caller disagrees. `high` is inclusive as this
+    What "included" means here, because one caller disagrees. `high` is inclusive as this
     range is *stated* and for two of its three callers in `content_builder`: `_repriced`
     clamps a price to `high`, and `_excluded_ceiling` reports it as attainable. The third,
     `_build_line_item`, draws in ten-kopiyka steps over a half-open interval and so ends
@@ -147,9 +147,9 @@ def price_range(item_kind: str, currency: str = "UAH") -> tuple[Decimal, Decimal
     places than the currency has is refused rather than rounded, because silently dropping
     a digit of a price is the same class of mistake the scale itself is guarding against.
 
-    🔴 THE CURRENCY SELECTS THE BLOCK, AND THE TWO BLOCKS ARE NOT SYMMETRIC. `UAH` reads
+    🔴 the currency selects the block, and the two blocks are not symmetric. `UAH` reads
     `price_ranges`, which carries a `default` because every Ukrainian category draws from
-    it. `EUR` reads `price_ranges_eur`, which deliberately has NO default and covers only
+    it. `EUR` reads `price_ranges_eur`, which deliberately has no default and covers only
     the kinds a euro-priced archetype can sell: a kind missing there is a `KeyError`
     naming the block, not a silent fall-through to a Ukrainian price printed under a euro
     sign — the two-order-of-magnitude error again, wearing a currency code.
@@ -190,9 +190,9 @@ def archetype_draw_weights() -> dict[str, float]:
     From `archetype_shares` in config/generation.yaml, whose comment carries the rule:
     a pool consults the table only when every one of its members is listed, draws
     uniformly when none is, and is refused when the listing is partial. That rule is the
-    CALLER'S (`claim_planner._draw_archetype`) — this accessor only reads the numbers.
+    caller's (`claim_planner._draw_archetype`) — this accessor only reads the numbers.
 
-    ⚠️ Deliberately NOT `@cache`d: every cached accessor in this module returns an
+    ⚠️ Deliberately not `@cache`d: every cached accessor in this module returns an
     immutable value, and this one returns a dict — a fresh one per call, so no caller can
     edit the configuration every later caller sees.
     """
@@ -216,7 +216,7 @@ def excluded_line_counts() -> tuple[int, ...]:
 def high_frequency_surnames(language: str) -> tuple[str, ...]:
     """The surname pool a personal name is composed from, by document language.
 
-    EMPTY when the language declares none, and that is a meaningful answer rather than a
+    Empty when the language declares none, and that is a meaningful answer rather than a
     missing one: only Ukrainian documents are rendered today, so only `uk` has a narrowed
     set, and the caller falls back to Faker's own pool for the rest. See `personal_names`
     in config/generation.yaml for why the Ukrainian pool is narrowed at all.
@@ -268,12 +268,12 @@ def fiscal_makers(pool: str, country: str) -> tuple[tuple[str, str], ...]:
     Which pool a kind of register draws from is a fact about the document; the marks themselves
     are data, so they live in the data file and are not restated in the fiscal rules.
 
-    PAIRS, NOT NAMES, because the two are printed forms of ONE fact — which maker produced the
+    Pairs, not names, because the two are printed forms of one fact — which maker produced the
     document. 📄 Line 35 of the form prints the wording «ФІСКАЛЬНИЙ ЧЕК» and then the maker's
     name; 👁 a ПРРО additionally tags the wording with a short abbreviation. Returning them
     together is what stops the paper from showing one provider's tag above another's name.
 
-    `title_suffix` is OPTIONAL and no entry carries one today: 👁 the tag is observed, but no
+    `title_suffix` is optional and no entry carries one today: 👁 the tag is observed, but no
     published source pairs a tag with a provider, so printing one would assert a pairing nobody
     established. Absence yields ``""`` rather than raising — an entry without a tag is the
     ordinary case, not a gap in the file.
@@ -304,9 +304,9 @@ def every_vendor(country: str) -> tuple[tuple[tuple[str, Any], ...], ...]:
     and drawing the noise from the claim's own category would make the relevant row findable by
     its neighbours all being unlike it.
 
-    NOT DE-DUPLICATED, and both halves of that matter. A firm listed under two categories is
+    Not DE-duplicated, and both halves of that matter. A firm listed under two categories is
     genuinely twice as likely to be paid, and — the half that would be a defect — the entries
-    that state NO name are the sole traders whose name is drawn per instance, so collapsing two
+    that state no name are the sole traders whose name is drawn per instance, so collapsing two
     identical ones would collapse two different printed names into one.
 
     Each vendor comes back as a tuple of sorted key-value pairs rather than a dict, because
@@ -348,21 +348,21 @@ def banks(country: str) -> tuple[str, ...]:
 def bank_codes(country: str) -> MappingProxyType[str, str]:
     """The stable name → МФО table: `bank_code` beside each entry `banks()` draws its name from.
 
-    Exists because a name and a code used to be drawn INDEPENDENTLY wherever a party's bank was
+    Exists because a name and a code used to be drawn independently wherever a party's bank was
     needed — once in `draw_party_identity`, again in `build_payment_confirmation`, again in a
     bank statement's own header — so the same real bank name could carry two different six-digit
     codes on two documents of one claim, or on one document's own header and its service-charge
-    row. A name now resolves to a code by LOOKUP, never by a fresh draw, which is what makes
+    row. A name now resolves to a code by lookup, never by a fresh draw, which is what makes
     "same name, same code" true by construction rather than by coincidence.
 
-    The codes are INVENTED — chosen to be shaped like a real МФО (six digits, in the range real
+    The codes are invented — chosen to be shaped like a real МФО (six digits, in the range real
     ones are allocated from) without equalling any real bank's actual one — and, unlike the name,
     they are not drawn at all: this table is the whole of what decides a code, so it has to stay
-    FIXED here rather than seeded, or a run could still print two codes for one name by changing
+    fixed here rather than seeded, or a run could still print two codes for one name by changing
     the codes under a different seed.
 
     Returned as a `MappingProxyType` rather than a plain `dict`, like `banks()` returns a tuple
-    and for the same reason: `functools.cache` hands every caller the SAME object, and a mutable
+    and for the same reason: `functools.cache` hands every caller the same object, and a mutable
     one would let an edit at one call site reach every other.
     """
     entries = load_vendors()["banks"].get(country)
@@ -460,7 +460,7 @@ def initiating_systems(language: str) -> tuple[str, ...]:
 #
 # Third and last per-class group. Three classes now share one shape — a `_share` family, a range
 # family — and the third occurrence is where abstracting it becomes right rather than premature.
-# It is deliberately NOT abstracted in this commit: the invoice is the change under review, and a
+# It is deliberately not abstracted in this commit: the invoice is the change under review, and a
 # refactor of the two accessors that already work would put an unrelated diff in front of it.
 # Recorded here as the next cleanup rather than left to be noticed.
 
@@ -469,7 +469,7 @@ def initiating_systems(language: str) -> tuple[str, ...]:
 def mismatch_delta_range() -> tuple[Decimal, Decimal]:
     """By how much a deliberately mismatched pair disagrees, in hryvnias.
 
-    The SHARE governing how often that happens is in config/policy.yaml beside `verdict_mix`, and
+    The share governing how often that happens is in config/policy.yaml beside `verdict_mix`, and
     the split is deliberate: a share sizes a labelled bucket, this magnitude changes no label.
     """
     low, high = (Decimal(str(value)) for value in load_generation()["mismatch"]["delta_range"])
@@ -481,7 +481,7 @@ def partial_payment_schedules() -> MappingProxyType[str, int]:
     """Schedule id → how many equal parts it divides an obligation into.
 
     The counterpart of `mismatch_delta_range` for the other imperfection realized by an amount: the
-    SHARE of the corpus that carries it is `verdict_mix.partially_paid` in config/policy.yaml, and
+    share of the corpus that carries it is `verdict_mix.partially_paid` in config/policy.yaml, and
     the size of a part changes no label, so it lives in config/generation.yaml.
 
     In file order, which is what keeps a draw over it reproducible — the same rule the cause
@@ -538,7 +538,7 @@ def invoice_count_range(name: str) -> tuple[int, int]:
 #
 # One draw shared by the two EU-page classes — the cross-border invoice and the platform
 # receipt's English variant — split across the two files exactly as every other drawn requisite
-# is: WHAT each form prints is `tax_on_top` in config/fiscal-rules.yaml, HOW OFTEN each form is
+# is: what each form prints is `tax_on_top` in config/fiscal-rules.yaml, how often each form is
 # drawn is `eu_tax_treatment` in config/generation.yaml.
 
 
@@ -546,7 +546,7 @@ def invoice_count_range(name: str) -> tuple[int, int]:
 def tax_on_top_rules() -> dict[str, Any]:
     """The `tax_on_top` block of the EU jurisdiction — rate parameters and row captions.
 
-    ⛔ THE RATES ARE PROJECT PARAMETERS for reproducing the form of a page, not statements about
+    ⛔ the rates are project parameters for reproducing the form of a page, not statements about
     any jurisdiction's tax law. The block's own comment in config/fiscal-rules.yaml carries the
     one exception — Ukraine's 20%, cited from published law — and the reasoning; this accessor
     repeats the boundary so no caller reads a figure here as legal fact.
@@ -581,9 +581,9 @@ def phone_prefixes() -> tuple[str, ...]:
 # --- generation.yaml: the bank-statement draw inputs ---------------------------
 #
 # A group of its own, mirroring the confirmation's above, because it reads a different block of
-# a different document class. Deliberately NOT folded into one accessor family taking a class
+# a different document class. Deliberately not folded into one accessor family taking a class
 # name: two classes are two, and the shape is worth abstracting on the third rather than on the
-# second. What the statement PRINTS is `bank_statement` in config/fiscal-rules.yaml.
+# second. What the statement prints is `bank_statement` in config/fiscal-rules.yaml.
 
 
 def _bank_statement_generation() -> dict[str, Any]:
@@ -661,8 +661,8 @@ def statement_purposes(language: str, kind: str) -> tuple[str, ...]:
 
 # --- generation.yaml: how the run's documents are carried ----------------------
 #
-# NOT A PER-CLASS GROUP, which is why it is its own. Everything above answers a question about
-# one document class; this answers one about a FILE, which may hold documents of more than one
+# Not a per-class group, which is why it is its own. Everything above answers a question about
+# one document class; this answers one about a file, which may hold documents of more than one
 # class. Sharing the accessor family of a class block would have put a file-level knob under a
 # document-level key.
 
@@ -671,7 +671,7 @@ def statement_purposes(language: str, kind: str) -> tuple[str, ...]:
 def file_composition_share(name: str) -> float:
     """The rate at which a way of composing a submitted file is chosen.
 
-    `bundle` is the only one today: how often the documents of ONE claim arrive as a single file
+    `bundle` is the only one today: how often the documents of one claim arrive as a single file
     rather than as one file each. ⛔ It says nothing about documents of different claims sharing a
     file — see `assembler.documents_share_one_file` for why that shape is not produced at all.
     """
@@ -692,13 +692,13 @@ def file_composition_share(name: str) -> float:
 def capture_mix(doc_type: str) -> MappingProxyType[str, float]:
     """The capture-channel weights for one document class, from policy.yaml's `capture_mix`.
 
-    🔴 IN POLICY AND NOT IN GENERATION because `capture` is a label: these shares size labelled
+    🔴 in policy and not in generation because `capture` is a label: these shares size labelled
     buckets, which is policy.yaml's business by generation.yaml's own rule. The keys are members
     of `schemas.Capture` and the weights of one class sum to 1 — both checked here, so a typo'd
     channel or a mix that quietly re-weights the others fails at load time naming the class,
     instead of drawing some distribution nobody declared.
 
-    ⛔ SCREEN-NATIVE ARCHETYPES NEVER CONSULT THIS TABLE (`claim_planner.Archetype.screen_native`):
+    ⛔ screen-native archetypes never consult this table (`claim_planner.Archetype.screen_native`):
     a transaction screen exists only as a screenshot, and that is a fact of the archetype rather
     than a weight of its class.
     """

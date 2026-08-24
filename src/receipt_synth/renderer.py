@@ -57,8 +57,8 @@ FONT_FILES = {
 class RenderedDocument:
     """One rendered page: the image on disk, where every field ended up on it, and what it says.
 
-    `reference_text` and `field_bboxes` COVER DIFFERENT THINGS, and the difference is the whole
-    reason both exist. The boxes cover the LABELLED FIELDS; the text covers ALL PRINTED TEXT. A
+    `reference_text` and `field_bboxes` cover different things, and the difference is the whole
+    reason both exist. The boxes cover the labelled fields; the text covers all printed text. A
     document whose every labelled field survived a crop while the footer carrying the fiscal
     wording was lost would look complete measured on the boxes alone.
     """
@@ -67,17 +67,17 @@ class RenderedDocument:
     width: int
     height: int
     field_bboxes: dict[str, BBox]
-    # One box per `[data-region]` element, keyed by the attribute's value — EMPTY on every
-    # template today, none of which mark one. Collected in the SAME pass as `field_bboxes` (see
+    # One box per `[data-region]` element, keyed by the attribute's value — empty on every
+    # template today, none of which mark one. Collected in the same pass as `field_bboxes` (see
     # `_COLLECT_BBOXES`) rather than a second page evaluation, and with the same rounding
     # convention. Nothing draws a multi-document file yet; this is the geometry a later stage
     # needs once a template starts marking more than one document's rectangle on a page.
     region_bboxes: dict[str, BBox]
-    # The page's text in reading order, taken from the layout engine BEFORE rasterization — so it
+    # The page's text in reading order, taken from the layout engine before rasterization — so it
     # is ground truth by construction rather than by annotation. See `_COLLECT_TEXT`.
     reference_text: str
-    # Where that text is, as one box. NOT the union of the field boxes and not the page: the extent
-    # of the rendered TEXT, which is what a later measurement compares a degraded capture against.
+    # Where that text is, as one box. Not the union of the field boxes and not the page: the extent
+    # of the rendered text, which is what a later measurement compares a degraded capture against.
     content_bbox: BBox
 
 
@@ -100,20 +100,20 @@ def qr_svg(payload: str, *, error: str = "m") -> str:
     return segno.make(payload, error=error).svg_inline(border=0, scale=3)
 
 
-# THE PAGE'S TEXT, IN READING ORDER, AND THE EXTENT OF IT.
+# The page's text, in reading order, and the extent of it.
 #
 # `innerText` rather than `textContent`, and the difference is not cosmetic: `textContent` returns
 # the source order of every node including ones CSS never paints, while `innerText` is what the
 # layout engine decided a reader sees — hidden elements excluded, line boxes reflected as newlines.
-# Since this dataset's whole premise is that the label describes the IMAGE, the text has to come
+# Since this dataset's whole premise is that the label describes the image, the text has to come
 # from the same authority that produced the image.
 #
-# THE EXTENT IS COMPUTED FROM TEXT RANGES, not from element boxes. An element's box includes its
+# The extent is computed from text ranges, not from element boxes. An element's box includes its
 # padding and can be far larger than the ink inside it — a table cell, a full-width footer div —
-# and a measurement of whether the CONTENT survived a crop wants where the characters are. A
+# and a measurement of whether the content survived a crop wants where the characters are. A
 # `Range` over a text node reports exactly the rectangles the glyphs occupy.
 #
-# ⚠️ ITS SCOPE IS TEXT AND ONLY TEXT. A QR code, a stamp and a signature are ink that this box does
+# ⚠️ Its scope is text and only text. A QR code, a stamp and a signature are ink that this box does
 # not cover, deliberately: it is the counterpart of `reference_text`, which is also text only, and
 # a later measurement must not read it as "everything printed".
 _COLLECT_TEXT = """
@@ -150,10 +150,10 @@ _COLLECT_TEXT = """
 # whole document first. Rounded to whole pixels: a box is an index into an image, and a
 # fractional pixel index means nothing to a consumer.
 #
-# ONE PASS COLLECTS BOTH `[data-field]` AND `[data-region]` BOXES, rather than a second page
+# One pass collects both `[data-field]` and `[data-region]` boxes, rather than a second page
 # evaluation for the region markers — the same layout, read once.
 #
-# 🔴 BOTH COME BACK AS A LIST OF PAIRS RATHER THAN AN OBJECT, and for both the reason is the same:
+# 🔴 Both come back as a list of pairs rather than an object, and for both the reason is the same:
 # `Object.fromEntries` on a duplicate key keeps only the last write, silently, leaving a label
 # whose box points at another element's ink. A repeat has to survive the crossing to be refused on
 # the Python side (`_unique_boxes`), which it cannot do once an object has collapsed it.
@@ -219,7 +219,7 @@ class Renderer:
     def build_html(self, template_name: str, context: dict) -> str:
         """The full HTML page for a document, stylesheet and fonts inlined.
 
-        `qr_svg` IS `None` WHERE THE DOCUMENT CARRIES NO QR, and that case is real rather than
+        `qr_svg` is `None` where the document carries no QR, and that case is real rather than
         defensive: 👁 only 2 of 8 bank payment confirmations print one. `context["qr_payload"]` is
         still required — a template that shows a QR has to say what is in it, and a missing key
         here would be a document silently losing a requisite — but a payload of `None` means the
@@ -245,7 +245,7 @@ class Renderer:
         """Render a page that is already HTML — the same capture pass `render` performs.
 
         Public for the same reason `build_html` is, and for one more. The pixel↔label gate
-        (`tools/pixel_label_gate.py`) renders a page it EDITED: it substitutes characters inside a
+        (`tools/pixel_label_gate.py`) renders a page it edited: it substitutes characters inside a
         labelled element and asks which pixels moved. Going back through a re-built context would
         re-run the layout, and a re-run layout cannot tell "this box shows this value" from "this
         box moved" — the edit has to happen downstream of the template and upstream of the browser,
@@ -271,7 +271,7 @@ class Renderer:
                 _refuse_unloaded_images(collected["broken_images"])
                 bboxes = _unique_boxes(collected["fields"], attribute="data-field")
                 region_bboxes = _unique_boxes(collected["regions"], attribute="data-region")
-                # Read BEFORE the screenshot, from the same page state. The order matters only in
+                # Read before the screenshot, from the same page state. The order matters only in
                 # that nothing may change between them; there is no scrolling or animation here, so
                 # both describe one layout.
                 content = page.evaluate(_COLLECT_TEXT)
@@ -293,7 +293,7 @@ class Renderer:
 def _refuse_unloaded_images(basenames: list[str]) -> None:
     """Stop the render when a picture the page asked for is not in it.
 
-    🔴 THE ONE FAILURE THAT LOOKS LIKE A SUCCESS. Only a composition template embeds an image
+    🔴 the one failure that looks like a success. Only a composition template embeds an image
     (`ua_claim_bundle`), and its `alt` is empty on purpose, so an image that does not load paints
     nothing at all: the sheet comes out blank, every box around it is collected as usual, and the
     label goes on asserting a document that is not in the pixels. Nothing downstream can notice —
@@ -301,12 +301,12 @@ def _refuse_unloaded_images(basenames: list[str]) -> None:
     corpus can therefore be corrupted wholesale by one unreadable path, which is why this is a
     refusal at the source rather than a check somebody remembers to run afterwards.
 
-    `complete && naturalWidth > 0` IS THE TEST BECAUSE `complete` ALONE IS NOT: it is true for a
+    `complete && naturalWidth > 0` is the test because `complete` alone is not: it is true for a
     finished attempt whether the attempt succeeded or failed, and a failed decode reports a natural
     width of zero. Read after `_fit_viewport_to_content`, which waits for the network to go idle,
     so an image still in flight is not mistaken for one that failed.
 
-    ⛔ THE MESSAGE CARRIES BASENAMES AND NO PATH. What it names has to be enough to find the file
+    ⛔ the message carries basenames and no path. What it names has to be enough to find the file
     and not enough to describe the machine; an absolute path in an exception is an absolute path in
     whatever log catches it, and this repository's redaction gate holds for what it prints too.
     """
@@ -326,12 +326,12 @@ def _unique_boxes(pairs: list[list], *, attribute: str) -> dict[str, BBox]:
     survives to be checked here: an `Object.fromEntries` on the JavaScript side would already
     have collapsed it to whichever element came last, with nothing left to detect.
 
-    🔴 ONE FUNCTION FOR `data-field` AND `data-region` BECAUSE IT IS ONE RULE. A name is what a
+    🔴 one function for `data-field` and `data-region` because it is one rule. A name is what a
     label points with, at either level, and the failure a repeat produces is identical: a box that
     belongs to one element filed under a name another element also answers to. The attribute is a
     parameter so the sentence names the marker the template author actually wrote.
 
-    ⚠️ THE SCOPE IS ONE RENDER AND NOT THE CORPUS. Two documents of one file may of course print
+    ⚠️ the scope is one render and not the corpus. Two documents of one file may of course print
     the same field name — both an invoice and its payment carry `amount` — but they are rendered
     separately and merged under per-document prefixes (`assembler._IN_DOCUMENT_KEY`), so no such
     pair ever reaches this function.

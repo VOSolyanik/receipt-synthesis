@@ -101,7 +101,7 @@ _RNOKPP_WEIGHTS = (-1, 5, 7, 9, 4, 6, 10, 5, 7)
 # python-stdnum (`stdnum/ua/edrpou.py`), which is the reference this follows. Two details
 # make it unlike the РНОКПП one, and both are load-bearing:
 #
-#   * the weight set is chosen by the FIRST DIGIT, not by a numeric range. The two
+#   * the weight set is chosen by the first digit, not by a numeric range. The two
 #     readings agree everywhere except at exactly 60000000; keying on the digit is what
 #     the standard does, so 6xxxxxxx always takes the plain set.
 #   * when the weighted sum leaves a remainder of 10, the calculation is repeated with
@@ -123,7 +123,7 @@ def _rnokpp_length() -> int:
     """How many digits a РНОКПП has, from config rather than from a literal.
 
     The ПН path already reads its length out of config/fiscal-rules.yaml, and a literal
-    here would have left the same fact stated twice in two different ways. It IS stated
+    here would have left the same fact stated twice in two different ways. It is stated
     twice all the same — the weight table pins the body length too — so the two are
     cross-checked instead of one of them being trusted silently.
     """
@@ -255,13 +255,13 @@ _SCALES = (
 
 _HRYVNIA_FORMS = ("гривня", "гривні", "гривень")
 _KOPIYKA_FORMS = ("копійка", "копійки", "копійок")
-# The euro is INDECLINABLE in Ukrainian — one form for all three counts — while the cent declines
+# The euro is indeclinable in Ukrainian — one form for all three counts — while the cent declines
 # like any masculine noun. Both facts are ordinary grammar rather than anything about a document.
 _EURO_FORMS = ("євро", "євро", "євро")
 _CENT_FORMS = ("цент", "центи", "центів")
 
 # What a Ukrainian document spells an amount in, per currency: the unit's forms, the subunit's,
-# and the GENDER THE UNIT GOVERNS — гривня is feminine («одна гривня», «дві гривні») and євро is
+# and the gender the unit governs — гривня is feminine («одна гривня», «дві гривні») and євро is
 # masculine («один євро», «два євро»). The gender belongs to the currency and not to the amount,
 # which is why it is stored beside the words rather than passed by a caller.
 _CURRENCY_WORDS: dict[str, tuple[tuple[str, str, str], tuple[str, str, str], bool]] = {
@@ -326,7 +326,7 @@ def amount_in_words_uk(amount: Decimal, currency: str = "UAH") -> str:
         Decimal("2500.00")        -> "дві тисячі п'ятсот гривень 00 копійок"
         Decimal("394.10"), "EUR"  -> "триста дев'яносто чотири євро 10 центів"
 
-    🔴 A UKRAINIAN DOCUMENT MAY STATE A FOREIGN AMOUNT, and this is the line where it stops being
+    🔴 A Ukrainian document may state a foreign amount, and this is the line where it stops being
     a hryvnia one. The words are what the page says the currency is, beside the caption that names
     the code — two independent statements of it, which is what a label recording `EUR` needs from
     an image that would otherwise carry a bare number.
@@ -408,8 +408,8 @@ def words_to_amount_uk(text: str) -> Decimal:
     """The amount a Ukrainian amount-in-words states, in whatever currency it names. Raises
     ``ValueError`` if the text is not one.
 
-    ⛔ IT DOES NOT REPORT THE CURRENCY, and that is deliberate: this is the independent reading of
-    a NUMBER, used to check that a printed figure and its printed words agree. Which currency the
+    ⛔ it does not report the currency, and that is deliberate: this is the independent reading of
+    a number, used to check that a printed figure and its printed words agree. Which currency the
     two are in is stated by the caption beside them and by the label, and a second answer here
     would be a second place for the two to disagree.
     """
@@ -457,10 +457,10 @@ def vat_rate_for_letter(letter: str, country: str) -> float:
 class Seller:
     """The party issuing the receipt.
 
-    UP TO TWO IDENTIFIER LINES, AND THEY ARE NOT ALTERNATIVES. Each is optional on its own:
+    Up to two identifier lines, and they are not alternatives. Each is optional on its own:
 
     * ``tax_code`` is the ІД — the seller's identification code. An eight-digit ЄДРПОУ for a
-      legal entity, a ten-digit РНОКПП for a sole trader: the length follows the TYPE OF PERSON
+      legal entity, a ten-digit РНОКПП for a sole trader: the length follows the type of person
       and not the prefix. ``None`` models a receipt that omits the line, which real receipts
       may do — 👁 only 1 of 3 real receipts carries one, and this generator prints it on every
       document anyway, as the superset. That overstatement is declared under
@@ -469,12 +469,12 @@ class Seller:
       ``identifiers`` in config/fiscal-rules.yaml.
     * ``vat_number`` is the ПН — the VAT-payer number, and ``None`` unless the seller is
       registered. Twelve digits for a legal entity, of which the first eight are its ЄДРПОУ, so
-      the two lines agree by construction — 👁 1/1, MEANING ONE DOCUMENT: only one observed
+      the two lines agree by construction — 👁 1/1, meaning one document: only one observed
       receipt carries both lines, and no source states the relation as a requirement. For a sole
-      trader it is THE SAME ten-digit РНОКПП the ІД line carries — one number under two
+      trader it is the same ten-digit РНОКПП the ІД line carries — one number under two
       prefixes, not two numbers.
 
-    A registered payer therefore prints one line MORE than a non-payer, not a different one.
+    A registered payer therefore prints one line more than a non-payer, not a different one.
     An earlier version of this model had them mutually exclusive, on a published table of the
     form that lists them as rows 4 and 5 with alternative examples; real ПРРО output prints both
     together and refuted it.
@@ -524,7 +524,7 @@ class Acquiring:
 class PrroReceipt:
     """One Ukrainian fiscal receipt, complete but not yet rendered.
 
-    NAMED AFTER THE ПРРО AND NO LONGER ONLY ONE. It also carries a classic hardware РРО
+    Named after the ПРРО and no longer only one. It also carries a classic hardware РРО
     receipt, which differs in the fiscal identity it prints and in nothing else this class
     models — see `build_prro_receipt`. The name is left alone deliberately: renaming it
     reaches every test module and is a rename rather than a change of behaviour, so it is
@@ -566,9 +566,9 @@ class PrroReceipt:
     decimal_separator: str
     qr_payload: str
     footer: str
-    # WHICH OF THE TWO 👁 OBSERVED FORMS the VAT summary row takes — a key of
+    # Which of the two 👁 observed forms the VAT summary row takes — a key of
     # `tax_line_label_forms` in config/fiscal-rules.yaml. `None` for a seller that is not
-    # registered for ПДВ, whose receipt has no tax block at all. Chosen from the document's MEDIUM
+    # registered for ПДВ, whose receipt has no tax block at all. Chosen from the document's medium
     # rather than drawn freely; see `_draw_tax_line_form`.
     vat_row_form: str | None
 
@@ -577,20 +577,20 @@ class PrroReceipt:
         """ДО СПЛАТИ — what the customer actually pays: the basket less any discount, plus
         cash rounding.
 
-        DERIVED, NOT STORED, so that the two amounts cannot drift apart — and the derivation is
+        Derived, not stored, so that the two amounts cannot drift apart — and the derivation is
         exercised rather than merely asserted: every receipt this builder produces fixes both
         adjustments at zero, so the arithmetic and the sign of each term would be invisible to
         the whole suite were it not for
         ``test_amount_due_is_the_total_less_the_discount_plus_the_rounding``, which sets them by
         hand. It equals ``total`` for as long as both adjustments are zero, and that is
         deliberate: reaching a genuine
-        divergence needs a rule for DISTRIBUTING a basket-level discount across covered and
+        divergence needs a rule for distributing a basket-level discount across covered and
         non-covered lines, because coverage is decided per line and the lines sum to
         ``total`` — and config/policy.yaml says nothing about how. Choosing here would wire an
         interpretation the policy does not contain into the ground truth.
 
         The consequence for a consumer is stated in config/labelling-schema.yaml, where it
-        matters: while the two coincide the field DISCRIMINATES NOTHING, so its accuracy must
+        matters: while the two coincide the field discriminates nothing, so its accuracy must
         not be reported as a metric.
         """
         return (self.total - self.discount + self.rounding).quantize(KOPIYKA)
@@ -703,7 +703,7 @@ class PrroReceipt:
             has_fiscal_number=True,
             capture=capture,
             field_bboxes=field_bboxes,
-            # From the RENDERER, like the boxes: neither is decided by the content class, and both
+            # From the renderer, like the boxes: neither is decided by the content class, and both
             # describe the page that was produced from it.
             reference_text=reference_text,
             content_bbox=content_bbox,
@@ -721,19 +721,19 @@ class PrroReceipt:
 
 _ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
-# The legal form as printed before the name. A ФОП is printed WITHOUT quotes: a sole
+# The legal form as printed before the name. A ФОП is printed without quotes: a sole
 # trader trades under a person's name, not under a firm name, and «ФОП «Прізвище І. Б.»»
 # is not a form any Ukrainian document uses.
 _LEGAL_FORM_PREFIX = {"TOV": "ТОВ", "FOP": "ФОП", "PRAT": "ПрАТ"}
 _SOLE_TRADER = "FOP"
 
-# The designation of a firm registered OUTSIDE the Ukrainian register, printed AFTER the name and
-# without quotes — "Coursera Inc." The Ukrainian marks are a rule about how a UKRAINIAN firm name
+# The designation of a firm registered outside the Ukrainian register, printed after the name and
+# without quotes — "Coursera Inc." The Ukrainian marks are a rule about how a Ukrainian firm name
 # is written; applying them to a foreign one produces «INC «Coursera»», a form no register holds
 # and no document prints. The forms are the ones config/vendors.json's `EU` block uses.
 _LEGAL_FORM_SUFFIX = {
     "INC": "Inc.", "LLC": "LLC", "SARL": "S.à r.l.", "GMBH": "GmbH", "EV": "e.V.",
-    # ⛔ AN EMPTY DESIGNATION IS A STATEMENT, and it is the honest one for a foreign institution
+    # ⛔ An empty designation is a statement, and it is the honest one for a foreign institution
     # that trades under a bare name. The forms above are each a real entity's actual one — the
     # rule config/vendors.json states for a public mark applies to the form printed beside it —
     # and a body whose form this repository has not verified gets none rather than a plausible
@@ -790,7 +790,7 @@ def _fill_placeholders(
 
 
 def sellable_kinds(catalogue: dict, vendor: dict) -> list[str]:
-    """The item kinds of a bucket that this vendor sells AND this generator can print.
+    """The item kinds of a bucket that this vendor sells and this generator can print.
 
     Two filters, and they answer different questions. A pharmacy does not sell "Складання
     плану харчування": that is affinity, vendor data, declared per profile in
@@ -828,7 +828,7 @@ def personal_surname(rng: random.Random, fake: Faker, country: str, *, female: b
     dataset is published, and a rare surname on a rendered receipt points at whoever bears
     it while a surname carried by a hundred thousand people does not.
 
-    ONE mechanism for both places a personal name is composed — a sole trader below, and a
+    One mechanism for both places a personal name is composed — a sole trader below, and a
     persona in `persona_generator`, whose name is not printed yet but will be as the payer
     on a payment confirmation. The exposure is the same in both, so the narrowing is not
     built twice.
@@ -875,13 +875,13 @@ def sole_trader_name(rng: random.Random, country: str = "UA") -> str:
 def resolve_vendor(rng: random.Random, vendor: dict, country: str = "UA") -> dict:
     """A vendor entry with its printed name settled, ready to be carried.
 
-    An entry that STATES a name keeps it — that is a firm trading under a mark. An entry
-    with NO name is one that trades under a natural person's, and the name is drawn here.
+    An entry that states a name keeps it — that is a firm trading under a mark. An entry
+    with no name is one that trades under a natural person's, and the name is drawn here.
     Absence is the signal rather than the legal form, because the two do not coincide: a
     German `EK` is a registered sole merchant who may trade under a business designation
     ("Sonnen-Apotheke e.K.") just as readily as under their own name.
 
-    Called ONCE per vendor instance — when the vendor is chosen for a claim — and the result
+    Called once per vendor instance — when the vendor is chosen for a claim — and the result
     is passed to every document of that claim. That ordering is the whole design: a personal
     name is now a draw rather than a constant, and a draw repeated per document would print
     two different sellers on two documents of one purchase. The constraint is older than the
@@ -901,9 +901,9 @@ def resolve_vendor(rng: random.Random, vendor: dict, country: str = "UA") -> dic
 
 
 def _vat_number(rng: random.Random, id_code: str, *, is_sole_trader: bool) -> str:
-    """The ПН — VAT-payer number — of a registered seller, built FROM its ІД.
+    """The ПН — VAT-payer number — of a registered seller, built from its ІД.
 
-    A sole trader's ПН simply IS its РНОКПП: 👁 one ten-digit number appears under both
+    A sole trader's ПН simply is its РНОКПП: 👁 one ten-digit number appears under both
     prefixes, so there is nothing to draw.
 
     A legal entity's is twelve digits, and 👁 the first eight of them are its ЄДРПОУ on the one
@@ -913,7 +913,7 @@ def _vat_number(rng: random.Random, id_code: str, *, is_sole_trader: bool) -> st
     generator calls honest. Derived rather than stored for the same reason `amount_due` is —
     two values that must agree should not be two values.
 
-    The relation rests on a SINGLE observation, and no source states it as a requirement. What
+    The relation rests on a single observation, and no source states it as a requirement. What
     is certain is the length, which config/fiscal-rules.yaml holds.
     """
     if is_sole_trader:
@@ -939,7 +939,7 @@ def vendor_is_vat_payer(vendor: dict) -> bool:
     system is not. A rule over the legal form would print a configuration the entry
     contradicts, which is the shape of the defect this replaced.
 
-    A MISSING FLAG IS REFUSED RATHER THAN DEFAULTED. A default would quietly make the status a
+    A missing flag is refused rather than defaulted. A default would quietly make the status a
     property of the legal form again for every entry nobody thought about — and the printed
     consequence would be a plausible-looking document rather than a failure.
     """
@@ -955,9 +955,9 @@ def vendor_is_vat_payer(vendor: dict) -> bool:
 
 @dataclass(frozen=True)
 class PartyIdentity:
-    """Who a party IS on paper, drawn ONCE PER CLAIM and printed on every document of it.
+    """Who a party is on paper, drawn once per claim and printed on every document of it.
 
-    🔴 THE CONSTRAINT `resolve_vendor` SOLVES FOR THE NAME, SOLVED FOR THE NUMBERS TOO. That
+    🔴 the constraint `resolve_vendor` solves for the name, solved for the numbers too. That
     docstring says a per-document draw "would print two different sellers on two documents of one
     purchase", and it was right — but it fixed only the name, so `generate_edrpou` and
     `generate_iban` went on being called once per builder and every identifier of one seller
@@ -971,14 +971,14 @@ class PartyIdentity:
     the number says something about the generator rather than about the system. The name matching
     byte for byte is the same defect from the other side.
 
-    ⚠️ `bank_name` AND `bank_code` BELONG TO THE IDENTITY AND NOT TO THE DOCUMENT, because
+    ⚠️ `bank_name` and `bank_code` belong to the identity and not to the document, because
     `account` is built on `bank_code` — an IBAN carries its bank's МФО in the clear. A document
     drawing its own bank while printing the claim's account would print a bank code that
     contradicts the account beside it, which is a defect no cross-document check would catch and
     every reader of one page would see.
 
     Not to be confused with `Seller`, `Party` or `InvoiceParty`: those are the party blocks three
-    document classes PRINT, each with its own captions and its own optional fields. This is the
+    document classes print, each with its own captions and its own optional fields. This is the
     identity all three print, and it is drawn where a claim is assembled rather than where a page
     is composed.
     """
@@ -998,7 +998,7 @@ def _draw_bank(rng: random.Random, country: str) -> tuple[str, str]:
     row's account. Extracted so a name can no longer be drawn without its code beside it — the same
     reason `bank_codes` exists at all, one call site short of covering every draw.
 
-    THE DRAW ITSELF IS UNCHANGED: one `rng.choice` over `banks(country)`, same as before this
+    The draw itself is unchanged: one `rng.choice` over `banks(country)`, same as before this
     existed, so a seeded run's output does not move.
     """
     bank_name = rng.choice(banks(country))
@@ -1016,13 +1016,13 @@ def draw_party_identity(
     classes that never print it: it costs one value from the generator and keeps the draw the same
     length whichever archetype the claim turns out to use.
 
-    Called once per claim by the assembler, and once per ORDINARY STATEMENT ROW by
+    Called once per claim by the assembler, and once per ordinary statement row by
     `build_bank_statement` — those counterparties are different firms on purpose, and a fresh
     identity per row is what they need.
     """
     is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
     tax_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
-    # The NAME is drawn; the CODE is looked up. See `_draw_bank` — a fresh draw here is exactly
+    # The name is drawn; the code is looked up. See `_draw_bank` — a fresh draw here is exactly
     # the defect this function used to carry: the same real bank name coming back with a
     # different МФО on the next identity drawn for it.
     bank_name, bank_code = _draw_bank(rng, country)
@@ -1043,16 +1043,16 @@ def draw_party_identity(
 class DocumentReference:
     """The document a payment's purpose line cites: its number, and the date it bears.
 
-    🔴 A REFERENCE IS A CROSS-DOCUMENT FIELD OF ITS OWN, and it used to be drawn independently on
+    🔴 A reference is a cross-document field of its own, and it used to be drawn independently on
     each side — the invoice printed one number in its title, and the payment beside it cited a
     number drawn from `rng.randint(1, 9999)`, so the two never agreed on any pair of the delivered
     corpus. Passing the subject document's own reference makes the citation resolvable: it is
     embedded in free text on the payment side and written into a title on the subject side, and the
-    DATE is spelled in words on one page and in digits on the other, so the two ends still have to
+    date is spelled in words on one page and in digits on the other, so the two ends still have to
     be parsed and normalized before they can be compared. That is the difference between a field a
     system can earn a score on and one it cannot.
 
-    ⛔ It is NOT passed to every purpose line. A statement's ordinary rows and a purpose naming a
+    ⛔ It is not passed to every purpose line. A statement's ordinary rows and a purpose naming a
     ВН — a delivery note, a different class of document — refer to documents that are not in the
     claim, and that is the whole reason a payment document establishes nothing about what was
     bought. See `_cited_number` and docs/cross-document-fields.md.
@@ -1111,7 +1111,7 @@ def _build_line_item(
         # Drawn in whole ten-kopiyka steps: retail prices do not end in arbitrary
         # kopiykas, and an exact integer keeps the sum exact. `randrange` is half-open, so
         # the configured `high` is the one price this draw cannot produce — see
-        # `config.price_range`, which says where the bound IS inclusive. The same
+        # `config.price_range`, which says where the bound is inclusive. The same
         # ten-minor-unit grid serves the euro draw — one mechanism, two currencies, as the
         # `price_ranges_eur` comment declares.
         price=Decimal(rng.randrange(_minor(low), _minor(high), 10)) / 100,
@@ -1322,8 +1322,8 @@ def _draw_basket(
 ) -> list[LineItem]:
     """What a document lists, drawn from the category's own buckets.
 
-    🔴 ONE DRAW FOR EVERY CLASS THAT CARRIES A BASKET, and the reason is a label rather than
-    tidiness: coverage is a property of WHAT WAS BOUGHT and not of the document that lists it,
+    🔴 one draw for every class that carries a basket, and the reason is a label rather than
+    tidiness: coverage is a property of what was bought and not of the document that lists it,
     so a receipt and an invoice listing the same purchase must produce the same covered
     fraction. Two builders drawing baskets two ways would make the verdict depend on which
     class a claim happened to be given. The three callers said so in three copies of this
@@ -1333,14 +1333,14 @@ def _draw_basket(
     builder realizes it. For `covered` the basket is drawn from the category's covered items
     alone; for `partially_covered` by `mixed_items` the caller clears the flag and states the
     `coverage_target` the basket should come to; for the zero-coverage route to `rejected` the
-    caller states a target of exactly ZERO and every line comes from `excluded_items` — the
+    caller states a target of exactly zero and every line comes from `excluded_items` — the
     mirror of `covered_only`, and the branch that used to be refused while nothing could plan it.
 
     `document` names the class in the length message and changes nothing else — "a receipt
     carries 1 to 20 lines" is what a caller of that builder needs to read, and the bound itself
     is `MAX_LINE_ITEMS` for every class.
 
-    ⚠️ THE ORDER OF THE DRAWS IS PART OF THE SEED'S MEANING. The line count is taken from `rng`
+    ⚠️ the order of the draws is part of the seed's meaning. The line count is taken from `rng`
     before anything else here, exactly as it was in each copy; moving it would change every
     document of every existing corpus for a refactor that is meant to change nothing.
 
@@ -1376,7 +1376,7 @@ def _draw_basket(
             "realizes a verdict, it does not decide one"
         )
     if coverage_target == Decimal(0):
-        # 🔴 THE ZERO-COVERAGE ROUTE TO `rejected`: every line drawn from the category's
+        # 🔴 The zero-coverage route to `rejected`: every line drawn from the category's
         # `excluded_items`, none covered, so the covered amount comes to zero and
         # `policy_engine.verdict_for` answers `rejected` with no cause. The mirror of the
         # `covered_only` branch above rather than a degenerate mixed basket — there is no ratio
@@ -1416,13 +1416,13 @@ def _build_tax_lines(items: list[LineItem], *, vat_payer: bool) -> list[TaxLine]
     Ukrainian receipts print VAT-inclusive prices, so the tax is extracted from the
     gross rather than added on top: vat = gross − gross / (1 + rate/100).
 
-    EMPTY FOR A SELLER THAT IS NOT REGISTERED FOR ПДВ, which is a document with no VAT block
+    Empty for a seller that is not registered for ПДВ, which is a document with no VAT block
     at all rather than one with an empty block. That case used to raise; the raise has become
     two narrower guards, because both directions are now a builder bug:
 
-    * a line with NO letter on a REGISTERED seller's receipt — turnover would be left out of
+    * a line with no letter on a registered seller's receipt — turnover would be left out of
       the tax block silently, which is the case the original raise was written for;
-    * a line WITH a letter on a non-payer's receipt — the seller has assigned no rate group to
+    * a line with a letter on a non-payer's receipt — the seller has assigned no rate group to
       anything, so the letter contradicts the document's own seller block.
 
     A jurisdiction with ``line_item_letter_position: none`` (ES, EU) prints no per-line letter
@@ -1481,7 +1481,7 @@ _PATTERN_ALPHABETS = {
 def _draw_from_pattern(rng: random.Random, pattern: str) -> str:
     """A value matching a configured identifier pattern.
 
-    A length RANGE is drawn from, because a range in the configuration means the length
+    A length range is drawn from, because a range in the configuration means the length
     genuinely varies: a hardware РРО's receipt counter reads four digits early in the life of
     the register and six later, and a corpus that only ever printed one of those widths would
     teach a consumer that width.
@@ -1521,8 +1521,8 @@ def _draw_from_pattern(rng: random.Random, pattern: str) -> str:
 def _tax_line_format(rules: dict, form: str | None) -> str:
     """The format string for a tax summary row, by jurisdiction and by chosen form.
 
-    A jurisdiction declares EITHER a single `tax_line_label_format` — which is every jurisdiction
-    but Ukraine, where the variation has been observed — OR a map of named forms under
+    A jurisdiction declares either a single `tax_line_label_format` — which is every jurisdiction
+    but Ukraine, where the variation has been observed — or a map of named forms under
     `tax_line_label_forms`, one of which the document chose. Two shapes rather than one because
     only one jurisdiction has evidence of variation, and giving the others a one-entry map would
     state a choice nobody has observed them making.
@@ -1540,12 +1540,12 @@ def _tax_line_format(rules: dict, form: str | None) -> str:
 def _draw_tax_line_form(rng: random.Random, rules: dict, medium: Medium) -> str | None:
     """Which of the 👁 observed VAT-row forms this document prints.
 
-    🔴 THE MEDIUM DECIDES, AND ASYMMETRICALLY. Paper takes the equals form and nothing else — 👁 two
+    🔴 the medium decides, and asymmetrically. Paper takes the equals form and nothing else — 👁 two
     independent installations, no counterexample. Electronic draws between both, because there is
-    ONE electronic observation and one observation cannot support a rule; drawing is what "no
+    one electronic observation and one observation cannot support a rule; drawing is what "no
     evidence either way" looks like once it has to be written down.
 
-    UNIFORM AMONG THE PERMITTED FORMS, and the uniformity is a consequence of the list rather than a
+    Uniform among the permitted forms, and the uniformity is a consequence of the list rather than a
     share somebody chose: `rng.choice` over what the medium allows. A weighted draw would be a claim
     about how often each form occurs electronically, which one observation cannot support.
 
@@ -1596,23 +1596,23 @@ def build_prro_receipt(
     day a receipt is paired with anything it would be the class that got missed.
 
     ``registrar`` names a key of ``receipt.registrars`` in config/fiscal-rules.yaml — ``prro``
-    for the software register, ``rro`` for the classic hardware one. IT DECIDES THE FISCAL
-    IDENTITY AND NOTHING ELSE: which prefix the fiscal number carries, whether a «ЗН» factory
+    for the software register, ``rro`` for the classic hardware one. It decides the fiscal
+    identity and nothing else: which prefix the fiscal number carries, whether a «ЗН» factory
     serial is printed at all, whether the online/offline marker appears, which of the two
     receipt-number formats is used, and which population the maker's name is drawn from. The
     basket, the seller and the money are the same document either way, which is why one builder
     produces both rather than two builders sharing everything but twenty lines.
 
-    THE PAPER WIDTH IS NOT HERE. It is the one difference that is purely visual, so it lives in
+    The paper width is not here. It is the one difference that is purely visual, so it lives in
     the stylesheet of each template, and two templates may therefore share a registrar.
 
-    ``capture`` IS NOT THE DEGRADER'S BUSINESS ALONE. It decides the document's MEDIUM, and 👁 the
+    ``capture`` is not the degrader's business alone. It decides the document's medium, and 👁 the
     VAT summary row takes one form on paper and either of two electronically — so the channel a
-    document will reach a verifier on has to be known while the document is BUILT, not only while
+    document will reach a verifier on has to be known while the document is built, not only while
     it is degraded. The assembler decides it once and passes the same value to both.
 
-    🔴 IT HAS NO DEFAULT, DELIBERATELY. It had one — `Capture.SCREENSHOT` — which equalled the only
-    channel the assembler produces, so a caller that stopped passing it produced IDENTICAL output
+    🔴 it has no default, deliberately. It had one — `Capture.SCREENSHOT` — which equalled the only
+    channel the assembler produces, so a caller that stopped passing it produced identical output
     and no test could tell. That was found by a mutation surviving: removing the assembler's
     `capture=` changed nothing observable, because the default silently supplied the same value.
     A silent fallback that coincides with the live value is not a convenience, it is a wiring break
@@ -1637,7 +1637,7 @@ def build_prro_receipt(
 
     # -- who sold it
     #
-    # TWO possible identifier lines, and a registered payer prints one MORE than a non-payer
+    # Two possible identifier lines, and a registered payer prints one more than a non-payer
     # rather than a different one. The ІД is the seller's identification code and its register
     # follows the legal form — a ФОП has no ЄДРПОУ at all, so an eight-digit code there would
     # put an identifier on the document that no register could resolve to the seller named
@@ -1646,7 +1646,7 @@ def build_prro_receipt(
     # in config/fiscal-rules.yaml for the sources and for what is not settled.
     # Both identifiers come from `identity`, drawn once for the claim. A fiscal receipt is a whole
     # claim on its own today, so nothing of this one is compared against a second document — the
-    # parameter is here so that ONE mechanism decides who a seller is, rather than three builders
+    # parameter is here so that one mechanism decides who a seller is, rather than three builders
     # deciding it three ways and the fourth being fixed later.
     is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
     id_code_rules = rules["identifiers"]["rnokpp" if is_sole_trader else "edrpou"]
@@ -1753,7 +1753,7 @@ def build_prro_receipt(
             total=total,
         ),
         footer=receipt_rules["footer"],
-        # 👁 The VAT row's form follows the MEDIUM this document will reach a verifier on, and only
+        # 👁 The VAT row's form follows the medium this document will reach a verifier on, and only
         # a registered payer has such a row at all. `None` for a non-payer is the same statement
         # its empty `tax_lines` makes: there is no tax block to take a form.
         vat_row_form=(
@@ -1766,16 +1766,16 @@ def build_prro_receipt(
 # Bank payment confirmation
 # =============================================================================
 #
-# A DIFFERENT DOCUMENT CLASS AND NOT A VARIANT OF THE RECEIPT ABOVE: a bank issues it, it
-# carries no fiscal identity, and 👁 8 of 8 observed confirmations list NO ITEMS at all. What it
+# A different document class and not a variant of the receipt above: a bank issues it, it
+# carries no fiscal identity, and 👁 8 of 8 observed confirmations list no items at all. What it
 # proves is therefore only that money moved — policy.yaml's `document_evidence` gives the type
 # `proves_subject: false`, and 👁 0 of 7 payment purposes name what was bought, which is the
 # strongest confirmation of that entry in this repository.
 #
-# ONE ARCHETYPE WITH A CONDITIONAL BLOCK, NOT TWO. An earlier reading split the class in two — a
+# One archetype with a conditional block, not two. An earlier reading split the class in two — a
 # quittance carrying a purpose against a card slip carrying an authorization code — and 👁 3 of 8
-# documents carry a masked card AND an authorization code AND a purpose at once, which refutes
-# it. What varies is HOW THE PAYMENT WAS INITIATED; see `initiation` in
+# documents carry a masked card and an authorization code and a purpose at once, which refutes
+# it. What varies is how the payment was initiated; see `initiation` in
 # config/fiscal-rules.yaml.
 
 
@@ -1815,7 +1815,7 @@ def generate_iban(rng: random.Random, bank_code: str, country: str = "UA") -> st
     country by the published registry, and that is a fact about the jurisdiction — which is why
     the rule sits beside the МФО rather than under the first document class that printed one.
 
-    ⚠️ `country` IS THE POOL THE ACCOUNT BELONGS TO AND NOT ALWAYS A COUNTRY. `EU` is a pool of
+    ⚠️ `country` is the pool the account belongs to and not always a country. `EU` is a pool of
     cross-border sellers, and the structure it draws is stated where the pool is.
     """
     rules = jurisdiction(country)["identifiers"]["iban_format"]
@@ -1833,7 +1833,7 @@ def generate_iban(rng: random.Random, bank_code: str, country: str = "UA") -> st
 def luhn_check_digit(body: str) -> int:
     """The final digit a card number would need for its 📄 published Luhn checksum to pass.
 
-    Here to be AVOIDED rather than satisfied — see `unissuable_card_number`.
+    Here to be avoided rather than satisfied — see `unissuable_card_number`.
     """
     if not body.isdigit():
         raise ValueError(f"a card number body is digits, got {body!r}")
@@ -1854,7 +1854,7 @@ def passes_luhn(number: str) -> bool:
 
 
 def unissuable_card_number(rng: random.Random, length: int = 16) -> str:
-    """Digits that LOOK like a card number and cannot be one, by construction.
+    """Digits that look like a card number and cannot be one, by construction.
 
     🔴 The reason is publication, not realism. 👁 One observed confirmation prints a recipient's
     card with no masking at all, so this generator must be able to print sixteen visible digits —
@@ -1875,25 +1875,25 @@ def unissuable_card_number(rng: random.Random, length: int = 16) -> str:
 class Party:
     """One side of a payment, as a bank confirmation prints it.
 
-    Every field is nullable because 👁 real confirmations leave them out in TWO mechanically
-    different ways, and the difference matters to whoever scores an extraction: a HYPHEN printed
+    Every field is nullable because 👁 real confirmations leave them out in two mechanically
+    different ways, and the difference matters to whoever scores an extraction: a hyphen printed
     as the value (`name="-"`) is a value an extractor returns as the string "-", while a caption
     with nothing under it returns nothing at all. Collapsing both into "field absent" would make
     accuracy on empty fields unmeasurable.
 
-    `code` is a РНОКПП (10 digits) or a ЄДРПОУ (8), and ⚠️ the length distinguishes the KIND OF
-    CODE rather than the kind of party: a sole trader is a business with a ten-digit code, so
+    `code` is a РНОКПП (10 digits) or a ЄДРПОУ (8), and ⚠️ the length distinguishes the kind of
+    code rather than the kind of party: a sole trader is a business with a ten-digit code, so
     "ten digits means a private individual" is false.
     """
 
     name: str
-    # THE BARE TRADING NAME, which is what the LABEL carries — `name` above is what the document
-    # PRINTS. config/labelling-schema.yaml makes the bare name authoritative under
+    # The bare trading name, which is what the label carries — `name` above is what the document
+    # prints. config/labelling-schema.yaml makes the bare name authoritative under
     # `normalization.party_name` ("this file makes the bare name authoritative"), because a legal
     # form is a property of the seller's registration rather than of the merchant identity a claim
     # is about. For a natural person the two coincide: there is no legal form to strip.
     #
-    # 🔴 IT EXISTS BECAUSE THE TWO HAD SILENTLY DIVERGED. This class labelled the PRINTED form —
+    # 🔴 It exists because the two had silently diverged. This class labelled the printed form —
     # «ТОВ «Ключ»» — while a receipt of the same seller labelled «Ключ», so two documents of one
     # claim carried two strings for one merchant. Nothing caught it: the contract's comparison
     # rule strips the legal form, so both compare equal to a consumer, and only a cross-document
@@ -1908,17 +1908,17 @@ class Party:
 class PaymentConfirmation:
     """One Ukrainian bank payment confirmation, complete but not yet rendered.
 
-    THE THREE AMOUNTS ARE THE HEART OF THIS CLASS, and 👁 0 of 8 observed documents carry only
+    The three amounts are the heart of this class, and 👁 0 of 8 observed documents carry only
     one:
 
-    * ``transfer`` — 📄 the amount of the payment OPERATION, which the National Bank's instruction
+    * ``transfer`` — 📄 the amount of the payment operation, which the National Bank's instruction
       on non-cash settlements makes a mandatory requisite. **This is the claim's amount.**
     * ``fee`` — the bank's charge. 📄 Absent from the requisite list entirely, and it pays for a
       banking service rather than for anything a benefit category covers, so it is never
       reimbursable. 👁 Non-zero on 3 of 8, and generated at about that rate: keeping it at zero
       would make the field discriminate nothing.
-    * ``total_charged`` — their sum, DERIVED rather than stored so the three cannot drift.
-      👁 Printed on 1 of 8, and where it is printed it is the LARGEST NUMBER ON THE PAGE.
+    * ``total_charged`` — their sum, derived rather than stored so the three cannot drift.
+      👁 Printed on 1 of 8, and where it is printed it is the largest number on the page.
 
     🔴 That last point is the divergence this archetype exists to make measurable. An extractor
     that takes the most salient figure returns ``total_charged`` while the oracle, following the
@@ -1926,7 +1926,7 @@ class PaymentConfirmation:
     whether a system resists the salient number instead of being invisible.
 
     ``initiation`` names a key of ``payment_confirmation.initiation`` in
-    config/fiscal-rules.yaml and decides the CONDITIONAL BLOCK: whether a card and an
+    config/fiscal-rules.yaml and decides the conditional block: whether a card and an
     authorization code are printed, whether there is a payment purpose at all, and whether the
     payer is identified. It is the axis of variation because 👁 the documents vary along it — not
     by family of document, which was the reading the observation refuted.
@@ -1947,9 +1947,9 @@ class PaymentConfirmation:
     initiation: str
     transfer: Decimal
     fee: Decimal
-    # 🔴 WHAT THE THREE AMOUNTS ARE IN, and it is a field rather than a constant because a
+    # 🔴 What the three amounts are in, and it is a field rather than a constant because a
     # Ukrainian bank executes instructions in foreign currency too. The label reads it; the page
-    # states it in the captions and in the words. ⚠️ THE FEE IS IN THE SAME CURRENCY as the
+    # states it in the captions and in the words. ⚠️ the fee is in the same currency as the
     # transfer — one page, one currency, exactly as one claim is — so nothing here has to say
     # which of the three a code applies to.
     currency: str
@@ -1982,7 +1982,7 @@ class PaymentConfirmation:
 
         Derived for the reason `PrroReceipt.amount_due` is derived and `_vat_number` is derived:
         two numbers that must agree should not be two numbers. Unlike ``amount_due`` this one
-        genuinely DIFFERS from the amount it is derived from — 👁 on about a third of documents —
+        genuinely differs from the amount it is derived from — 👁 on about a third of documents —
         so it discriminates, and a consumer may score it.
         """
         return (self.transfer + self.fee).quantize(KOPIYKA)
@@ -2060,7 +2060,7 @@ class PaymentConfirmation:
     ) -> DocGroundTruth:
         """The label record for this confirmation.
 
-        ``amount`` IS THE TRANSFER AND NOT THE TOTAL. Two supports, and they agree: 📄 the
+        ``amount`` is the transfer and not the total. Two supports, and they agree: 📄 the
         instruction on non-cash settlements calls the amount of the operation the requisite, and a
         fee buys a banking service rather than anything a benefit category covers, so the policy
         does not reach it. ``total_charged`` and ``fee`` are labelled beside it, which is what
@@ -2070,7 +2070,7 @@ class PaymentConfirmation:
         no such line. Reusing it for «Загальна сума» would give one key two meanings, which is the
         failure config/labelling-schema.yaml exists to prevent.
 
-        ``line_items`` is EMPTY rather than omitted — the document lists nothing, and that empty
+        ``line_items`` is empty rather than omitted — the document lists nothing, and that empty
         list is the statement.
         """
         return DocGroundTruth(
@@ -2083,7 +2083,7 @@ class PaymentConfirmation:
             fee=self.fee,
             total_charged=self.total_charged,
             date=self.issued_at.date(),
-            # The BARE trade name, not the printed one — see `Party.trade_name`.
+            # The bare trade name, not the printed one — see `Party.trade_name`.
             counterparty=self.payee.trade_name,
             payer=self.payer.name,
             payment_purpose=self.purpose,
@@ -2091,7 +2091,7 @@ class PaymentConfirmation:
             document_code=self.document_code,
             auth_code=self.auth_code,
             line_items=[],
-            # 👁 2 of 8 carry a QR and BOTH are marketing — an application download. So a QR on
+            # 👁 2 of 8 carry a QR and both are marketing — an application download. So a QR on
             # this class is positive evidence that a QR says nothing about fiscality, and
             # `qr_is_fiscal` is False whether or not one is printed.
             has_qr=self.qr_payload is not None,
@@ -2099,7 +2099,7 @@ class PaymentConfirmation:
             has_fiscal_number=False,
             capture=capture,
             field_bboxes=field_bboxes,
-            # From the RENDERER, like the boxes: neither is decided by the content class, and both
+            # From the renderer, like the boxes: neither is decided by the content class, and both
             # describe the page that was produced from it.
             reference_text=reference_text,
             content_bbox=content_bbox,
@@ -2128,7 +2128,7 @@ def _draw_document_code(rng: random.Random, block: dict) -> str:
 def _draw_card(rng: random.Random, block: dict) -> str:
     """A card number under one of the 👁 six observed masking schemes.
 
-    ⛔ NO NORM WAS FOUND for masking, in either the instruction on non-cash settlements or the
+    ⛔ no norm was found for masking, in either the instruction on non-cash settlements or the
     regulation on payment instruments, and 🔴 the spread confirms the absence from the opposite
     direction: one observed document prints a recipient's card unmasked. So the scheme is drawn,
     the unmasked one included, and a consumer whose pattern is "six digits, asterisks, four" is
@@ -2185,17 +2185,17 @@ def _fill_reference(
 ) -> str:
     """A purpose line with the document it names filled in.
 
-    `cites` is the claim's own subject document, and where it is given the line names THAT
+    `cites` is the claim's own subject document, and where it is given the line names that
     invoice — its number and the date it bears. Where it is not, the line names a document outside
     the claim, which is the honest case for every ordinary statement row and for a payment
     document built on its own.
 
-    ⚠️ `{delivery_note_no}` IS NEVER FILLED FROM `cites`. A ВН is a delivery note and no claim
+    ⚠️ `{delivery_note_no}` is never filled from `cites`. A ВН is a delivery note and no claim
     holds one, so its number stays drawn however the caller was called — see the note beside the
     templates in config/generation.yaml for why the two placeholders are separate.
 
-    🔴 THE SAME THREE VALUES ARE DRAWN WHETHER OR NOT `cites` IS GIVEN, and one of the three is
-    then discarded. A branch that skipped the draw would make the LENGTH of the run's draw depend
+    🔴 the same three values are drawn whether or not `cites` is given, and one of the three is
+    then discarded. A branch that skipped the draw would make the length of the run's draw depend
     on whether a claim happened to have a subject document, so every later value in the whole run
     would shift with it — the same reason `build_bank_statement` nudges a colliding amount instead
     of redrawing it.
@@ -2210,7 +2210,7 @@ def _fill_reference_traced(
     at: datetime,
     cites: DocumentReference | None,
 ) -> tuple[str, str | None]:
-    """`_fill_reference`, plus WHICH рахунок number the line ended up naming — or `None` where the
+    """`_fill_reference`, plus which рахунок number the line ended up naming — or `None` where the
     template names none (a generic formula) or names a ВН, whose number belongs to no document of
     the claim.
 
@@ -2240,7 +2240,7 @@ def _money_caption(
 
     Domestic: the observed pool, drawn from as it always was. Foreign: the same pool less the
     captions that name hryvnias, with the ISO code in brackets — the form those captions
-    themselves use. ONE DRAW EITHER WAY, so the currency of a document does not change how many
+    themselves use. One draw either way, so the currency of a document does not change how many
     values a run takes from the generator.
     """
     if domestic:
@@ -2268,37 +2268,37 @@ def build_payment_confirmation(
 ) -> PaymentConfirmation:
     """Build one Ukrainian bank payment confirmation.
 
-    🔴 ``currency`` IS THE ONE AXIS THAT MOVES, and everything else about the page holds still.
+    🔴 ``currency`` is the one axis that moves, and everything else about the page holds still.
     ``None`` means the jurisdiction's own — every claim of this corpus until a foreign one was
     planned — and naming another one states a transfer executed in it. 📄 The requisites do not
     change: the instruction on non-cash settlements names an amount of the operation, not an amount
-    in hryvnias. What changes is what the page must SAY: the caption carries the code (see
+    in hryvnias. What changes is what the page must say: the caption carries the code (see
     `captions_naming_the_domestic_currency` in config/fiscal-rules.yaml) and the words spell euros,
     so a label recording EUR is readable off the image twice over.
 
-    ⛔ A CARD OPERATION IS REFUSED IN A FOREIGN CURRENCY, and it is refused rather than quietly
+    ⛔ A card operation is refused in a foreign currency, and it is refused rather than quietly
     turned into a transfer. 👁 The card modes print an authorization code and a masked card — a
     domestic acquiring operation — and what a Ukrainian bank executes against a foreign
     beneficiary's account is a transfer by account details. A caller asking for both has asked for
     a document this repository has no evidence for.
 
     ``must_cite`` is the label-first knob of the `subject` axis: the plan has decided this
-    payment's purpose NAMES the рахунок in ``cites``, so the initiation mode is drawn among those
+    payment's purpose names the рахунок in ``cites``, so the initiation mode is drawn among those
     that print a purpose at all and the formula among those that cite an invoice by number.
     Without it either draw may honestly produce a page that cites nothing — the ordinary case —
     and a claim built to disagree about its subject would disagree about nothing. It requires
     ``cites``: a forced citation of no document is not a page anything plans.
 
-    ``vendor`` is an entry of config/vendors.json, resolved — it is the PAYEE, and the same
+    ``vendor`` is an entry of config/vendors.json, resolved — it is the payee, and the same
     instance is passed to every document of a claim so two documents cannot name two firms. Its
     ``profile`` is not consulted: this document lists nothing, so what the payee sells cannot be
     read off it, which is the whole reason the type proves no subject.
 
-    ``identity`` is that payee's `PartyIdentity`, and it is REQUIRED for the reason ``capture`` is
+    ``identity`` is that payee's `PartyIdentity`, and it is required for the reason ``capture`` is
     required on the receipt builder: a default would draw a valid-looking code and IBAN, the
     document would render, and the only symptom would be that it disagreed with the invoice beside
     it — which is exactly the defect this parameter exists to remove. It is not drawn here because
-    it is a property of the CLAIM's payee and not of this page.
+    it is a property of the claim's payee and not of this page.
 
     ``cites`` is the claim's subject document, when it has one. Given, the purpose line names that
     invoice; omitted, it names a document outside the claim, which is what a confirmation built on
@@ -2309,9 +2309,9 @@ def build_payment_confirmation(
     high-frequency set before it was ever printed — see `personal_names` in
     config/generation.yaml.
 
-    ``amount`` IS THE TRANSFER — the value the label's `amount` field takes, which on this class is
+    ``amount`` is the transfer — the value the label's `amount` field takes, which on this class is
     📄 the amount of the operation and not the largest number printed. It is drawn when not given.
-    THE PARAMETER IS SPELLED THE SAME ON EVERY PAYMENT BUILDER, while the dataclass field below
+    The parameter is spelled the same on every payment builder, while the dataclass field below
     keeps its own name `transfer`: the assembler hands one claim's amount to whichever
     payment-proving archetype the plan chose, and a keyword that differed per builder would be a
     second table saying how to call each one. Uniformity belongs at the call boundary; the
@@ -2375,21 +2375,21 @@ def build_payment_confirmation(
         fee_low, fee_high = payment_confirmation_money_range("fee")
         fee = Decimal(rng.randrange(_minor(fee_low), _minor(fee_high), 10)) / 100
 
-    # -- the two parties. The PAYER's bank is this document's own — the confirmation is issued by
-    # the bank that moved the money — while the PAYEE's comes from the claim's identity, because
+    # -- the two parties. The payer's bank is this document's own — the confirmation is issued by
+    # the bank that moved the money — while the payee's comes from the claim's identity, because
     # the account printed for the payee is the claim's and an IBAN carries its bank's code.
     bank_name, bank_code = _draw_bank(rng, country)
 
-    # 👁 The SECOND form of emptiness — a caption with nothing under it — observed on the
+    # 👁 The second form of emptiness — a caption with nothing under it — observed on the
     # recipient's bank among three such fields on one document. ⛔ The same form was observed on
-    # the recipient's NAME too and is deliberately not produced there: `counterparty` is a
+    # the recipient's name too and is deliberately not produced there: `counterparty` is a
     # required label field, and emitting an empty one would assert that the document names no
     # counterparty, a case whose comparison rule the labelling contract has not settled. Declared
     # as a narrowing in config/labelling-schema.yaml rather than left for a reader to notice.
-    # 🔴 A BANK OUTSIDE THE NATIONAL REGISTER HAS NO МФО TO PRINT. The code beside the payee's
+    # 🔴 A bank outside the national register has no МФО to print. The code beside the payee's
     # bank is 📄 assigned in the National Bank's register of participants (`identifiers.bank_code`),
     # so a beneficiary banked abroad has none — and the beneficiary's IBAN is what says so, since
-    # its country is the country of the account. The NAME is printed either way; the code is a
+    # its country is the country of the account. The name is printed either way; the code is a
     # domestic requisite and is omitted rather than invented.
     payee_bank_label = block["parties"]["bank_code_label"]
     payee_is_domestic = identity.account.startswith(
@@ -2405,19 +2405,19 @@ def build_payment_confirmation(
     payee = Party(
         name=printed_legal_name(vendor["name"], vendor["legal_form"]),
         trade_name=vendor["name"],
-        # 🔴 AND NO CODE FOR A BENEFICIARY OUTSIDE THE REGISTER, for the reason its bank carries
+        # 🔴 And no code for a beneficiary outside the register, for the reason its bank carries
         # none. 👁 The «Код» line holds a ЄДРПОУ or a РНОКПП — both Ukrainian registers — so a
         # foreign firm has no value for it, and printing the code drawn for the claim would put
         # an eight-digit Ukrainian identifier under a foreign company's name. The caption
-        # disappears with the value: this is the field being INAPPLICABLE, not empty, and the two
+        # disappears with the value: this is the field being inapplicable, not empty, and the two
         # observed forms of emptiness are about a field the document does have.
         code=identity.tax_code if payee_is_domestic else None,
         account=identity.account,
         bank=payee_bank,
     )
 
-    # 👁 The FIRST form of emptiness, and the mode it belongs to: on the internet-acquiring
-    # document the payer is not identified at all and a HYPHEN is printed as the value. An
+    # 👁 The first form of emptiness, and the mode it belongs to: on the internet-acquiring
+    # document the payer is not identified at all and a hyphen is printed as the value. An
     # extractor reads that hyphen as a string, which is why it is a value here and not a `None`.
     if mode["identifies_payer"]:
         payer = Party(
@@ -2451,13 +2451,13 @@ def build_payment_confirmation(
         if must_cite:
             # The formula draw over the templates that name a рахунок, for the reason the mode
             # draw above narrowed: a plan that aims a subject disagreement at this page needs the
-            # citation ON the page, and «Оплата за товар» carries none.
+            # citation on the page, and «Оплата за товар» carries none.
             pool = tuple(t for t in pool if "{invoice_no}" in t)
         template = rng.choice(pool)
         # An invoice number and its date, filled here rather than from the placeholder
         # vocabulary: this is a reference to another document, not merchandise. 🔴 It still proves
-        # nothing about the SUBJECT — it names a document, and a document number says nothing
-        # about what was bought — but where `cites` is given it names the claim's OWN invoice, so
+        # nothing about the subject — it names a document, and a document number says nothing
+        # about what was bought — but where `cites` is given it names the claim's own invoice, so
         # the two documents can be linked by somebody willing to parse both ends. Some templates
         # name no document at all; that absence is deliberate and is what stops a linker from
         # assuming the reference is always there.
@@ -2498,7 +2498,7 @@ def build_payment_confirmation(
             currency=currency, domestic=domestic_currency,
         ),
         prints_total=rng.random() < payment_confirmation_share("prints_total"),
-        # 👁 The words spell the TRANSFER and not the total: 📄 the amount of the operation is the
+        # 👁 The words spell the transfer and not the total: 📄 the amount of the operation is the
         # requisite, and the words are the same requisite written twice.
         amount_in_words=(
             amount_in_words_uk(amount, currency)
@@ -2513,7 +2513,7 @@ def build_payment_confirmation(
         terminal_label=terminal_label,
         terminal_value=terminal_value,
         # 👁 The stamp is 8/8 and is therefore not a draw; the signature beside it is 7/8, and the
-        # document without one printed an EMPTY SIGNATURE LINE, so the caption stays either way.
+        # document without one printed an empty signature line, so the caption stays either way.
         signature_path=(
             _draw_signature_path(rng)
             if rng.random() < payment_confirmation_share("signature")
@@ -2553,9 +2553,9 @@ class StatementRow:
     from. Only some of them reach a label, and which ones is the point of the class: the row the
     claim rests on contributes `amount`, `date`, `counterparty` and `payment_purpose` to
     `DocGroundTruth`, every other row on the page contributes nothing at all, and the four
-    counterparty fields collapse to the NAME alone even on the labelled row.
+    counterparty fields collapse to the name alone even on the labelled row.
 
-    `amount` IS UNSIGNED. `direction` says which of the two money columns it is printed in — see
+    `amount` is unsigned. `direction` says which of the two money columns it is printed in — see
     `schemas.Direction` for why that is a field rather than a sign.
     """
 
@@ -2568,7 +2568,7 @@ class StatementRow:
     counterparty_code: str
     counterparty_account: str
     counterparty_bank: str
-    # The рахунок number `purpose` names, where it names one — set on the LABELLED row, whose
+    # The рахунок number `purpose` names, where it names one — set on the labelled row, whose
     # purpose is the one the label ships, and left `None` on ordinary rows: their citations point
     # outside the claim by construction and no label reads them.
     cites_document_no: str | None = None
@@ -2582,34 +2582,34 @@ class StatementRow:
 class BankStatement:
     """One Ukrainian bank account statement, complete but not yet rendered.
 
-    🔴 THE LABEL CARRIES ONE TRANSACTION AND THE DOCUMENT'S OWN TOTALS CARRY NOTHING. That is the
+    🔴 the label carries one transaction and the document's own totals carry nothing. That is the
     whole shape of this class, and it is derived rather than chosen: the consumer's required-field
-    table names a statement's amount, date, payee and payment purpose in the SINGULAR and states
+    table names a statement's amount, date, payee and payment purpose in the singular and states
     that the type has no line items, so what it describes is a transaction. `relevant` is that
     transaction and `ground_truth` reads every scoreable field off it.
 
-    🔴 THE FOUR TURNOVER TOTALS ARE PRINTED AND NEVER LABELLED — opening balance, closing balance,
+    🔴 the four turnover totals are printed and never labelled — opening balance, closing balance,
     total credit, total debit. 👁 They are the most prominent numbers on the page, and omitting
     them would make "find the relevant transaction" artificially easy and inflate whatever is
     measured on the class. It is the same refusal as `PrroReceipt.amount_due` not being scoreable
     and as the confirmation's total being printed while the transfer is the answer: a number is
     printed because the document prints it, and labelled only where a label can mean something.
-    All four are DERIVED from the rows, so the page cannot contradict itself.
+    All four are derived from the rows, so the page cannot contradict itself.
 
-    ⚠️ THE DIFFICULTY OF FINDING THE RELEVANT ROW IS UNDERSTATED IN THIS VERSION. The other rows
+    ⚠️ the difficulty of finding the relevant row is understated in this version. The other rows
     are ordinary operations drawn from the same pools, with no deliberate resemblance to the
-    labelled one — a row carrying the same counterparty or a nearby amount is a DECOY, that is a
+    labelled one — a row carrying the same counterparty or a nearby amount is a decoy, that is a
     difficulty dial belonging to the trap design, and it is deferred. Anyone quoting a number
     measured on this class has to say so, which is why the contract states it too rather than
     leaving it here.
 
-    THE LABELLED AMOUNT APPEARS ON NO OTHER ROW, and that is a separate decision from deferring
+    The labelled amount appears on no other row, and that is a separate decision from deferring
     decoys — it is what makes the label well-posed. A consumer identifies the row from the claim's
-    OTHER document, an invoice naming a seller and a total, so two rows answering that description
+    other document, an invoice naming a seller and a total, so two rows answering that description
     would leave the ground truth pointing at one of two indistinguishable answers. The claim's
     payee is additionally kept out of the pool the other rows draw from.
 
-    The residual case, stated rather than implied: a sole trader's printed name is DRAWN, so an
+    The residual case, stated rather than implied: a sole trader's printed name is drawn, so an
     ordinary row could in principle draw the same personal name as the claim's payee. The amount is
     what makes the row unique in that case, which is why the amount is the invariant and the payee
     exclusion is not.
@@ -2622,7 +2622,7 @@ class BankStatement:
     account: str
     period_start: date
     period_end: date
-    # The date and time the statement itself was produced, which is NOT the date of the
+    # The date and time the statement itself was produced, which is not the date of the
     # transaction it is labelled for. 👁 The observed statement was issued the morning after its
     # period closed.
     issued_at: datetime
@@ -2630,9 +2630,9 @@ class BankStatement:
     rows: tuple[StatementRow, ...]
     # Which row the label is about, as an index into `rows`. An index rather than a copy of the
     # row so there is one row object and no way for the two to drift; the label exports the row's
-    # printed NUMBER, which is what a reader of the image can point at.
+    # printed number, which is what a reader of the image can point at.
     relevant_index: int
-    # The BARE trading name of the labelled row's counterparty. The row PRINTS the name with its
+    # The bare trading name of the labelled row's counterparty. The row prints the name with its
     # legal form; the label carries the bare one, which config/labelling-schema.yaml makes
     # authoritative under `normalization.party_name`. Carried on the statement rather than on every
     # row because only one row is labelled — and see `Party.trade_name` for the defect that made
@@ -2650,15 +2650,15 @@ class BankStatement:
             )
         # The pointer has to point at one row. 👁 A drawn number repeated on two rows of one render
         # before the numbering became a counter, and nothing but this would have caught it: the
-        # label was still correct about the row's values, and only the POINTER was ambiguous.
+        # label was still correct about the row's values, and only the pointer was ambiguous.
         numbers = [row.number for row in self.rows]
         if len(set(numbers)) != len(numbers):
             raise ValueError(
                 "two operations on this statement carry the same number, so "
                 "`relevant_transaction` would point at both — see `_draw_operation_numbers`"
             )
-        # 🔴 THE INVARIANT OF THIS CLASS, enforced at construction rather than trusted: only a
-        # DEBIT can be proof of payment. A credit is money arriving — a refund, a reversal, a
+        # 🔴 The invariant of this class, enforced at construction rather than trusted: only a
+        # debit can be proof of payment. A credit is money arriving — a refund, a reversal, a
         # transfer in — and it evidences no expense whatever its amount, so a statement whose
         # labelled row is a credit is a document that cannot support the claim it was built for.
         # `proves_payment_by_direction` states the same rule as a validator, and
@@ -2682,21 +2682,21 @@ class BankStatement:
     def page_sheets(self) -> tuple[tuple[StatementRow, ...], ...]:
         """The operations grouped by the sheet each one is printed on, in reading order.
 
-        🔴 DERIVED FROM THE ROW COUNT AND NOTHING ELSE, which is what makes it honest: a page holds
+        🔴 derived from the row count and nothing else, which is what makes it honest: a page holds
         what fits on it, so how many sheets this document has is a consequence of how many
         operations it lists, not a second decision that could disagree with the first. The
         capacities are `bank_statement.pagination` in config/fiscal-rules.yaml — layout, checked
         against a real render by a test.
 
-        ⚠️ THE FIRST SHEET IS FILLED BEFORE THE SECOND IS STARTED, and it holds FEWER rows than a
+        ⚠️ the first sheet is filled before the second is started, and it holds fewer rows than a
         continuation sheet: it carries the bank header, the title and the turnover block, and a
         continuation sheet gets that height back. A split that balanced the sheets evenly would be
         a layout no printer produces.
 
-        🔴 A SHEET THAT IS THE WHOLE STATEMENT HOLDS ONE ROW MORE THAN THE FIRST SHEET OF A
-        PAGINATED ONE, because a paginated sheet carries the «Сторінка N з M» footer and that line
+        🔴 A sheet that is the whole statement holds one row more than the first sheet of a
+        paginated one, because a paginated sheet carries the «Сторінка N з M» footer and that line
         costs a row. The two capacities are not circular: whether there is a footer at all is
-        decided by whether the rows fit under the LARGER bound, which is asked first and answered
+        decided by whether the rows fit under the larger bound, which is asked first and answered
         without reference to the smaller.
         """
         single, first, per_sheet = _statement_capacities()
@@ -2756,7 +2756,7 @@ class BankStatement:
         two columns a number goes in would put the direction rule in the markup, where no test
         looks for it.
 
-        `relevant` is passed as a FLAG ON EACH ROW, and it is what marks the labelled cells for
+        `relevant` is passed as a flag on each row, and it is what marks the labelled cells for
         the bounding-box collector. Nothing about it is visible on the page: it adds no class, no
         emphasis and no ordering, so 👁 to the eye the row is one of twenty. That has to be true
         or the corpus measures a highlighted row.
@@ -2794,12 +2794,12 @@ class BankStatement:
     def _pages(self, rules: dict, block: dict) -> list[dict]:
         """The sheets the template lays out, each with its own rows and its own footer.
 
-        🔴 THE ROW'S INDEX IS THE ONE IT HAS IN THE DOCUMENT, not on its sheet. Every row carries an
+        🔴 the row's index is the one it has in the document, not on its sheet. Every row carries an
         `operation_<i>` box so that a test can decide box containment per row, and a counter that
         restarted on each sheet would give two rows one box name — which the renderer refuses, and
         which would otherwise have made the second sheet's boxes overwrite the first's.
 
-        `folio` IS `None` ON A ONE-SHEET STATEMENT, and that is the whole of the difference between
+        `folio` is `None` on a one-sheet statement, and that is the whole of the difference between
         today's page and this one: «Сторінка 1 з 1» printed on the majority of this class's images
         would be a visible change to a settled look, in exchange for a count a reader can see.
         """
@@ -2853,24 +2853,24 @@ class BankStatement:
 
         `amount`, `date`, `counterparty`, `payment_purpose` and `direction` are read off
         `relevant`, and `relevant_transaction` carries that row's printed number so the label says
-        WHICH row the answers came from. `field_bboxes` then says where: the LABELLED field keys
+        which row the answers came from. `field_bboxes` then says where: the labelled field keys
         are the cells of that row, because only its cells carry a field marker. Every row also
         carries an indexed marker of its own — `operation_<i>` over the whole row rect — so the
-        boxes on a statement are NOT the labelled row's alone, and the labelled ones are.
+        boxes on a statement are not the labelled row's alone, and the labelled ones are.
 
-        NONE OF THE FOUR TURNOVER TOTALS IS LABELLED, and none of them is `total_charged` under
+        None of the four turnover totals is labelled, and none of them is `total_charged` under
         another name either — that field is the confirmation's «Загальна сума», one payment plus
         its fee. Reusing it for a period's turnover would give one key two meanings, which is the
         failure config/labelling-schema.yaml exists to prevent.
 
-        `counterparty` is the payee's NAME only, out of the 👁 four fields the row prints for it.
-        ⚠️ A single counterparty field is ambiguous about ROLE on a statement — for a debit the
+        `counterparty` is the payee's name only, out of the 👁 four fields the row prints for it.
+        ⚠️ A single counterparty field is ambiguous about role on a statement — for a debit the
         counterparty received the money, for a credit it sent it — and `direction` is what removes
         the ambiguity. That is the second reason the field exists, beside proof of payment.
 
-        🔴 `page_regions` COMES FROM THE RENDERER AND `page_count` FROM THIS OBJECT, and the two
+        🔴 `page_regions` comes from the renderer and `page_count` from this object, and the two
         must be handed in together: the document knows how many sheets it has, only the render
-        knows where they landed. ⛔ NO SILENT FALLBACK — a paginated statement whose regions were
+        knows where they landed. ⛔ no silent fallback — a paginated statement whose regions were
         not supplied is refused rather than labelled as one page, because that label would be
         wrong about an image already written to disk and nothing downstream would say so.
         """
@@ -2895,10 +2895,10 @@ class BankStatement:
             cites_document_no=row.cites_document_no,
             # 👁 The observed statement's header carries no number of its own — a client, an
             # account, a period and a production time. `document_code` is therefore `None`, and
-            # `relevant_transaction` below is a pointer INTO the document rather than its identity.
+            # `relevant_transaction` below is a pointer into the document rather than its identity.
             document_code=None,
             relevant_transaction=row.number,
-            # EMPTY, and settled by the requirement rather than open: a statement has no line
+            # Empty, and settled by the requirement rather than open: a statement has no line
             # items. It lists transactions, and a transaction is not a line of a basket — which is
             # exactly why 👁 a statement establishes nothing about what was bought.
             line_items=[],
@@ -2907,11 +2907,11 @@ class BankStatement:
             has_fiscal_number=False,
             capture=capture,
             field_bboxes=field_bboxes,
-            # ⛔ `file_region` STAYS `None`: this file holds one document. Several documents in one
+            # ⛔ `file_region` stays `None`: this file holds one document. Several documents in one
             # file is a separate relation and a separate step.
             page_count=self.page_count,
             page_regions=page_regions,
-            # From the RENDERER, like the boxes: neither is decided by the content class, and both
+            # From the renderer, like the boxes: neither is decided by the content class, and both
             # describe the page that was produced from it.
             reference_text=reference_text,
             content_bbox=content_bbox,
@@ -2922,8 +2922,8 @@ class BankStatement:
 def _draw_operation_numbers(rng: random.Random, block: dict, count: int) -> list[str]:
     """`count` per-row operation numbers, in the 👁 two observed shapes and all distinct.
 
-    🔴 DISTINCT BY CONSTRUCTION, because the number is the label's pointer at the labelled row: two
-    rows carrying the same one would point at both. The trailing digits are ONE COUNTER across the
+    🔴 distinct by construction, because the number is the label's pointer at the labelled row: two
+    rows carrying the same one would point at both. The trailing digits are one counter across the
     page, which is 👁 what the short form is — a client's own sequential document numbering — so the
     realism and the uniqueness are the same fact rather than a constraint bolted onto a draw.
 
@@ -2954,7 +2954,7 @@ def _statement_capacities(country: str = "UA") -> tuple[int, int, int]:
     """How many operations fit on a sheet that is the whole statement, on the first sheet of a
     paginated one, and on each sheet after that.
 
-    ⛔ THE CONTINUATION SHEET IS NOT AN OBSERVED ANATOMY. Only the first page of the one statement
+    ⛔ the continuation sheet is not an observed anatomy. Only the first page of the one statement
     was ever seen; the capacities are `bank_statement.pagination` in config/fiscal-rules.yaml, and
     what a continuation sheet carries there is general layout of a paginated table.
     """
@@ -2969,13 +2969,13 @@ def _statement_capacities(country: str = "UA") -> tuple[int, int, int]:
 def draw_statement_pages(rng: random.Random, country: str = "UA") -> int:
     """How many sheets the next statement runs to — 1 or 2, at the declared share.
 
-    🔴 A COMPOSITION KNOB AND NOT A LABEL, which is why it reads config/generation.yaml and why it
+    🔴 A composition knob and not a label, which is why it reads config/generation.yaml and why it
     is a function of its own rather than a draw buried in `build_bank_statement`. The assembler
     calls it and passes the answer in, exactly as it draws the capture channel and passes that in:
     how difficult a document is belongs to whoever is composing the run, and a builder that decided
     it would leave every caller — including a test — unable to ask for either case.
 
-    ⛔ THREE SHEETS ARE NOT DRAWN, though `page_sheets` splits any number of rows. The second page
+    ⛔ three sheets are not drawn, though `page_sheets` splits any number of rows. The second page
     is what makes «one page = one document» falsifiable; a third would add paper and test nothing
     the second does not.
     """
@@ -2998,12 +2998,12 @@ def build_bank_statement(
 ) -> BankStatement:
     """Build one Ukrainian bank account statement.
 
-    ``must_cite`` narrows the LABELLED row's purpose formula to those naming a рахунок by number
+    ``must_cite`` narrows the labelled row's purpose formula to those naming a рахунок by number
     — the `subject` axis's label-first knob, exactly as on the confirmation builder. The ordinary
     rows are untouched: their citations point outside the claim by construction. Requires
     ``cites`` for the same reason the confirmation does.
 
-    ⚠️ `issued_at` IS THE MOMENT OF THE LABELLED TRANSACTION, not of the document. Every other
+    ⚠️ `issued_at` is the moment of the labelled transaction, not of the document. Every other
     archetype of this repository is a document about one payment, so the two coincide there and
     the parameter means the same thing to the assembler; here the statement covers a period, and
     its own production time is derived from the period's end. The claim's payment date is the
@@ -3012,12 +3012,12 @@ def build_bank_statement(
     `vendor` is the claim's payee, resolved, and it appears on the labelled row and on no other:
     no ordinary row repeats that counterparty, so the row the label points at is the only one
     matching the claim's other document. `identity` is that payee's, and it is what makes the
-    match hold on more than the NAME: the labelled row prints the claim's tax code, account and
+    match hold on more than the name: the labelled row prints the claim's tax code, account and
     bank, while every ordinary row draws its own. `payer_name` and `payer_tax_id` come from the
-    persona and are the ACCOUNT HOLDER — a statement of anybody else's account would evidence
+    persona and are the account holder — a statement of anybody else's account would evidence
     nothing about this claimant's money.
 
-    `cites` is the claim's subject document. ⛔ IT REACHES THE LABELLED ROW AND NO OTHER. Every
+    `cites` is the claim's subject document. ⛔ it reaches the labelled row and no other. Every
     ordinary row names a document outside the claim, which is the whole reason a statement
     establishes nothing about what was bought, and a page whose every row cited the same invoice
     would be a different document altogether.
@@ -3026,12 +3026,12 @@ def build_bank_statement(
     reason the confirmation's `transfer` is one: a caller pairing this statement with an invoice
     has to be able to state the amount both documents describe.
 
-    `pages` IS HOW MANY SHEETS THE DOCUMENT RUNS TO, and it is a parameter for a third reason: it
+    `pages` is how many sheets the document runs to, and it is a parameter for a third reason: it
     is a composition decision, drawn by the assembler from `two_page_share` — see
-    `draw_statement_pages`. ⚠️ It reaches this function as a ROW COUNT and nothing else: which
+    `draw_statement_pages`. ⚠️ It reaches this function as a row count and nothing else: which
     range the operations are drawn from is the whole of what it changes, and how those rows then
     fall across sheets is `BankStatement.page_sheets`, derived from the count. A page holds what
-    fits on it, so the two cannot disagree. DEFAULTING TO 1 is what keeps every existing caller —
+    fits on it, so the two cannot disagree. Defaulting to 1 is what keeps every existing caller —
     and every figure already measured on this class — on the one-page document it was built for.
     """
     rules = jurisdiction(country)
@@ -3072,7 +3072,7 @@ def build_bank_statement(
     credits = max(1, round(bank_statement_share("credit") * ordinary))
     credits = min(credits, ordinary)
 
-    # The claim's own payee is taken OUT of the pool the ordinary rows draw from, so that no other
+    # The claim's own payee is taken out of the pool the ordinary rows draw from, so that no other
     # row names it. See the uniqueness note on `BankStatement` for what that buys and for the one
     # residual case it does not cover.
     # Every row's number, allocated together so the counter that keeps them distinct is one
@@ -3092,7 +3092,7 @@ def build_bank_statement(
     def counterparty_of(entry: dict) -> tuple[str, str, str, str]:
         """The four printed fields of a counterparty: name, code, account, bank.
 
-        A FRESH IDENTITY PER ROW, and that is correct here: these are other firms the holder paid,
+        A fresh identity per row, and that is correct here: these are other firms the holder paid,
         each appearing once on the page. The claim's own payee is the one counterparty whose
         identity is fixed for the whole claim, and it is not drawn through this function.
         """
@@ -3109,7 +3109,7 @@ def build_bank_statement(
         """A purpose line, with the document it refers to filled in.
 
         🔴 Without `cites` it refers to a document that is not in the claim, which is the whole
-        reason a statement establishes nothing about what was bought. The LABELLED row passes the
+        reason a statement establishes nothing about what was bought. The labelled row passes the
         claim's invoice, so that one row can be linked to the invoice beside it — and a purpose
         naming a ВН still points outside the claim even there, because a delivery note is a
         different class of document.
@@ -3127,7 +3127,7 @@ def build_bank_statement(
         direction = Direction.CREDIT if index < credits else Direction.DEBIT
         entry = rng.choice(pool)
         name, code, iban, their_bank = counterparty_of(entry)
-        # A credit may be a transfer from ANOTHER ACCOUNT OF THE HOLDER'S, in which case the
+        # A credit may be a transfer from another account of the holder's, in which case the
         # counterparty is the holder. Drawn after the vendor rather than instead of it, so that
         # adding the case shifted no later value in the run.
         kind = "credit" if direction is Direction.CREDIT else "debit"
@@ -3173,12 +3173,12 @@ def build_bank_statement(
             # 👁 The counterparty of a service charge is the issuer itself, and the code beside it
             # is a МФО — six digits under the same «Код» caption that carries eight and ten
             # elsewhere on the page. ⚠️ That is the confirmation's finding about caption plus
-            # length appearing again on a second class, and it is why a rule reading the KIND of
+            # length appearing again on a second class, and it is why a rule reading the kind of
             # code off its caption alone is wrong.
             #
-            # 🔴 THE ISSUER'S OWN CODE, NOT A FRESH DRAW: this row names the same bank the header
+            # 🔴 The issuer's own code, not a fresh draw: this row names the same bank the header
             # does, so it prints the header's `bank_code` rather than drawing one of its own — a
-            # second draw here is exactly what let this row disagree with the header AND with the
+            # second draw here is exactly what let this row disagree with the header and with the
             # МФО inside its own IBAN, on the same line, on a delivered document.
             counterparty_name=bank_name,
             counterparty_code=bank_code,
@@ -3187,9 +3187,9 @@ def build_bank_statement(
         )
     )
 
-    # -- the labelled transaction. The ONE row that carries the claim's own payee, and therefore
+    # -- the labelled transaction. The one row that carries the claim's own payee, and therefore
     # the only row printing the claim's identity and citing the claim's invoice. Its purpose is
-    # filled TRACED — the label ships the cited рахунок number structured — and, under
+    # filled traced — the label ships the cited рахунок number structured — and, under
     # `must_cite`, from the formulas that name one.
     labelled_pool = purposes["debit"]
     if must_cite:
@@ -3219,7 +3219,7 @@ def build_bank_statement(
     )
 
     # 👁 Operations are printed in the order they happened, so the labelled one lands wherever its
-    # timestamp puts it — usually in the middle of the page. Sorted by the timestamp AND then by
+    # timestamp puts it — usually in the middle of the page. Sorted by the timestamp and then by
     # the drawn order, so two operations in the same second keep a defined order under a seed.
     ordered = sorted(range(len(rows)), key=lambda index: (rows[index].at, index))
     rows = [rows[index] for index in ordered]
@@ -3239,9 +3239,9 @@ def build_bank_statement(
             rng.randint(0, 59)
         )
         + timedelta(days=1),
-        # 🔴 DERIVED, NOT DRAWN: what the account started with is what makes the period's
+        # 🔴 Derived, not drawn: what the account started with is what makes the period's
         # arithmetic land on a plausible residue. Drawing it independently produced statements with
-        # a NEGATIVE closing balance — an account with a credit line, which is a different document
+        # a negative closing balance — an account with a credit line, which is a different document
         # and one nothing observed supports. The residue is drawn; `max` keeps the opening balance
         # non-negative in the other direction, where more money arrived than left.
         opening_balance=(
@@ -3272,7 +3272,7 @@ def _draw_row_time(rng: random.Random, start: date, end: date) -> datetime:
 class InvoiceParty:
     """One side of an invoice — the supplier, or the buyer it is addressed to.
 
-    NOT `Seller`, which models the party block of a FISCAL RECEIPT: that class carries the two
+    Not `Seller`, which models the party block of a fiscal receipt: that class carries the two
     identifier lines «ІД» and «ПН» with their prefixes, which are requisites of the receipt form and
     appear nowhere on an invoice. Two classes rather than one with half its fields unused, because
     the overlap is a coincidence of both documents naming a firm.
@@ -3295,38 +3295,38 @@ class InvoiceParty:
 class Invoice:
     """One Ukrainian рахунок на оплату, complete but not yet rendered.
 
-    🔴 AN OFFER TO PAY, AND EVERY DECISION HERE FOLLOWS FROM THAT. 📄 An invoice is not a primary
+    🔴 an offer to pay, and every decision here follows from that. 📄 An invoice is not a primary
     accounting document: it proposes that the buyer pay, and the fact of payment is established by a
     payment document. Two consequences that a reader coming from the consumer's field list will
     look for and not find:
 
-    * **NO PAYMENT STATUS.** 👁 0 of 2 open invoices print one, and the reason is structural rather
+    * **no payment status.** 👁 0 of 2 open invoices print one, and the reason is structural rather
       than a small sample. The consumer's requirement asks this type for a payment status — the
-      example it gives, «Zapłacono», is Polish — and that requirement is recorded as a DIVERGENCE in
+      example it gives, «Zapłacono», is Polish — and that requirement is recorded as a divergence in
       config/labelling-schema.yaml rather than satisfied. Nothing in this repository lets a verdict
       rest on such a line, which is the guard that matters: an oracle reading proof of payment off a
       printed word would be deriving the answer from the thing under test.
 
-      🔴 `schedule` IS NOT THAT LINE AND MUST NOT BE READ AS ONE. It states a PAYMENT TERM — that
+      🔴 `schedule` is not that line and must not be read as one. It states a payment term — that
       the obligation is settled in equal parts, and what one part comes to — which is a condition
       of the offer, settled when the invoice is drawn up and before any money exists to record.
       The guard above survives intact: a verdict does rest on the term's presence, but the term
       says only how the seller proposes to be paid, and whether money actually moved is still
-      decided from the PAYMENT document's type, exactly as it is on every other claim. Nothing on
+      decided from the payment document's type, exactly as it is on every other claim. Nothing on
       this page becomes proof of payment.
-    * **NO `amount_due`.** 👁 1/1 has a single total block. «ДО СПЛАТИ» is 📄 line 24 of the fiscal
+    * **no `amount_due`.** 👁 1/1 has a single total block. «ДО СПЛАТИ» is 📄 line 24 of the fiscal
       receipt form, where it differs from «СУМА» by the discount and the rounding. An invoice has
       one total and nothing for a second field to differ from.
 
-    THIS IS THE SUBJECT DOCUMENT OF THE DOMINANT PAIR. It states what was bought and does not prove
+    This is the subject document of the dominant pair. It states what was bought and does not prove
     payment; a confirmation or a statement proves the payment and states no subject. That is the
     exact inverse of the bank classes, and it is why registering this archetype is what makes a
     two-document claim buildable at all.
 
-    ⛔ NO PER-LINE VAT LETTER. 👁 The observed table prices VAT-inclusive and states the tax once at
+    ⛔ no per-line VAT letter. 👁 The observed table prices VAT-inclusive and states the tax once at
     the foot, so `line_items` carry `vat_letter=None` — a letter labelled and not printed would be a
     ground-truth value unreadable from the image, which is the rule that gave the bank statement its
-    second money column. The tax total is computed from the letters BEFORE they are dropped, so the
+    second money column. The tax total is computed from the letters before they are dropped, so the
     figure is the same one a receipt would print.
     """
 
@@ -3344,8 +3344,8 @@ class Invoice:
     agreement: str | None
     # 📄 The recommended alternative to a payment status — how long the offer stands.
     validity: str | None
-    # WHICH INSTALMENT SCHEDULE THIS OBLIGATION IS SETTLED ON — a key of
-    # `config.partial_payment_schedules`, or `None` for an invoice payable in one. The COUNT is not
+    # Which instalment schedule this obligation is settled on — a key of
+    # `config.partial_payment_schedules`, or `None` for an invoice payable in one. The count is not
     # stored beside it: two values that must agree should not be two values, and the count is a
     # lookup away. The page prints the schedule's Ukrainian adverb and the amount of one part; it
     # never prints the count, so no label carries it either — a labelled value unreadable from the
@@ -3358,22 +3358,22 @@ class Invoice:
 
     @property
     def total(self) -> Decimal:
-        """Σ over the line items. DERIVED rather than stored: an invoice states one total, and two
+        """Σ over the line items. Derived rather than stored: an invoice states one total, and two
         numbers that must agree should not be two numbers."""
         return line_items_total(self.line_items)
 
     @property
     def instalment_amount(self) -> Decimal | None:
-        """What ONE PART of this obligation comes to, or `None` for an invoice payable in one.
+        """What one part of this obligation comes to, or `None` for an invoice payable in one.
 
-        DERIVED from the total and the schedule for the reason `total` itself is derived: an
+        Derived from the total and the schedule for the reason `total` itself is derived: an
         invoice states one obligation, and a part of it that could disagree with the whole would be
         a second number saying the same thing. Rounded to the kopiyka half-up, the rule every
         amount in this repository is normalized under.
 
-        ⚠️ THE PARTS NEED NOT SUM BACK TO THE TOTAL, and the page never claims they do. A total of
+        ⚠️ the parts need not sum back to the total, and the page never claims they do. A total of
         1000.00 in three parts prints 333.33, and three of those come to 999.99; the invoice states
-        the amount of the NEXT payment, not a schedule of every one, so there is no printed
+        the amount of the next payment, not a schedule of every one, so there is no printed
         arithmetic for the missing kopiyka to contradict. Deciding where a remainder is carried is
         a commercial term nothing here observes.
         """
@@ -3410,7 +3410,7 @@ class Invoice:
     def render_context(self) -> dict:
         """Everything the template prints, already formatted.
 
-        👁 THE TITLE'S DATE IS IN WORDS AND THE REST OF THE PAGE'S DATES ARE IN DIGITS, so both forms
+        👁 the title's date is in words and the rest of the page's dates are in digits, so both forms
         appear on one document. That is a date-parsing case a corpus of receipts never presents, and
         it is reproduced because the observed invoice does it.
         """
@@ -3492,10 +3492,10 @@ class Invoice:
 
         `amount` is the total. The only other money field an invoice can carry is
         `instalment_amount`, and it is populated exactly when the page prints the instalment term:
-        no `amount_due`, no `fee`, no `total_charged`. `counterparty` is the SUPPLIER — the party
+        no `amount_due`, no `fee`, no `total_charged`. `counterparty` is the supplier — the party
         opposite the claimant, as on every class — and `payer` is the buyer, which is the claimant.
 
-        NOTHING RECORDS WHETHER IT WAS PAID, and that is the point of the class rather than a gap.
+        Nothing records whether it was paid, and that is the point of the class rather than a gap.
         `instalment_amount` is not that record either — see the field's own entry in `schemas.py`
         and the `schedule` bullet above: it says what one part of the obligation is, not that any
         part of it has been settled.
@@ -3523,7 +3523,7 @@ class Invoice:
             has_fiscal_number=False,
             capture=capture,
             field_bboxes=field_bboxes,
-            # From the RENDERER, like the boxes: neither is decided by the content class, and both
+            # From the renderer, like the boxes: neither is decided by the content class, and both
             # describe the page that was produced from it.
             reference_text=reference_text,
             content_bbox=content_bbox,
@@ -3567,22 +3567,22 @@ def build_invoice(
 ) -> Invoice:
     """Build one Ukrainian рахунок на оплату.
 
-    THE BASKET IS DRAWN EXACTLY AS A RECEIPT'S IS — same knobs, same meaning, and since the third
-    basket-carrying class landed the same FUNCTION: `_draw_basket`, whose docstring carries the
+    The basket is drawn exactly as a receipt's is — same knobs, same meaning, and since the third
+    basket-carrying class landed the same function: `_draw_basket`, whose docstring carries the
     reasoning. `covered_only` for a `covered` claim, `coverage_target` for a mixed one.
 
-    `identity` is the SUPPLIER's `PartyIdentity` — its code, its account and the bank holding it —
+    `identity` is the supplier's `PartyIdentity` — its code, its account and the bank holding it —
     drawn once for the claim so that the payment document settling this invoice names the same
     party by the same numbers. Required rather than defaulted: a builder that quietly drew its own
     would produce a document that renders perfectly and agrees with nothing.
 
-    `buyer_name` and `buyer_tax_id` are the CLAIMANT's — an invoice is addressed to somebody, and an
+    `buyer_name` and `buyer_tax_id` are the claimant's — an invoice is addressed to somebody, and an
     invoice addressed to anybody else would evidence nothing about the persona filing the claim.
     This is where an invoice differs structurally from a receipt: a till receipt names no buyer
     because the payer is standing at the till, while an offer to pay has to say to whom it is made.
 
-    🔴 `settled_at` IS THE DATE THE CLAIM'S MONEY MOVED, AND IT BOUNDS A PRINTED TERM. The validity
-    line — 📄 «Рахунок дійсний до X р.» — is a CONDITION OF THE OFFER, and an offer settled after it
+    🔴 `settled_at` is the date the claim's money moved, and it bounds a printed term. The validity
+    line — 📄 «Рахунок дійсний до X р.» — is a condition of the offer, and an offer settled after it
     lapsed is not the obligation the payment discharged: a seller reissues a lapsed invoice rather
     than banking against it. Measured over eight seeds before this parameter existed: of 490
     invoices, 182 printed the line and 100 of those were paid later than the date they printed — 27
@@ -3593,7 +3593,7 @@ def build_invoice(
     `None` is for a document with no settlement to respect — a builder called directly, and the
     mock-ups — and then the drawn window is the whole of the span.
 
-    🔴 `schedule` IS NAMED BY THE PLAN AND NEVER DRAWN HERE, unlike every other optional requisite
+    🔴 `schedule` is named by the plan and never drawn here, unlike every other optional requisite
     of this class. The others are variation — an agreement line, a telephone, a validity — and a
     builder may draw them because no label depends on which way they come out. This one decides
     whether the page carries the marker `policy_engine` reads to tell `partially_paid` from
@@ -3626,7 +3626,7 @@ def build_invoice(
         item_count=item_count,
     )
 
-    # -- the tax, computed from the letters and THEN the letters dropped. ⛔ The observed table has
+    # -- the tax, computed from the letters and then the letters dropped. ⛔ The observed table has
     # no per-line letter column, so a label carrying one would be unreadable from the image; the
     # figure itself is the same one a receipt would print, which is why it is taken first.
     vat_total = sum(
@@ -3639,7 +3639,7 @@ def build_invoice(
 
     # -- who is selling. 👁 The supplier block names the firm, its code, its address, sometimes a
     # telephone, and always an account with the bank holding it. Every one of those requisites but
-    # the address and the telephone is the CLAIM's, not this page's: an invoice and the payment
+    # the address and the telephone is the claim's, not this page's: an invoice and the payment
     # settling it name one seller, and naming it by four independently drawn numbers is what made
     # the pair unlinkable. 👁 The bank is printed twice on this form — beside the account in the
     # supplier block and again in the payment-order sample at the head — and both read the same
@@ -3676,11 +3676,11 @@ def build_invoice(
     validity = None
     if rng.random() < invoice_share("validity"):
         until = issued_at + timedelta(days=rng.randint(*invoice_count_range("validity_days")))
-        # 🔴 THE OFFER STILL STANDS ON THE DAY IT IS SETTLED, and the drawn window is a FLOOR on the
+        # 🔴 The offer still stands on the day it is settled, and the drawn window is a floor on the
         # span rather than the whole of it for exactly that reason. The draw happens first and
         # unconditionally, so a seed's stream is the same whether or not the claim's payment outruns
         # the window — the printed date moves, and nothing else about the run does. Compared as a
-        # DATE: the line prints a day, and a payment on the last day of the offer is inside it.
+        # date: the line prints a day, and a payment on the last day of the offer is inside it.
         if settled_at is not None and settled_at.date() > until.date():
             until = settled_at
         validity = block["validity_format"].format(date=until.strftime(rules["date_format"]))
@@ -3714,7 +3714,7 @@ def build_invoice(
     )
 
 
-# Vendor profiles that sell a SERVICE rather than a thing, for the unit column. Read from the
+# Vendor profiles that sell a service rather than a thing, for the unit column. Read from the
 # profile because that is where what a vendor sells already lives; a profile absent from this set
 # sells goods, which is the safe default — «шт.» beside a service reads as a clerical slip, while
 # «посл.» beside a bottle of vitamins reads as a different document.
@@ -3735,7 +3735,7 @@ def _sells_services(vendor: dict) -> bool:
 def personal_signatory(rng: random.Random, language: str) -> str:
     """The person who wrote the invoice out, as «Прізвище І. Б.».
 
-    ⛔ NARROWER THAN OBSERVED: the real invoice prints a full given name and patronymic. This form
+    ⛔ narrower than observed: the real invoice prints a full given name and patronymic. This form
     carries the same information for extraction — a personal name in the signature block — while
     drawing only from the narrowed high-frequency surname pool, so a published image never names a
     person more specifically than that pool justifies. Same rule and same pool as a sole trader's
@@ -3748,21 +3748,21 @@ def personal_signatory(rng: random.Random, language: str) -> str:
 # Non-fiscal sales slip — товарний чек
 # =============================================================================
 #
-# 🔴 THE DOCUMENT THE FISCALITY RULE HAS NEVER HAD A TEST CASE FOR. A verifier is expected to
-# treat a NEGATIVE fiscality signal as overriding every positive one, and until this class landed
+# 🔴 The document the fiscality rule has never had a test case for. A verifier is expected to
+# treat a negative fiscality signal as overriding every positive one, and until this class landed
 # no document of the corpus carried anything negative to override with: every archetype either
 # printed a full fiscal identity or belonged to a class nobody would look for one on. This one is
 # the hard case — the basket, the arithmetic, the totals block and the column layout are a fiscal
 # receipt's, and 📄 the difference is exactly the two requisites the tax service says such a
 # document omits.
 #
-# 📄 THE FORM IS NOT DEFINED BY LAW and the sources are named where the strings live —
+# 📄 The form is not defined by law and the sources are named where the strings live —
 # `receipt.non_fiscal` in config/fiscal-rules.yaml. What matters here is what follows from them:
 # the seller may not be registered for ПДВ (a payer is obliged to use a register), so no line
 # carries a ПДВ letter and no tax block is printed; and 📄 ст. 9 of the accounting law obliges the
 # document to name the person responsible and carry their signature, which no fiscal receipt does.
 #
-# ⛔ IT PROVES NO PAYMENT, which is policy.yaml's `document_evidence` and not this class's opinion
+# ⛔ It proves no payment, which is policy.yaml's `document_evidence` and not this class's opinion
 # of itself. A claim evidenced by one alone is `not_proof_of_payment` — see
 # `claim_planner.EvidenceIntent.PAYMENT_GAP`, which is what plans such a claim.
 
@@ -3771,8 +3771,8 @@ def personal_signatory(rng: random.Random, language: str) -> str:
 class NonFiscalReceipt:
     """One товарний чек, complete but not yet rendered.
 
-    `Seller` IS REUSED AND `PrroReceipt` IS NOT, and the split is the sources' rather than a
-    convenience: 📄 the tax service says this document's content is the FISCAL RECEIPT'S FORM less
+    `Seller` is reused and `PrroReceipt` is not, and the split is the sources' rather than a
+    convenience: 📄 the tax service says this document's content is the fiscal receipt's form less
     the fiscal number and the fiscal wording, so the party block is literally the receipt's — one
     identifier line, no «ПН», because its seller cannot be a registered payer. What differs is the
     fiscal identity, which this class does not have a field for at all. Modelling the difference
@@ -3780,10 +3780,10 @@ class NonFiscalReceipt:
     has one, and every consumer of `PrroReceipt` would then carry a branch for a class it never
     sees.
 
-    ⛔ NO `vat_row_form`, NO `tax_lines`, NO `acquiring`, NO `qr_payload`, and none of them is an
+    ⛔ no `vat_row_form`, no `tax_lines`, no `acquiring`, no `qr_payload`, and none of them is an
     omission: a non-payer's receipt has no tax block to take a form, 📄 a card sale is a settlement
     operation that obliges the seller to use a register, and 📄 the QR is a requisite of the fiscal
-    form. The absences ARE the archetype.
+    form. The absences are the archetype.
     """
 
     seller: Seller
@@ -3796,7 +3796,7 @@ class NonFiscalReceipt:
     # between them. Both adjustments are zero in this version for the reason stated at
     # `PrroReceipt.amount_due` — the policy says nothing about distributing a discount across
     # covered and non-covered lines — and the lines are printed all the same, because this
-    # document's form IS that form.
+    # document's form is that form.
     discount: Decimal
     rounding: Decimal
     amount_in_words: str
@@ -3811,7 +3811,7 @@ class NonFiscalReceipt:
     def amount_due(self) -> Decimal:
         """ДО СПЛАТИ — the basket less any discount, plus cash rounding.
 
-        DERIVED for the same reason `PrroReceipt.amount_due` is: two amounts that must agree
+        Derived for the same reason `PrroReceipt.amount_due` is: two amounts that must agree
         should not be two stored numbers. It equals `total` while both adjustments are zero, and
         the consequence for a consumer is the one recorded against that field — while the two
         coincide the field discriminates nothing and its accuracy is not a metric.
@@ -3857,7 +3857,7 @@ class NonFiscalReceipt:
             "issuer_name": self.issuer_name,
             "signature_label": block["signature_label"],
             "footer": self.footer,
-            # 📄 No QR: it is a requisite of the FISCAL form. The renderer requires the key on
+            # 📄 No QR: it is a requisite of the fiscal form. The renderer requires the key on
             # every context, and `None` is how a template says the document carries none.
             "qr_payload": None,
         }
@@ -3877,14 +3877,14 @@ class NonFiscalReceipt:
     ) -> DocGroundTruth:
         """The label record for this slip.
 
-        🔴 THE THREE FISCALITY FLAGS ARE ALL FALSE, AND THEY ARE THE POINT OF THE RECORD. A
+        🔴 the three fiscality flags are all false, and they are the point of the record. A
         consumer classifying on a fiscal marker must find none here, on a page that otherwise
         looks like a fiscal receipt line for line. `payer` is `None`: 📄 the form this document
         follows has no buyer field, and the person who paid was standing at the counter.
 
-        ⛔ NOTHING RECORDS THE NEGATIVE MARKER ITSELF. There is no such field on `DocGroundTruth`,
+        ⛔ nothing records the negative marker itself. There is no such field on `DocGroundTruth`,
         and adding one is RC-08 in config/labelling-schema.yaml — still an open decision, because
-        what this document carries is a positive TITLE plus an ABSENCE of requisites, which a
+        what this document carries is a positive title plus an absence of requisites, which a
         field shaped as "marker text and its position" cannot hold. The absence is real ground
         truth and it is expressed by the three flags below rather than invented as a string.
         """
@@ -3924,10 +3924,10 @@ def build_non_fiscal_receipt(
 ) -> NonFiscalReceipt:
     """Build one товарний чек.
 
-    THE BASKET IS THE RECEIPT'S AND THE INVOICE'S — `_draw_basket`, same knobs, same meaning —
+    The basket is the receipt's and the invoice's — `_draw_basket`, same knobs, same meaning —
     because coverage is a property of what was bought and not of the class that lists it.
 
-    🔴 THE SELLER MUST NOT BE REGISTERED FOR ПДВ, and this refuses rather than printing one that
+    🔴 the seller must not be registered for ПДВ, and this refuses rather than printing one that
     is. 📄 A registered payer is obliged to use a cash register, so a seller who issues this
     document is a non-payer; a payer issuing one would be a page whose own requisites say it
     should not exist, and every VAT decision below — no «ПН» line, no letter on any line, no tax
@@ -3937,7 +3937,7 @@ def build_non_fiscal_receipt(
 
     `identity` carries the seller's identification code, drawn once for the claim, exactly as on
     the other classes. A claim evidenced by this document alone has no second page to agree with —
-    the parameter is required all the same, so that ONE mechanism decides who a seller is.
+    the parameter is required all the same, so that one mechanism decides who a seller is.
     """
     if vendor_is_vat_payer(vendor):
         raise ValueError(
@@ -3990,7 +3990,7 @@ def build_non_fiscal_receipt(
         discount=Decimal(0),
         rounding=Decimal(0),
         amount_in_words=amount_in_words_uk(total),
-        # 🔴 CASH, AND IT IS NOT A COSMETIC CHOICE. 📄 A card sale is a settlement operation that
+        # 🔴 Cash, and it is not a cosmetic choice. 📄 A card sale is a settlement operation that
         # obliges the seller to use a register, so a slip issued without one records cash. This is
         # the first archetype of the corpus to print «ГОТІВКА» — the second entry of
         # `payment_method_labels`, which was unreachable until this class landed — and the value
@@ -4013,15 +4013,15 @@ def build_non_fiscal_receipt(
 
 @dataclass(frozen=True)
 class TaxTreatment:
-    """What an EU page's totals block says about the tax — one of three drawn FORMS.
+    """What an EU page's totals block says about the tax — one of three drawn forms.
 
-    A digital service is taxed where its consumer is, so which form a page takes is DERIVED from
+    A digital service is taxed where its consumer is, so which form a page takes is derived from
     the buyer's country rather than being a new fact about the seller or the persona: a Ukrainian
     resident's page adds the tax on top at the UA rate parameter, a relocated buyer's at their
     own country's, and a business customer under reverse charge sees no charge at all. The three:
 
     * `tax_on_top` — a row and a positive figure between the subtotal and the total, so the
-      printed total EXCEEDS the line items: `total = subtotal + tax`. 👁 The form the author's
+      printed total exceeds the line items: `total = subtotal + tax`. 👁 The form the author's
       own cross-border platform receipts print, and the one the corpus lacked by construction
       while every EU page reproduced the out-of-scope convention only;
     * `out_of_scope` — no row (`label is None`): the old page exactly, whose licence to omit the
@@ -4029,19 +4029,19 @@ class TaxTreatment:
     * `reverse_charge` — a row whose caption names the mechanism, a figure of 0.00, and the
       sentence `note()` returns in the foot.
 
-    🔴 FORM, NOT VERDICT, which is what licenses a drawn share at all: the oracle's
-    `policy_engine.covered_total` runs over the LINE ITEMS alone, and the payment document beside
-    a subject page is told the PRINTED total whichever form came out
+    🔴 form, not verdict, which is what licenses a drawn share at all: the oracle's
+    `policy_engine.covered_total` runs over the line items alone, and the payment document beside
+    a subject page is told the printed total whichever form came out
     (`assembler._amount_the_payment_states` reads the subject's `amount`) — so the draw moves
     pixels and the `tax` label field, never a verdict.
 
-    ⛔ THE RATES BEHIND `amount` ARE PROJECT PARAMETERS, not statements about any jurisdiction's
+    ⛔ the rates behind `amount` are project parameters, not statements about any jurisdiction's
     tax law — `tax_on_top` in config/fiscal-rules.yaml carries the boundary and the one cited
     exception (Ukraine's 20%).
     """
 
     form: str
-    # `label` and `amount` are None together — a row is a caption AND a figure, and an absent row
+    # `label` and `amount` are None together — a row is a caption and a figure, and an absent row
     # is absent whole, exactly as its box is absent from the labelling rather than empty.
     label: str | None
     amount: Decimal | None
@@ -4050,7 +4050,7 @@ class TaxTreatment:
         """The one tax-status sentence of the page's foot, or None for a foot without one.
 
         The reverse-charge sentence is the treatment's own — one wording for every EU class,
-        read from config. What the OUT-OF-SCOPE form says is the CLASS's business, which is why
+        read from config. What the out-of-scope form says is the class's business, which is why
         it arrives as an argument: the invoice names Articles 44 and 59 there, and the platform
         receipt says nothing — a receipt records a payment and argues no law.
         """
@@ -4066,7 +4066,7 @@ def draw_tax_treatment(
 ) -> TaxTreatment:
     """Draw which of the three forms this page takes, and compute what its row prints.
 
-    ONE WEIGHTED DRAW WHATEVER THE OUTCOME, so a seed's stream does not depend on which form
+    One weighted draw whatever the outcome, so a seed's stream does not depend on which form
     came out — the same discipline every conditional requisite of this module follows. The
     weights are `eu_tax_treatment` in config/generation.yaml, in file order; the captions and
     the rate parameters are `tax_on_top` in config/fiscal-rules.yaml.
@@ -4108,12 +4108,12 @@ def draw_tax_treatment(
 class PlatformReceipt:
     """One platform receipt — an online platform's own page for a paid order.
 
-    THE FIRST CLASS IN TWO DIMENSIONS AT ONCE: the corpus's first English document and its
+    The first class in two dimensions at once: the corpus's first English document and its
     first euro one, which is the reason the archetype exists — the contract's reference
     profile records `currency_UAH` and `language_uk` at 100% of documents and names the
     single-valued dimensions a finding.
 
-    🔴 WHAT IT LACKS IS ITSELF EVIDENCED, by the method the non-fiscal slip used on the
+    🔴 what it lacks is itself evidenced, by the method the non-fiscal slip used on the
     Ukrainian fiscal form. 📄 Article 226 of Directive 2006/112/EC lists the particulars a
     VAT invoice must carry — the supplier's address, the supplier's and the customer's VAT
     identification numbers — and this document declares itself not to be one («This is not
@@ -4122,14 +4122,14 @@ class PlatformReceipt:
     mark; there is no `Seller` here at all, because every other field of that class is a
     requisite this page is licensed to omit.
 
-    ⚠️ A TAX ROW IS NOT ONE OF THOSE ABSENCES ANY MORE. The EU variant draws one of the
+    ⚠️ A tax row is not one of those absences any more. The EU variant draws one of the
     three forms of `TaxTreatment` — 👁 the author's own cross-border receipts add the
-    destination tax ON TOP of net prices and still say they are not a VAT invoice, the
-    declaration being about the DOCUMENT and the row about the TAX. So the total may
+    destination tax on top of net prices and still say they are not a VAT invoice, the
+    declaration being about the document and the row about the tax. So the total may
     exceed the line items, `tax_amount` below says by how much, and the declaration
     stays printed whatever the form.
 
-    ⛔ NO QR, NO FISCAL IDENTITY, NO AMOUNT IN WORDS — absences, not gaps. The class
+    ⛔ no QR, no fiscal identity, no amount in words — absences, not gaps. The class
     establishes both facts of `document_evidence` (the lines say what was bought, the
     paid caption and the card say money moved) while being fiscal like neither receipt
     class: that pairing is what the archetype puts into the data.
@@ -4137,8 +4137,8 @@ class PlatformReceipt:
 
     # The vendors.json jurisdiction block the page's captions, formats, language and
     # currency come from — "EU" for the English euro variant, "UA" for the Ukrainian one.
-    # ONE CLASS, TWO JURISDICTIONS, THREE AXES: language and currency are data, and the
-    # third axis is LAW — the UA seller is a domestic company whose requisites and tax row
+    # One class, two jurisdictions, three axes: language and currency are data, and the
+    # third axis is law — the UA seller is a domestic company whose requisites and tax row
     # are ordinary, the EU page disclaims them all. The optional fields below are that
     # third axis: all None on the EU variant, filled on the UA one.
     jurisdiction_code: str
@@ -4151,7 +4151,7 @@ class PlatformReceipt:
     # digits identify nothing: four digits are a tail every issued range shares.
     card_masked: str
     line_items: list[LineItem]
-    # THE PRINTED GRAND TOTAL — the line items PLUS any destination tax the EU variant added on
+    # The printed grand total — the line items plus any destination tax the EU variant added on
     # top (`tax_amount` below), so `total > Σ lines` exactly where a tax row is printed. The
     # subtotal is not stored: it is Σ over `line_items` by construction, and `render_context`
     # derives it so the two figures cannot drift.
@@ -4165,7 +4165,7 @@ class PlatformReceipt:
     seller_tax_code_label: str | None = None
     seller_vat_number: str | None = None
     seller_vat_number_label: str | None = None
-    # 📄 «У т.ч. ПДВ» — the tax CONTAINED in a gross price, not added to it, exactly as the
+    # 📄 «У т.ч. ПДВ» — the tax contained in a gross price, not added to it, exactly as the
     # invoice states it: subtotal and total are one figure and the row sits between them
     # for information. None where the page asserts no tax treatment at all.
     vat_label: str | None = None
@@ -4174,16 +4174,16 @@ class PlatformReceipt:
     # words; no Ukrainian equivalent was found in any public source, so the UA variant
     # carries None rather than a translation nothing evidences.
     not_a_tax_invoice_note: str | None = None
-    # THE DESTINATION TAX THE EU VARIANT MAY ADD ON TOP — `TaxTreatment`'s caption and figure,
+    # The destination tax the EU variant may add on top — `TaxTreatment`'s caption and figure,
     # None together where the drawn form prints no row, and None on the UA variant always.
-    # ⛔ DISTINCT FROM `vat_label`/`vat_amount` ABOVE, deliberately: that pair states the tax
-    # CONTAINED in a Ukrainian gross price and never moves the total, this pair is ADDED and
+    # ⛔ Distinct from `vat_label`/`vat_amount` above, deliberately: that pair states the tax
+    # contained in a Ukrainian gross price and never moves the total, this pair is added and
     # does — one field for both would give a key two meanings, and a consumer subtracting it
     # would corrupt exactly the documents where the subtraction is wrong.
     tax_label: str | None = None
     tax_amount: Decimal | None = None
     # The reverse-charge sentence of the foot (`TaxTreatment.note`), under the same box name the
-    # invoice's tax-status sentence carries. ⛔ The out-of-scope form prints NOTHING here: a
+    # invoice's tax-status sentence carries. ⛔ The out-of-scope form prints nothing here: a
     # receipt records a payment and argues no law, which is where it differs from the invoice.
     vat_note: str | None = None
     # UA draws its decimal separator per document, as every Ukrainian class does; the EU
@@ -4240,7 +4240,7 @@ class PlatformReceipt:
                 }
                 for item in self.line_items
             ],
-            # Derived, not read from `total`: the subtotal is the LINE ITEMS' sum on both
+            # Derived, not read from `total`: the subtotal is the line items' sum on both
             # variants, and the total below may exceed it by the EU variant's tax on top.
             "subtotal": self._amount(line_items_total(self.line_items)),
             # 📄 Present only where the supplier states the contained tax: the UA seller's gross
@@ -4286,9 +4286,9 @@ class PlatformReceipt:
         archetype into the corpus at all. `payer` carries the buyer the page names; the
         three fiscality flags are false, as on the slip, and for the same reason: a
         consumer classifying on a fiscal marker must find none here. `amount` is the
-        PRINTED total and `tax` the row the EU variant may add on top — labelled apart so
+        printed total and `tax` the row the EU variant may add on top — labelled apart so
         `amount ≠ Σ line items` is measurable where it is true; ⛔ the UA variant's
-        contained-VAT row is NOT `tax` (see the field in `schemas.DocGroundTruth`).
+        contained-VAT row is not `tax` (see the field in `schemas.DocGroundTruth`).
         """
         rules = jurisdiction(self.jurisdiction_code)
         return DocGroundTruth(
@@ -4333,13 +4333,13 @@ def build_platform_receipt(
     """Build one platform receipt — English and EUR by default, Ukrainian and UAH for
     the domestic variant (`jurisdiction_code="UA"`), one class either way.
 
-    THE BASKET IS THE RECEIPT'S AND THE INVOICE'S — `_draw_basket`, same knobs, same
+    The basket is the receipt's and the invoice's — `_draw_basket`, same knobs, same
     meaning — with the two axes that make this class what it is: `language="en"` selects
     the English template list policy.yaml carries for every kind, and `currency="EUR"`
     selects `price_ranges_eur`, whose comment states the arithmetic tying it to the UAH
     ranges the planner sizes baskets by.
 
-    WHAT THE EU VARIANT ACCEPTS AND DELIBERATELY DOES NOT PRINT, because the assembler
+    What the EU variant accepts and deliberately does not print, because the assembler
     hands these to every archetype of their kind and a page must not grow a requisite to
     use them up — while the UA variant prints the first and third as its ordinary
     requisites:
@@ -4349,14 +4349,14 @@ def build_platform_receipt(
       is a domestic company and prints them.
     * `buyer_tax_id` — 📄 the customer's VAT identification number is on the same Article
       226 list, and 👁 a platform account has a name and a country, not a tax number.
-      Printed by NEITHER variant, ⛔ the reverse-charge form included.
+      Printed by neither variant, ⛔ the reverse-charge form included.
     * `address` — the seller's address slot. Blank on the EU page; the UA page prints it.
 
-    `buyer_country` IS THE AXIS THE EU VARIANT'S TAX TREATMENT DERIVES FROM — the persona's own
+    `buyer_country` is the axis the EU variant's tax treatment derives from — the persona's own
     country, printed under the buyer's name on both variants and deciding which rate parameter a
     tax-on-top page charges (see `TaxTreatment`). Defaulted to UA because every persona of
     today's corpus is a Ukrainian resident. ⛔ The UA variant reads it for the printed name only:
-    its tax statement is the contained-VAT row, a fact of the SELLER's registration, not of the
+    its tax statement is the contained-VAT row, a fact of the seller's registration, not of the
     buyer's country.
     """
     del buyer_tax_id  # accepted, never printed — see the docstring
@@ -4370,11 +4370,11 @@ def build_platform_receipt(
         document="a platform receipt",
         category_id=category_id,
         vendor=vendor,
-        # ⛔ NO VAT LETTER ON ANY LINE, ON EITHER VARIANT, and for two different reasons
+        # ⛔ No VAT letter on any line, on either variant, and for two different reasons
         # that end in one flag: the EU page prints no tax requisite of any kind (its own
         # footer is the licence), and the UA page prices VAT-inclusive and states the tax
         # once at the foot — the same convention the invoice follows, whose lines carry no
-        # letter either. The letter is a requisite of the FISCAL receipt's line.
+        # letter either. The letter is a requisite of the fiscal receipt's line.
         vat_payer=False,
         covered_only=covered_only,
         coverage_target=coverage_target,
@@ -4413,7 +4413,7 @@ def build_platform_receipt(
                 if vat_payer
                 else None
             ),
-            # 📄 The tax CONTAINED in a gross price: gross × rate / (100 + rate).
+            # 📄 The tax contained in a gross price: gross × rate / (100 + rate).
             vat_amount=(
                 (total * vat_rate / (100 + vat_rate)).quantize(KOPIYKA)
                 if vat_payer
@@ -4426,8 +4426,8 @@ def build_platform_receipt(
         del identity, address  # not printed on the EU page — see the docstring
         # The drawn tax treatment — the same draw the cross-border invoice makes, at the same
         # point relative to the basket, so the two classes vary the same way. The tax-on-top
-        # form lifts the PRINTED total above the line items; the not-a-tax-invoice declaration
-        # stays whatever the form, because it is a statement about the DOCUMENT, not the tax.
+        # form lifts the printed total above the line items; the not-a-tax-invoice declaration
+        # stays whatever the form, because it is a statement about the document, not the tax.
         treatment = draw_tax_treatment(
             rng, buyer_country=buyer_country, subtotal=total
         )
@@ -4467,16 +4467,16 @@ def build_platform_receipt(
 class EuInvoice:
     """One invoice issued by a platform of the `EU` pool to a Ukrainian claimant.
 
-    🔴 THE CLASS THAT MAKES A EURO CLAIM A PAIR. Every euro document before it was a
-    `platform_receipt`, which proves BOTH facts and is therefore the whole of its claim: the
+    🔴 the class that makes a euro claim a pair. Every euro document before it was a
+    `platform_receipt`, which proves both facts and is therefore the whole of its claim: the
     oracle converted a page. This one proves the subject and no payment — 📄 an invoice is an
     offer to pay — so the claim it belongs to carries a payment document beside it, and the
     conversion runs through a cross-document check for the first time.
 
-    📄 NOT A VAT INVOICE, AND FOR A DIFFERENT REASON FROM THE PLATFORM RECEIPT'S. That page
-    declares itself not to be one; this one IS an invoice, and what its totals block says about
-    the tax is DRAWN — one of the three forms `TaxTreatment` carries, derived from the buyer's
-    country. The mass form adds the destination tax ON TOP, so `total = subtotal + tax` and the
+    📄 not A VAT invoice, and for a different reason from the platform receipt's. That page
+    declares itself not to be one; this one is an invoice, and what its totals block says about
+    the tax is drawn — one of the three forms `TaxTreatment` carries, derived from the buyer's
+    country. The mass form adds the destination tax on top, so `total = subtotal + tax` and the
     printed total exceeds the line items — honestly, which is what the corpus could not show
     before this form existed. The out-of-scope form is the old page exactly: no row, and the foot
     names Articles 44 and 59 of Directive 2006/112/EC, the provisions that place the supply
@@ -4484,12 +4484,12 @@ class EuInvoice:
     for the tax. Three forms of one block, which is exactly the variation a consumer that
     classifies or checks arithmetic on a tax block has to survive.
 
-    ⛔ NO PAYMENT STATUS, EVER. The class states an obligation and a date by which it should be
+    ⛔ no payment status, ever. The class states an obligation and a date by which it should be
     settled; whether it was is what the document beside it establishes. A "Paid" mark here would
     make the class prove both facts and would contradict `document_evidence` in policy.yaml.
     """
 
-    # THE BARE MARK, which is what `counterparty` carries on every class of this dataset. The
+    # The bare mark, which is what `counterparty` carries on every class of this dataset. The
     # page prints `seller_display` — the same firm with the designation its own register gives it
     # — so the label and the image differ in exactly the way the contract's `normalization`
     # section says they may, and the payment document beside it names the party identically.
@@ -4498,7 +4498,7 @@ class EuInvoice:
     buyer_name: str
     buyer_country: str
     issued_at: datetime
-    # 🔴 A TERM OF THE OFFER, and it is bound by the day the claim's money moves: an offer whose
+    # 🔴 A term of the offer, and it is bound by the day the claim's money moves: an offer whose
     # date has passed is not the obligation the payment discharged. `build_eu_invoice` pushes it
     # out to the settlement where a drawn window would fall short — the same rule the Ukrainian
     # invoice's validity line follows, and for the reason recorded there.
@@ -4506,17 +4506,17 @@ class EuInvoice:
     number: str
     line_items: list[LineItem]
     # The seller's account, which is what makes the invoice payable by the transfer beside it.
-    # ⚠️ ORDINARY COMMERCIAL CONTENT AND NOT A TAX REQUISITE — Article 226 lists no bank details.
+    # ⚠️ Ordinary commercial content and not a tax requisite — Article 226 lists no bank details.
     # It is printed because a document nobody could pay is not an offer to pay.
     iban: str
     bank_name: str
-    # THE ONE TAX-STATUS SENTENCE OF THE FOOT, or None for a foot the template omits whole. Which
+    # The one tax-status sentence of the foot, or None for a foot the template omits whole. Which
     # sentence follows the drawn form (see `TaxTreatment.note`): the out-of-scope page names
     # Articles 44 and 59, the reverse-charge page says who accounts for the tax, and the
-    # tax-on-top page prints NO sentence — its row IS the statement, and the out-of-scope wording
+    # tax-on-top page prints no sentence — its row is the statement, and the out-of-scope wording
     # beside a charged rate would contradict the figure above it.
     vat_note: str | None
-    # THE TAX ROW OF THE TOTALS BLOCK — `TaxTreatment`'s caption and figure, None together where
+    # The tax row of the totals block — `TaxTreatment`'s caption and figure, None together where
     # the drawn form prints no row. Kept as two plain fields rather than the treatment object so
     # the class stores exactly what the page prints, as every other class of this module does.
     tax_label: str | None = None
@@ -4535,7 +4535,7 @@ class EuInvoice:
     def total(self) -> Decimal:
         """What the page asks to be paid: the line items plus any tax printed on top.
 
-        🔴 NO LONGER Σ OVER THE LINE ITEMS ALONE, and that is the whole point of the tax-on-top
+        🔴 no longer Σ over the line items alone, and that is the whole point of the tax-on-top
         form: a real cross-border page whose total exceeds its lines is honest, and a corpus in
         which `Σ lines = total` held on every document could not test a consumer against it.
         Derived rather than stored so the three figures cannot drift — the same reasoning as
@@ -4546,10 +4546,10 @@ class EuInvoice:
 
     @property
     def instalment_amount(self) -> Decimal | None:
-        """What ONE PART of this obligation comes to, or `None` for an invoice payable in one.
+        """What one part of this obligation comes to, or `None` for an invoice payable in one.
 
         The Ukrainian invoice's rule, unchanged and deliberately so: the parts need not sum back
-        to the total, because the page states the amount of the NEXT payment rather than a
+        to the total, because the page states the amount of the next payment rather than a
         schedule of every one. See `Invoice.instalment_amount`, which carries the argument.
         """
         if self.schedule is None:
@@ -4637,7 +4637,7 @@ class EuInvoice:
     ) -> DocGroundTruth:
         """The label record for this invoice — the Ukrainian invoice's record in another currency.
 
-        Same class, same fields, same meanings: `amount` is the PRINTED total — the line items
+        Same class, same fields, same meanings: `amount` is the printed total — the line items
         plus any tax on top, because the total is what the page asks for and what the payment
         document beside it states — `document_code` is the printed number a payment's purpose
         cites, `instalment_amount` is populated exactly when the page prints the term. `tax` is
@@ -4691,35 +4691,35 @@ def build_eu_invoice(
     """Build one invoice from a platform of the `EU` pool — English, euros, one class with the
     Ukrainian рахунок.
 
-    THE BASKET IS THE PLATFORM RECEIPT'S — `_draw_basket` with `language="en"` and
+    The basket is the platform receipt's — `_draw_basket` with `language="en"` and
     `currency="EUR"`, which selects the English template lists policy.yaml carries per item kind
     and the euro price ranges of config/generation.yaml. Same knobs, same meaning, same function
     as every other basket-carrying class.
 
-    WHAT IT ACCEPTS AND DELIBERATELY DOES NOT PRINT, because the assembler hands these to every
+    What it accepts and deliberately does not print, because the assembler hands these to every
     subject document and a page must not grow a requisite to use one up:
 
     * `buyer_tax_id` — 📄 the customer's VAT identification number is an Article 226 particular of
       a VAT invoice, and this is not one; the customer is in any case a private individual.
-      ⛔ The reverse-charge form does NOT change this: the drawn note states the mechanism and
+      ⛔ The reverse-charge form does not change this: the drawn note states the mechanism and
       the page still prints no number for it, because the buyer whose number it would be is a
       private person whose РНОКПП belongs on no cross-border invoice.
-    * `address` — the assembler's address slot holds the CLAIMANT's city, which is the seller's
+    * `address` — the assembler's address slot holds the claimant's city, which is the seller's
       own on a domestic claim and nobody's here. ⛔ Inventing a seat for a named real platform is
       a checkable claim about a real firm, which this repository does not make.
 
-    `buyer_country` IS THE AXIS THE TAX TREATMENT DERIVES FROM — the persona's own country,
-    printed under the buyer's name AND deciding which rate parameter a tax-on-top page charges
+    `buyer_country` is the axis the tax treatment derives from — the persona's own country,
+    printed under the buyer's name and deciding which rate parameter a tax-on-top page charges
     (see `TaxTreatment`). Defaulted to UA because every persona of today's corpus is a Ukrainian
     resident; the assembler passes the persona's country either way, so a relocated persona
     changes this page without this builder being touched.
 
-    `identity` IS PRINTED, and it is the one identity field this class carries: the seller's IBAN
+    `identity` is printed, and it is the one identity field this class carries: the seller's IBAN
     and the bank holding it, drawn once for the claim so the payment document settling this
     invoice names the same account. Its `tax_code` is a Ukrainian register's and is not printed —
     see the block comment in config/fiscal-rules.yaml.
 
-    🔴 `settled_at` BOUNDS THE DUE DATE, exactly as it bounds the Ukrainian invoice's validity
+    🔴 `settled_at` bounds the due date, exactly as it bounds the Ukrainian invoice's validity
     line and for the same reason: an offer whose term lapsed before the payment is not the
     obligation that payment discharged. The window is drawn first and unconditionally, so a seed's
     stream does not depend on whether the claim's payment outran it.
@@ -4734,9 +4734,9 @@ def build_eu_invoice(
         document="an invoice",
         category_id=category_id,
         vendor=vendor,
-        # ⛔ NO LINE CARRIES A VAT LETTER, whatever the drawn tax treatment: the letter is a
+        # ⛔ No line carries A VAT letter, whatever the drawn tax treatment: the letter is a
         # requisite of the Ukrainian fiscal receipt's line, and the tax this page may charge
-        # stands in ONE row of the totals block (see `TaxTreatment`), never per line.
+        # stands in one row of the totals block (see `TaxTreatment`), never per line.
         vat_payer=False,
         covered_only=covered_only,
         coverage_target=coverage_target,
@@ -4745,8 +4745,8 @@ def build_eu_invoice(
         currency=rules["currency"],
     )
 
-    # The tax treatment, drawn AFTER the basket because its figure is a rate over the lines and
-    # BEFORE the due date so the two draws keep their positions whatever either returns.
+    # The tax treatment, drawn after the basket because its figure is a rate over the lines and
+    # before the due date so the two draws keep their positions whatever either returns.
     treatment = draw_tax_treatment(
         rng, buyer_country=buyer_country, subtotal=line_items_total(items)
     )
@@ -4814,11 +4814,11 @@ def descriptor_prefixes() -> tuple[str, ...]:
 def merchant_descriptor(rng: random.Random, merchant_name: str) -> str:
     """🔴 `LIQPAY*КОВАЛЬЧУК О.С.` — the counterparty as the card network carries it.
 
-    NOT a legal name, and that is the whole phenomenon: the tail is the merchant's name
+    Not a legal name, and that is the whole phenomenon: the tail is the merchant's name
     after the descriptor field has had it — uppercased, punctuation squeezed — and the
     prefix is the processor's, so the one party line the screen prints matches no party
-    block of any other document of the claim. The LABEL still carries the bare trade name
-    in `counterparty`, exactly as on every class: what breaks is the PRINTED cross-check,
+    block of any other document of the claim. The label still carries the bare trade name
+    in `counterparty`, exactly as on every class: what breaks is the printed cross-check,
     which is the thing this archetype exists to put in the data. The normalization rule
     for descriptor prefixes is deliberately a downstream question, not this generator's.
     """
@@ -4830,7 +4830,7 @@ def merchant_descriptor(rng: random.Random, merchant_name: str) -> str:
 class AppTransaction:
     """One operation as a banking application shows it — the transaction screen.
 
-    🔴 THE STRONGEST NEGATIVE EXAMPLE FOR THE PAYMENT CLASS BY LACK OF REQUISITES. The
+    🔴 the strongest negative example for the payment class by lack of requisites. The
     screen looks like proof of payment and carries none of the requisites by which proof
     of payment is recognized: ⛔ no document number, no authorization code, no RRN, no
     stamp, no signature, no amount in words, no payment purpose. What it does carry —
@@ -4839,7 +4839,7 @@ class AppTransaction:
     the largest type, a balance after the operation, the paying card, and a tap that
     opens the framed receipt the sibling archetype renders.
 
-    ⚠️ THE CATEGORY CHIP IS THE BANK'S, NOT THE POLICY'S, and it is drawn without
+    ⚠️ the category chip is the bank's, not the policy's, and it is drawn without
     reference to the claim — it may plainly disagree with what was bought, which is a
     property of the domain rather than a defect.
     """
@@ -4851,7 +4851,7 @@ class AppTransaction:
     issued_at: datetime
     amount: Decimal
     balance_after: Decimal
-    # The bare trade name the LABEL carries as `counterparty`, while the page prints the
+    # The bare trade name the label carries as `counterparty`, while the page prints the
     # descriptor above — the split is the archetype's point.
     counterparty: str
     battery_fill_px: int
@@ -4908,8 +4908,8 @@ class AppTransaction:
 
         `payment_purpose`, `auth_code` and `fee` are `None`, `payer` is `None` — 👁 the
         screen is the claimant's own application, so it names nobody — and `direction` is
-        DEBIT, which the printed minus states. `counterparty` carries the bare trade
-        name, as on every class; the descriptor is what the PAGE prints, and the gap
+        debit, which the printed minus states. `counterparty` carries the bare trade
+        name, as on every class; the descriptor is what the page prints, and the gap
         between the two is measured on pixels, not smuggled into the label.
         """
         return DocGroundTruth(
@@ -4948,16 +4948,16 @@ def build_app_transaction(
 ) -> AppTransaction:
     """Build one app transaction screen.
 
-    ``must_cite`` is REFUSED where true: the screen has no purpose line, so a plan forcing a
+    ``must_cite`` is refused where true: the screen has no purpose line, so a plan forcing a
     citation onto it has aimed the `subject` axis at a class that cannot carry the negative —
     `claim_planner` keeps such plans off this archetype, and reaching the refusal means the two
     have come apart.
 
-    THE TRANSFER KEYWORDS OF EVERY PAYMENT BUILDER, four of them unprinted here:
+    The transfer keywords of every payment builder, four of them unprinted here:
     `identity`, `payer_name` and `payer_tax_id` are accepted so that one mechanism
     serves every payment archetype — ⛔ nothing on this screen names a party by
     requisites: the seller appears only as the descriptor, and the payer is holding the
-    phone. `cites` is accepted and NOT printed, and that is the honest outcome rather
+    phone. `cites` is accepted and not printed, and that is the honest outcome rather
     than an error: the screen has no purpose line, so a claim settled by it carries its
     citation nowhere — the same case as the internet-acquiring confirmation that prints
     no purpose, which the contract's KL-16 already tells a consumer to stratify by. The
@@ -4976,7 +4976,7 @@ def build_app_transaction(
         )
     del identity, payer_name, payer_tax_id, cites  # accepted, never printed — see above
     if amount is None:
-        # An EVIDENCE-GAP claim carries this payment document ALONE — there is no subject
+        # An evidence-gap claim carries this payment document alone — there is no subject
         # whose amount the assembler could hand over — so the transfer is drawn, exactly
         # as the A4 confirmation draws its own in the same case: the same declared range,
         # the same ten-kopiyka steps. 🔴 Found by the cross-seed verification sweep, not
@@ -4988,7 +4988,7 @@ def build_app_transaction(
         raise ValueError(f"an app transaction states a positive amount, got {amount}")
 
     strings = jurisdiction("UA")["bank_app"]["transaction"]
-    # The NAME is drawn and the pool is the shared one; the МФО table stays honest
+    # The name is drawn and the pool is the shared one; the МФО table stays honest
     # because no code is printed beside the name here.
     bank_name, _ = _draw_bank(rng, "UA")
     return AppTransaction(
@@ -5009,9 +5009,9 @@ def build_app_transaction(
 class BankReceiptInApp:
     """The A4 payment confirmation, captured inside the banking application.
 
-    🔴 THE SAME FORMAL DOCUMENT, NOT A SIBLING OF IT: the inner document is a
+    🔴 the same formal document, not a sibling of it: the inner document is a
     `PaymentConfirmation` built by the same builder, rendered through the same shared
-    body (`templates/ua_bank_payment_confirmation.jinja`), and labelled by ITS OWN
+    body (`templates/ua_bank_payment_confirmation.jinja`), and labelled by its own
     `ground_truth` — this class delegates rather than copies, so the two carriers cannot
     drift. One document, two carriers, and the labels must agree: that is the archetype's
     whole argument, and delegation is what makes it a property of the construction
@@ -5019,7 +5019,7 @@ class BankReceiptInApp:
 
     What the frame adds is chrome an extractor has to see past — a dark surround, a
     status bar, a back arrow, a share button, a tab bar, and a screen heading that
-    repeats the document's own number in DIFFERENT WORDS than the document's own
+    repeats the document's own number in different words than the document's own
     heading. 👁 The two headings disagreeing over one number is observed, not staged.
     """
 
@@ -5044,7 +5044,7 @@ class BankReceiptInApp:
         """The inner document's label, verbatim — the medium does not change the ground
         truth. The carrier contributes only what the render measured: the boxes (which
         include the chrome's own `screen_title`) and the reference text (which includes
-        the chrome's strings), both of which describe the IMAGE and are exactly what the
+        the chrome's strings), both of which describe the image and are exactly what the
         parameters of this call carry."""
         return self.inner.ground_truth(**kwargs)
 
@@ -5063,7 +5063,7 @@ def build_bank_receipt_in_app(
 ) -> BankReceiptInApp:
     """Build the confirmation and the frame around it.
 
-    The inner document is built FIRST and with the same keywords the A4 archetype gets —
+    The inner document is built first and with the same keywords the A4 archetype gets —
     `must_cite` passes through untouched, so a subject-mismatch claim carried by this archetype
     is document-for-document what it would have been on paper; the chrome draws come after, and
     the order is part of the seed's meaning.
@@ -5119,18 +5119,18 @@ def validate_amount_in_words(text: str, amount: Decimal) -> bool:
 def proves_payment_by_direction(direction: Direction | None) -> bool:
     """Whether a transaction in this direction can be proof that an expense was paid.
 
-    🔴 ONLY A DEBIT CAN. A credit is money arriving — a refund, a reversal, a transfer from
+    🔴 only a debit can. A credit is money arriving — a refund, a reversal, a transfer from
     another account of the holder's — and it evidences no expense whatever its amount: for a
     reimbursement claim the difference between a debit and a credit is the difference between
     proof of an expense and proof that the money came back.
 
-    `None` PASSES, and that is a statement rather than a lenience: a document class that prints no
-    direction is a document about ONE movement of money, made because a payment was made, so
+    `None` passes, and that is a statement rather than a lenience: a document class that prints no
+    direction is a document about one movement of money, made because a payment was made, so
     there is nothing for the rule to be about. A receipt and a confirmation are that; a statement,
     which lists movements both ways, is what the rule exists for.
 
     Stated as a question with a boolean answer, like every validator here. Two things enforce it,
-    and only one of them goes through this function: `policy_engine.resolve_evidence` CALLS it, and
+    and only one of them goes through this function: `policy_engine.resolve_evidence` calls it, and
     refuses a claim that rests on a credit rather than assigning it a verdict policy.yaml does not
     support, while `BankStatement.__post_init__` refuses independently — it tests the row's own
     direction, so the builder's guard survives a mistake in here and vice versa. A trap
@@ -5153,13 +5153,13 @@ def printed_legal_name(name: str, legal_form: str) -> str:
     A sole trader is printed without quotes — ``ФОП Ковальчук О. С.`` — because the name is
     a person's, not a firm's. Every other Ukrainian form takes the Ukrainian quotation marks.
 
-    A FOREIGN FIRM TAKES NEITHER, and carries its own designation after the name instead:
+    A foreign firm takes neither, and carries its own designation after the name instead:
     ``Coursera Inc.`` The quotation marks are a rule about a Ukrainian firm's name, and the first
     document to print a cross-border seller's legal name is what made the difference visible —
     every earlier one either named a domestic firm or, like the platform receipt, printed the
     bare trade name.
 
-    Takes the two strings rather than a ``Seller`` because the same rule prints the RECIPIENT of
+    Takes the two strings rather than a ``Seller`` because the same rule prints the recipient of
     a bank payment confirmation, which is the same firm named on a different document class and
     is not a seller of anything on that page.
     """
