@@ -3,36 +3,36 @@
 
     uv run python tools/cross_document_audit.py out
 
-🔴 IT READS THE OUTPUT AND NOT THE BUILDER. Every value below is pulled out of
+🔴 it reads the output and not the builder. Every value below is pulled out of
 `reference_text` — the printed characters of the page, recorded by the layout engine that
 produced the image — with the regexes a consumer would have to write. A comparison that read
 the builder's own fields instead could not fail: the two sides would be the same object, and
 the whole class of defect this tool exists for is precisely a field that is *drawn twice*
 rather than *printed wrong*.
 
-WHAT A ROW MEANS, AND WHY THERE ARE THREE OUTCOMES RATHER THAN TWO. A cross-document field is
+What a row means, and why there are three outcomes rather than two. A cross-document field is
 only useful for linking documents to one claim if it can be *resolved* — which means it has to
 be capable of both agreeing and disagreeing, and of being read from two different renderings.
 So each row reports:
 
-    readable   pairs where the field could be read off BOTH documents
+    readable   pairs where the field could be read off both documents
     agree      pairs where the two readings are equal
 
 and the useful states are then:
 
-    agree == readable == pairs   the field matches TRIVIALLY. A selector built on it scores
+    agree == readable == pairs   the field matches trivially. A selector built on it scores
                                  perfectly by construction and measures nothing.
-    agree == 0                   the field NEVER matches. A selector built on it scores zero by
+    agree == 0                   the field never matches. A selector built on it scores zero by
                                  construction and measures nothing either.
-    0 < agree < readable, and    the field is resolvable and the score is EARNED. This is the
+    0 < agree < readable, and    the field is resolvable and the score is earned. This is the
     readable < pairs             only state worth having, and it needs the field to be absent or
                                  differently spelled on some pairs for honest reasons.
 
 `docs/cross-document-fields.md` holds the derivation of which fields belong here at all.
 Nothing in `src/` imports this file: it is an instrument for auditing a run, not a stage.
 
-ONE MORE AXIS, PRINTED SEPARATELY, AND NOT ONE OF THE ROWS ABOVE. `FIELDS` is `{subject} ×
-{payment}` — the same field on the two documents of ONE claim — and a bank NAME its payer banks
+One more axis, printed separately, and not one of the rows above. `FIELDS` is `{subject} ×
+{payment}` — the same field on the two documents of one claim — and a bank name its payer banks
 with has no subject-side counterpart to compare against: an invoice never states it, so that shape
 would report `readable == 0` forever, which is not a clean result but an instrument that has
 stopped reading. `bank_identity_audit` measures the different, corpus-wide invariant this
@@ -65,10 +65,10 @@ INVOICE_ACCOUNT = re.compile(r"КРЕДИТ рах\. №\t(UA\d{27})\b")
 INVOICE_TITLE = re.compile(r"Рахунок на оплату № *(\S+) від (.+?) р\.")
 INVOICE_BUYER = re.compile(r"Покупець:\n(.+?), РНОКПП (\d{10})\b")
 
-# THE CROSS-BORDER INVOICE, whose captions are English and whose party block is three lines of a
+# The cross-border invoice, whose captions are English and whose party block is three lines of a
 # payment-details section rather than a Ukrainian requisites table. A separate set of patterns and
 # not a widened one: every pattern above is anchored to a caption, and a caption in another
-# language is another anchor. ⛔ NO TAX-CODE PATTERN, because the page prints no tax code — a
+# language is another anchor. ⛔ no tax-code pattern, because the page prints no tax code — a
 # foreign firm has no Ukrainian register entry, and a pattern for a field that is never printed
 # would report a permanent zero and read as a defect.
 EU_INVOICE_PAYEE = re.compile(r"Beneficiary: (.+)")
@@ -77,11 +77,11 @@ EU_INVOICE_BANK = re.compile(r"Bank: (.+)")
 EU_INVOICE_NUMBER = re.compile(r"Payment reference: (\S+)")
 EU_INVOICE_BUYER = re.compile(r"BILL TO\n(.+)")
 
-# ⚠️ TWO OPTIONAL PIECES ARE OPTIONAL FOR A NEW REASON since the euro pair landed, and the groups
-# had to be named to keep the reader legible. A payee OUTSIDE the Ukrainian register prints no
+# ⚠️ Two optional pieces are optional for a new reason since the euro pair landed, and the groups
+# had to be named to keep the reader legible. A payee outside the Ukrainian register prints no
 # «Код» and no «Код банку» — those are a ЄДРПОУ and a МФО, which a foreign firm and a foreign bank
 # do not have — and its IBAN is not a Ukrainian one. So the account pattern is any IBAN and the
-# bank code is optional WITHIN the bank line rather than the line being absent. The Ukrainian
+# bank code is optional within the bank line rather than the line being absent. The Ukrainian
 # reading is unchanged: the optional code group is tried before it is skipped, so a coded line
 # still yields both halves.
 CONFIRMATION_PARTY = re.compile(
@@ -93,30 +93,30 @@ CONFIRMATION_PARTY = re.compile(
 )
 STATEMENT_HOLDER = re.compile(r"Клієнт (.+?), РНОКПП (\d{10})\b")
 
-# What a purpose line cites. 🔴 `рахунок` and `ВН` are DIFFERENT DOCUMENT CLASSES — an invoice
+# What a purpose line cites. 🔴 `рахунок` and `ВН` are different document classes — an invoice
 # and a delivery note — so a pattern matching «№» alone would report a delivery note as the
 # claim's invoice and call a wrong link a right one.
 #
-# ⚠️ THE NUMBER IS MATCHED BY ITS OWN SHAPE, not by what follows it. The first version ended
+# ⚠️ The number is matched by its own shape, not by what follows it. The first version ended
 # `(?:,| від <date>|$| )` — a list of the things that can come after the number — and `$` without
-# `re.MULTILINE` is the END OF THE WHOLE PAGE, not the end of the line. So a purpose ending in the
+# `re.MULTILINE` is the end of the whole page, not the end of the line. So a purpose ending in the
 # number, which is what three of the five configured templates produce, matched only when it
 # happened to be the last text on the document: **99 of 163 citations went unread**. It never
 # affected the finding it was written for — nothing agreed either way — but it understated the
-# COVERAGE threefold, and coverage is the figure that says how much of a linking score is earned.
+# coverage threefold, and coverage is the figure that says how much of a linking score is earned.
 # Describe the token you want; do not enumerate its neighbours.
 CITED_INVOICE = re.compile(r"рахунку № *([0-9A-Za-z/-]+)")
 
-# The ISSUER's own requisites — the bank that issued the confirmation, or that holds the
+# The issuer's own requisites — the bank that issued the confirmation, or that holds the
 # statement's account — printed as the first two lines of either header: the name, then the
 # caption and the МФО, and nothing else on that second line. Anchored at the start of the page
-# (`\A`) rather than searched for, because the SAME caption "Код банку" reappears later on a
+# (`\A`) rather than searched for, because the same caption "Код банку" reappears later on a
 # confirmation's payee line — «Банк одержувача X, Код банку Y» — where it does not start a line,
 # so an unanchored search would sometimes read the payee's code as the issuer's.
 ISSUER_BANK = re.compile(r"\A(.+)\nКод банку (\d{6})\b")
-# A payment confirmation's payee — the SAME pair `INVOICE_PAYEE_BANK` and `CONFIRMATION_PARTY`
+# A payment confirmation's payee — the same pair `INVOICE_PAYEE_BANK` and `CONFIRMATION_PARTY`
 # already read for `seller_bank_name`/`seller_bank_code`, matched again here on its own: the axis
-# below is over every PRINTED pair, not only the ones two documents of one claim share.
+# below is over every printed pair, not only the ones two documents of one claim share.
 CONFIRMATION_PAYEE_BANK = re.compile(r"Банк одержувача (.+?), Код банку (\d{6})\b")
 
 
@@ -132,7 +132,7 @@ class Row:
 def _eu_invoice_fields(text: str) -> dict[str, str | None]:
     """The cross-border invoice, read by its own captions.
 
-    ⛔ `seller_tax_code` IS NONE BY CONSTRUCTION and not by a failure to read: neither document of
+    ⛔ `seller_tax_code` is none by construction and not by a failure to read: neither document of
     a euro claim prints one. The audit reports it as unreadable, which is the truthful answer —
     what a caller must not do is treat that as a disagreement.
     """
@@ -174,9 +174,9 @@ def _invoice_fields(text: str) -> dict[str, str | None]:
 def _confirmation_fields(text: str) -> dict[str, str | None]:
     """The two party blocks of a confirmation, read by caption.
 
-    ⚠️ THE PAYER BLOCK CAN BE A HYPHEN. On the internet-acquiring mode the payer is not
+    ⚠️ the payer block can be a hyphen. On the internet-acquiring mode the payer is not
     identified at all, and a pattern that simply took "the next Код after Платник" would run
-    on into the RECIPIENT's block and report the payee's code as the payer's. That is not a
+    on into the recipient's block and report the payee's code as the payer's. That is not a
     hypothetical: the first version of this reader did exactly that and manufactured 32
     disagreements out of a corpus that had none.
     """
@@ -198,7 +198,7 @@ def _confirmation_fields(text: str) -> dict[str, str | None]:
 
 
 def _statement_fields(text: str, relevant: str | None) -> dict[str, str | None]:
-    """The LABELLED row of a statement, located by the operation number the label points at.
+    """The labelled row of a statement, located by the operation number the label points at.
 
     The page carries a dozen rows naming a dozen other counterparties; only one of them is the
     claim's. `relevant_transaction` is what the label uses to say which, so the audit joins the
@@ -232,7 +232,7 @@ def _statement_fields(text: str, relevant: str | None) -> dict[str, str | None]:
     purpose = CITED_INVOICE.search(body)
     lines = [line for line in body.split("\n") if line.strip()]
     # 👁 The row wraps over several lines: number and date, then the time, then the money columns
-    # with the purpose and the counterparty's NAME as the last tab-separated field of that line,
+    # with the purpose and the counterparty's name as the last tab-separated field of that line,
     # then the code, the account and the bank. So the name is taken from the line carrying the
     # money columns — identified by its tab count — and not from the first line, which holds the
     # operation date and would silently report a date as a counterparty.
@@ -265,7 +265,7 @@ def fields_of(document: dict) -> dict[str, str | None]:
     doc_type = document["doc_type"]
     text = document["reference_text"]
     if doc_type == "invoice":
-        # ONE CLASS, TWO LAYOUTS AND TWO LANGUAGES. Dispatched on the label's own `language`
+        # One class, two layouts and two languages. Dispatched on the label's own `language`
         # rather than by trying one reader and falling back to the other: a fallback would report
         # a Ukrainian invoice this reader failed on as a euro one it read badly.
         return (
@@ -281,30 +281,30 @@ def fields_of(document: dict) -> dict[str, str | None]:
 
 
 def bank_identity_pairs(doc_type: str, text: str) -> list[tuple[str, str]]:
-    """Every (bank name, МФО) pair a page prints TOGETHER.
+    """Every (bank name, МФО) pair a page prints together.
 
-    🔴 NOT A subject-vs-payment ROW, AND DELIBERATELY SO. Every field in `FIELDS` above is one two
-    document CLASSES both print, so the shape `audit()` uses — read the subject, read the payment,
+    🔴 not A subject-vs-payment row, and deliberately so. Every field in `FIELDS` above is one two
+    document classes both print, so the shape `audit()` uses — read the subject, read the payment,
     compare — has something on both sides. A payer's own bank has nothing to compare against: an
-    invoice never states who the PAYER banks with, so that shape would report `readable == 0` on
+    invoice never states who the payer banks with, so that shape would report `readable == 0` on
     every claim, forever — and lessons.md already names a zero-readable axis as no evidence at
     all, not as a clean result.
 
-    So this reads a DIFFERENT invariant, one that is corpus-wide rather than per-claim: a printed
-    bank NAME must carry one printed CODE everywhere it appears, whoever's bank it is and on
+    So this reads a different invariant, one that is corpus-wide rather than per-claim: a printed
+    bank name must carry one printed code everywhere it appears, whoever's bank it is and on
     whichever document — the issuer of a confirmation, the issuer of a statement, that same
     issuer's own service-charge row, or a confirmation's payee. `bank_identity_audit` below is
     what turns a list of these pairs into a readable/agree count; this function only locates them.
 
     Each reader is anchored to what makes it safe rather than to a caption alone:
 
-    * the ISSUER of a confirmation or a statement is the first two lines of the page — the name,
+    * the issuer of a confirmation or a statement is the first two lines of the page — the name,
       then a line that is nothing but the caption and six digits. `\\A` keeps this from ever
-      matching the SAME caption reappearing later on a confirmation's payee line, which is not at
+      matching the same caption reappearing later on a confirmation's payee line, which is not at
       the start of a line and would otherwise be a second, wrong match.
-    * a statement's SERVICE-CHARGE ROW is found by the shape of its own code rather than by
+    * a statement's service-charge row is found by the shape of its own code rather than by
       position: every ordinary row's counterparty code is a tax id, eight or ten digits, and the
-      one row whose code is exactly SIX digits, alone on its own line, is the row naming the
+      one row whose code is exactly six digits, alone on its own line, is the row naming the
       issuer — describing the token wanted, not the row it happens to sit in, for the reason
       `CITED_INVOICE` above gives.
     """
@@ -333,12 +333,12 @@ def bank_identity_pairs(doc_type: str, text: str) -> list[tuple[str, str]]:
 
 
 def bank_identity_audit(corpus: Path) -> dict:
-    """Whether the corpus keeps one promise: A PRINTED NAME CARRIES ONE CODE, EVERYWHERE.
+    """Whether the corpus keeps one promise: A printed name carries one code, everywhere.
 
     Walks every document of the corpus once, in `ground_truth.json` order, and checks each
-    (name, code) pair `bank_identity_pairs` finds against the FIRST code that name was printed
+    (name, code) pair `bank_identity_pairs` finds against the first code that name was printed
     with. The first occurrence sets the expectation rather than a value from `config/vendors.json`,
-    because — per the module docstring — this tool reads the OUTPUT and never the builder: a table
+    because — per the module docstring — this tool reads the output and never the builder: a table
     read from config could certify a corpus that agrees with nothing but itself if the table and
     the generator ever drifted apart, which is exactly the failure mode this axis exists to catch.
     """
@@ -401,13 +401,13 @@ def audit(corpus: Path) -> dict:
 
 
 def state_of(readable: int, agree: int) -> str:
-    """What the two counts say about this row, and NOTHING BEYOND THEM.
+    """What the two counts say about this row, and nothing beyond them.
 
     ⚠️ These are not the three design states of `docs/cross-document-fields.md`. Counts cannot
     tell resolvable from trivial: a field printed identically on both pages and a field that
-    has to be parsed out of a free-text purpose line both come back ALWAYS AGREES, and a field
+    has to be parsed out of a free-text purpose line both come back always agrees, and a field
     drawn from a four-value list agrees a quarter of the time by coincidence. Which state a row
-    is in is a judgement about HOW the value has to be read, and the doc makes it; this
+    is in is a judgement about how the value has to be read, and the doc makes it; this
     function reports what was counted so the doc can be checked against it.
     """
     if readable == 0:
@@ -452,7 +452,7 @@ def main(argv: list[str] | None = None) -> int:
                     for example in row["examples"]:
                         print(f"      {example}")
 
-    # 🔴 CORPUS-WIDE, NOT PER-CLAIM: printed regardless of whether any claim above had a subject
+    # 🔴 Corpus-wide, not per-claim: printed regardless of whether any claim above had a subject
     # and a payment document, because this axis is over every document that names a bank at all.
     identity = bank_identity_audit(args.corpus)
     print("\nbank identity — one printed name, one printed МФО, corpus-wide")
