@@ -209,12 +209,8 @@ def is_valid_edrpou(value: str) -> bool:
 def generate_edrpou(rng: random.Random) -> str:
     """A valid ЄДРПОУ.
 
-    Computed directly from the drawn prefix. This used to draw whole codes and reject
-    invalid ones, on the reasoning that the weight set depended on the value of the
-    complete code and so could not be resolved from seven digits — that reasoning was
-    part of the same misreading that made `edrpou_check_digit` return None. The set
-    depends on the first digit alone, so the eighth is a pure function of the first
-    seven and there is nothing to reject.
+    Computed directly from the drawn prefix, with nothing to reject: the weight set depends on
+    the first digit alone, so the eighth digit is a pure function of the first seven.
     """
     # Note: excludes codes with a leading zero, which the register does issue. Widening
     # this is tracked separately — it changes which identifiers a given seed produces.
@@ -1022,9 +1018,8 @@ def draw_party_identity(
     """
     is_sole_trader = vendor["legal_form"] == _SOLE_TRADER
     tax_code = generate_rnokpp(rng) if is_sole_trader else generate_edrpou(rng)
-    # The name is drawn; the code is looked up. See `_draw_bank` — a fresh draw here is exactly
-    # the defect this function used to carry: the same real bank name coming back with a
-    # different МФО on the next identity drawn for it.
+    # The name is drawn; the code is looked up. See `_draw_bank` — a fresh draw here brings the
+    # same real bank name back with a different МФО on the next identity drawn for it.
     bank_name, bank_code = _draw_bank(rng, country)
     return PartyIdentity(
         tax_code=tax_code,
@@ -1043,10 +1038,10 @@ def draw_party_identity(
 class DocumentReference:
     """The document a payment's purpose line cites: its number, and the date it bears.
 
-    🔴 A reference is a cross-document field of its own, and it used to be drawn independently on
-    each side — the invoice printed one number in its title, and the payment beside it cited a
-    number drawn from `rng.randint(1, 9999)`, so the two never agreed on any pair of the delivered
-    corpus. Passing the subject document's own reference makes the citation resolvable: it is
+    🔴 A reference is a cross-document field of its own, and drawing it independently on each side
+    — a number in the invoice's title, and a separate `rng.randint(1, 9999)` on the payment beside
+    it — leaves the two disagreeing on every pair in the corpus. Passing the subject document's own
+    reference makes the citation resolvable: it is
     embedded in free text on the payment side and written into a title on the subject side, and the
     date is spelled in words on one page and in digits on the other, so the two ends still have to
     be parsed and normalized before they can be compared. That is the difference between a field a
@@ -1334,7 +1329,7 @@ def _draw_basket(
     alone; for `partially_covered` by `mixed_items` the caller clears the flag and states the
     `coverage_target` the basket should come to; for the zero-coverage route to `rejected` the
     caller states a target of exactly zero and every line comes from `excluded_items` — the
-    mirror of `covered_only`, and the branch that used to be refused while nothing could plan it.
+    mirror of `covered_only`.
 
     `document` names the class in the length message and changes nothing else — "a receipt
     carries 1 to 20 lines" is what a caller of that builder needs to read, and the bound itself
@@ -1667,9 +1662,9 @@ def build_prro_receipt(
     acquiring_rules = rules["acquiring_block"]
     acquiring_examples = {f["key"]: f for f in acquiring_rules["fields"]}
     acquiring = Acquiring(
-        # Drawn rather than fixed. The acquirer used to be the single `example` string of
-        # fiscal-rules.yaml, which put the same bank name on every receipt in the dataset —
-        # a printed field with one value teaches a consumer the value, not the field.
+        # Drawn rather than fixed: taking the single `example` string of fiscal-rules.yaml puts
+        # the same bank name on every receipt in the dataset, and a printed field with one value
+        # teaches a consumer the value, not the field.
         acquirer=rng.choice(acquirers("UA")),
         terminal_id=f"{rng.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{rng.randint(0, 10**7 - 1):07d}",
         # `[0]` and not a draw: every receipt in the corpus is a sale, so «ПОВЕРНЕННЯ» is

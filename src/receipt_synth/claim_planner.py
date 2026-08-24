@@ -104,12 +104,10 @@ class Archetype:
     # to be refused.
     #
     # Declared here and printed by the builder, exactly as `language` is, so the two can drift.
-    # ⚠️ Nothing guards that drift today, and this comment used to claim otherwise: it cited
-    # `tests/test_archetype_currency.py` as building one document per archetype and comparing the
-    # label's `currency` against this field. That file has never existed (checked 24.08.2026), and
-    # no other test sweeps the registry for this property — `test_claim_currency.py` asserts the
-    # registry pairs within a currency, which is a different statement, and the euro archetypes are
-    # covered one at a time in `test_eu_invoice.py` and `test_payment_confirmation_eur.py`.
+    # ⚠️ No test sweeps the registry for that drift (checked 24.08.2026). `test_claim_currency.py`
+    # asserts the registry pairs within a currency, which is a different statement, and the euro
+    # archetypes are covered one at a time in `test_eu_invoice.py` and
+    # `test_payment_confirmation_eur.py`.
     #
     # The risk is concrete rather than theoretical: several builders in `content_builder` write
     # `currency="UAH"` literally instead of reading this field, so an archetype registered with a
@@ -752,14 +750,11 @@ _UNREALIZABLE_ROUTES: dict[str, str] = {
     # realizable verdict is now buildable, and the next route that cannot be built lands here
     # before anything promises it.
     #
-    # ⚠️ `rejected/zero_coverage` was the first and only entry and its reason is worth one line,
-    # because it is the sentence a reader of the git history will find: the route needed
-    # `content_builder` to draw no covered line, and it always drew at least one. What opened it
-    # is `_draw_basket` accepting a `coverage_target` of zero — the same label-first knob that
-    # realizes `mixed_items`, at the value that used to be refused — and `rejected_routes` in
-    # policy.yaml giving the draw a share. Until then every `rejected` claim in a corpus was an
-    # out-of-period one, and config/labelling-schema.yaml told consumers so as a known
-    # limitation; the corpus stopped being that the day this entry left the table.
+    # ⚠️ `rejected/zero_coverage` was the one entry, and what opened the route is worth a line:
+    # `_draw_basket` accepting a `coverage_target` of zero — the same label-first knob that
+    # realizes `mixed_items` — plus a share for the draw in `rejected_routes`. Without both, every
+    # `rejected` claim in a corpus is an out-of-period one, which config/labelling-schema.yaml
+    # then has to declare to consumers as a known limitation.
 }
 
 _UNREALIZABLE_REASONS: dict[Verdict, str] = {

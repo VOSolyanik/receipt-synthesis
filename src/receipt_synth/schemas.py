@@ -103,11 +103,11 @@ class Capture(StrEnum):
     """How the document reached the verifier — see docs/architecture.md#degradation.
 
     🔴 `DIGITAL_PDF` is the undamaged original, and its membership is a deliberate reversal
-    recorded at contract version 35. The enum used to be read as "ways a document was damaged",
-    which kept the undamaged case out by definition; it is read now as what this docstring has
-    always said — ways a document reached the verifier — and arriving as the original file is one
-    of them. The degrader applies nothing to this channel, which is the channel's meaning, and
-    the consumer's own `medium` vocabulary has carried the value all along (RC-11).
+    recorded at contract version 35. Read as "ways a document was damaged", the enum keeps the
+    undamaged case out by definition; read as ways a document reached the verifier, arriving as
+    the original file is one of them. The degrader applies nothing to this channel, which is the
+    channel's meaning, and the consumer's own `medium` vocabulary has carried the value all
+    along (RC-11).
     """
 
     SCREENSHOT = "screenshot"

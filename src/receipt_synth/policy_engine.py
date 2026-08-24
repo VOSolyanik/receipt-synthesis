@@ -635,15 +635,12 @@ def resolve_evidence(documents: Sequence[DocGroundTruth]) -> EvidenceShape:
     open which payment settles it. `document_evidence` answers neither, and picking would
     either double a claim or silently drop a document.
 
-    A bank statement used to be refused outright here, on the ground that it lists several
-    transactions while its label carried a single amount for the whole document, so nothing
-    identified the row a claim was about. That reason is gone: a statement's label now describes
-    one transaction — the row's amount, date, counterparty, purpose and direction, with
+    A bank statement is an ordinary payment-proving document here. Its label describes one
+    transaction — the row's amount, date, counterparty, purpose and direction, with
     `relevant_transaction` naming the row and `field_bboxes` pointing at its cells — so the claim's
-    money is exactly as well identified as it is on a confirmation. A statement is now an ordinary
-    payment-proving document to this function.
+    money is as well identified as it is on a confirmation.
 
-    What replaced it is narrower and is a different question. Only a debit can be proof of
+    The narrower guard is on direction. Only a debit can be proof of
     payment; a credit is money arriving — a refund, a reversal — and evidences no expense. Such a
     claim is refused rather than labelled, because policy.yaml assigns no verdict to a claim whose
     proof of payment is a refund, and inventing one here would be the engine deciding policy. The

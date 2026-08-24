@@ -153,12 +153,11 @@ SYNTHETIC_DATA_MARKER = (
 # on: a till roll has no undamaged electronic original to submit, a bank-generated PDF has
 # nothing forcing it through a camera, and a banking-app screen exists only as a screenshot.
 #
-# 🔴 The mix lives in policy.yaml and not here, closing the question this comment used to record
-# as open. `capture` is a label, a share that sizes a labelled bucket belongs beside
-# `verdict_mix`, and the uniform in-code draw that stood here was a placeholder claiming nothing
-# about the world — which had a cost the delivered corpus paid: paper receipts arrived as
-# screenshots, app screens arrived as flatbed scans, and every channel figure averaged over
-# combinations that cannot occur. The weights and their arithmetic are at the block itself.
+# 🔴 The mix lives in policy.yaml and not here: `capture` is a label, and a share that sizes a
+# labelled bucket belongs beside `verdict_mix`. A uniform in-code draw claims nothing about the
+# world, and the cost is measurable — paper receipts arriving as screenshots, app screens as
+# flatbed scans, and every channel figure averaged over combinations that cannot occur. The
+# weights and their arithmetic are at the block itself.
 #
 # The tuple below is the draw order, not a mix: `draw_capture` walks it with one uniform draw
 # against the class's cumulative weights, so its order is part of the seed's meaning exactly as
@@ -476,10 +475,9 @@ _BUILDERS = {
     "ua_bank_receipt_in_app": build_bank_receipt_in_app,
 }
 
-# Which classes name the claimant on the page, and it is keyed by document class because the
-# question is one of form rather than of evidence. The predicate used to be "proves the subject and
-# not the payment", which was right while the invoice was the only such class: 📄 an offer to pay
-# has to say to whom it is made.
+# Which classes name the claimant on the page, keyed by document class because the question is one
+# of form rather than of evidence. Not derivable from the evidence a class proves: the two classes
+# below break such a predicate in opposite directions.
 #
 # 📄 A товарний чек has no buyer field. The tax service's own rule is that its content is the
 # fiscal receipt's form less two requisites, and that form names no buyer — the payer is standing
@@ -537,12 +535,11 @@ def _write_png(path: Path, image: np.ndarray) -> None:
 class _BuiltDocument:
     """One document built and rendered clean, before it is known what file will carry it.
 
-    🔴 the seam this dataclass exists for. Every document used to be built, degraded and written in
-    one pass, which is exactly right while a file holds one document. It cannot be right for a file
-    that holds two: the composition has to be rendered from both clean renders before any of it can
-    be degraded, and the degradation then has to happen once, for the file. So the pipeline splits
-    in two — `_render_document` up to the clean render, and one of two carriers after it
-    (`_build_document`'s own tail, or `_bundle_one_file`).
+    🔴 the seam this dataclass exists for. Building, degrading and writing in one pass works while
+    a file holds one document, and cannot work for a file that holds two: the composition has to be
+    rendered from both clean renders before any of it can be degraded, and the degradation then has
+    to happen once, for the file. So the pipeline splits in two — `_render_document` up to the clean
+    render, and one of two carriers after it (`_build_document`'s own tail, or `_bundle_one_file`).
 
     `degrade_seed` is drawn in the first half, at the point in the stream the single-document path
     always drew it, and carried here rather than drawn where it is used. That is what keeps the
@@ -1827,10 +1824,10 @@ def _document_class_lines(dataset: Dataset) -> list[str]:
     side it is computed on. The corpus row stays, as context and with its share, because it is what
     says how the mix fell — but it is not what the class is held to.
 
-    ⚠️ this block used to check the corpus row, and the failure it could not see is on record: rp-05
-    was demoted because its corpus row cleared the minimum on all four classes while its validation
-    side carried 10 and 21. The report printed `ok` for both. The class the shortfall lands on has
-    changed since; the shape has not, which is why it moved here rather than into a note.
+    ⚠️ Checking the corpus row instead cannot see the failure rp-05 was demoted for: its corpus row
+    cleared the minimum on all four classes while its validation side carried 10 and 21, and the
+    report printed `ok` for both. The class the shortfall lands on has changed since; the shape
+    has not.
 
     A run with no partition has no side to check, and it says so rather than checking two empty
     counters — which would flag every class of every unpartitioned run as below the minimum, i.e. a

@@ -88,12 +88,11 @@ def _paper_pipeline(capture: Capture, seed: int) -> AugraphyPipeline | None:
     * `digital_pdf` — the original file. Nothing: no device produced it, so there is no
       device character to apply, and `None` is that stated rather than an empty pipeline
       run for show.
-    * `screenshot` — a screen capture of an electronic document. `None` too, and that is a
-      correction rather than a variant: the pixels were never light on paper and never
-      crossed a sensor, so the paper grain and the sensor noise this channel used to carry
-      were physically impossible artefacts — a screenshot showing paper texture is a
-      composite no capture produces. What a screenshot does lose is compression, which is
-      geometry-phase (`_geometry`) and stays.
+    * `screenshot` — a screen capture of an electronic document. `None` too: the pixels were
+      never light on paper and never crossed a sensor, so paper grain and sensor noise are
+      physically impossible here — a screenshot showing paper texture is a composite no capture
+      produces. What a screenshot does lose is compression, which is geometry-phase
+      (`_geometry`) and stays.
     * `photo` — a hand-held camera over paper on a desk. Paper texture and sensor noise
       always (they are the physics of a camera over paper); uneven illumination and a cast
       shadow at the rates config/generation.yaml declares (`degradation.photo`) — common,

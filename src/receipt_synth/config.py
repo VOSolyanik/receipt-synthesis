@@ -348,12 +348,11 @@ def banks(country: str) -> tuple[str, ...]:
 def bank_codes(country: str) -> MappingProxyType[str, str]:
     """The stable name → МФО table: `bank_code` beside each entry `banks()` draws its name from.
 
-    Exists because a name and a code used to be drawn independently wherever a party's bank was
-    needed — once in `draw_party_identity`, again in `build_payment_confirmation`, again in a
-    bank statement's own header — so the same real bank name could carry two different six-digit
-    codes on two documents of one claim, or on one document's own header and its service-charge
-    row. A name now resolves to a code by lookup, never by a fresh draw, which is what makes
-    "same name, same code" true by construction rather than by coincidence.
+    A name resolves to a code by lookup, never by a fresh draw. Drawing the two independently —
+    which is what every call site would otherwise do, in `draw_party_identity`, in
+    `build_payment_confirmation` and in a bank statement's own header — lets one real bank name
+    carry two different six-digit codes across a claim, or across one document's header and its
+    service-charge row.
 
     The codes are invented — chosen to be shaped like a real МФО (six digits, in the range real
     ones are allocated from) without equalling any real bank's actual one — and, unlike the name,
