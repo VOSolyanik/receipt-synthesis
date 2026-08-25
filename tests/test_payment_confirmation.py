@@ -525,7 +525,7 @@ def test_no_purpose_asserts_a_transfer_between_the_payers_own_accounts():
     the vendor's name, code and IBAN — so a purpose saying «Переказ власних коштів», a
     transfer between the payer's own accounts, contradicts the page it is printed on.
 
-    Measured before the repair, on the production corpus (rp-06): 54 of 261 confirmations
+    Measured before the repair, on the production corpus (RP-06): 54 of 261 confirmations
     printing a purpose carried exactly that formula — 55% of the "cites nothing" bucket —
     and `docs/cross-document-fields.md` blocked the `cites_subject_document` contract
     field on those 54, because the flag would have certified them as legitimately

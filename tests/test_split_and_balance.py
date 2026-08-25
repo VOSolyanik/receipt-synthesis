@@ -365,8 +365,8 @@ def test_the_per_class_minimum_is_checked_on_EACH_SIDE_and_not_on_the_corpus_row
 
     Nothing is measured on the corpus as a whole: a consumer inspects documents on the development
     side and reports figures on the measurement side, so a per-class figure needs its 30 documents
-    on the side it is computed on. The contract says exactly this at `run_profiles` rp-06, and
-    rp-05 was demoted for exactly this — its corpus row cleared the minimum on all four classes
+    on the side it is computed on. The contract says exactly this at `run_profiles` RP-06, and
+    RP-05 was demoted for exactly this — its corpus row cleared the minimum on all four classes
     while its validation side carried 10 and 21.
 
     Sized so that the two checks disagree: 40 documents in the corpus, 31 and 9 across the sides.

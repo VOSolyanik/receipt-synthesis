@@ -207,7 +207,7 @@ def assign_splits(
 ) -> dict[str, Split]:
     """Which side of the partition each persona is on. See `schemas.Split` for the unit.
 
-    🔴 `train_fraction` has no default, here or anywhere above. It is a decision about the
+    🔴 `TRAIN_FRACTION` has no default, here or anywhere above. It is a decision about the
     measurement, and a default would let a run be performed without that decision ever having been
     declared — the argument `--seed` already wins in this repository, applied to a partition nobody
     declared. A caller has to pass one; what to pass, and why a half is the answer for a consumer
@@ -1504,7 +1504,7 @@ def generate_dataset(
     planner stops early once no category of theirs has an annual balance left — which is
     also the only way the cumulative-limit mechanism can be exercised at all.
 
-    `train_fraction` is required and sits with `seed` for the same reason — a run performed
+    `TRAIN_FRACTION` is required and sits with `seed` for the same reason — a run performed
     without the partition ever having been declared documents a measurement nobody chose. It has
     no default at this entry point either: a default here would be the same defect one layer below
     the command line, where it would be harder to see. See `assign_splits`.
@@ -1824,7 +1824,7 @@ def _document_class_lines(dataset: Dataset) -> list[str]:
     side it is computed on. The corpus row stays, as context and with its share, because it is what
     says how the mix fell — but it is not what the class is held to.
 
-    ⚠️ Checking the corpus row instead cannot see the failure rp-05 was demoted for: its corpus row
+    ⚠️ Checking the corpus row instead cannot see the failure RP-05 was demoted for: its corpus row
     cleared the minimum on all four classes while its validation side carried 10 and 21, and the
     report printed `ok` for both. The class the shortfall lands on has changed since; the shape
     has not.

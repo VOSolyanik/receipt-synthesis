@@ -632,7 +632,7 @@ def _settleable_instalment_subjects(candidates: list[Archetype]) -> list[Archety
 class EvidenceIntent(Enum):
     """Whether a claim's evidence is meant to establish both facts, or deliberately not.
 
-    🔴 the difference between "could not assemble the subject" AND "chose not to", made a value so
+    🔴 the difference between "COULD NOT ASSEMBLE THE SUBJECT" AND "CHOSE NOT TO", made a value so
     that nobody has to infer it from a count of documents. `_select_documents` assembles both facts
     or refuses, and that refusal is what stops a missing template from turning into a mislabelled
     claim. An incomplete claim is nevertheless something this generator has to produce — a bare
@@ -1388,7 +1388,7 @@ def _select_documents(
     distinguishable from an ordinary one by nothing except the thing being labelled. That is what
     makes it a usable negative: had the flag also changed the gap, a consumer could learn the gap.
 
-    ⚠️ the subject of a pair is narrower than "an archetype that proves the subject" — see
+    ⚠️ the subject of a pair is narrower than "AN ARCHETYPE THAT PROVES THE SUBJECT" — see
     `_pairable_subjects`. A payment settles an obligation, and a class that states none is not
     half of a pair however well it states what was bought.
 
@@ -1773,7 +1773,7 @@ def plan_claims(
     all up front would size every `limit_exhausted` basket against a balance that no
     longer exists by the time it is built.
 
-    ⚠️ "in date order" is about the claims that spend, and one kind does not. A plan aimed at
+    ⚠️ "IN DATE ORDER" is about the claims that spend, and one kind does not. A plan aimed at
     `rejected` has its payment displaced out of the benefit period by `plan_claim`, so the dates
     coming out of this generator are no longer ascending. What the order is for survives intact:
     such a claim reimburses nothing and consumes no balance, so it cannot change what a later

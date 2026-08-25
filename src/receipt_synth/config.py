@@ -130,7 +130,7 @@ def unprintable_item_kinds() -> frozenset[str]:
 def price_range(item_kind: str, currency: str = "UAH") -> tuple[Decimal, Decimal]:
     """The retail price range of an item kind, in whole currency units, bounds included.
 
-    What "included" means here, because one caller disagrees. `high` is inclusive as this
+    What "INCLUDED" means here, because one caller disagrees. `high` is inclusive as this
     range is *stated* and for two of its three callers in `content_builder`: `_repriced`
     clamps a price to `high`, and `_excluded_ceiling` reports it as attainable. The third,
     `_build_line_item`, draws in ten-kopiyka steps over a half-open interval and so ends
