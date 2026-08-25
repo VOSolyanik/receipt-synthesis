@@ -211,6 +211,11 @@ def generate_edrpou(rng: random.Random) -> str:
 
     Computed directly from the drawn prefix, with nothing to reject: the weight set depends on
     the first digit alone, so the eighth digit is a pure function of the first seven.
+
+    ⛔ Drawing whole codes and rejecting the invalid ones is the wrong shape, and the reasoning
+    that leads there is worth naming: that the weight set depends on the value of the complete
+    code and so cannot be resolved from seven digits. That is the same misreading that makes
+    `edrpou_check_digit` return None.
     """
     # Note: excludes codes with a leading zero, which the register does issue. Widening
     # this is tracked separately — it changes which identifiers a given seed produces.

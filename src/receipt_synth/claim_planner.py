@@ -104,10 +104,14 @@ class Archetype:
     # to be refused.
     #
     # Declared here and printed by the builder, exactly as `language` is, so the two can drift.
-    # ⚠️ No test sweeps the registry for that drift (checked 24.08.2026). `test_claim_currency.py`
-    # asserts the registry pairs within a currency, which is a different statement, and the euro
-    # archetypes are covered one at a time in `test_eu_invoice.py` and
-    # `test_payment_confirmation_eur.py`.
+    # ⚠️ No test sweeps the registry for that drift. `test_claim_currency.py` asserts the registry
+    # pairs within a currency, which is a different statement, and the euro archetypes are covered
+    # one at a time in `test_eu_invoice.py` and `test_payment_confirmation_eur.py`.
+    #
+    # ⛔ `tests/test_archetype_currency.py` is not that guard: no such file has ever existed in
+    # this repository (checked 24.08.2026). It is an easy name to reach for — one document per
+    # archetype, the label's `currency` compared against this field — so confirm it against the
+    # tree before citing it as cover.
     #
     # The risk is concrete rather than theoretical: several builders in `content_builder` write
     # `currency="UAH"` literally instead of reading this field, so an archetype registered with a

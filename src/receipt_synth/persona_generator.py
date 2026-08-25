@@ -106,6 +106,10 @@ def generate_persona(
     # ⚠️ Seeding the instance is not the whole of determinism. A seeded Faker provider still
     # reads the clock for anything defined relative to now, so a seed fixes the offset and not
     # the date. See `_draw_birth_date`.
+    #
+    # ⛔ "Everything below is then a function of the incoming seed" is the summary to avoid. It is
+    # false, it is the obvious thing to write here, and it stood in this comment for four months —
+    # the line drawing the birth date is what falsifies it.
     fake = Faker(locale)
     fake.seed_instance(rng.getrandbits(64))
 
