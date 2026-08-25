@@ -135,11 +135,11 @@ def test_the_constants_this_file_was_written_against():
     If policy.yaml changes, this fails first and says so, instead of the rest of the file
     quietly asserting arithmetic that no longer follows from the policy.
 
-    🔴 `verdict_mix` IS PINNED WHOLE, AND IT WAS THE ONE CONSTANT OF THE HEADER THAT WAS NOT.
+    🔴 `verdict_mix` is pinned whole, and it was the one constant of the header that was not.
     The module docstring lists the mix among the values this file is written against, and it
     silently described another policy for the length of a change that moved two of its shares —
     every test still passed, because nothing compared the block against the file. Pinned as a
-    MAPPING rather than share by share: a member added to the mix with a share of its own would
+    mapping rather than share by share: a member added to the mix with a share of its own would
     slip past a list of six assertions and is exactly the edit this has to catch.
     """
     assert full_threshold() == Decimal("0.9999")
@@ -169,12 +169,11 @@ def test_verdict_mix_names_every_verdict_and_every_one_now_carries_a_share():
 
         0.40 + 0.20 + 0.10 + 0.10 + 0.10 + 0.10 = 1.00
 
-    ⚠️ `rejected` USED TO BE THE EXCEPTION, declared as `null` while nothing could build such a
-    claim. It gained 0.10 when the planner learned to date a payment outside the benefit period,
-    and `covered` gave up exactly that much — which is why the sum is unchanged and why the
-    realizable subset still totals 0.80. The undecided-share MECHANISM is untouched and still
-    tested, one test below: the next verdict declared before its mechanism exists arrives the
-    same way.
+    ⚠️ `rejected` was the exception, declared as `null` while nothing could build such a claim.
+    It took 0.10 when the planner learned to date a payment outside the benefit period, and
+    `covered` gave up exactly that much, which is why the sum is unchanged and the realizable
+    subset still totals 0.80. The undecided-share mechanism is untouched and still tested, one
+    test below: the next verdict declared before its mechanism exists arrives the same way.
     """
     mix = verdict_mix()
     assert set(mix) == set(Verdict), "every verdict is named in the mix"
@@ -311,7 +310,7 @@ def test_a_zero_amount_basket_has_no_covered_fraction():
         covered_fraction("vitamins_nutrition", [item("0.00", True)])
 
 
-# --------------------------------------------------------- the STRICT rule ----
+# --------------------------------------------------------- the strict rule ----
 
 
 def test_a_fully_covered_basket_is_covered():
@@ -338,7 +337,7 @@ def test_the_policys_own_example_a_three_hryvnia_item_on_a_thousand_hryvnia_rece
 
 
 def test_one_kopiyka_not_covered_is_partially_covered_at_any_scale():
-    """The STRICT rule, stated in policy.yaml as "ANY non-covered line item makes the claim
+    """The strict rule, stated in policy.yaml as "any non-covered line item makes the claim
     partially covered, however small".
 
         covered   999.99
@@ -406,8 +405,8 @@ def test_a_wholly_non_covered_basket_is_rejected():
         total   500.00
         fraction    0  ->  rejected
 
-    policy.yaml's `coverage` block sends a zero covered fraction to `rejected`, and the
-    enum now carries that member, so there is one answer where there used to be a slash.
+    policy.yaml's `coverage` block sends a zero covered fraction to `rejected`, and the enum
+    carries that member, so the answer is single-valued.
 
     The whole claim, hand-derived:
         verdict             rejected — nothing on the document belongs to the category
@@ -522,7 +521,7 @@ def test_the_cheapest_real_article_is_still_absorbed_by_a_numeric_branch():
 
 # ---------------------------------------------------------------- currency ----
 #
-# The engine CONVERTS a foreign-currency document — config/fx-rates.yaml at the
+# The engine converts a foreign-currency document — config/fx-rates.yaml at the
 # document's date, quantized at the point that file declares, the applied rate recorded
 # in `ClaimEvaluation.fx`. An earlier revision refused instead; the tests of that refusal
 # were rewritten into these when the decision fell. The constants below are pinned from
@@ -925,7 +924,7 @@ def test_the_two_routes_to_rejected_are_told_apart_by_their_cause():
     """`rejected` has two mechanisms and one name, so the verdict alone cannot separate
     them and `imperfection` has to.
 
-    A basket the category covers none of carries NO cause — the verdict says the whole of
+    A basket the category covers none of carries no cause — the verdict says the whole of
     it. A payment outside the window carries `outside_period`, because "not covered" is
     true of both and only the cause says which sense of it applies.
     """

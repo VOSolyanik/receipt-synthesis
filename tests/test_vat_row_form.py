@@ -1,23 +1,23 @@
-"""The VAT summary row takes two forms, and the MEDIUM decides which — asymmetrically.
+"""The VAT summary row takes two forms, and the medium decides which — asymmetrically.
 
-👁 THE EVIDENCE, which is what this whole module is about:
+👁 the evidence, which is what this whole module is about:
 
-    A — delivered ONLINE — `ПДВ А 20%`     (spaced)
-    B — PAPER            — `ПДВ А=20,00%`  (equals)
-    C — PAPER            — `ПДВ А=20,00%`  (equals)
+    A — delivered online — `ПДВ А 20%`     (spaced)
+    B — paper            — `ПДВ А=20,00%`  (equals)
+    C — paper            — `ПДВ А=20,00%`  (equals)
 
-three of the author's own receipts, each a SEPARATE INSTALLATION, which is what makes them the
+three of the author's own receipts, each a separate installation, which is what makes them the
 strongest evidence available for a question about print format. So:
 
-    paper       → the equals form ONLY.  Two independent observations, no counterexample.
-    electronic  → BOTH, drawn.           One observation, and one cannot support a rule.
+    paper       → the equals form only.  Two independent observations, no counterexample.
+    electronic  → both, drawn.           One observation, and one cannot support a rule.
 
-🔴 THE ASYMMETRY IS THE PROPERTY UNDER TEST. A symmetric rule — "electronic ⇒ spaced" — would read
+🔴 the asymmetry is the property under test. A symmetric rule — "electronic ⇒ spaced" — would read
 better and rest on n = 1, which is the over-claim that produced the single unconditional form this
-replaces. The tests below therefore assert the paper side EXHAUSTIVELY and the electronic side as a
-DRAW, and one of them exists only to fail if somebody tidies the two into agreement.
+replaces. The tests below therefore assert the paper side exhaustively and the electronic side as a
+draw, and one of them exists only to fail if somebody tidies the two into agreement.
 
-⚠️ NOTHING ASSERTED THE PRINTED ROW BEFORE THIS MODULE. The form was changed once already, on a
+⚠️ nothing asserted the printed row before this module. The form was changed once already, on a
 denominator that turned out to be wrong, and no test read the string it printed — so the change was
 invisible to the suite in both directions.
 """
@@ -102,7 +102,7 @@ def test_every_medium_has_forms_declared_for_it():
 
 @pytest.mark.parametrize("capture", [Capture.PHOTO, Capture.SCAN])
 def test_paper_takes_the_equals_form_and_never_the_other(capture):
-    """👁 TWO INDEPENDENT PAPER INSTALLATIONS, ZERO COUNTEREXAMPLES — so this side is exhaustive
+    """👁 two independent paper installations, zero counterexamples — so this side is exhaustive
     rather than a draw. The combination paper + spaced does not occur in the data because it was
     never observed, which is the concrete thing the asymmetry buys."""
     drawn = set(forms_over_seeds(capture))
@@ -113,12 +113,12 @@ def test_paper_takes_the_equals_form_and_never_the_other(capture):
 
 
 def test_an_electronic_receipt_draws_both_forms():
-    """👁 ONE electronic observation, so the rule refuses to choose: both forms occur.
+    """👁 one electronic observation, so the rule refuses to choose: both forms occur.
 
     This is the test that would go red if somebody made the rule symmetric — "electronic ⇒ spaced"
     reads better and would rest on a single receipt. The counts are reported with their denominator
-    rather than asserted as a ratio: `rng.choice` over the permitted forms is uniform BY
-    CONSEQUENCE, and pinning a proportion would state a frequency nothing has measured.
+    rather than asserted as a ratio: `rng.choice` over the permitted forms is uniform by
+    consequence, and pinning a proportion would state a frequency nothing has measured.
     """
     drawn = forms_over_seeds(Capture.SCREENSHOT)
     seen = {form: drawn.count(form) for form in set(drawn)}
@@ -143,7 +143,7 @@ def test_the_two_forms_are_different_strings():
 
 @pytest.mark.parametrize("capture", list(Capture))
 def test_the_label_carries_the_form_that_was_chosen(capture):
-    """The point of labelling it: a consumer can FILTER on it. A system that learned one form fails
+    """The point of labelling it: a consumer can filter on it. A system that learned one form fails
     on the other, and without this field nothing in the labels would explain why."""
     for seed in range(12):
         receipt = make(seed, capture)
@@ -169,7 +169,7 @@ def test_a_seller_that_is_not_registered_has_no_form_at_all():
 
 @pytest.mark.parametrize("form", sorted(FORMS))
 def test_the_printed_row_is_the_form_the_label_declares(form):
-    """🔴 THE LABEL AND THE PAGE, CHECKED AGAINST EACH OTHER. A form recorded in the label while a
+    """🔴 the label and the page, checked against each other. A form recorded in the label while a
     different one is printed is exactly the class of defect the cross-document check found on the
     counterparty: internally consistent on each side and wrong between them.
 

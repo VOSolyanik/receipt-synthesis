@@ -129,7 +129,7 @@ def doc(
     document's obligation comes to, where the document says it is settled in parts. `None` on
     every ordinary document, which is what makes the mismatch cases below still mismatch.
 
-    `counterparty` DEFAULTS TO ONE VALUE FOR EVERY DOCUMENT, which is what an honest claim looks
+    `counterparty` defaults to one value for every document, which is what an honest claim looks
     like: the invoice and the payment name one seller. The parameter exists so a pair can be built
     that does not — see the counterparty section below — and every other test in this file inherits
     the agreement rather than restating it.
@@ -195,10 +195,10 @@ def test_every_document_type_the_generator_can_label_has_an_evidence_row():
 
 
 def test_an_invoice_and_its_payment_are_one_transaction_and_one_amount():
-    """THE CLAIM THAT SPANS TWO DOCUMENTS, end to end.
+    """the claim that spans two documents, end to end.
 
     An invoice states what was bought; a payment confirmation states that it was paid.
-    They are the same money, so the claim's amount is 1200.00 and NOT 2400.00.
+    They are the same money, so the claim's amount is 1200.00 and not 2400.00.
 
         invoice d1   1 x 1200.00 vitamin_complex, covered      lines total 1200.00
         payment d2   amount 1200.00, no line items            the same money
@@ -252,14 +252,14 @@ def test_a_payment_document_carrying_lines_does_not_double_the_claim():
     """Decision A's guard, pinned on an input the design does not admit.
 
     Taking the lines from `subject_documents` rather than from every document is what keeps
-    a payment document's lines out of the claim's amount — and NO set of documents this
+    a payment document's lines out of the claim's amount — and no set of documents this
     generator can build exercises it. The types that prove payment without proving the
     subject are `payment_confirmation` and `bank_statement`: the statement is refused
     outright by `resolve_evidence`, and the confirmation carries no line items, which the
     requirements state and the labelling contract records. A `fiscal_receipt` proves both
     facts, so in a self-contained claim `subject_documents` and `documents` are the same
-    tuple. Every remaining mixture is refused. The branch is therefore unreachable BY
-    CONSTRUCTION, not merely unexercised today.
+    tuple. Every remaining mixture is refused. The branch is therefore unreachable by
+    construction, not merely unexercised today.
 
     Which is why it is asserted here on a hand-built record instead of being waited for, the
     same way `test_a_verdict_the_planner_cannot_draw_is_still_given_a_row` asserts a report
@@ -268,7 +268,7 @@ def test_a_payment_document_carrying_lines_does_not_double_the_claim():
     exists partly because that failure mode has already cost this project a day.
 
         invoice d1  1 x 1200.00 covered, lines total 1200.00
-        payment d2  amount 1200.00, AND lines of its own worth 1200.00
+        payment d2  amount 1200.00, and lines of its own worth 1200.00
         claim       total 1200.00, reimbursable 1200.00 — never 2400.00
     """
     invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")])
@@ -343,7 +343,7 @@ def test_an_invoice_on_its_own_proves_no_payment():
 )
 def test_every_type_that_proves_no_payment_reaches_the_same_verdict_alone(doc_type):
     """Parametrized over `document_evidence` rather than over one example, because the
-    verdict is a property of the TYPE and a rule stated for one type is a rule the others
+    verdict is a property of the type and a rule stated for one type is a rule the others
     are free to break."""
     alone = doc("c1_d1", doc_type, amount="800.00", items=[item("800.00")])
     assert evaluate([alone]).verdict is Verdict.NOT_PROOF_OF_PAYMENT
@@ -385,13 +385,13 @@ def test_an_out_of_period_payment_with_no_subject_is_rejected_not_insufficient()
     """The 2026-08-17 reordering, pinned on the claim that separates the two orders.
 
     A payment confirmation dated outside the window, with nothing saying what it bought,
-    fails TWO rules at once — the period and the what-was-bought slot — and the period now
+    fails two rules at once — the period and the what-was-bought slot — and the period now
     runs first. `rejected`/`outside_period` is terminal; the old answer,
     `insufficient_evidence`/`subject_not_evidenced`, is repairable and would invite the
     claimant to supply a subject document for a claim no document can save.
 
     The period is read off the payment documents themselves here: with no subject, the
-    claim has NO transactions (`resolve_evidence` composes them only when both facts are
+    claim has no transactions (`resolve_evidence` composes them only when both facts are
     established), so a period check reading `shape.transactions` would silently pass.
     """
     payment = doc(
@@ -454,8 +454,8 @@ def test_the_ledger_order_follows_the_payment_and_not_the_invoice():
         claim A  invoice 2026-01-05, payment 2026-12-01
         claim B  fiscal receipt 2026-06-01
 
-    By the earliest DOCUMENT, A is first: A takes 8000.00, B is left 4000.00.
-    By the PAYMENT, B is first: B takes 8000.00, A is left 4000.00.
+    By the earliest document, A is first: A takes 8000.00, B is left 4000.00.
+    By the payment, B is first: B takes 8000.00, A is left 4000.00.
 
     The two orderings disagree about which claim is limit-bound, so this is the assertion
     that decision C is implemented and not merely described.
@@ -507,11 +507,11 @@ def test_a_payment_outside_the_period_is_rejected():
 
         invoice 2026-12-20 (inside), payment 2027-01-05 (outside) — the payment decides
 
-    `rejected`, and emphatically NOT `insufficient_evidence`. Every fact this claim rests
+    `rejected`, and emphatically not `insufficient_evidence`. Every fact this claim rests
     on is established: the purchase is stated, the payment is proven, the two agree, and
     the invoice's own date is inside the window. Nothing is missing, so a verdict whose name
     means "a required fact was not established" does not describe it. The policy plainly
-    does not cover this claim — by WHEN rather than by WHAT, which is the wrong-subject case
+    does not cover this claim — by when rather than by what, which is the wrong-subject case
     turned ninety degrees — and `rejected` is the verdict for plainly not covered.
 
     `covered_fraction` is still 1.0: every line of the invoice belongs to the category, and
@@ -532,7 +532,7 @@ def test_a_payment_outside_the_period_is_rejected():
 
 
 def test_a_payment_may_not_precede_the_document_it_settles():
-    """D's second half, and it is a DIFFERENT defect from the period one — folding the two
+    """D's second half, and it is a different defect from the period one — folding the two
     together is what made the December invoice look like a period failure. They now differ
     in the verdict as well as in the cause: an impossible order leaves the linkage
     unestablished (`insufficient_evidence`), while an out-of-window payment establishes
@@ -573,8 +573,8 @@ def test_a_payment_on_the_same_day_as_the_invoice_is_in_order():
 
 
 def test_documents_stating_different_amounts_are_insufficient_evidence():
-    """E. Both facts are present separately, and the claim does not establish that THIS
-    payment paid for THIS subject.
+    """E. Both facts are present separately, and the claim does not establish that this
+    payment paid for this subject.
 
         invoice  1 x 1200.00 covered
         payment  1000.00
@@ -600,9 +600,9 @@ def test_documents_stating_different_amounts_are_insufficient_evidence():
 
 # ------------------------------------------ a payment that settles one part --
 #
-# 🔴 TWO CLAIMS WITH THE SAME PAIR OF NUMBERS AND DIFFERENT VERDICTS. Every case below is an
-# invoice of 1200.00 beside a payment of less, and what decides the label is whether the INVOICE
-# SAYS the obligation is settled in parts. The arithmetic is identical throughout on purpose:
+# 🔴 Two claims with the same pair of numbers and different verdicts. Every case below is an
+# invoice of 1200.00 beside a payment of less, and what decides the label is whether the invoice
+# says the obligation is settled in parts. The arithmetic is identical throughout on purpose:
 # these tests are what stops `partially_paid` from being implemented as "the payment is smaller",
 # which would relabel every low-side `amount_mismatch` and cost the corpus a negative it already
 # has. config/policy.yaml, `partial_payment`, states the rule.
@@ -616,7 +616,7 @@ def test_a_payment_settling_one_instalment_is_partially_paid():
     the lines and says nothing about how much has been paid — and `reimbursable` is 0.00, because
     policy.yaml has not decided how much of a partly settled obligation is payable.
 
-    NO CAUSE, for the reason `not_proof_of_payment` carries none: one mechanism, one way to reach
+    No cause, for the reason `not_proof_of_payment` carries none: one mechanism, one way to reach
     it, nothing for a cause to distinguish.
     """
     invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
@@ -636,7 +636,7 @@ def test_a_payment_settling_one_instalment_is_partially_paid():
 
 
 def test_a_smaller_payment_without_the_marker_is_not_partially_paid():
-    """🔴 THE DISCRIMINATOR, AND THE TEST THIS WHOLE BRANCH IS ON PROBATION FOR. The same two
+    """🔴 the discriminator, and the test this whole branch is on probation for. The same two
     amounts as the case above — 1200.00 against 300.00 — with the instalment term absent from the
     invoice. The claim states no arrangement to pay in parts, so what it shows is a payment for an
     amount its subject document does not name: `insufficient_evidence`, cause `amount_mismatch`,
@@ -660,7 +660,7 @@ def test_a_smaller_payment_without_the_marker_is_not_partially_paid():
 
 
 def test_a_payment_matching_no_part_of_a_stated_arrangement_is_a_mismatch():
-    """The marker has to AGREE with the payment, not merely be present. An invoice settled in
+    """The marker has to agree with the payment, not merely be present. An invoice settled in
     parts of 300.00 beside a payment of 250.00 is a payment for some third amount — the mismatch
     case again — and a rule that read only the presence of the term would label it a lawful
     instalment of an arrangement it does not fit."""
@@ -675,7 +675,7 @@ def test_a_payment_matching_no_part_of_a_stated_arrangement_is_a_mismatch():
 
 
 def test_an_instalment_paid_before_its_invoice_is_still_insufficient_evidence():
-    """The amount check is skipped for a partial settlement; the DATE check is not. A payment that
+    """The amount check is skipped for a partial settlement; the date check is not. A payment that
     precedes what it settles is an impossible order whether it pays a part or the whole, so the
     cause survives and the verdict with it — `partially_paid` describes a claim whose documents
     agree, and these do not."""
@@ -693,16 +693,16 @@ def test_an_instalment_paid_before_its_invoice_is_still_insufficient_evidence():
 
 
 def test_a_partial_settlement_paid_outside_the_period_is_rejected():
-    """🔴 THE ONE CLAIM TWO BRANCHES BOTH DESCRIBE, and policy.yaml decides which wins:
+    """🔴 the one claim two branches both describe, and policy.yaml decides which wins:
     `partial_payment.outside_the_period` says `rejected`, and this pins it.
 
-    THE PRECEDENCE IS THE POINT, not the arithmetic. Both facts are proven, the pair agrees, and
+    The precedence is the point, not the arithmetic. Both facts are proven, the pair agrees, and
     the invoice's term is printed — so `partially_paid` is true of the documents — while the
     payment fell outside the benefit window, so the plan does not cover the expense at all. The
     period question is prior: it asks whether the plan covers this claim, and `partially_paid` is
     a statement about a claim the plan does cover.
 
-    ⚠️ NO GENERATED CLAIM REACHES IT. `claim_planner` names a schedule for a `partially_paid` plan
+    ⚠️ no generated claim reaches it. `claim_planner` names a schedule for a `partially_paid` plan
     and displaces the payment for a `rejected` one, never both, so this case exists in the
     consumer's world and not in the corpus. It is pinned here precisely because nothing else would
     catch a change to it: an engine that answered `partially_paid` would produce a corpus
@@ -727,12 +727,12 @@ def test_a_partial_settlement_paid_outside_the_period_is_rejected():
 
 
 def test_an_engine_ordered_against_the_declared_precedence_refuses_to_label():
-    """The drift above, made to happen. The branch ORDER in `evaluate_claim` is this engine's
+    """The drift above, made to happen. The branch order in `evaluate_claim` is this engine's
     answer to the precedence question, so a file declaring the other answer must stop the run
     rather than be silently overruled — a consumer reading that file would label such a claim
     `partially_paid` and score this dataset's `rejected` as a miss.
 
-    Patched on the POLICY side because that is the side a consumer vendors."""
+    Patched on the policy side because that is the side a consumer vendors."""
     invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", when=date(2025, 6, 1),
                   items=[item("1200.00")], instalment_amount="300.00")
     payment = doc("c1_d2", DocType.PAYMENT_CONFIRMATION, amount="300.00", when=date(2025, 6, 15))
@@ -782,7 +782,7 @@ def test_a_partly_settled_claim_consumes_no_balance():
 
 
 def test_the_marker_the_engine_reads_is_the_one_the_policy_declares():
-    """🔴 A CONSUMER BUILDS ITS OWN ENGINE FROM policy.yaml. If this module's marker and the
+    """🔴 A consumer builds its own engine from policy.yaml. If this module's marker and the
     file's ever differ, the two engines label the same claim differently while each is correct
     about the field it read — the most expensive class of disagreement this repository has, because
     it looks like a measurement problem.
@@ -797,7 +797,7 @@ def test_the_marker_the_engine_reads_is_the_one_the_policy_declares():
 
 
 def test_an_engine_reading_a_marker_the_policy_does_not_declare_refuses_to_label():
-    """The drift above, made to happen. Patched on the POLICY side because that is the side a
+    """The drift above, made to happen. Patched on the policy side because that is the side a
     consumer vendors: an engine that went on labelling against a field the file no longer names
     would produce ground truth nobody can reproduce from the published spec."""
     invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
@@ -814,13 +814,13 @@ def test_an_engine_reading_a_marker_the_policy_does_not_declare_refuses_to_label
 
 # ------------------------------- the axes are a policy parameter, not a list in the code --
 #
-# 🔴 WHAT THESE TESTS ARE ABOUT, and it is not the counterparty. `cross_document_agreement` in
-# policy.yaml declares WHICH fields the two documents of a claim must agree on and WHAT it costs
+# 🔴 What these tests are about, and it is not the counterparty. `cross_document_agreement` in
+# policy.yaml declares which fields the two documents of a claim must agree on and what it costs
 # them not to; the engine reads that block. So the assertions below come in pairs — the axis
 # declared and the same claim labelled, the axis withdrawn and the same claim passing — because a
 # check that fires whatever the file says would be a check the file does not control.
 #
-# ⚠️ THE VARIANTS ARE BUILT HERE AND HANDED TO THE ENGINE. config/policy.yaml is never edited to
+# ⚠️ The variants are built here and handed to the engine. config/policy.yaml is never edited to
 # make one of these pass: it is the file the rest of this suite reads its expectations from, and a
 # test that moved it would be proving a property of its own edit. `policy_variant` patches the one
 # function the engine reads the file through, so the accessor's own parsing and guards run on the
@@ -842,7 +842,7 @@ COUNTERPARTY_AXIS = {
 
 
 def a_pair_naming_two_parties() -> list[DocGroundTruth]:
-    """An invoice from one party beside a payment to another, and ORDINARY IN EVERY OTHER RESPECT:
+    """An invoice from one party beside a payment to another, and ordinary in every other respect:
     the amounts agree to the kopiyka, both dates are inside the period and in order, and every line
     of the basket is covered. So a claim built from it is `covered` on every axis but this one,
     which is what makes it usable as the input to both directions below."""
@@ -854,9 +854,9 @@ def a_pair_naming_two_parties() -> list[DocGroundTruth]:
 
 
 def test_a_payment_made_to_another_party_is_insufficient_evidence():
-    """🔴 THE LINKAGE SLOT BROKEN BY WHO RATHER THAN BY HOW MUCH. Both documents are flawless and
+    """🔴 the linkage slot broken by who rather than by how much. Both documents are flawless and
     they agree about the money and the dates; the invoice was issued by one seller and the money
-    went to another, so nothing establishes that THIS payment paid for THIS obligation.
+    went to another, so nothing establishes that this payment paid for this obligation.
 
     `covered_fraction` is still 1.0 — every line of the invoice is covered, which is a fact about
     the lines and is true whatever the payment names — and nothing is reimbursed.
@@ -875,7 +875,7 @@ def test_a_payment_made_to_another_party_is_insufficient_evidence():
 
 
 def test_the_same_pair_passes_when_the_policy_declares_no_counterparty_axis():
-    """THE OTHER DIRECTION, AND THE ONE THAT MAKES THE FIRST MEAN SOMETHING. The identical
+    """the other direction, and the one that makes the first mean something. The identical
     documents, evaluated against a policy whose axis list is amount alone: nothing compares the two
     names, so the claim is an ordinary covered one.
 
@@ -892,12 +892,12 @@ def test_the_same_pair_passes_when_the_policy_declares_no_counterparty_axis():
 
 
 def test_the_verdict_a_disagreement_earns_is_read_from_the_policy():
-    """The OUTCOME is a parameter too, not only the axis. The same pair, against a policy that
+    """The outcome is a parameter too, not only the axis. The same pair, against a policy that
     declares the same axis with a different label, comes back carrying that label.
 
-    ⚠️ NOBODY WOULD WRITE THIS POLICY, and it is not offered as one: a broken linkage is
+    ⚠️ nobody would write this policy, and it is not offered as one: a broken linkage is
     `insufficient_evidence` for the reason `cross_document_agreement` gives, and the shipped file
-    says so. What this asserts is only that the engine takes the label FROM THE FILE — an engine
+    says so. What this asserts is only that the engine takes the label from the file — an engine
     that returned a constant would pass every other test in this section and fail this one.
     """
     with pytest.MonkeyPatch.context() as patch:
@@ -935,7 +935,7 @@ def test_two_failed_axes_declaring_different_verdicts_are_refused():
     labels they declare. Picking either would be the engine deciding a policy question, and a
     consumer's engine picking the other would label the same claim differently.
 
-    ⚠️ UNREACHABLE AGAINST THE SHIPPED FILE, where every axis declares `insufficient_evidence`, and
+    ⚠️ unreachable against the shipped file, where every axis declares `insufficient_evidence`, and
     asserted against a variant for that reason.
     """
     invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
@@ -953,7 +953,7 @@ def test_the_axes_are_applied_in_the_order_the_policy_declares_them():
     """`imperfection` follows the file, not the order the predicates happen to be written in. A
     claim failing two axes is reported the same way every run, and the way is the policy's.
 
-    Asserted on a REVERSED variant rather than on the shipped order alone: against the file's own
+    Asserted on a reversed variant rather than on the shipped order alone: against the file's own
     order the two are indistinguishable from a hardcoded sequence.
     """
     invoice = doc("c1_d1", DocType.INVOICE, amount="1200.00", items=[item("1200.00")],
@@ -988,8 +988,8 @@ def test_the_shipped_policy_declares_the_axes_this_suite_was_written_against():
 
 
 def a_pair_citing_another_invoice() -> list[DocGroundTruth]:
-    """An invoice numbered one way beside a payment whose purpose cites a DIFFERENT рахунок, and
-    ORDINARY IN EVERY OTHER RESPECT: the amounts agree to the kopiyka, both dates are inside the
+    """An invoice numbered one way beside a payment whose purpose cites a different рахунок, and
+    ordinary in every other respect: the amounts agree to the kopiyka, both dates are inside the
     period and in order, one party on both pages, every line covered. So the pair fails on the one
     dimension no other axis reads — which document the money settled."""
     return [
@@ -1001,10 +1001,10 @@ def a_pair_citing_another_invoice() -> list[DocGroundTruth]:
 
 
 def test_a_payment_citing_another_invoice_is_insufficient_evidence():
-    """🔴 THE LINKAGE SLOT BROKEN BY WHAT WAS SETTLED, rather than by how much, when, or to whom.
+    """🔴 the linkage slot broken by what was settled, rather than by how much, when, or to whom.
     Both documents are flawless and agree on every other dimension; the payment declares on its
-    own purpose line that it settles a different purchase, so nothing establishes that THIS money
-    paid THIS obligation."""
+    own purpose line that it settles a different purchase, so nothing establishes that this money
+    paid this obligation."""
     result = evaluate(a_pair_citing_another_invoice())
 
     assert result.verdict is Verdict.INSUFFICIENT_EVIDENCE
@@ -1032,7 +1032,7 @@ def test_the_same_pair_passes_when_the_policy_declares_no_subject_axis():
 
 
 def test_an_uncited_payment_is_not_a_subject_disagreement():
-    """⛔ ABSENCE IS NEVER A DISAGREEMENT ON THIS AXIS — the guard the old refusal of a subject
+    """⛔ absence is never a disagreement on this axis — the guard the old refusal of a subject
     axis turned into. A generic purpose, a ВН citation and an unprinted purpose line all leave
     `cites_document_no` empty, and every such pair is an ordinary covered claim; anything else
     would relabel the majority of the corpus for carrying the citation noise KL-16 documents."""
@@ -1139,14 +1139,13 @@ def test_a_disagreeing_claim_consumes_no_balance():
 def test_a_bank_statement_now_pairs_with_a_subject_document_like_any_other_payment():
     """What replaced the blanket refusal of a statement, and it is the same test inverted.
 
-    A statement used to be refused outright here, on the ground that it lists several
-    transactions while its label carried one amount for the whole document, so nothing pointed
-    at the row the claim was about. Its label now describes ONE TRANSACTION — the row's amount,
-    date, counterparty and direction, with `relevant_transaction` naming the row — so the
-    claim's money is identified exactly as well as it is on a confirmation, and the type is an
-    ordinary payment document to this function.
+    The blanket refusal rested on a statement listing several transactions while its label
+    carried one amount for the whole document, so nothing pointed at the row the claim was about.
+    Its label describes one transaction — the row's amount, date, counterparty and direction, with
+    `relevant_transaction` naming the row — so the claim's money is identified as well as it is on
+    a confirmation, and the type is an ordinary payment document to this function.
 
-    Asserted on the SHAPE rather than on a verdict, because that is what changed: one
+    Asserted on the shape rather than on a verdict, because that is what changed: one
     transaction, the invoice as its subject and the statement as its payment.
     """
     statement = doc("c1_d2", DocType.BANK_STATEMENT, amount="600.00")
@@ -1163,8 +1162,8 @@ def test_a_bank_statement_now_pairs_with_a_subject_document_like_any_other_payme
 def test_a_credit_is_refused_because_money_arriving_proves_no_expense():
     """🔴 The invariant of the statement class, checked on the oracle rather than on the builder.
 
-    Only a DEBIT can be proof of payment. A credit is a refund or a reversal, and a claim whose
-    proof of payment is money ARRIVING is a claim proving that the money came back. policy.yaml
+    Only a debit can be proof of payment. A credit is a refund or a reversal, and a claim whose
+    proof of payment is money arriving is a claim proving that the money came back. policy.yaml
     assigns no verdict to that, so the engine refuses rather than inventing one.
 
     Built by hand because `content_builder.BankStatement` cannot produce it — it refuses to
@@ -1261,10 +1260,10 @@ def test_the_limit_binds_on_the_money_that_moved_once():
 
 
 def test_a_claim_whose_documents_disagree_on_currency_is_refused():
-    """The engine converts a foreign-currency claim, but a claim stated in TWO currencies
+    """The engine converts a foreign-currency claim, but a claim stated in two currencies
     is still refused: coverage pools line items across subject documents and every
     cross-document axis compares amounts between documents, and policy.yaml states no
-    rule for doing either across two currencies. The refusal has to see EVERY document —
+    rule for doing either across two currencies. The refusal has to see every document —
     the payment document is the one with no line items to give it away, and before the
     conversion landed this same case was what `_check_currency` iterated for."""
     with pytest.raises(PolicyGapError, match="EUR"):
@@ -1305,7 +1304,7 @@ def _persona():
 
 
 def test_a_claims_shape_follows_the_evidence_its_category_can_assemble():
-    """What a claim's document list is, ASSERTED AGAINST THE REGISTRY rather than against a number.
+    """What a claim's document list is, asserted against the registry rather than against a number.
 
     It read `len(plan.documents) == 1` while every registered archetype proved both facts, and the
     invoice made that false in six categories of seven. The property was never "one document" — it
@@ -1379,7 +1378,7 @@ def test_a_registry_without_a_both_proving_archetype_plans_two_documents():
 
 
 def test_only_one_document_of_a_plan_carries_the_basket():
-    """Inventory item 5: the basket is sized ONCE for the claim, against what is left of
+    """Inventory item 5: the basket is sized once for the claim, against what is left of
     the annual balance. A second document carrying line items would spend the balance
     twice and the `limit_exhausted` mechanism would be counted under a size it never had.
     """
@@ -1417,9 +1416,9 @@ def test_a_plan_whose_documents_would_both_carry_a_basket_is_refused():
 
 
 def test_the_same_candidates_build_a_pair_or_a_gap_depending_only_on_the_intent():
-    """🔴 THE POINT OF `EvidenceIntent`, ASSERTED WHERE THE TWO CANNOT BE CONFUSED: one archetype
+    """🔴 the point of `EvidenceIntent`, asserted where the two cannot be confused: one archetype
     list, two calls, two shapes. A payment document alone is what the cause `subject_not_evidenced`
-    needs, and it must be REACHED BY ASKING — not by a subject archetype failing to turn up, which
+    needs, and it must be reached by asking — not by a subject archetype failing to turn up, which
     is what the refusal one test below still means.
 
     Both calls are made against the same `PAIR_REGISTRY` candidates, so nothing about the registry
@@ -1445,7 +1444,7 @@ def test_the_same_candidates_build_a_pair_or_a_gap_depending_only_on_the_intent(
 
 
 def test_an_evidence_gap_needs_a_payment_archetype_and_says_so_when_there_is_none():
-    """The gap is in the SUBJECT and nowhere else. Asked for one where only a subject archetype is
+    """The gap is in the subject and nowhere else. Asked for one where only a subject archetype is
     registered, the planner refuses instead of returning an invoice on its own — that claim proves
     no payment at all, which is `not_proof_of_payment`, a different verdict nobody asked for here.
     """
@@ -1462,7 +1461,7 @@ def test_a_subject_not_evidenced_claim_is_planned_as_a_payment_and_nothing_else(
     """The plan the cause needs, built through `plan_claim` rather than through the selector, so
     that the route from a drawn cause to a shape is what is pinned.
 
-    The category is one the registry CAN document completely — `PAIR_REGISTRY` holds an invoice —
+    The category is one the registry can document completely — `PAIR_REGISTRY` holds an invoice —
     which is the whole distinction: the subject document is available and is deliberately not
     planned. A gap that only occurred where nothing else was possible would be a shortage wearing
     the name of a decision.
@@ -1488,14 +1487,14 @@ def test_a_rejected_plan_is_refused_by_the_engine_on_the_period_and_on_nothing_e
 
     The two halves were tested apart — the engine's period check on hand-built documents further
     up this file, the planner's draw in tests/test_pipeline.py — and each can be right while the
-    pair is wrong. A plan that displaced the SUBJECT document's date instead of the payment's, or
+    pair is wrong. A plan that displaced the subject document's date instead of the payment's, or
     that displaced by a fortnight into a window edge, would satisfy both halves and produce a
     `covered` claim under a `rejected` target.
 
-    🔴 EVERY LINE OF THE BASKET IS COVERED HERE, deliberately: `covered_fraction` comes back 1.0
+    🔴 every line of the basket is covered here, deliberately: `covered_fraction` comes back 1.0
     and the verdict is still `rejected`, which is the whole of the distinction the two routes to
     that verdict draw. Nothing about this claim is unestablished and nothing about it is
-    non-covered — the policy does not cover it because of WHEN the money moved.
+    non-covered — the policy does not cover it because of when the money moved.
     """
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(claim_planner, "ARCHETYPES", PAIR_REGISTRY)
@@ -1526,12 +1525,12 @@ def test_a_rejected_plan_is_refused_by_the_engine_on_the_period_and_on_nothing_e
 
 
 def test_a_zero_coverage_plan_is_rejected_by_the_engine_on_the_basket_and_on_nothing_else():
-    """The loop closed for the OTHER route: the planner's zero coverage target, read back by the
+    """The loop closed for the other route: the planner's zero coverage target, read back by the
     oracle that labels it. The mirror of the period test above, with the two mechanisms swapped —
     an ordinary in-window date and a basket the category covers none of.
 
-    🔴 THE DATE IS INSIDE THE WINDOW HERE, deliberately: `covered_fraction` comes back 0.0 and
-    the verdict is still `rejected`, with an EMPTY `imperfection` — which is the whole of the
+    🔴 the date is inside the window here, deliberately: `covered_fraction` comes back 0.0 and
+    the verdict is still `rejected`, with an empty `imperfection` — which is the whole of the
     distinction the two routes draw, and the property that stops a consumer reading the verdict
     off the calendar. A plan that also displaced the date would collapse the two routes into one
     and the corpus would go back to measuring a single rule.
@@ -1566,7 +1565,7 @@ def test_a_zero_coverage_plan_is_rejected_by_the_engine_on_the_basket_and_on_not
 
 
 def test_a_gap_claim_refuses_its_subject_document_by_naming_the_intent():
-    """Two refusals, one method, and they must not read alike. A COMPLETE plan with no carrier is
+    """Two refusals, one method, and they must not read alike. A complete plan with no carrier is
     inconsistent — something went missing — while a gap plan has none by design, and a caller told
     "0 documents state what was bought" would go looking for a template rather than at its own
     assumption that every claim has a subject.
@@ -1582,7 +1581,7 @@ def test_a_gap_claim_refuses_its_subject_document_by_naming_the_intent():
     with pytest.raises(ValueError, match="ON PURPOSE") as deliberate:
         _ = gap.subject_document
 
-    # The same documents WITHOUT the intent are a plan that lost its subject, and that message is
+    # The same documents without the intent are a plan that lost its subject, and that message is
     # the other one. Asserted as a pair: a single message serving both cases is the defect.
     accidental = ClaimPlan(
         claim_id="c2", persona_id="p001", category="vitamins_nutrition",
@@ -1678,22 +1677,22 @@ def test_the_claim_label_of_a_two_document_claim_is_linked():
 def test_the_vendor_is_chosen_once_per_claim_however_many_documents_it_has(tmp_path):
     """Inventory item 7, checked on the loop rather than on the builder.
 
-    A sole trader's name is DRAWN, so two calls to `_pick_vendor` for one claim would put
+    A sole trader's name is drawn, so two calls to `_pick_vendor` for one claim would put
     two different sellers on two documents of one purchase. Counted here through a real
     run, so that the guarantee is a property of the loop and not of a call the loop
     happens not to make yet.
 
-    🔴 THE STUB MIRRORS THE LIVE SIGNATURE KEYWORD FOR KEYWORD, AND THAT IS LOAD-BEARING RATHER
-    THAN TIDINESS. `assembler._payee_the_payment_names` passes `excluding_name=` on every claim
+    🔴 the stub mirrors the live signature keyword for keyword, and that is load-bearing rather
+    than tidiness. `assembler._payee_the_payment_names` passes `excluding_name=` on every claim
     planned as `counterparty_mismatch`, so a stub one parameter short raises `TypeError` the
     moment the seed stream shifts such a claim into this profile — it was green by seed luck
     alone. Verified rather than assumed: at seed 2, same personas and claims, the run plans one
     such claim, and the short stub failed there with "counting() got an unexpected keyword
     argument 'excluding_name'".
 
-    ⚠️ AND THAT SECOND DRAW IS NOT COUNTED, because it is not the call this test is about. It
-    asks for a party the claim's own vendor is NOT — a deliberate second seller for the
-    payment document — while what is asserted here is that the claim's OWN vendor is drawn
+    ⚠️ and that second draw is not counted, because it is not the call this test is about. It
+    asks for a party the claim's own vendor is not — a deliberate second seller for the
+    payment document — while what is asserted here is that the claim's own vendor is drawn
     once. Counting both would make the assertion below fail at seed 2 for a call that is
     correct.
     """
@@ -1728,7 +1727,7 @@ def test_document_ids_are_numbered_from_the_plan_and_not_fixed_at_one(tmp_path):
     """Inventory item 6. `_d1` was hardcoded; the id now comes from the position of the
     document in the plan, and the claim label points at exactly the documents written.
 
-    NOT ADDRESSABLE UNTIL A SECOND ARCHETYPE REGISTERS, and that is expected rather than a
+    Not addressable until a second archetype registers, and that is expected rather than a
     weakness here. With one document per plan the expected list is `["<claim>_d1"]`, which a
     hardcoded `_d1` also produces — so reverting the fix does not turn this red. It starts
     discriminating the moment a plan carries two documents. Do not "strengthen" it by
@@ -1749,14 +1748,14 @@ def test_document_ids_are_numbered_from_the_plan_and_not_fixed_at_one(tmp_path):
 
 
 def test_a_planned_archetype_with_no_builder_fails_by_name():
-    """The other assumption the loop used to carry: every document was built by
+    """The other assumption a dispatch loop can carry: that every document is built by
     `build_prro_receipt`, whatever the plan said. An archetype nothing can produce has to say so
     rather than be handed to the one builder that exists.
 
-    ⚠️ THE SUBJECT OF THIS TEST HAD TO MOVE. It planned a `ua_invoice`, which had no builder; it has
-    one now, so the archetype stopped being unproducible and the test began asserting that a real
-    builder raises on an empty vendor — a different thing entirely, and one nothing needed. An `act`
-    takes its place: 📄 a type policy.yaml gives evidence for and no template produces. The
+    ⚠️ the subject has to be a class that stays unproducible. `ua_invoice` served until it gained a
+    builder, at which point the test silently became one about a real builder raising on an empty
+    vendor. An `act` takes its place: 📄 a type policy.yaml gives evidence for and no template
+    produces. The
     assertion below checks that it genuinely has no builder, so the day one lands this test says so
     instead of passing while measuring nothing.
     """
@@ -1779,7 +1778,7 @@ def test_a_planned_archetype_with_no_builder_fails_by_name():
         assembler._build_document(
             random.Random(1), persona=_persona(), plan=plan,
             document_plan=plan.documents[0], vendor={},
-            # Hand-built rather than drawn: the refusal must happen BEFORE anything reads either,
+            # Hand-built rather than drawn: the refusal must happen before anything reads either,
             # and a drawn identity would need a vendor this test deliberately does not supply.
             identity=PartyIdentity(
                 tax_code="12345678", vat_number=None, bank_name="bank",

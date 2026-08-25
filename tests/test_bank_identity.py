@@ -1,20 +1,20 @@
 """One bank name, one bank code — everywhere it is drawn, not only within one call.
 
-🔴 THE DEFECT THIS FILE EXISTS FOR: `draw_party_identity`, `build_payment_confirmation` and
-`build_bank_statement` each used to draw a bank's NAME and its МФО (`bank_code`) INDEPENDENTLY.
-Every single call was internally consistent — the account it built really did carry the code it
-drew — so nothing local to one call could see the problem. What broke is the fact TWO DIFFERENT
-calls have no reason to agree: measured on a delivered run, 7 claims of 60 printed one real bank
-name with two different codes, because the payer's own bank (drawn in the payment document) and
-the claim's payee bank (drawn in `draw_party_identity`) happened to name the same institution.
+🔴 the defect this file exists for: `draw_party_identity`, `build_payment_confirmation` and
+`build_bank_statement` each drawing a bank's name and its МФО (`bank_code`) independently. Every
+such call is internally consistent — the account it builds really does carry the code it drew — so
+nothing local to one call can see the problem. Two different calls have no reason to agree:
+measured on a delivered run, 7 claims of 60 printed one real bank name with two different codes,
+because the payer's own bank (drawn in the payment document) and the claim's payee bank (drawn in
+`draw_party_identity`) happened to name the same institution.
 
-THE FIX IS A LOOKUP, NOT A STRICTER DRAW. `config.bank_codes` is a fixed, invented name → code
-table (`config/vendors.json` `banks.<country>[].bank_code`); every site above draws the NAME with
-`rng.choice(banks(country))` exactly as before and then looks the CODE up, so a code can no longer
+The fix is a lookup, not a stricter draw. `config.bank_codes` is a fixed, invented name → code
+table (`config/vendors.json` `banks.<country>[].bank_code`); every site above draws the name with
+`rng.choice(banks(country))` exactly as before and then looks the code up, so a code can no longer
 differ between two draws of the same name — not because the odds improved, but because there is
 only one value to draw from.
 
-Every expectation below is checked against `config.bank_codes` directly — the table IS the known
+Every expectation below is checked against `config.bank_codes` directly — the table is the known
 answer here, unlike a drawn value, because it is not seeded: it is a fixed fact of the
 configuration and every builder is required to agree with it.
 """
@@ -44,7 +44,7 @@ EU_VENDOR = {
 CLAIMANT = "Ковальчук Олена Петрівна"
 CLAIMANT_CODE = "2345678901"
 WHEN = datetime(2026, 6, 11, 14, 33)
-# Enough seeds that, with a FOUR-name pool, the same name is drawn twice across independent calls
+# Enough seeds that, with a four-name pool, the same name is drawn twice across independent calls
 # many times over — see `test_content_builder`'s sibling note on cardinality. Four seeds proved too
 # few for an equality test elsewhere in this repository (`test_cross_document_identity.SEEDS`); 40
 # is comfortably past the point of relying on luck, and the test below asserts the coincidence
@@ -54,8 +54,8 @@ SEEDS = range(40)
 
 def _draws(seed: int):
     """One identity, one confirmation issuer and one statement issuer, drawn the way the
-    assembler draws them — the identity ONCE per claim, the payment document's own bank as a
-    SEPARATE call, exactly the two independent draws the defect lived between."""
+    assembler draws them — the identity once per claim, the payment document's own bank as a
+    separate call, exactly the two independent draws the defect lived between."""
     rng = random.Random(seed)
     vendor = resolve_vendor(rng, dict(VENDOR), "UA")
     identity = draw_party_identity(rng, vendor, "UA")
@@ -121,7 +121,7 @@ def test_the_euro_pools_codes_are_eight_digits_and_unique():
 
 
 def test_a_euro_seller_is_banked_in_the_euro_pool_and_not_at_home():
-    """🔴 THE IDENTITY IS WHOSE IT IS. A seller of the `EU` pool holds a euro-area account, and the
+    """🔴 the identity is whose it is. A seller of the `EU` pool holds a euro-area account, and the
     claimant's jurisdiction has nothing to say about it — `assembler` draws the identity in the
     pool the seller came from, and before it did, a foreign platform was given a Ukrainian IBAN
     that no document happened to print."""
@@ -166,9 +166,9 @@ def test_a_statements_own_issuer_takes_its_code_from_the_table():
 
 
 def test_the_same_bank_name_never_carries_two_codes_across_independent_draws():
-    """🔴 THE ROW THIS FILE IS ACTUALLY FOR. `draw_party_identity` (the claim's payee) and
-    `build_payment_confirmation` (the same claim's payer, issued by the payer's own bank) are TWO
-    INDEPENDENT DRAWS from the same four-name pool — nothing ties them together except that both
+    """🔴 the row this file is actually for. `draw_party_identity` (the claim's payee) and
+    `build_payment_confirmation` (the same claim's payer, issued by the payer's own bank) are two
+    independent draws from the same four-name pool — nothing ties them together except that both
     now read the same table. Across many seeds the two coincide on a name repeatedly; when they
     do, this asserts the code came out identical, and it also asserts that the coincidence
     happened, so a pool change that stopped producing it could not turn this into a check of

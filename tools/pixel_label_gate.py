@@ -1,8 +1,8 @@
-"""The gate that reads PIXELS — the one side of this generator nothing else measures.
+"""The gate that reads pixels — the one side of this generator nothing else measures.
 
     uv run python tools/pixel_label_gate.py --seed 20260803 --personas 8 --claims-per-persona 3
 
-🔴 WHY IT EXISTS. Generation is label-first, so the label is the CAUSE of the image and any
+🔴 why it exists. Generation is label-first, so the label is the cause of the image and any
 disagreement between what is printed and what is recorded is a defect of this generator rather
 than annotation noise. Every gate in `tests/` nevertheless compares code against code: the
 reference-text gate reads `innerText` against the markup (DOM against DOM), the bbox gate moves a
@@ -10,32 +10,32 @@ synthetic white rectangle, the render-region gate does box-in-box arithmetic. No
 the PNG a consumer receives. Measured rather than argued: setting every channel's JPEG quality to
 3–5 — a mutation that visibly wrecks decimal separators — passed the whole suite.
 
-WHAT A `field_bboxes` ENTRY PROMISES, because that is what this gate holds the corpus to. It is
+What A `field_bboxes` entry promises, because that is what this gate holds the corpus to. It is
 part of the ground truth, and it says: *this rectangle of this image is where that field is
 printed*. Two things have to be true of it, and each is a separate statement here.
 
-  1. EVIDENCE — the pixels inside the box are that field's own ink. Tested by EDITING the field's
+  1. Evidence — the pixels inside the box are that field's own ink. Tested by editing the field's
      printed characters, in place, to characters of the same width, and re-rendering: the box's
      pixels must change, and the pixels of boxes that share no area with it must not. A box whose
      pixels do not move when its own value changes is pointing at nothing, or at another field's
      value; a box that moves when a stranger's value changes is showing that stranger.
-     ⚠️ This is the statement that is INDEPENDENT of the renderer's own account of itself. It does
+     ⚠️ This is the statement that is independent of the renderer's own account of itself. It does
      not ask the DOM where a value is; it asks the raster which pixels the value is responsible for.
 
-  2. SURVIVAL — the capture channel did not destroy the marks. Tested against THE SAME CHANNEL
-     WITH ITS JPEG STEP LEFT OUT (`degrader.degrade(..., compress=False)`): same paper phase, same
+  2. Survival — the capture channel did not destroy the marks. Tested against the same channel
+     with its JPEG step left out (`degrader.degrade(..., compress=False)`): same paper phase, same
      padding, perspective, rotation and blur, same seed, so the geometry cancels and the peak
      normalized cross-correlation over the box answers one question — what the compression cost.
 
-⛔ IT IS NOT AN OCR TEST AND CARRIES NO RECOGNIZER. Two were tried and rejected before this shape
-was chosen: Tesseract 5 (eng and snum) misreads the mono digits of these renders on CLEAN pixels —
+⛔ it is not an OCR test and carries no recognizer. Two were tried and rejected before this shape
+was chosen: Tesseract 5 (eng and snum) misreads the mono digits of these renders on clean pixels —
 «2 301,90» came back as «2 361,99» — so it would have manufactured findings, and a template
 rasterized from the vendored TTF separated the true string from a one-digit decoy by 0.02 NCC,
 which is not an instrument either. Both failures are of the same kind: an instrument less reliable
 than the thing it measures. What is asked here instead is answerable exactly — whether the pixels
 of a labelled box depend on that field's value, and whether the shipped file still carries them.
 
-THE CALIBRATION, and it is a measurement rather than a preference. Peak NCC over the MARKS of each
+The calibration, and it is a measurement rather than a preference. Peak NCC over the marks of each
 labelled box (see `_ink_template`), four seeds × 6 personas × 3 claims — 2 461 boxes — shipped
 recipe against the same recipe with every channel's JPEG quality forced to 3–5:
 
@@ -45,37 +45,37 @@ recipe against the same recipe with every channel's JPEG quality forced to 3–5
     scan                0.904 / 0.987                 0.638–0.713 / 0.33–0.45
     photo               0.765 / 0.977                 0.639–0.746 / 0.23–0.31
 
-🔴 A FLOOR PER CHANNEL AND NOT ONE FLOOR, because the four are not comparable: a photograph is
+🔴 A floor per channel and not one floor, because the four are not comparable: a photograph is
 padded, warped, rotated, blurred and compressed at 45–75, a screenshot only compressed at 70–88,
 and `digital_pdf` is the identity. One number would have to clear the photograph's worst box, which
 would put it beneath the mutation's median on the other three — a floor that could not go red where
 the damage is easiest to see. `LEGIBILITY_FLOORS` therefore sits below each channel's own worst
 shipped box by 3.6–6.5 points, and every one of them is far above that channel's mutated median.
 
-⚠️ A CHANNEL WHOSE RECIPE GAINS A FURTHER LOSSY STEP HAS TO REDO THIS MEASUREMENT. The floors are a
+⚠️ A channel whose recipe gains a further lossy step has to redo this measurement. The floors are a
 property of the recipes in `degrader`, not of the JPEG format, and a new blur or a wider quality
 range moves them.
 
-WHAT IT DOES NOT SEE, stated so the report cannot be read as wider than it is:
-  ⛔ it does not judge whether the printed value equals the LABEL value — `reference_text` and the
+What it does not see, stated so the report cannot be read as wider than it is:
+  ⛔ it does not judge whether the printed value equals the label value — `reference_text` and the
      builders' own invariant tests answer that, and the chain is: label = printed text (those
      tests) ∧ printed text ⇒ these pixels (this gate);
   ⛔ it does not read a caption, so a value printed under the wrong heading in the right place is
      invisible to it;
   ⛔ a box with no editable text of its own (a wrapper element whose children carry the values, an
-     empty box, a QR) is REPORTED AS UNMEASURED rather than passed. The counts are printed, because
+     empty box, a QR) is reported as unmeasured rather than passed. The counts are printed, because
      a gate that silently narrows its own denominator reads as coverage it does not have.
 
-HOW IT REACHES A REAL RUN. It wraps `assembler.degrade` and `Renderer.render` for the duration of
+How it reaches a real run. It wraps `assembler.degrade` and `Renderer.render` for the duration of
 one `generate_dataset` call, so the documents it measures are the documents that run produced —
-every archetype, every channel, at their real draw rates — and it adds NOTHING to the shipped
+every archetype, every channel, at their real draw rates — and it adds nothing to the shipped
 pipeline: no byte of a corpus changes because this file exists. The wrapping is the fragile part,
-so the gate asserts its own coverage against the manifest — both the DOCUMENTS observed and the
-LABELLED BOXES seen — and a shortfall in either is reported as a broken instrument rather than as a
+so the gate asserts its own coverage against the manifest — both the documents observed and the
+labelled boxes seen — and a shortfall in either is reported as a broken instrument rather than as a
 clean corpus.
 
-⚠️ BOTH DENOMINATORS, BECAUSE THE DOCUMENT ONE ALONE CANNOT FAIL THE WAY IT NEEDS TO. A bundled
-file is composed from renders of its own, so a run observes MORE renders than it writes documents:
+⚠️ both denominators, because the document one alone cannot fail the way it needs to. A bundled
+file is composed from renders of its own, so a run observes more renders than it writes documents:
 the first production sweep reported 1 381 against 1 261 and passed, while measuring 30 605 of the
 corpus's 37 796 labelled boxes. See `_RESERVED`.
 """
@@ -111,21 +111,21 @@ LEGIBILITY_FLOORS = {
     Capture.PHOTO: 0.70,
 }
 
-# How many groups the editable fields of a page are split into, so that a box showing a NEIGHBOUR's
+# How many groups the editable fields of a page are split into, so that a box showing a neighbour's
 # value is caught. Three, because the boxes of one receipt line sort as `item_0_name`,
 # `item_0_price`, `item_0_qty`, `item_0_sum` — with two groups the price and the sum would be edited
 # together and a swap between them would look like each box answering to itself.
 EDIT_GROUPS = 3
 
-# When a box that was NOT edited still differs, this is how close its pattern has to stay to its own
+# When a box that was not edited still differs, this is how close its pattern has to stay to its own
 # former self to count as the same value merely re-positioned. Antialiasing under a sub-pixel shift
 # scores 0.999 and above; a box that acquired a different value scores far below.
 _SAME_PATTERN = 0.99
 
-# 🔴 THE EDIT IS A REORDERING AND NOT A SUBSTITUTION, and the reason is the whole reason this
+# 🔴 The edit is a reordering and not a substitution, and the reason is the whole reason this
 # statement can be measured at all. An edited element must occupy exactly the width it occupied
 # before, or the page reflows and a pixel comparison answers about the reflow instead. A reversal
-# keeps the GLYPH MULTISET, so the advance width is the same in a proportional face as well as in a
+# keeps the glyph multiset, so the advance width is the same in a proportional face as well as in a
 # mono one — measured: substituting characters left 94 of 137 boxes unmeasurable on a two-persona
 # run, reversing them leaves the layout alone.
 #
@@ -149,7 +149,7 @@ def edited_text(body: str) -> str:
         return reversed_body
     return "".join(_SUBSTITUTIONS.get(ch, ch) for ch in body)
 
-# An element that carries a `data-field` AND whose whole content is text. A wrapper whose children
+# An element that carries a `data-field` and whose whole content is text. A wrapper whose children
 # hold the values is deliberately not matched: editing it would edit its children too, and the
 # question this gate asks is per box.
 _LEAF_FIELD = re.compile(
@@ -232,12 +232,12 @@ def _grey(image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
 
 
-# How far from the paper a pixel has to be to count as a mark. Read against the crop's OWN median
+# How far from the paper a pixel has to be to count as a mark. Read against the crop's own median
 # rather than against white, because a photographed page carries a lighting gradient and a shadow:
 # the paper inside one box is grey, and a fixed threshold would call a whole box ink.
 #
-# ⚠️ IT IS A FIXED DISTANCE ALL THE SAME, AND THAT IS THE INSTRUMENT'S KNOWN LIMIT. On a photograph
-# whose shadow falls across a requisite the WHOLE crop can span 37 grey levels — the digits stay
+# ⚠️ It is a fixed distance all the same, and that is the instrument's known limit. On a photograph
+# whose shadow falls across a requisite the whole crop can span 37 grey levels — the digits stay
 # legible to a reader, and their distance from the local paper is under this threshold, so the box
 # goes unmeasured. Measured: 2 boxes of 1580 on one seed, both of them a tax code under a cast
 # shadow. They are counted under `survival: no marks in the reference` and printed, so the gap is a
@@ -245,19 +245,18 @@ def _grey(image: np.ndarray) -> np.ndarray:
 # would close it and would re-open the calibration above, which is why it is recorded rather than
 # tuned here.
 #
-# 🔴 AND IN EITHER DIRECTION, WHICH THE FIRST VERSION GOT WRONG AND THE COVERAGE REPORT CAUGHT. Two
-# archetypes of this corpus are banking-app screens in a DARK theme — light text on a dark panel —
-# so "darker than the paper" found no marks in any of their boxes and nine of them went unmeasured
-# on a single seed. They were counted and printed rather than passed over, which is the only reason
-# the gap was visible at all; a gate that had reported them as clean would have been silent about
-# two whole archetypes.
+# 🔴 And in either direction. Two archetypes of this corpus are banking-app screens in a dark theme
+# — light text on a dark panel — so "darker than the paper" finds no marks in any of their boxes,
+# and nine went unmeasured on a single seed. Counting and printing them rather than passing over
+# them is the only reason that gap is visible at all; reporting them as clean would be silent
+# about two whole archetypes.
 _INK_CONTRAST = 25
 
 
 def _ink_template(reference: np.ndarray) -> np.ndarray | None:
     """The part of a reference crop that has marks in it, or `None` if it has none.
 
-    🔴 THE CORRELATION IS TAKEN OVER THE GLYPHS AND NOT OVER THE BOX, and the difference is the
+    🔴 the correlation is taken over the glyphs and not over the box, and the difference is the
     difference between an instrument and a rumour. A right-aligned invoice cell is 66 px wide and
     holds a single «1»: over the whole box the comparison is dominated by how faithfully the
     compression reproduced blank paper, and on a shadowed photograph that put three such cells
@@ -275,14 +274,14 @@ def _ink_template(reference: np.ndarray) -> np.ndarray | None:
 def _shares_a_line(one: BBox, other: BBox, *, slack: int = 1) -> bool:
     """Whether two boxes sit on the same line of text.
 
-    🔴 THE EXEMPTION THAT SEPARATES THE INSTRUMENT'S OWN NOISE FROM A FINDING, and it took three
-    false ones to state. A line of text is laid out as ONE FLOW: editing anything in it re-shapes
+    🔴 the exemption that separates the instrument's own noise from a finding, and it took three
+    false ones to state. A line of text is laid out as one flow: editing anything in it re-shapes
     what follows, and Cyrillic reversed inside «Олекса Семенюк, РНОКПП 2674077210» moves the code
-    after it by a FRACTION of a pixel. The box rounds to the same rectangle and its antialiasing
+    after it by a fraction of a pixel. The box rounds to the same rectangle and its antialiasing
     does not, so every invoice reported its `buyer_code` and its `signatory_post` as showing
     somebody else's value at pattern correlations of 0.68–0.98 — real pixel differences, and not one
     of them a wrong value.
-    ⛔ Nothing is lost by exempting them: a box that shows a NEIGHBOUR's value instead of its own
+    ⛔ Nothing is lost by exempting them: a box that shows a neighbour's value instead of its own
     fails the first half of the statement — its own edit moves nothing — and that half is exempted
     from nothing.
     """
@@ -428,7 +427,7 @@ def evidence_findings(
                 coverage.unmeasured["evidence: the edit resized the page"] += len(edited)
             continue
         difference = cv2.absdiff(_grey(clean), _grey(after))
-        # A box that MOVED cannot be measured: the comparison would answer about the move. Judged
+        # A box that moved cannot be measured: the comparison would answer about the move. Judged
         # per box rather than per page, because an edit that reflows one table cell leaves the rest
         # of the page where it was, and dropping the whole page for it would throw away most of the
         # corpus.
@@ -450,7 +449,7 @@ def evidence_findings(
                         "so its pixels are not this field's",
                     )
                 )
-        # The other half of the statement, and it is only answerable where NOTHING moved: on a page
+        # The other half of the statement, and it is only answerable where nothing moved: on a page
         # that reflowed, a box may differ because the text beside it shifted.
         if set(variant.field_bboxes) != settled:
             if coverage is not None:
@@ -461,9 +460,9 @@ def evidence_findings(
                 continue
             if any(_shares_a_line(boxes[name], boxes[n]) for n in edited):
                 continue
-            # ⚠️ A DIFFERENT PIXEL IS NOT A DIFFERENT VALUE, and this is the distinction that
+            # ⚠️ A different pixel is not a different value, and this is the distinction that
             # separated the instrument's own noise from a finding. Reversing a proportional name
-            # changes its kerning, so the text after it on the same line moves by a FRACTION of a
+            # changes its kerning, so the text after it on the same line moves by a fraction of a
             # pixel: the box rounds to the same rectangle, the antialiasing does not, and every
             # invoice reported its `buyer_code` as showing somebody else's value. The peak
             # correlation slides, so a pattern that merely moved still matches itself; only a box
@@ -555,15 +554,15 @@ def _observing(staging: Path) -> Iterator[tuple[list[_Observed], list[dict]]]:
 # regions, the bundle's per-document frames. They are geometry rather than printed values, and
 # `assembler` strips them before a label is written.
 #
-# 🔴 `__doc_{i}__{name}` IS NOT ONE OF THEM, AND LISTING IT HERE COST THE GATE A FIFTH OF THE
-# CORPUS. It is a labelled FIELD of the i-th document of a bundled file, offset into the composed
+# 🔴 `__doc_{i}__{name}` is not one of them, and listing it here cost the gate a fifth of the
+# corpus. It is a labelled field of the i-th document of a bundled file, offset into the composed
 # page — a rectangle that reaches a consumer's label and therefore the exact thing this gate is
 # about. The frames are `__file_region_{i}__`, which the entry above already covers. Measured on
 # the first production sweep: `labelled boxes seen` came back 30 605 against a corpus carrying
-# 37 796, and the 7 191 missing were EXACTLY the boxes of the 240 documents that ship inside a
+# 37 796, and the 7 191 missing were exactly the boxes of the 240 documents that ship inside a
 # bundle. The survival statement — did the shipped JPEG keep the marks — had never looked at one.
 #
-# ⚠️ AND THE BUNDLE IS NOT A CASE THE REST OF THE CORPUS VOUCHES FOR: it is the one file shape
+# ⚠️ And the bundle is not a case the rest of the corpus vouches for: it is the one file shape
 # where two documents are composed onto a taller sheet and the channel's geometry and compression
 # act on that, so "the other 81% survived" says nothing about it.
 _RESERVED = ("__content_extent__", "__page_region", "__file_region")
@@ -636,7 +635,7 @@ def scan_run(
 def _file_id(observed_file: dict, documents: list[_Observed]) -> str:
     """Which document (or documents) the file under measurement carries.
 
-    Matched on the PIXELS the degrader was handed rather than on call order: a bundled claim renders
+    Matched on the pixels the degrader was handed rather than on call order: a bundled claim renders
     two documents and then a composition, so the order of the two streams differs from the order of
     the files. A composed file matches no single render and is named after the documents whose boxes
     it carries.
@@ -655,8 +654,8 @@ def _with_manifest(coverage: Coverage, dataset) -> Coverage:
     """Attach nothing; check the denominators. A run that observed fewer documents than it wrote is
     an unhooked instrument, and the caller turns that into a finding.
 
-    🔴 BOXES ARE CHECKED AS WELL AS DOCUMENTS, AND THE DOCUMENT COUNT IS WHY THAT IS NOT ENOUGH.
-    The first production sweep observed 1 381 renders against 1 261 written documents — MORE, not
+    🔴 boxes are checked as well as documents, and the document count is why that is not enough.
+    The first production sweep observed 1 381 renders against 1 261 written documents — more, not
     fewer, because a bundled file is composed from renders of its own — so the document check
     passed while the gate was measuring 30 605 of the corpus's 37 796 labelled boxes. A denominator
     that can only be exceeded is a denominator that cannot fail. The count taken here is the one a

@@ -1,9 +1,9 @@
-"""The invoice: an OFFER TO PAY, and the subject document of the dominant pair.
+"""The invoice: an offer to pay, and the subject document of the dominant pair.
 
-🔴 WHAT THIS FILE MOSTLY ASSERTS IS AN ABSENCE, which is unusual and is the point. 📄 A Ukrainian
+🔴 what this file mostly asserts is an absence, which is unusual and is the point. 📄 A Ukrainian
 рахунок на оплату is not a primary accounting document — it proposes that the buyer pay, and the
-fact of payment is established by a payment document. So the class must NOT carry a payment status
-and must NOT carry an `amount_due`, and the consumer's requirement asking for the first of those is
+fact of payment is established by a payment document. So the class must not carry a payment status
+and must not carry an `amount_due`, and the consumer's requirement asking for the first of those is
 recorded in the contract as a divergence rather than satisfied. An absence is easy to introduce by
 accident and impossible to notice in a render, so it is tested rather than trusted.
 
@@ -70,7 +70,7 @@ NON_PAYER = {"legal_form": "FOP", "profile": "therapy_practice", "vat_payer": Fa
 NON_PAYER_CATEGORY = "mental_health"
 
 BUYER_NAME = "Ковальчук Олена Петрівна"
-# A CHECKSUM-CORRECT РНОКПП, generated rather than typed — it is swept by the checksum test below,
+# A checksum-correct РНОКПП, generated rather than typed — it is swept by the checksum test below,
 # and a hand-typed ten-digit string failed it. The same fixture defect as in test_bank_statement.py,
 # and the same fix: a persona's tax id is checksum-correct, so the fixture must be too.
 BUYER_CODE = generate_rnokpp(random.Random(5))
@@ -130,14 +130,14 @@ def rendered(renderer, tmp_path_factory):
     return invoice, renderer.render(SLUG, invoice.render_context(), output)
 
 
-# ------------------------------------------- what the class deliberately does NOT carry --
+# ------------------------------------------- what the class deliberately does not carry --
 
 
 def test_the_label_carries_no_payment_status_under_any_name():
-    """🔴 THE CENTRAL ABSENCE. 📄 An invoice is an offer to pay; the fact of payment is established
+    """🔴 the central absence. 📄 An invoice is an offer to pay; the fact of payment is established
     by a payment document, and 👁 0 of 2 open invoices print any status.
 
-    Asserted over the WHOLE record rather than by naming a field, because the failure to guard
+    Asserted over the whole record rather than by naming a field, because the failure to guard
     against is a status arriving under some other name — `paid`, `settled`, a boolean somewhere. The
     record's field set is fixed by `DocGroundTruth`, so this is a real sweep with a real
     denominator: every field of the model, checked for a value readable as a payment status.
@@ -156,8 +156,8 @@ def test_the_label_carries_no_payment_status_under_any_name():
 
 
 def test_the_label_carries_no_amount_due():
-    """🔴 `amount_due` IS A RECEIPT REQUISITE — 📄 line 24 of the fiscal receipt form, where it
-    differs from «СУМА» by the discount and the rounding. 👁 An invoice has ONE total block, so there
+    """🔴 `amount_due` is a receipt requisite — 📄 line 24 of the fiscal receipt form, where it
+    differs from «СУМА» by the discount and the rounding. 👁 An invoice has one total block, so there
     is nothing for a second amount to differ from, and a populated field would be `amount` twice
     under two names — the failure the labelling contract exists to prevent."""
     record = label(make_invoice())
@@ -170,12 +170,12 @@ def test_the_label_carries_no_amount_due():
 
 
 def test_the_page_prints_no_payment_status_either(renderer):
-    """The same absence on the RENDER, because a label and a page can disagree. Swept over the
+    """The same absence on the render, because a label and a page can disagree. Swept over the
     Ukrainian and Polish words a status would be written in — 📄 the consumer's own example is the
     Polish «Zapłacono», which is where that requirement came from.
 
-    🔴 THE INSTALMENT INVOICE IS SWEPT TOO, and it is the case this test is now most needed for. A
-    payment TERM is not a payment status — it says how the seller proposes to be paid, not that
+    🔴 the instalment invoice is swept too, and it is the case this test is now most needed for. A
+    payment term is not a payment status — it says how the seller proposes to be paid, not that
     anybody paid — and the difference is one word away: «черговий платіж» is a term, «сплачено» is
     a record. The verdict `partially_paid` rests on the term's presence, so a term that drifted
     into a status would put a printed word in the position of proof of payment, which is the one
@@ -195,7 +195,7 @@ def test_the_page_prints_no_payment_status_either(renderer):
 
 
 def test_an_invoice_payable_in_one_states_no_instalment_term():
-    """THE DEFAULT, and it has to stay the default: the marker a verdict rests on must be absent
+    """the default, and it has to stay the default: the marker a verdict rests on must be absent
     from every ordinary claim, or `partially_paid` would swallow the pairs that agree. `schedule`
     is `None` unless a plan names one — `build_invoice` never draws it."""
     invoice = make_invoice()
@@ -211,8 +211,8 @@ def test_the_instalment_is_the_total_divided_by_its_schedule(schedule):
     """One part of the obligation, to the kopiyka, half-up — the rounding every amount here uses.
 
     Computed against config/generation.yaml rather than against a stored figure, so a schedule
-    added or repriced there is covered without this test being edited. STRICTLY SMALLER THAN THE
-    TOTAL is asserted separately, because it is the property `policy_engine` discriminates on and
+    added or repriced there is covered without this test being edited. Strictly smaller than the
+    total is asserted separately, because it is the property `policy_engine` discriminates on and
     it is not implied by the division being correct: a schedule of one part would divide correctly
     and mark nothing.
     """
@@ -228,7 +228,7 @@ def test_the_instalment_is_the_total_divided_by_its_schedule(schedule):
 
 
 def test_the_instalment_term_is_printed_with_a_box_round_its_amount(renderer, tmp_path):
-    """The term reaches the PAGE, and the box hugs the figure rather than the sentence.
+    """The term reaches the page, and the box hugs the figure rather than the sentence.
 
     Three things, all of which a consumer depends on: the schedule's Ukrainian adverb is printed
     (so a reader can tell a quarterly plan from a monthly one), the amount is printed in the page's
@@ -241,7 +241,7 @@ def test_the_instalment_term_is_printed_with_a_box_round_its_amount(renderer, tm
 
     assert BLOCK["instalment_periods"]["quarterly"] in text
     assert "instalment_amount" in result.field_bboxes
-    # The box is BELOW the total's, because the term sits in the block under the totals — and it is
+    # The box is below the total's, because the term sits in the block under the totals — and it is
     # narrower than the page, which is what "round the amount" means geometrically.
     assert result.field_bboxes["instalment_amount"][1] > result.field_bboxes["total"][1]
     assert result.field_bboxes["instalment_amount"][2] < result.field_bboxes["title"][2] / 2
@@ -256,10 +256,10 @@ def test_an_invoice_states_no_schedule_the_configuration_does_not_declare():
 
 
 def test_no_line_item_carries_a_vat_letter():
-    """⛔ THE OBSERVED TABLE HAS NO PER-LINE VAT LETTER COLUMN — it prices VAT-inclusive and states
+    """⛔ the observed table has no per-line VAT letter column — it prices VAT-inclusive and states
     the tax once at the foot. A letter labelled and not printed would be a ground-truth value
     unreadable from the image, which is the rule that gave the bank statement its second money
-    column. Checked on a REGISTERED payer, where a receipt would carry one on every line."""
+    column. Checked on a registered payer, where a receipt would carry one on every line."""
     invoice = make_invoice(vendor=PAYER)
 
     assert invoice.vat_payer, "a non-payer carries no letters anyway — this would prove nothing"
@@ -282,7 +282,7 @@ def test_the_label_is_the_total_the_lines_come_to():
 
 
 def test_the_counterparty_is_the_supplier_and_the_payer_is_the_claimant():
-    """`counterparty` is the party opposite the claimant on every class; here that is the SUPPLIER.
+    """`counterparty` is the party opposite the claimant on every class; here that is the supplier.
     ⚠️ The buyer is the claimant — an invoice addressed to anybody else would evidence nothing about
     the persona filing the claim, the same reasoning that puts the persona on a statement's
     account."""
@@ -306,7 +306,7 @@ def test_the_amount_in_words_states_the_total(seed):
 
 @pytest.mark.parametrize("seed", range(10))
 def test_the_tax_is_the_tax_contained_within_the_total(seed):
-    """👁 Prices are VAT-INCLUSIVE, so the tax is extracted from the gross rather than added on top —
+    """👁 Prices are VAT-inclusive, so the tax is extracted from the gross rather than added on top —
     and the invoice's single «У т.ч. ПДВ» is the sum of what a receipt would print per rate. Derived
     from the letters before they are dropped, so the figure is the same one either class states."""
     invoice = make_invoice(seed)
@@ -363,16 +363,16 @@ def test_a_non_payers_invoice_drops_the_tax_line_and_the_column_suffix(renderer)
 
 
 def test_a_printed_offer_still_stands_on_the_day_the_claim_settles_it():
-    """🔴 THE PAGE MAY NOT BE CONTRADICTED BY ITS OWN CLAIM. 📄 «Рахунок дійсний до X р.» states how
+    """🔴 the page may not be contradicted by its own claim. 📄 «Рахунок дійсний до X р.» states how
     long the offer stands; a payment dated after X settles an offer that had lapsed, which is not a
     document a seller banks — it reissues the invoice. Nothing in policy.yaml reads the line, so no
     verdict moved and nothing noticed: measured over eight seeds, 100 of the 182 invoices that
     printed it were paid later than the date they printed, 27 of them on claims labelled `covered`.
     A consumer that learned to read the line would have rejected those claims and been right.
 
-    🔴 THE RUN COUNT IS DERIVED FROM THE RATE AT WHICH THE MUTATION SHOWS, not from the rate at
+    🔴 the run count is derived from the rate at which the mutation shows, not from the rate at
     which the line appears — the lesson of the subject-mismatch sweep. Dropping the coupling in
-    `build_invoice` produces a VISIBLE violation only when the line is printed AND the claim's
+    `build_invoice` produces a visible violation only when the line is printed and the claim's
     payment outruns the drawn window: P(printed) × P(lead > window) with lead uniform on
     0..`_SUBJECT_LEAD_DAYS` and the window uniform on `validity_days_range`. Both factors are read
     from config below, so a re-tuned share or range resizes this test instead of quietly weakening
@@ -385,10 +385,10 @@ def test_a_printed_offer_still_stands_on_the_day_the_claim_settles_it():
     outruns = sum((lead_days - days) / (lead_days + 1) for days in window) / len(window)
     visible = invoice_share("validity") * outruns
     assert visible > 0, "the mutation could never show and this test would be a tautology"
-    # ⚠️ THE RATE ABOVE IS AN AVERAGE OVER THE LEAD, so the sweep has to CONTAIN the whole lead
+    # ⚠️ The rate above is an average over the lead, so the sweep has to contain the whole lead
     # range or the rate it samples is a different one. Measured the hard way: sized at the 13 runs
     # the rate alone asks for, one lead each, the sweep only ever reached a 12-day lead — under the
-    # smallest drawable window on most of them — and the mutation SURVIVED. The count is therefore
+    # smallest drawable window on most of them — and the mutation survived. The count is therefore
     # the larger of the two demands.
     runs = max(
         math.ceil(math.log(0.05) / math.log(1 - visible)),
@@ -427,12 +427,12 @@ def test_an_invoice_with_no_settlement_to_respect_prints_the_drawn_window():
         until = datetime.strptime(
             re.search(r"(\d{2}\.\d{2}\.\d{4})", line).group(1), jurisdiction("UA")["date_format"]
         )
-        # In DAYS: the line prints a calendar day, and the invoice is issued at 10:15.
+        # In days: the line prints a calendar day, and the invoice is issued at 10:15.
         assert low <= (until.date() - WHEN.date()).days <= high
 
 
 def test_the_title_writes_its_date_in_words_and_the_body_in_digits(rendered):
-    """👁 BOTH DATE SPELLINGS ON ONE PAGE — the title reads «від 3 червня 2026 р.» while the
+    """👁 both date spellings on one page — the title reads «від 3 червня 2026 р.» while the
     agreement line and any validity line use digits. That is a parsing case a corpus of receipts
     alone never presents, and it is reproduced because the observed invoice does it. The label
     carries the calendar date; `normalization.iso_date` settles the comparison."""
@@ -469,10 +469,10 @@ def test_the_stylesheet_renders_the_paper_the_configuration_declares():
 
 def test_the_specimen_payment_order_prints_the_recipient_a_second_time(renderer):
     """⚠️ 👁 1/1 — the classic 1С/BAS invoice carries a filled-in sample payment order above the
-    title, so THE RECIPIENT'S NAME, CODE AND ACCOUNT APPEAR TWICE on one sheet.
+    title, so the recipient's name, code and account appear twice on one sheet.
 
     That is a genuine ambiguity for an extractor — which of two identical strings to return — and it
-    is reproduced rather than smoothed away. Asserted by COUNTING occurrences in the rendered text,
+    is reproduced rather than smoothed away. Asserted by counting occurrences in the rendered text,
     because "the block is present" would pass on a block that repeated nothing, which is exactly
     what the first draft of this test did.
     """
@@ -488,7 +488,7 @@ def test_the_specimen_payment_order_prints_the_recipient_a_second_time(renderer)
             f"{value!r} appears {text.count(value)} times; the specimen payment order and the "
             "supplier block each print it once, and that duplication is the point"
         )
-    # And the BUYER is named once — the specimen is a payment order TO the supplier, so only the
+    # And the buyer is named once — the specimen is a payment order to the supplier, so only the
     # recipient's side is repeated. Without this the test would pass on a page that printed
     # everything twice.
     assert text.count(invoice.buyer.code) == 1
@@ -534,10 +534,10 @@ def test_the_contract_records_the_payment_status_as_a_divergence_and_not_as_a_fi
     inherit it by omission.
 
     Two files again, two independently maintained sides: the requirement is restated in the
-    contract, and the generator emits NOTHING for it. A row that quietly acquired a generator
+    contract, and the generator emits nothing for it. A row that quietly acquired a generator
     counterpart would mean somebody had printed a status.
 
-    The emptiness is asserted on the LIST rather than on a sentence. That column was prose until
+    The emptiness is asserted on the list rather than on a sentence. That column was prose until
     contract version 21 and this line read `== "none, and none is wanted"`, which pinned an
     editorial phrasing: rewording the cell reddened the test while adding a field to it did not.
     Now the two are the other way round, which is the direction that matters.
@@ -553,7 +553,7 @@ def test_the_contract_records_the_payment_status_as_a_divergence_and_not_as_a_fi
 
 def test_every_category_of_the_policy_can_be_invoiced():
     """The registry claims this archetype carries every category. That is a positive claim about
-    BASKETS — unlike the bank classes, an invoice lists items — so it is checked by building one for
+    baskets — unlike the bank classes, an invoice lists items — so it is checked by building one for
     each rather than asserted in a comment."""
     categories = [entry["id"] for entry in load_policy()["categories"]]
     assert len(categories) == 7, f"{len(categories)} categories — the sweep's denominator moved"
@@ -562,7 +562,7 @@ def test_every_category_of_the_policy_can_be_invoiced():
 
     assert set(ARCHETYPES["ua_invoice"].categories) == set(categories)
     for category_id in categories:
-        # The FIRST vendor of each category, not a drawn one: the assertion is that every category
+        # The first vendor of each category, not a drawn one: the assertion is that every category
         # can be invoiced at all, and a draw would make a failure depend on the seed.
         invoice = make_invoice(vendor=_vendors_for(category_id)[0], category_id=category_id)
         assert invoice.line_items

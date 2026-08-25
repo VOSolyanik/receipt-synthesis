@@ -109,27 +109,27 @@ UNATTRIBUTED = "not attributed — planning stopped for a reason claim_planner c
 # checked rather than assumed.
 _CONTENT_BBOX_KEY = "__content_extent__"
 
-# The same device for a document's PAGE REGIONS — one key per sheet, numbered from 1 in reading
+# The same device for a document's page regions — one key per sheet, numbered from 1 in reading
 # order, matching the `data-region="page_N"` the template marks. The prefix is what the split
-# sweeps by, so that EVERY reserved key is removed even where the label has no room for it.
+# sweeps by, so that every reserved key is removed even where the label has no room for it.
 _PAGE_REGION_PREFIX = "__page_region_"
 _PAGE_REGION_KEY = _PAGE_REGION_PREFIX + "{page}__"
 
-# The composition template — templates/ua_claim_bundle.html. ⛔ NOT AN ARCHETYPE: it has no entry
+# The composition template — templates/ua_claim_bundle.html. ⛔ not an archetype: it has no entry
 # in `claim_planner.ARCHETYPES` and none in `_BUILDERS`, because it is not a document class.
-# It is the FILE the documents of one claim are carried in, and what it embeds are those
+# It is the file the documents of one claim are carried in, and what it embeds are those
 # documents' own renders. See `_compose_bundle`.
 BUNDLE_TEMPLATE = "ua_claim_bundle"
 
 # The `data-region` the template marks each embedded document's rectangle with, numbered from 1 in
-# CLAIM order — the subject document first, the payment document second, which is the order
+# claim order — the subject document first, the payment document second, which is the order
 # `ClaimPlan.documents` is built in.
 _BUNDLE_REGION = "doc_{index}"
 
 # The two reserved key families the bundle merge adds on top of the two above, so that every
-# rectangle of every document in one file goes through the degrader in ONE call.
+# rectangle of every document in one file goes through the degrader in one call.
 #
-# 🔴 THE PER-DOCUMENT PREFIX IS WHAT MAKES THE MERGE POSSIBLE AT ALL: two documents of one claim
+# 🔴 The per-document prefix is what makes the merge possible at all: two documents of one claim
 # print the same field names — both carry an `amount` — and a flat merge would silently leave the
 # file with one box under that name, with the label of whichever document lost pointing at the
 # other's ink. The trailing `__` is not decoration either: it is what keeps `__doc_1__` from being
@@ -141,26 +141,25 @@ _FILE_REGION_KEY = "__file_region_{index}__"
 # encounters one outside this repository — cropped into a slide, forwarded in a chat — can tell
 # by inspecting the file that it is not a real document. Metadata only: it never touches a pixel.
 #
-# ASCII HYPHENS, NOT EM DASHES. PIL's `PngInfo.add_text` encodes to Latin-1 and falls back to an
+# ASCII hyphens, not em dashes. PIL's `PngInfo.add_text` encodes to Latin-1 and falls back to an
 # `iTXt` chunk — silently — for any character that does not fit, and U+2014 does not. A marker
 # meant to land in `tEXt` has to be spelled in characters `tEXt` can actually hold.
 SYNTHETIC_DATA_MARKER = (
     "SYNTHETIC TEST DATA - NOT VALID PROOF OF PAYMENT - github.com/VOSolyanik/receipt-synthesis"
 )
 
-# HOW A DOCUMENT REACHED THE VERIFIER — drawn per document, from the CLASS'S OWN MIX in
+# How a document reached the verifier — drawn per document, from the class's own mix in
 # config/policy.yaml (`capture_mix`), because a document's carrier follows the medium it is born
 # on: a till roll has no undamaged electronic original to submit, a bank-generated PDF has
 # nothing forcing it through a camera, and a banking-app screen exists only as a screenshot.
 #
-# 🔴 THE MIX LIVES IN policy.yaml AND NOT HERE, closing the question this comment used to record
-# as open. `capture` is a label, a share that sizes a labelled bucket belongs beside
-# `verdict_mix`, and the uniform in-code draw that stood here was a placeholder claiming nothing
-# about the world — which had a cost the delivered corpus paid: paper receipts arrived as
-# screenshots, app screens arrived as flatbed scans, and every channel figure averaged over
-# combinations that cannot occur. The weights and their arithmetic are at the block itself.
+# 🔴 The mix lives in policy.yaml and not here: `capture` is a label, and a share that sizes a
+# labelled bucket belongs beside `verdict_mix`. A uniform in-code draw claims nothing about the
+# world, and the cost is measurable — paper receipts arriving as screenshots, app screens as
+# flatbed scans, and every channel figure averaged over combinations that cannot occur. The
+# weights and their arithmetic are at the block itself.
 #
-# The tuple below is the DRAW ORDER, not a mix: `draw_capture` walks it with one uniform draw
+# The tuple below is the draw order, not a mix: `draw_capture` walks it with one uniform draw
 # against the class's cumulative weights, so its order is part of the seed's meaning exactly as
 # any drawn-from list's is — reordering it changes which document gets which channel for a given
 # seed. It holds every `Capture` member so that a channel added to the enum without a weight in
@@ -176,7 +175,7 @@ CAPTURE_DRAW_ORDER = (
 def draw_capture(rng: random.Random, archetype: Archetype) -> Capture:
     """One capture channel for one document, per the class mix — or none to draw at all.
 
-    ⛔ A SCREEN-NATIVE ARCHETYPE CONSUMES NO RANDOMNESS HERE. Its channel is a fact, not a draw,
+    ⛔ A screen-native archetype consumes no randomness here. Its channel is a fact, not a draw,
     and burning a uniform for it anyway would be a draw whose value is discarded — the shape this
     repository reserves for keeping a stream stable, which nothing about a constant needs.
     """
@@ -195,9 +194,9 @@ def draw_capture(rng: random.Random, archetype: Archetype) -> Capture:
         channel for channel in reversed(CAPTURE_DRAW_ORDER) if mix[channel.value] > 0
     )
 
-# 🔴 THE MINIMUM NUMBER OF DOCUMENTS A PER-CLASS FIGURE MAY BE QUOTED ON. Below it a per-class
+# 🔴 The minimum number of documents a per-class figure may be quoted on. Below it a per-class
 # accuracy is not a measurement: at p ≈ 0.9 and n = 30 the 95% Wilson interval is about ±0.10, so
-# "0.91" and "0.85" are the same reading. THE THRESHOLD IS REPORTED AND NEVER ENFORCED — nothing
+# "0.91" and "0.85" are the same reading. The threshold is reported and never enforced — nothing
 # here resizes a run or reweights a draw to reach it, because a corpus tuned until its report looks
 # healthy is a corpus whose report says nothing. The shortfall is made visible and left.
 MIN_DOCUMENTS_PER_TARGET_CLASS = 30
@@ -208,17 +207,17 @@ def assign_splits(
 ) -> dict[str, Split]:
     """Which side of the partition each persona is on. See `schemas.Split` for the unit.
 
-    🔴 `train_fraction` HAS NO DEFAULT, HERE OR ANYWHERE ABOVE. It is a decision about the
-    MEASUREMENT, and a default would let a run be performed without that decision ever having been
+    🔴 `TRAIN_FRACTION` has no default, here or anywhere above. It is a decision about the
+    measurement, and a default would let a run be performed without that decision ever having been
     declared — the argument `--seed` already wins in this repository, applied to a partition nobody
     declared. A caller has to pass one; what to pass, and why a half is the answer for a consumer
     that trains nothing, is in README.md's flag table and in `docs/architecture.md` under the
     assembler. The binding constraint is `MIN_DOCUMENTS_PER_TARGET_CLASS` above: a per-class figure
-    needs that many documents ON THE SIDE IT IS MEASURED ON, so the thinnest class sets how small
+    needs that many documents on the side it is measured on, so the thinnest class sets how small
     the validation side may ever be.
 
-    🔴 SEEDED INDEPENDENTLY OF THE GENERATOR'S OWN DRAW, from `f"split:{seed}"` rather than from
-    the root generator. That is what makes the partition a LABELLING OF AN EXISTING CORPUS instead
+    🔴 seeded independently of the generator's own draw, from `f"split:{seed}"` rather than from
+    the root generator. That is what makes the partition a labelling of an existing corpus instead
     of a change to it: the documents a seed produces are byte-identical with and without this
     step, so a corpus generated before the partition existed can be partitioned without being
     regenerated. Drawing from `root` would have shifted every document downstream of the first
@@ -227,13 +226,13 @@ def assign_splits(
     `random.Random` seeds from a string through SHA-512 of its bytes, so the assignment does not
     depend on `PYTHONHASHSEED` and is reproducible across machines and interpreter runs.
 
-    ⚠️ ADDING A PERSONA RESHUFFLES THE WHOLE PARTITION, and that is inherent rather than a defect
-    of this implementation: a partition is a property of the SET, and any rule that kept earlier
+    ⚠️ adding a persona reshuffles the whole partition, and that is inherent rather than a defect
+    of this implementation: a partition is a property of the set, and any rule that kept earlier
     personas in place would have to place later ones by a fixed criterion, which stops honouring
     the requested fraction. What the generator does promise is reproducibility for a given seed and
     size, and that holds exactly.
 
-    NO SIDE IS TOPPED UP TO BE NON-EMPTY. A run of one persona has an empty validation side, and
+    No side is topped up to be non-empty. A run of one persona has an empty validation side, and
     the report says so — see `_split_lines`. Forcing a document into an empty side would satisfy
     the shape of a split while producing a validation set of one persona, which is worse than
     nothing precisely because it looks like something.
@@ -283,7 +282,7 @@ class Dataset:
     # without a partition, which is a different state from a partition that put everything on one
     # side. See `assign_splits`.
     split: dict[str, Split] = field(default_factory=dict)
-    # What was ASKED FOR, kept beside what was realized. The two differ by rounding on any run
+    # What was asked for, kept beside what was realized. The two differ by rounding on any run
     # whose persona count does not divide evenly, and a report that printed only the realized share
     # would leave a reader unable to tell a rounding from a mistake.
     train_fraction: float | None = None
@@ -291,9 +290,9 @@ class Dataset:
     def as_manifest(self) -> dict:
         """The full index: every persona, claim and document, plus the partition.
 
-        THE PARTITION IS DESCRIBED HERE AND APPLIED ON THE RECORDS. This block carries the
-        DECISION — the unit, the fraction asked for, the realized counts — and each claim and
-        document carries its own `split`. It deliberately does NOT repeat the ids: a list here
+        The partition is described here and applied on the records. This block carries the
+        decision — the unit, the fraction asked for, the realized counts — and each claim and
+        document carries its own `split`. It deliberately does not repeat the ids: a list here
         beside a field there would be two statements of one fact, and the first edit to either
         makes them disagree with nothing to notice it.
         """
@@ -363,28 +362,28 @@ def _pick_vendor(
     those for a mixed plan would fail inside the builder, one stage away from the choice
     that caused it. The filter preserves file order, so the draw stays reproducible.
 
-    🔴 `vat_payer` IS THE SECOND SUCH FILTER AND IT IS ABOUT WHO MAY ISSUE A CLASS AT ALL. 📄 A
+    🔴 `vat_payer` is the second such filter and it is about who may issue a class at all. 📄 A
     registered ПДВ payer is obliged to use a cash register, so the seller on a товарний чек is a
     non-payer and `content_builder.build_non_fiscal_receipt` refuses any other. `None` means the
     plan does not care, which is every other claim, and the draw is then exactly what it was.
 
-    🔴 `excluding_name` IS THE THIRD, AND IT IS THE ONLY ONE ABOUT A SELLER'S IDENTITY RATHER THAN
-    ITS TRADE. It exists for one caller — `_payee_the_payment_names`, which needs a party the
-    claim's own vendor is NOT — and it is a filter on the pool rather than a redraw, so the number
+    🔴 `excluding_name` is the third, and it is the only one about a seller's identity rather than
+    its trade. It exists for one caller — `_payee_the_payment_names`, which needs a party the
+    claim's own vendor is not — and it is a filter on the pool rather than a redraw, so the number
     of values taken from `rng` does not depend on which vendor came out first.
 
-    ⚠️ IT MATCHES ON THE STORED NAME, so it removes every entry that TRADES UNDER THAT MARK and
+    ⚠️ it matches on the stored name, so it removes every entry that trades under that mark and
     cannot remove a sole trader whose name has not been drawn yet: an entry with no `name` is a
     person whose name `resolve_vendor` draws below. The caller compares the resolved names and
     draws again on the collision, which is what closes that gap.
 
-    Returns a RESOLVED vendor: a sole trader's name is drawn here, once, and the same
+    Returns a resolved vendor: a sole trader's name is drawn here, once, and the same
     instance is then carried to every document of the claim. Called from the claim loop and
     never from `_build_document`, because a per-document call would redraw the name and put
     two different sellers on two documents of one purchase.
     """
     # `pool` is a config/vendors.json block key. A `Country` still works — every domestic
-    # archetype's pool IS its claimant's jurisdiction — and a plain key is what a
+    # archetype's pool is its claimant's jurisdiction — and a plain key is what a
     # cross-border archetype passes: `EU` is a pool of sellers, not a fifth jurisdiction.
     # See `claim_planner.Archetype.vendor_pool`.
     pool_key = pool.value if isinstance(pool, Country) else pool
@@ -422,36 +421,36 @@ def _pick_vendor(
 # an unregistered slug has to fail by name instead of being silently handed to the one
 # builder that exists. One entry per slug in `claim_planner.ARCHETYPES`.
 #
-# THE KIND OF CASH REGISTER IS BOUND HERE, and this is the place for it: an archetype is a
+# The kind of cash register is bound here, and this is the place for it: an archetype is a
 # template, `registrar` says which fiscal identity that template's document carries, and the
-# pairing of the two is exactly what this table is for. It is deliberately NOT a field on
+# pairing of the two is exactly what this table is for. It is deliberately not a field on
 # `Archetype` — the planner decides labels, and which prefix a fiscal number takes is not one.
 # The paper width is bound nowhere in Python at all: it lives in `<slug>.css`, which the
 # renderer picks up from the slug.
 #
-# FOUR DOCUMENT CLASSES NOW, AND THE DISPATCH IS THREE-WAY — keyed on `document_evidence` and not
+# Four document classes now, and the dispatch is three-way — keyed on `document_evidence` and not
 # on the class, so what a document must be told follows from what it proves:
 #
-#   proves both      a fiscal receipt. Takes a basket. Names NO buyer: the payer is standing at the
+#   proves both      a fiscal receipt. Takes a basket. Names no buyer: the payer is standing at the
 #                    till, so a receipt has no buyer field at all.
-#   subject only     an invoice. Takes a basket AND the claimant, because an OFFER TO PAY has to say
+#   subject only     an invoice. Takes a basket and the claimant, because an offer to pay has to say
 #                    to whom it is made.
 #   payment only     a confirmation or a statement. Takes the claimant as the payer, no basket, and
-#                    THE CLAIM'S AMOUNT — see `_build_document`.
+#                    the claim's amount — see `_build_document`.
 #
 # The middle case is what the invoice added. It is a real relation rather than a convenient one: a
-# document that proves the payment IS the payment, so its payer is present by construction; a
+# document that proves the payment is the payment, so its payer is present by construction; a
 # document that does not prove payment is addressed to somebody and must name them.
 #
-# 🔴 AND THE MIDDLE CASE NO LONGER HOLDS FOR EVERY SUBJECT-ONLY CLASS — see `_NAMES_THE_BUYER`.
+# 🔴 And the middle case no longer holds for every subject-only class — see `_NAMES_THE_BUYER`.
 # A товарний чек proves no payment and names nobody, so "addressed to somebody" turned out to be a
-# property of the INVOICE rather than of the evidence row it was read off.
+# property of the invoice rather than of the evidence row it was read off.
 _BUILDERS = {
     "ua_prro_receipt": build_prro_receipt,
     "ua_prro_receipt_58mm": build_prro_receipt,
     "ua_rro_receipt": partial(build_prro_receipt, registrar="rro"),
     "ua_bank_payment_confirmation": build_payment_confirmation,
-    # 🔴 THE SAME BUILDER WITH THE CURRENCY AXIS MOVED, and the initiation mode NAMED rather than
+    # 🔴 The same builder with the currency axis moved, and the initiation mode named rather than
     # drawn: 👁 the card modes print an authorization code and a masked card — a domestic acquiring
     # operation — and what a bank executes against a foreign beneficiary's account is a transfer
     # by account details. The builder refuses the combination, so this partial is where the
@@ -476,25 +475,24 @@ _BUILDERS = {
     "ua_bank_receipt_in_app": build_bank_receipt_in_app,
 }
 
-# WHICH CLASSES NAME THE CLAIMANT ON THE PAGE, and it is keyed by document class because the
-# question is one of FORM rather than of evidence. The predicate used to be "proves the subject and
-# not the payment", which was right while the invoice was the only such class: 📄 an offer to pay
-# has to say to whom it is made.
+# Which classes name the claimant on the page, keyed by document class because the question is one
+# of form rather than of evidence. Not derivable from the evidence a class proves: the two classes
+# below break such a predicate in opposite directions.
 #
 # 📄 A товарний чек has no buyer field. The tax service's own rule is that its content is the
-# FISCAL RECEIPT'S FORM less two requisites, and that form names no buyer — the payer is standing
+# fiscal receipt's form less two requisites, and that form names no buyer — the payer is standing
 # at the counter. Handing the builder a buyer would print a line no source puts on the document,
 # and inventing a requisite is the one thing this repository never does with a form it has not
 # observed.
 #
-# 🔴 THE PLATFORM RECEIPT IS THE CASE THAT BREAKS THE OLD PREDICATE THE OTHER WAY: it proves the
-# payment AND names the buyer — 👁 a "Billed to" block with a name and a country is what the class
+# 🔴 The platform receipt is the case that breaks the old predicate the other way: it proves the
+# payment and names the buyer — 👁 a "Billed to" block with a name and a country is what the class
 # prints — so "proves the subject and not the payment" would have denied it the very field its
 # form carries. Keying by class is what lets both exceptions coexist.
 _NAMES_THE_BUYER: frozenset[DocType] = frozenset({DocType.INVOICE, DocType.PLATFORM_RECEIPT})
 
-# WHICH CLASSES ARE HANDED THE CAPTURE CHANNEL AT BUILD TIME. Keyed by class for the reason
-# `_NAMES_THE_BUYER` is: the question is whether the FORM prints a requisite that varies with the
+# Which classes are handed the capture channel at build time. Keyed by class for the reason
+# `_NAMES_THE_BUYER` is: the question is whether the form prints a requisite that varies with the
 # medium, and that is a property of the class, not of its evidence row. 👁 The fiscal receipt's VAT
 # summary row takes one form on paper and either of two electronically — the observation the
 # predicate exists for — and no other class has an observed analogue. The platform receipt proves
@@ -502,15 +500,15 @@ _NAMES_THE_BUYER: frozenset[DocType] = frozenset({DocType.INVOICE, DocType.PLATF
 # ("proves the payment") would have handed its builder an argument it has no requisite to spend.
 _CAPTURE_SHAPES_A_REQUISITE: frozenset[DocType] = frozenset({DocType.FISCAL_RECEIPT})
 
-# WHICH CLASSES PRINT A TERM THAT BOUNDS WHEN THE CLAIM MAY BE SETTLED, and so have to be told the
+# Which classes print a term that bounds when the claim may be settled, and so have to be told the
 # date the claim's money moved. 📄 The invoice's «Рахунок дійсний до X р.» is that term and the only
 # one in the corpus: it says how long the offer stands, and a claim whose payment is dated after it
 # prints a page contradicted by its own claim (see `content_builder.build_invoice`, which measured
 # 100 such invoices of 182 before this).
 #
-# 🔴 KEYED BY CLASS AND NOT BY EVIDENCE, for the reason `_NAMES_THE_BUYER` gives: a class either
+# 🔴 Keyed by class and not by evidence, for the reason `_NAMES_THE_BUYER` gives: a class either
 # prints such a term or does not, whatever it proves. And handed to the builder rather than decided
-# there — the settlement date is a property of the CLAIM, and a builder that reached for it would be
+# there — the settlement date is a property of the claim, and a builder that reached for it would be
 # reading a plan it is not given.
 _PRINTS_A_TERM_BOUND_BY_THE_PAYMENT: frozenset[DocType] = frozenset({DocType.INVOICE})
 
@@ -518,7 +516,7 @@ _PRINTS_A_TERM_BOUND_BY_THE_PAYMENT: frozenset[DocType] = frozenset({DocType.INV
 def _write_png(path: Path, image: np.ndarray) -> None:
     """Write a BGR image (OpenCV's convention) to `path`, stamped with `SYNTHETIC_DATA_MARKER`.
 
-    THE LAST SAVE POINT FOR A SHIPPED IMAGE, and the only one: `renderer.render` also writes a
+    The last save point for a shipped image, and the only one: `renderer.render` also writes a
     PNG — a document's clean render, and the composed file of a bundle — but only into a staging
     directory whose owner discards it, so nothing downstream ever sees one; `degrader.degrade`
     never touches disk, it hands back a numpy array. This function is therefore the single place a
@@ -535,19 +533,18 @@ def _write_png(path: Path, image: np.ndarray) -> None:
 
 @dataclass(frozen=True)
 class _BuiltDocument:
-    """One document built and rendered clean, before it is known what FILE will carry it.
+    """One document built and rendered clean, before it is known what file will carry it.
 
-    🔴 THE SEAM THIS DATACLASS EXISTS FOR. Every document used to be built, degraded and written in
-    one pass, which is exactly right while a file holds one document. It cannot be right for a file
-    that holds two: the composition has to be rendered from BOTH clean renders before any of it can
-    be degraded, and the degradation then has to happen once, for the file. So the pipeline splits
-    in two — `_render_document` up to the clean render, and one of two carriers after it
-    (`_build_document`'s own tail, or `_bundle_one_file`).
+    🔴 the seam this dataclass exists for. Building, degrading and writing in one pass works while
+    a file holds one document, and cannot work for a file that holds two: the composition has to be
+    rendered from both clean renders before any of it can be degraded, and the degradation then has
+    to happen once, for the file. So the pipeline splits in two — `_render_document` up to the clean
+    render, and one of two carriers after it (`_build_document`'s own tail, or `_bundle_one_file`).
 
-    `degrade_seed` IS DRAWN IN THE FIRST HALF, at the point in the stream the single-document path
+    `degrade_seed` is drawn in the first half, at the point in the stream the single-document path
     always drew it, and carried here rather than drawn where it is used. That is what keeps the
     generator's draw stream identical whichever carrier runs: at one seed the same documents are
-    produced, and only their carriage differs. ⚠️ A bundle uses the FIRST document's seed and
+    produced, and only their carriage differs. ⚠️ A bundle uses the first document's seed and
     channel for the file and does not use the second's — a file is captured once — so those two
     values of the second document are drawn and left unused rather than not drawn.
     """
@@ -569,18 +566,18 @@ class _BuiltDocument:
         return getattr(self.document, "page_count", 1)
 
     def as_rendered(self, *, source_file: str) -> DocGroundTruth:
-        """This document's label AS IT WAS RENDERED — every value final, the geometry not yet moved
+        """This document's label as it was rendered — every value final, the geometry not yet moved
         by any capture.
 
-        ONE CALLER AND ONE PURPOSE, and it is not the dataset: the claim loop has to tell the
+        One caller and one purpose, and it is not the dataset: the claim loop has to tell the
         payment document what its subject states, and `_amount_the_payment_states` reads that off
-        the subject's RECORD rather than recomputing it — an invoice divided its own total and
-        PRINTED the result, so a second division would round apart from the printed one. In a
+        the subject's record rather than recomputing it — an invoice divided its own total and
+        printed the result, so a second division would round apart from the printed one. In a
         bundle the final record cannot exist that early: the file is composed only after every
-        document of the claim has been rendered. ⛔ WHAT THIS RETURNS IS NEVER WRITTEN. The record
+        document of the claim has been rendered. ⛔ what this returns is never written. The record
         the dataset ships is built by the carrier, from the degraded geometry.
 
-        ⚠️ CALLED FOR THE SUBJECT DOCUMENT ONLY, which is a class that prints on one sheet. A
+        ⚠️ called for the subject document only, which is a class that prints on one sheet. A
         paginated subject would raise here — `ground_truth` requires the regions it has no way to
         pass — rather than be labelled as a one-page document.
         """
@@ -608,18 +605,18 @@ def _build_document(
     settles: Decimal | None = None,
     cites: DocumentReference | None = None,
 ) -> tuple[DocGroundTruth, DocumentReference | None]:
-    """One document of a claim IN A FILE OF ITS OWN, and the reference by which another document
+    """One document of a claim in a file of its own, and the reference by which another document
     of the claim can cite this one.
 
     The majority path, and the whole path until a claim's documents could share a file: what this
-    function adds to `_render_document` is the CARRIAGE — one capture channel applied to one
+    function adds to `_render_document` is the carriage — one capture channel applied to one
     document, written to one image named after it. `_bundle_one_file` is the other carrier, and
     the two are alternatives rather than layers.
 
     The second half of the return value is `None` for every class but the invoice: a payment
     document is not cited by anything in its own claim, and a fiscal receipt is the whole claim.
 
-    `settles` is THE AMOUNT THIS DOCUMENT'S CLAIM IS ABOUT, and it is required for a document that
+    `settles` is the amount this document's claim is about, and it is required for a document that
     proves the payment and ignored by one that states the subject. The subject document decides the
     amount — its basket is drawn first and summed — and the payment document is then told what it
     settles. The order is not an accident of the loop: a claim's money is a property of what was
@@ -630,26 +627,26 @@ def _build_document(
     to the payment class and ignored by the subject class, which cites nothing — an invoice is
     issued before there is a payment to point at.
 
-    `vendor` is passed in rather than chosen here. It is the party THIS DOCUMENT names, and on
+    `vendor` is passed in rather than chosen here. It is the party this document names, and on
     every claim but one it is the claim's single vendor instance: the documents of one purchase
     name one seller — while a sole trader's name was a stored constant that held by the nature of
     the type, and a drawn name can differ, so it is now a constraint somebody has to keep.
 
-    ⚠️ THE ONE EXCEPTION IS A CLAIM PLANNED AS `counterparty_mismatch`, whose payment document is
-    handed a SECOND party on purpose (`_payee_the_payment_names`). That is the negative itself, and
+    ⚠️ the one exception is a claim planned as `counterparty_mismatch`, whose payment document is
+    handed a second party on purpose (`_payee_the_payment_names`). That is the negative itself, and
     it is decided in the claim loop rather than here: this function is told whom to print, and a
     document that chose its own party would make the defect a property of the builder.
 
     `identity` is that party's code, account and bank, drawn once beside the vendor it belongs to.
-    The `vendor` constraint was solved for the NAME alone, and every other identifier of one seller
+    The `vendor` constraint was solved for the name alone, and every other identifier of one seller
     went on being drawn per document — 587 pairs of the delivered corpus, 587 disagreements. See
     `content_builder.PartyIdentity` and docs/cross-document-fields.md.
 
-    The basket goes to the claim's SUBJECT document and to no other. Sizing is a claim-level
+    The basket goes to the claim's subject document and to no other. Sizing is a claim-level
     decision (`ClaimPlan.coverage_target`, `item_count`), and giving the same basket to a
     second document would double the money a claim aimed at a limit was sized to spend.
 
-    DISPATCHED ON WHAT THE DOCUMENT HAS TO STATE, read from `document_evidence` in policy.yaml
+    Dispatched on what the document has to state, read from `document_evidence` in policy.yaml
     rather than from a table of slugs. The two classes take different parameters because they
     state different things: a receipt needs a category to draw a basket from, and a payment
     confirmation needs the two parties and takes no basket at all. Keying on the evidence means a
@@ -671,9 +668,9 @@ def _build_document(
         )
         document, clean = built.document, built.clean
         image_path = out_dir / "images" / f"{doc_id}.png"
-        # 🔴 THE CONTENT EXTENT AND THE PAGE REGIONS TRAVEL WITH THE FIELD BOXES, THROUGH ONE CALL
-        # AND ONE TRANSFORM. Geometry is Albumentations' alone (see `degrader`), and every channel
-        # that has any DRAWS it — so a box moved by a second call is moved by a second draw and
+        # 🔴 The content extent and the page regions travel with the field boxes, through one call
+        # and one transform. Geometry is Albumentations' alone (see `degrader`), and every channel
+        # that has any draws it — so a box moved by a second call is moved by a second draw and
         # lands somewhere else. `tracked_boxes` is the merge and the two lines below are the split.
         moved = degrade(
             cv2.imread(str(clean.image_path)),
@@ -687,8 +684,8 @@ def _build_document(
         # `DocGroundTruth._page_count_and_regions_agree` requires of a one-page label.
         page_regions = take_page_regions(boxes, page_count=built.page_count)
         pages = {"page_regions": page_regions} if page_regions is not None else {}
-        # 🔴 GATE 2 OF THE FIDELITY MATRIX: DID THE CONTENT SURVIVE THE CAPTURE. Measured against
-        # the DEGRADED image, because that is the file a consumer receives, and from the CONTENT
+        # 🔴 Gate 2 of the fidelity matrix: did the content survive the capture. Measured against
+        # the degraded image, because that is the file a consumer receives, and from the content
         # extent rather than from the field boxes — a document whose every labelled field came
         # through while a crop took the footer with the fiscal wording would report as complete
         # measured on the fields, and would then hand a system a falsely high character error rate
@@ -707,7 +704,7 @@ def _build_document(
             reference_text=clean.reference_text,
             content_bbox=content_bbox,
             content_lost_edges=lost,
-            # Passed only by a class that HAS sheets to report. A `page_regions` parameter added to
+            # Passed only by a class that has sheets to report. A `page_regions` parameter added to
             # all five content classes for the sake of the one that paginates would be four classes
             # carrying an argument they can only ever be given `None` for.
             **pages,
@@ -730,10 +727,10 @@ def _render_document(
     settles: Decimal | None = None,
     cites: DocumentReference | None = None,
 ) -> _BuiltDocument:
-    """Build one document and render it CLEAN into `staging` — everything both carriers share.
+    """Build one document and render it clean into `staging` — everything both carriers share.
 
-    ⛔ IT WRITES NOTHING A CONSUMER RECEIVES. The clean render is an intermediate: the dataset
-    ships the document as it would have been CAPTURED, and `staging` is a temporary directory the
+    ⛔ it writes nothing a consumer receives. The clean render is an intermediate: the dataset
+    ships the document as it would have been captured, and `staging` is a temporary directory the
     caller owns and discards. A bundled claim's documents never reach `images/` at all — only the
     file that carries them does.
 
@@ -749,7 +746,7 @@ def _render_document(
             f"produces it; assembler._BUILDERS knows {sorted(_BUILDERS)}"
         )
 
-    # ONE CAPTURE CHANNEL PER DOCUMENT, DECIDED ONCE. It reaches three places — the builder, which
+    # One capture channel per document, decided once. It reaches three places — the builder, which
     # prints a requisite that depends on the medium; the degrader, which applies that channel's
     # artefacts; and the label. Two literals for one fact is how they come to disagree.
     capture = draw_capture(rng, archetype)
@@ -757,7 +754,7 @@ def _render_document(
     evidence = evidence_of(archetype)
     if evidence.proves_subject:
         if document_plan is not plan.subject_document:
-            # `ClaimPlan.subject_document` establishes that the claim has exactly ONE document
+            # `ClaimPlan.subject_document` establishes that the claim has exactly one document
             # stating what was bought; this says that the one being built is that document. The
             # basket is sized once per claim, so a second carrier would spend the claim's money
             # twice.
@@ -777,12 +774,12 @@ def _render_document(
             "coverage_target": plan.coverage_target,
             "item_count": plan.item_count,
         }
-        # TWO INDEPENDENT QUESTIONS ABOUT ONE DOCUMENT, and they were a single if/else while the
+        # Two independent questions about one document, and they were a single if/else while the
         # answers happened to coincide. A class may name the claimant, or take the capture
         # channel, or neither — the slip is the class that does neither, and folding the two back
         # together would give it a buyer field no source puts on the form.
         if plan.schedule is not None:
-            # 🔴 THE PLAN DECIDES WHAT THE PAGE STATES, and the builder is only told. A schedule
+            # 🔴 The plan decides what the page states, and the builder is only told. A schedule
             # handed to a class that cannot print the term would produce an ordinary invoice, the
             # payment would be sized to an instalment nothing on the page names, and the engine
             # would label the claim `insufficient_evidence` with the cause `amount_mismatch` — a
@@ -796,9 +793,9 @@ def _render_document(
                 )
             basket |= {"schedule": plan.schedule}
         if archetype.doc_type in _NAMES_THE_BUYER:
-            # AN OFFER TO PAY HAS TO SAY TO WHOM IT IS MADE. Keyed by class rather than by
+            # An offer to pay has to say to whom it is made. Keyed by class rather than by
             # evidence — see `_NAMES_THE_BUYER`, which is where the change of predicate is
-            # explained. The COUNTRY travels with the name: it is the axis the EU classes derive
+            # explained. The country travels with the name: it is the axis the EU classes derive
             # their tax treatment from (`content_builder.TaxTreatment`) and the value their pages
             # print under the buyer's name — a derived attribute of the persona's jurisdiction,
             # not a new persona field, so a relocated persona changes the page with no builder
@@ -810,28 +807,28 @@ def _render_document(
                 "buyer_country": persona.location.country,
             }
         if archetype.doc_type in _PRINTS_A_TERM_BOUND_BY_THE_PAYMENT:
-            # 🔴 `plan.issued_at` AND NOT `document_plan.issued_at`: the claim's date is the date
+            # 🔴 `plan.issued_at` and not `document_plan.issued_at`: the claim's date is the date
             # its money moved (see `ClaimPlan`), while this document's own date is when the offer
             # was drawn up. The term is about the first and printed on the second.
             basket |= {"settled_at": plan.issued_at}
         if archetype.doc_type in _CAPTURE_SHAPES_A_REQUISITE:
-            # 🔴 THE CAPTURE CHANNEL REACHES THE BUILDER, not only the degrader. 👁 The VAT summary
+            # 🔴 The capture channel reaches the builder, not only the degrader. 👁 The VAT summary
             # row of a fiscal receipt takes one form on paper and either of two electronically, so
-            # the MEDIUM a document will be captured on decides a requisite that is printed while
+            # the medium a document will be captured on decides a requisite that is printed while
             # the document is built. Passed to the class that has the observed variation and to no
             # other — see `_CAPTURE_SHAPES_A_REQUISITE`, which replaced "proves the payment" the
             # day a payment-proving class with no medium-varying requisite was registered.
             basket |= {"capture": capture}
         document = _BUILDERS[slug](rng, **basket)
     else:
-        # A document that proves the payment and states no subject. It takes NO basket and no
+        # A document that proves the payment and states no subject. It takes no basket and no
         # coverage target — there is nothing on it for a coverage rule to read, which is exactly
         # why its type proves no subject — and it takes the persona, because this class prints a
         # persona's own name, as the payer.
         #
-        # 🔴 AND IT TAKES THE CLAIM'S AMOUNT, which is the whole of what makes a split pair
+        # 🔴 And it takes the claim's amount, which is the whole of what makes a split pair
         # coherent. `policy_engine._cross_checks` compares a transaction's subject and payment
-        # amounts EXACTLY — there is no tolerance anywhere in this repository — so a payment that
+        # amounts exactly — there is no tolerance anywhere in this repository — so a payment that
         # drew its own amount would disagree with the invoice beside it on every claim, and every
         # such claim would be labelled `insufficient_evidence` with the cause `amount_mismatch`.
         # Measured before this was written: an invoice of 1200.00 beside an independently drawn
@@ -844,17 +841,17 @@ def _render_document(
             "payer_tax_id": persona.tax_id,
             "amount": settles,
             "cites": cites,
-            # 🔴 THE OTHER HALF OF THE `subject_mismatch` MECHANISM: the wrong reference above is
-            # only a defect if the page PRINTS it, and the purpose formula draw may honestly cite
+            # 🔴 The other half of the `subject_mismatch` mechanism: the wrong reference above is
+            # only a defect if the page prints it, and the purpose formula draw may honestly cite
             # nothing. The knob forces a citing formula (and, on the confirmation, a
             # purpose-printing initiation mode); `claim_planner` keeps such plans off the one
             # archetype that cannot print one.
             "must_cite": plan.cause == SUBJECT_MISMATCH,
         }
         if archetype.doc_type is DocType.BANK_STATEMENT:
-            # 🔴 HOW MANY SHEETS THE STATEMENT RUNS TO IS DRAWN HERE, not in the builder, and it is
+            # 🔴 How many sheets the statement runs to is drawn here, not in the builder, and it is
             # drawn for the same reason `capture` is: it is a decision about how difficult this
-            # RUN's documents are, and a builder that took it would leave no caller able to ask for
+            # run's documents are, and a builder that took it would leave no caller able to ask for
             # either case. It is also the change that stops «one page is one document» from being
             # true by construction across this corpus — see `draw_statement_pages`.
             transfer |= {"pages": draw_statement_pages(rng)}
@@ -869,7 +866,7 @@ def _render_document(
         # nothing, so registering one does not bring this branch a case to handle.
         reference=getattr(document, "reference", None),
         capture=capture,
-        # DRAWN HERE, and used by whichever carrier takes this document — see `_BuiltDocument`.
+        # Drawn here, and used by whichever carrier takes this document — see `_BuiltDocument`.
         degrade_seed=rng.getrandbits(32),
         clean=clean,
     )
@@ -878,22 +875,22 @@ def _render_document(
 def tracked_boxes(clean: RenderedDocument) -> dict[str, BBox]:
     """Every rectangle that has to come out of the degrader where its pixels came out.
 
-    🔴 ONE DICT, ONE CALL, ONE TRANSFORM — and that is the whole of why this function exists rather
+    🔴 one dict, one call, one transform — and that is the whole of why this function exists rather
     than three call sites. Geometry belongs to Albumentations alone (see `degrader.carry_boxes`),
-    and the transform each channel applies is DRAWN: a perspective and a rotation are sampled from
+    and the transform each channel applies is drawn: a perspective and a rotation are sampled from
     a range, so a second call with the same seed is a second draw and lands somewhere else. A box
     carried by a second call would therefore be plausible and wrong, in a way that shows up
     downstream as a poor extractor or a poor segmenter and never as a coordinate defect.
 
     Three kinds of rectangle ride together:
 
-    * the LABELLED FIELDS, under their own `data-field` names;
-    * the CONTENT EXTENT, under `_CONTENT_BBOX_KEY` — the box `content_lost_edges` is measured
+    * the labelled fields, under their own `data-field` names;
+    * the content extent, under `_CONTENT_BBOX_KEY` — the box `content_lost_edges` is measured
       from, which is why it must not drift from the ink by so much as a rotation;
-    * the PAGE REGIONS of a document printed on more than one sheet, under `_PAGE_REGION_KEY`.
+    * the page regions of a document printed on more than one sheet, under `_PAGE_REGION_KEY`.
 
     The two reserved names begin with two underscores, which no `data-field` does — and the
-    collision is CHECKED rather than trusted, because "no template does that today" is exactly the
+    collision is checked rather than trusted, because "no template does that today" is exactly the
     kind of premise a later template breaks in silence.
     """
     reserved = {_CONTENT_BBOX_KEY} | {
@@ -907,7 +904,7 @@ def tracked_boxes(clean: RenderedDocument) -> dict[str, BBox]:
         )
     tracked: dict[str, BBox] = {**clean.field_bboxes, _CONTENT_BBOX_KEY: clean.content_bbox}
     for page in range(1, len(clean.region_bboxes) + 1):
-        # By NAME rather than by iterating the dict: `page_regions` is a list in reading order, and
+        # By name rather than by iterating the dict: `page_regions` is a list in reading order, and
         # a template that numbered its sheets from 0 or skipped one has to fail here rather than
         # produce a label whose second region is the third sheet.
         name = f"page_{page}"
@@ -921,7 +918,7 @@ def tracked_boxes(clean: RenderedDocument) -> dict[str, BBox]:
 
 
 def take_page_regions(boxes: dict[str, BBox], *, page_count: int) -> list[BBox] | None:
-    """The page half of the inverse of `tracked_boxes` — TAKEN OUT of the degraded boxes.
+    """The page half of the inverse of `tracked_boxes` — taken out of the degraded boxes.
 
     Removes every reserved region key from `boxes` and returns the regions in reading order, or
     `None` where the document is a single sheet, which is what
@@ -929,11 +926,11 @@ def take_page_regions(boxes: dict[str, BBox], *, page_count: int) -> list[BBox] 
     than copies for the reason the content extent above it does: what is left in `boxes` afterwards
     is exactly the label's `field_bboxes`, so a key this function forgot cannot quietly become one.
 
-    `page_count` COMES FROM THE DOCUMENT, not from counting the keys. A render that lost a sheet's
+    `page_count` comes from the document, not from counting the keys. A render that lost a sheet's
     marker would otherwise be split into however many regions survived and labelled as that many
     pages — an image of two sheets described as a document of one, with nothing anywhere saying so.
 
-    ⚠️ EVERY RESERVED KEY GOES WHATEVER `page_count` SAYS. A one-page document still marks its
+    ⚠️ every reserved key goes whatever `page_count` says. A one-page document still marks its
     single sheet, so the carried boxes hold a region the label has no room for — and a key left
     behind would reach a consumer as a `data-field` named `__page_region_1__`, which is a field no
     template prints and no requirement names.
@@ -959,24 +956,24 @@ def take_page_regions(boxes: dict[str, BBox], *, page_count: int) -> list[BBox] 
 
 
 def documents_share_one_file(*, seed: int, claim_id: str, document_count: int) -> bool:
-    """Whether this claim's documents arrive as ONE file rather than as one file each.
+    """Whether this claim's documents arrive as one file rather than as one file each.
 
     A claim of a single document is never eligible: a file holding one document is not a bundle of
     one, and there is nothing to compose. Everything else is drawn at
     `file_composition.bundle_share` in config/generation.yaml, which is also where the value's
     justification and its bounds are written down.
 
-    ⛔ THE PATTERN IS DOCUMENTS OF **ONE CLAIM** IN ONE FILE, AND NOTHING ELSE. A file holding
-    documents of DIFFERENT claims is a shape this generator does not produce and will not be given
+    ⛔ the pattern is documents of **one claim** in one file, and nothing else. A file holding
+    documents of different claims is a shape this generator does not produce and will not be given
     a flag for. It is not an oversight and it is not "later": a claim is the unit a verdict is
     reached on, so a file spanning two claims would be evidence for two answers at once, and the
     ground truth would have to say which part of one image belongs to which claim's label —
     a relation nothing in the schema carries. The documents of one claim are one submission; two
     claims in one file are two submissions somebody stapled together.
 
-    🔴 SEEDED INDEPENDENTLY OF THE GENERATOR'S OWN DRAW, from `f"bundle:{seed}:{claim_id}"` rather
+    🔴 seeded independently of the generator's own draw, from `f"bundle:{seed}:{claim_id}"` rather
     than from the claim's generator — the device `assign_splits` uses, for a related reason. This
-    decision is about CARRIAGE and not about content: at one seed the run builds the same
+    decision is about carriage and not about content: at one seed the run builds the same
     documents, with the same amounts, dates, parties and verdicts, whether or not they end up in
     one file. Drawing from the claim's own generator would have shifted every document after the
     first bundled claim, so a corpus could not be regenerated with the composition changed and
@@ -994,14 +991,14 @@ def documents_share_one_file(*, seed: int, claim_id: str, document_count: int) -
 def _compose_bundle(
     renderer: Renderer, sheets: Sequence[RenderedDocument], *, output_path: Path
 ) -> RenderedDocument:
-    """Render the FILE that carries `sheets` — their clean renders embedded at natural size.
+    """Render the file that carries `sheets` — their clean renders embedded at natural size.
 
     The result's `region_bboxes` is where each document landed, keyed `doc_1`, `doc_2`, … in claim
     order. Its `field_bboxes`, `reference_text` and `content_bbox` are empty or meaningless and are
     not used: the bundle template marks no field and prints no text of its own, and what a bundled
-    document says is recorded from ITS OWN render.
+    document says is recorded from its own render.
 
-    🔴 THE 1:1 CHECK IS THE POINT OF THIS FUNCTION BEING A FUNCTION. Every coordinate of every
+    🔴 the 1:1 check is the point of this function being a function. Every coordinate of every
     bundled label is a per-document coordinate plus its region's origin, which is true only while
     the embedded image is drawn at the size it was rendered at. A stylesheet that gave `.doc` a
     width would scale every one of those coordinates by a factor nothing in the label records —
@@ -1043,21 +1040,21 @@ def _compose_bundle(
 def bundled_boxes(
     sheets: Sequence[tuple[BBox, dict[str, BBox]]],
 ) -> dict[str, BBox]:
-    """Every rectangle of every document in one file, in FILE coordinates, for ONE degrader call.
+    """Every rectangle of every document in one file, in file coordinates, for one degrader call.
 
     The outer counterpart of `tracked_boxes`, and it takes that function's output per document:
     each entry is the document's region in the composed file, together with the boxes
-    `tracked_boxes` collected in that document's OWN coordinates — its fields, its content extent
+    `tracked_boxes` collected in that document's own coordinates — its fields, its content extent
     and its page regions. Two things happen to them here, and both have to happen before the
     degrader rather than after it:
 
-    * they are OFFSET by the region's origin, which is the whole arithmetic of putting a document
+    * they are offset by the region's origin, which is the whole arithmetic of putting a document
       in a file — the embedding is 1:1, so a size is never touched;
-    * they are NAMESPACED per document, because two documents of one claim print the same field
+    * they are namespaced per document, because two documents of one claim print the same field
       names and a flat merge would leave the file one box under each.
 
-    The region itself rides along under `_FILE_REGION_KEY`. 🔴 IT MUST: it is the segmentation
-    ground truth, the geometry of every capture channel that has any is DRAWN, and a region moved
+    The region itself rides along under `_FILE_REGION_KEY`. 🔴 it must: it is the segmentation
+    ground truth, the geometry of every capture channel that has any is drawn, and a region moved
     by a second call to the degrader is moved by a second draw. It would land somewhere plausible
     and wrong, and downstream that reads as a poor segmenter rather than as a coordinate defect.
     """
@@ -1088,18 +1085,18 @@ class CarriedDocument:
 def take_bundled_boxes(
     boxes: dict[str, BBox], *, index: int, page_count: int
 ) -> CarriedDocument:
-    """The inverse of `bundled_boxes` for ONE document — TAKEN OUT of the degraded boxes.
+    """The inverse of `bundled_boxes` for one document — taken out of the degraded boxes.
 
     Removes this document's region and every box that came from it, strips the namespace, and
     hands the two inner reserved keys back to the same split the single-document path uses
     (`take_page_regions` and the content extent), so the two paths cannot drift in what they
     consider a field.
 
-    It POPS for the reason that split does: what is left in `boxes` after every document has been
+    It pops for the reason that split does: what is left in `boxes` after every document has been
     taken is nothing, and a key this function forgot cannot quietly reach a consumer as a
     `data-field` named `__doc_1__amount` — a field no template prints and no requirement names.
 
-    ⛔ A DOCUMENT WITH NO REGION IS A REFUSAL, not an empty label. A file whose second region never
+    ⛔ A document with no region is a refusal, not an empty label. A file whose second region never
     reached the degrader would otherwise produce a record that looks like a page nothing was
     extracted from, which is a defect wearing the appearance of a result.
     """
@@ -1135,24 +1132,24 @@ def _bundle_one_file(
     out_dir: Path,
     staging: Path,
 ) -> list[DocGroundTruth]:
-    """Carry the documents of ONE claim in ONE file, and label each of them where it landed.
+    """Carry the documents of one claim in one file, and label each of them where it landed.
 
     The alternative to `_build_document`'s own tail, and the differences are the whole of what a
     multi-document file is:
 
-    * the documents are composed into a file FIRST, from their clean renders, at natural size;
+    * the documents are composed into a file first, from their clean renders, at natural size;
     * every coordinate of every document is offset into the file's own space;
-    * 🔴 THE FILE IS DEGRADED ONCE, with every document's boxes and every region in the SAME call.
+    * 🔴 the file is degraded once, with every document's boxes and every region in the same call.
       A second call is a second draw of the same channel's geometry, so a box carried by one would
       be plausible and wrong. This is the same rule `tracked_boxes` states one level down, applied
       to a file rather than to a document;
-    * ONE CAPTURE CHANNEL FOR THE FILE, because a file is captured once — a claimant who
+    * one capture channel for the file, because a file is captured once — a claimant who
       photographs a stapled pair does not photograph one sheet and scan the other. It is the first
       document's drawn channel; the second's is drawn and unused (see `_BuiltDocument`);
-    * ONE IMAGE IS WRITTEN, named after the CLAIM, and the per-document renders stay in `staging`.
+    * one image is written, named after the claim, and the per-document renders stay in `staging`.
 
     `file_region` reaches the label through `model_copy` rather than through `ground_truth`,
-    deliberately: where a document sits inside a shared file is a fact about the FILE, decided here
+    deliberately: where a document sits inside a shared file is a fact about the file, decided here
     after the composition has been rendered, and not one of the five content classes knows it or
     could be asked it. Threading a parameter through all five so that this function could pass it
     to one of them would put a file-level fact in five document-level signatures.
@@ -1160,15 +1157,15 @@ def _bundle_one_file(
     composed = _compose_bundle(
         renderer, [built.clean for built in builts], output_path=staging / f"{claim_id}.png"
     )
-    # ⛔ THE FILE TAKES THE FIRST DOCUMENT'S CHANNEL AND THE SECOND'S IS DROPPED, WHICH IS SOUND
-    # ONLY WHILE NO BUILDER PRINTS MEDIUM-DEPENDENT CONTENT. Today none does: `capture` reaches the
+    # ⛔ The file takes the first document's channel and the second's is dropped, which is sound
+    # only while no builder prints medium-dependent content. Today none does: `capture` reaches the
     # degrader and the label and never a content builder, so the second document's pixels are the
     # same whichever channel was drawn for it and the discard costs nothing. A builder that started
     # to read its own capture — a caption naming the copy as scanned, a header only a screenshot
     # carries — would make this line quietly wrong: that document would print for one channel while
     # its file was captured on another, and nothing downstream measures the two against each other.
     # The precondition is stated here because the violation would be invisible, not because it is
-    # near; if it ever stops holding, the channel has to be chosen for the CLAIM before its
+    # near; if it ever stops holding, the channel has to be chosen for the claim before its
     # documents are built rather than picked off one of them afterwards.
     capture = builts[0].capture
     moved = degrade(
@@ -1186,7 +1183,7 @@ def _bundle_one_file(
         capture=capture,
     )
     boxes = dict(moved.field_bboxes)
-    # THE FRAME IS THE FILE'S, and it is the file a consumer receives — see the same measurement in
+    # The frame is the file's, and it is the file a consumer receives — see the same measurement in
     # `_build_document`. A document whose sheet was cropped off the photograph loses its content in
     # exactly the way a single-document capture does.
     file_height, file_width = moved.image.shape[:2]
@@ -1214,7 +1211,7 @@ def _bundle_one_file(
             f"the split left {sorted(boxes)} behind after {len(builts)} document(s); every "
             "carried box belongs to one of them"
         )
-    # WRITTEN LAST, after every label has been built and the split has come out empty: an image on
+    # Written last, after every label has been built and the split has come out empty: an image on
     # disk that no label describes correctly is worse than a run that stopped, because it is the
     # half a consumer keeps.
     image_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1223,7 +1220,7 @@ def _bundle_one_file(
 
 
 # How many times `_payee_the_payment_names` may draw before it gives up. The filter inside
-# `_pick_vendor` already removes every STORED name, so a redraw is only ever needed when a sole
+# `_pick_vendor` already removes every stored name, so a redraw is only ever needed when a sole
 # trader's drawn personal name collides with the claim's own — Faker's uk_UA name space makes that
 # a one-in-many-thousands event, and eight draws put the residual beyond anything a corpus reaches.
 # Bounded rather than a `while True`: a pool that cannot satisfy the plan has to fail with a
@@ -1234,13 +1231,13 @@ _PAYEE_DRAW_ATTEMPTS = 8
 def _payee_the_payment_names(
     rng: random.Random, plan: ClaimPlan, vendor: dict, pool: str
 ) -> dict:
-    """Which party the PAYMENT document of this claim names.
+    """Which party the payment document of this claim names.
 
-    THE CLAIM'S OWN VENDOR ON AN ORDINARY CLAIM, which is what makes a pair one transaction: an
+    The claim's own vendor on an ordinary claim, which is what makes a pair one transaction: an
     invoice and the payment settling it name one seller, and every identifier of that seller is
     drawn once for the claim (see `_build_document` and `content_builder.PartyIdentity`).
 
-    🔴 A DIFFERENT PARTY WHEN THE PLAN ASKED FOR ONE — the sibling of `_amount_the_payment_states`
+    🔴 A different party when the plan asked for one — the sibling of `_amount_the_payment_states`
     below, on the other axis of `cross_document_agreement`. A claim planned as
     `insufficient_evidence` with the cause `counterparty_mismatch` is realized here and nowhere
     else: the label was chosen first and the documents are built to make it true. Nothing else
@@ -1248,22 +1245,22 @@ def _payee_the_payment_names(
     basket is ordinary — because a consumer that could tell the claim apart by anything but the
     party would be learning something other than the defect.
 
-    🔴 DRAWN FROM THE SAME CATEGORY, and that is a decision rather than convenience. A payment to
-    some unrelated business would be discriminable by the KIND of party as well as by its name — a
+    🔴 drawn from the same category, and that is a decision rather than convenience. A payment to
+    some unrelated business would be discriminable by the kind of party as well as by its name — a
     gym invoice settled by a payment to a pharmacy — and the negative would then be easier than the
-    one it stands for. The realistic case is a claimant paying the wrong provider OF THE SAME KIND,
+    one it stands for. The realistic case is a claimant paying the wrong provider of the same kind,
     and it is also the harder one.
 
-    ⛔ THE PAYMENT'S PURPOSE STILL CITES THE CLAIM'S OWN INVOICE, and that is left alone
+    ⛔ the payment's purpose still cites the claim's own invoice, and that is left alone
     deliberately: 👁 a purpose line names an invoice, and a payment that went to the wrong provider
     while quoting the right invoice number is what the mistake actually looks like. Cutting the
     citation would make the claim discriminable by a missing reference rather than by the party.
 
-    ⚠️ AND THE INVOICE'S PARTY MAY APPEAR ON A STATEMENT'S OTHER ROWS. `build_bank_statement` takes
-    the claim's PAYEE out of the pool its ordinary rows draw from, and this claim's payee is the
+    ⚠️ and the invoice's party may appear on a statement's other rows. `build_bank_statement` takes
+    the claim's payee out of the pool its ordinary rows draw from, and this claim's payee is the
     mismatched one — so a decoy row naming the invoice's seller is possible. It does not soften the
     negative: an ordinary row's amount avoids the labelled one and its purpose cites a document
-    outside the claim, so no row of the page shows THIS invoice settled by its own party.
+    outside the claim, so no row of the page shows this invoice settled by its own party.
 
     The engine still decides. Nothing here asserts the label: if the two names ever came out equal
     the pair would agree, the claim would come back `covered`, and `_drift_lines` would report the
@@ -1283,7 +1280,7 @@ def _payee_the_payment_names(
                 rng, pool, plan.category, mixed=False, excluding_name=vendor["name"]
             )
         except ValueError as no_second_seller:
-            # RE-RAISED WITH THE CAUSE NAMED. `_pick_vendor` refuses in the language of a vendor
+            # Re-raised with the cause named. `_pick_vendor` refuses in the language of a vendor
             # pool — it does not know what the claim was planned as — and a reader meeting that
             # sentence alone would go looking for a basket problem rather than at the category
             # needing two sellers for this cause.
@@ -1303,18 +1300,18 @@ def _amount_the_payment_states(
 ) -> Decimal:
     """What the payment document of this claim should state, given the subject document.
 
-    THE SAME AMOUNT ON AN ORDINARY CLAIM, which is what makes a pair one transaction:
-    `policy_engine._cross_checks` compares the two EXACTLY, and there is no tolerance anywhere in
+    The same amount on an ordinary claim, which is what makes a pair one transaction:
+    `policy_engine._cross_checks` compares the two exactly, and there is no tolerance anywhere in
     this repository.
 
-    🔴 ONE INSTALMENT WHEN THE CLAIM IS PLANNED AS `partially_paid`, AND THE FIGURE IS READ OFF THE
-    BUILT DOCUMENT rather than computed here. The invoice divided its own total by the schedule and
-    PRINTED the result; recomputing it would be a second implementation of the division, and the
+    🔴 one instalment when the claim is planned as `partially_paid`, and the figure is read off the
+    built document rather than computed here. The invoice divided its own total by the schedule and
+    printed the result; recomputing it would be a second implementation of the division, and the
     two would round apart on the first total that does not divide evenly — leaving the payment
     disagreeing with the term beside it by a kopiyka, which the engine labels `amount_mismatch`.
     That is why this function takes the whole subject record and not its amount.
 
-    🔴 A DIFFERENT AMOUNT WHEN THE PLAN ASKED FOR ONE. A claim planned as `insufficient_evidence`
+    🔴 A different amount when the plan asked for one. A claim planned as `insufficient_evidence`
     with the cause `amount_mismatch` is realized here and nowhere else: the label was chosen first
     and the documents are built to make it true, which is the whole direction of this generator.
     The delta is drawn from config/generation.yaml — the magnitude is a difficulty knob and changes
@@ -1360,20 +1357,20 @@ def _reference_the_payment_cites(
 ) -> DocumentReference | None:
     """Which рахунок this claim's payment document cites, given the subject document's own.
 
-    THE SAME REFERENCE ON AN ORDINARY CLAIM — the same object, untouched — which is what makes a
+    The same reference on an ordinary claim — the same object, untouched — which is what makes a
     citation resolvable at all: where the purpose formula names a рахунок, it names the claim's
     own invoice.
 
-    🔴 A DIFFERENT REFERENCE WHEN THE PLAN ASKED FOR ONE. A claim planned as
+    🔴 A different reference when the plan asked for one. A claim planned as
     `insufficient_evidence` with the cause `subject_mismatch` is realized here and nowhere else —
     the sibling of `_amount_the_payment_states` and `_payee_the_payment_names`, on the last of
     the transaction's dimensions: the payment states the right money, to the right party, in the
-    right order, FOR A DIFFERENT PURCHASE. The number is drawn in the same 1..9999 form
+    right order, for a different purchase. The number is drawn in the same 1..9999 form
     `content_builder._fill_reference_traced` draws for a citation pointing outside the claim,
     because that is exactly what this one is; the date is drawn a few days back from the
     payment's, as an unrelated invoice's would be.
 
-    The builder is separately told to PRINT the citation (`must_cite`): a wrong reference on a
+    The builder is separately told to print the citation (`must_cite`): a wrong reference on a
     page whose formula draw happened to cite nothing would leave the corpus with zero claims of
     the cause while every engine test stayed green — the `partially_paid` lesson, applied at the
     step that realizes rather than the step that labels.
@@ -1409,17 +1406,17 @@ def _claim_documents(
     """Every document of one claim, built, captured and labelled — in one file or in one each.
 
     A claim is a list of documents, and since the invoice archetype landed it may genuinely hold
-    two. A LOOP RATHER THAN A COMPREHENSION, because the documents are not independent: the subject
+    two. A loop rather than a comprehension, because the documents are not independent: the subject
     document fixes the claim's amount and the payment document has to be told it, or the two
     disagree and the engine labels every such claim `insufficient_evidence`.
 
     `plan.documents` is ordered subject-first — `_select_documents` builds it that way — and the
-    LABELS follow that order into the file: `doc_1` is the subject, `doc_2` the payment. Nothing
+    labels follow that order into the file: `doc_1` is the subject, `doc_2` the payment. Nothing
     else here relies on it: `settles` is read off whichever document proved the subject, and stays
     `None` for a self-contained claim, whose single document is its own subject and its own
     payment.
 
-    🔴 THE CARRIAGE IS DECIDED BEFORE THE FIRST DOCUMENT IS BUILT, and it changes nothing about
+    🔴 the carriage is decided before the first document is built, and it changes nothing about
     what is built — see `documents_share_one_file`. A bundled claim renders its documents clean
     into a staging directory that outlives them, because the file is composed from all of them at
     once; an unbundled one takes the path it always took, document by document.
@@ -1435,13 +1432,13 @@ def _claim_documents(
 
     with ExitStack() as stack:
         # Opened only for a bundled claim: the composition needs every clean render at the same
-        # time, so the directory belongs to the CLAIM. An unbundled document stages its own inside
+        # time, so the directory belongs to the claim. An unbundled document stages its own inside
         # `_build_document` and discards it there.
         staging = (
             Path(stack.enter_context(tempfile.TemporaryDirectory())) if bundled else None
         )
         for doc_index, document_plan in enumerate(plan.documents, start=1):
-            # WHICH PARTY THIS DOCUMENT NAMES, decided by what it establishes and read from
+            # Which party this document names, decided by what it establishes and read from
             # policy.yaml like every other role in this loop. The two are the same object on every
             # claim but a `counterparty_mismatch` one, so this dispatch changes nothing about the
             # rest of the corpus.
@@ -1461,9 +1458,9 @@ def _claim_documents(
                 built = _render_document(rng, staging=staging, **asked)
                 rendered.append(built)
                 reference = built.reference
-                # ⚠️ ASKED OF THE SUBJECT DOCUMENT AND OF NO OTHER, which is a condition rather
+                # ⚠️ Asked of the subject document and of no other, which is a condition rather
                 # than an optimization: `as_rendered` labels a document from its own render, and a
-                # PAGINATED one refuses to be labelled without the regions it has no way to pass.
+                # paginated one refuses to be labelled without the regions it has no way to pass.
                 # The payment class is the one that paginates, and nothing needs its record here.
                 record = built.as_rendered(source_file=source_file) if states_subject else None
             else:
@@ -1474,7 +1471,7 @@ def _claim_documents(
                 # What the payment document will cite. It travels beside `settles` because it is
                 # the same kind of fact — a property of the claim that the subject document decides
                 # and the payment document has to be told. On a `subject_mismatch` claim it is the
-                # one fact told WRONG, and told wrong HERE — the same seam, so the defect cannot
+                # one fact told wrong, and told wrong here — the same seam, so the defect cannot
                 # drift apart from the mechanism that delivers every honest citation.
                 cites = _reference_the_payment_cites(rng, plan, reference)
         if bundled:
@@ -1507,14 +1504,14 @@ def generate_dataset(
     planner stops early once no category of theirs has an annual balance left — which is
     also the only way the cumulative-limit mechanism can be exercised at all.
 
-    `train_fraction` IS REQUIRED AND SITS WITH `seed` FOR THE SAME REASON — a run performed
+    `TRAIN_FRACTION` is required and sits with `seed` for the same reason — a run performed
     without the partition ever having been declared documents a measurement nobody chose. It has
     no default at this entry point either: a default here would be the same defect one layer below
     the command line, where it would be harder to see. See `assign_splits`.
     """
     if claims_per_persona < 1:
         raise ValueError(f"a persona files at least one claim, not {claims_per_persona}")
-    # Validated BEFORE the run rather than at the partition step at the end. A bad fraction would
+    # Validated before the run rather than at the partition step at the end. A bad fraction would
     # otherwise be reported after every image had been rendered, which on a production run is an
     # hour and a half spent to learn that an argument was mistyped.
     assign_splits([], seed=seed, train_fraction=train_fraction)
@@ -1541,12 +1538,12 @@ def generate_dataset(
             for plan in plan_claims(
                 rng, persona=persona, count=claims_per_persona, ledger=ledger
             ):
-                # The claim's vendor instance, chosen ONCE here and carried into every
+                # The claim's vendor instance, chosen once here and carried into every
                 # document of the claim. Outside the loop below on purpose: a sole
                 # trader's name is drawn rather than stored, so calling `_pick_vendor` per
                 # document would put two different sellers on two documents of one
                 # purchase. That constraint used to hold by the nature of the type.
-                # WHICH POOL THE SELLER COMES FROM follows the archetypes of the plan, not
+                # Which pool the seller comes from follows the archetypes of the plan, not
                 # the persona: a cross-border archetype names its own (`vendor_pool`),
                 # every domestic one defaults to the claimant's jurisdiction. One pool per
                 # claim — the vendor is one party on every document — so two documents
@@ -1567,7 +1564,7 @@ def generate_dataset(
                     pool,
                     plan.category,
                     mixed=plan.coverage_target is not None,
-                    # 🔴 ONE ARCHETYPE CONSTRAINS WHO CAN HAVE SOLD THE GOODS, and the constraint
+                    # 🔴 One archetype constrains who can have sold the goods, and the constraint
                     # is the claim's rather than the document's: the vendor is drawn once here for
                     # every document of the claim, so a claim carrying a товарний чек has to be
                     # given a seller that could have issued one. 📄 A registered ПДВ payer is
@@ -1582,28 +1579,28 @@ def generate_dataset(
                         else None
                     ),
                 )
-                # And WHO THAT VENDOR IS ON PAPER, drawn here for the same reason and in the same
+                # And who that vendor is on paper, drawn here for the same reason and in the same
                 # place. The name was fixed per claim and the code, the account and the bank were
                 # not, so two documents of one purchase named one seller by four different numbers
                 # — on every pair of the delivered corpus. The constraint was known; it had been
                 # applied to one field.
                 #
-                # 🔴 DRAWN IN THE SELLER'S POOL AND NOT THE CLAIMANT'S, which is the same
-                # correction `_pick_vendor` above already carries: an identity is WHOSE it is. The
+                # 🔴 Drawn in the seller's pool and not the claimant's, which is the same
+                # correction `_pick_vendor` above already carries: an identity is whose it is. The
                 # claimant's jurisdiction decided the seller's bank and account while every seller
                 # was domestic, and the two coincided — a foreign seller banked in the euro area
-                # would have been given a Ukrainian IBAN, and the first document to PRINT one
+                # would have been given a Ukrainian IBAN, and the first document to print one
                 # would have said so on the page.
                 identity = draw_party_identity(rng, vendor, pool)
-                # WHOM THE PAYMENT DOCUMENT NAMES, which is the same seller on every claim but
-                # one. A claim planned as `counterparty_mismatch` names a SECOND party here — the
+                # Whom the payment document names, which is the same seller on every claim but
+                # one. A claim planned as `counterparty_mismatch` names a second party here — the
                 # invoice was issued by one seller and the money went to another — and that party
                 # gets its own identity, because a payee is one party on paper: a second name
                 # beside the first one's account and tax code would be a document nothing
                 # describes. Drawn from the same generator, so the run stays determined by `--seed`.
-                # 🔴 THE SECOND SELLER COMES FROM THE CLAIM'S OWN POOL, for the reason the first
-                # does: a payment that went to the wrong provider went to another provider OF THE
-                # SAME KIND, and a domestic company named on a cross-border claim's payment would
+                # 🔴 The second seller comes from the claim's own pool, for the reason the first
+                # does: a payment that went to the wrong provider went to another provider of the
+                # same kind, and a domestic company named on a cross-border claim's payment would
                 # be discriminable by the pool rather than by the party.
                 payee = _payee_the_payment_names(rng, plan, vendor, pool)
                 payee_identity = (
@@ -1647,7 +1644,7 @@ def generate_dataset(
                 reason = why_no_claim(persona, ledger) or UNATTRIBUTED
                 skipped[reason] += claims_per_persona - built
 
-    # THE PARTITION IS APPLIED LAST, ON A FINISHED CORPUS, because its unit is the persona and no
+    # The partition is applied last, on a finished corpus, because its unit is the persona and no
     # persona is complete until its own planning has stopped. It changes no pixel and no drawn
     # value — see `assign_splits` on why it has its own generator — so this is a labelling pass over
     # records that already exist.
@@ -1695,26 +1692,26 @@ def balance_report(dataset: Dataset) -> str:
     balanced-looking dataset while a fifth of the target mix was absent, which is worse
     than printing nothing: it answers the question nobody would then think to ask.
 
-    A member may also carry NO SHARE — `verdict_mix` may declare one as `null`, and every
+    A member may also carry no share — `verdict_mix` may declare one as `null`, and every
     member carries a number today. Such a member is named without a percentage and excluded
     from every sum, and the absent fraction is then reported as a lower bound: it is what
     the share-carrying verdicts account for, not the whole of what is missing. The branch
     stays because the next verdict declared before its mechanism exists arrives that way, and
     it is exercised by a test against a patched mix.
 
-    🔴 TWO MARKER VOCABULARIES, AND THEY MUST NOT MERGE. The report says two different kinds of
+    🔴 two marker vocabularies, and they must not merge. The report says two different kinds of
     thing and a reader has to be able to tell them apart at a glance:
 
-      `!!`   THE REPORT CONTRADICTS ITSELF, or the run reached a state nothing should produce —
+      `!!`   the report contradicts itself, or the run reached a state nothing should produce —
              rows that do not sum to their own header, a verdict realized that the planner cannot
              draw, claims missing that nothing accounts for. It should never fire, and if it does
-             the TABLE is wrong rather than the dataset.
-      words  A FINDING ABOUT THE CORPUS, in capitals and in plain English: ABSENT, EMPTY,
-             BELOW <n>, ONE VALUE ACROSS THE WHOLE CORPUS, THIS SIDE CONTAINS NO <x>. These are
+             the table is wrong rather than the dataset.
+      words  A finding about the corpus, in capitals and in plain English: absent, empty,
+             below <n>, one value across the whole corpus, this side contains no <x>. These are
              expected to fire — a corpus that never trips one is a corpus nobody stressed — and
              they are not defects in the report.
 
-    The distinction is load-bearing rather than cosmetic: a test asserts that `!!` is ABSENT from a
+    The distinction is load-bearing rather than cosmetic: a test asserts that `!!` is absent from a
     healthy run's report, which is only meaningful while `!!` means the first thing. Marking a
     below-threshold class with `!!` broke that test the moment the class block landed, and the
     lesson is that the sigil is a reserved word, not emphasis.
@@ -1802,44 +1799,44 @@ def balance_report(dataset: Dataset) -> str:
 
 
 def _document_class_lines(dataset: Dataset) -> list[str]:
-    """The distribution over document classes, against the per-class minimum — REPORTED, NOT MET.
+    """The distribution over document classes, against the per-class minimum — reported, not met.
 
-    🔴 THERE IS NO TARGET SHARE TO COMPARE AGAINST, AND THE ABSENCE IS DELIBERATE.
-    config/policy.yaml declares `verdict_mix` and explicitly REFUSES a `document_mix`, on the
+    🔴 there is no target share to compare against, and the absence is deliberate.
+    config/policy.yaml declares `verdict_mix` and explicitly refuses a `document_mix`, on the
     ground that a share of receipts against invoices would read as an observation about which
     documents claimants actually submit — which nothing here has measured. So this block reports
-    what a run produced and measures it against one thing only: a MINIMUM below which a per-class
+    what a run produced and measures it against one thing only: a minimum below which a per-class
     figure should not be quoted at all.
 
-    🔴 AND NOTHING TUNES ANYTHING TO REACH IT. The threshold applies to the delivered corpus and is
+    🔴 and nothing tunes anything to reach it. The threshold applies to the delivered corpus and is
     checked after it is generated; this block makes a shortfall visible and leaves it. A generator
     that resized a run until its own report looked healthy would produce a report that could not
     fail, which is a report nobody reads.
 
-    A CLASS WITH NO REGISTERED ARCHETYPE IS ABSENT, NOT ZERO. `DocType` names seven classes and the
+    A class with no registered archetype is absent, not zero. `DocType` names seven classes and the
     registry can build four; the other three cannot appear in any run at any size, so a count of 0
     beside a threshold would invite somebody to fix a shortfall that no run can close. The minimum
     is stated only for the classes it can be asked of.
 
-    🔴 AND THE MINIMUM IS CHECKED ON EACH SIDE OF THE PARTITION, NOT ON THE CORPUS ROW. Nothing is
+    🔴 and the minimum is checked on each side of the partition, not on the corpus row. Nothing is
     measured on the corpus as a whole: a consumer inspects documents on the development side and
-    reports figures on the measurement side, so a per-class figure needs its 30 documents ON THE
-    SIDE IT IS COMPUTED ON. The corpus row stays, as CONTEXT and with its share, because it is what
+    reports figures on the measurement side, so a per-class figure needs its 30 documents on the
+    side it is computed on. The corpus row stays, as context and with its share, because it is what
     says how the mix fell — but it is not what the class is held to.
 
-    ⚠️ THIS BLOCK USED TO CHECK THE CORPUS ROW, AND THE FAILURE IT COULD NOT SEE IS ON RECORD: RP-05
-    was demoted because its corpus row cleared the minimum on all four classes while its validation
-    side carried 10 and 21. The report printed `ok` for both. The class the shortfall lands on has
-    changed since; the shape has not, which is why it moved here rather than into a note.
+    ⚠️ Checking the corpus row instead cannot see the failure RP-05 was demoted for: its corpus row
+    cleared the minimum on all four classes while its validation side carried 10 and 21, and the
+    report printed `ok` for both. The class the shortfall lands on has changed since; the shape
+    has not.
 
-    A RUN WITH NO PARTITION HAS NO SIDE TO CHECK, and it says so rather than checking two empty
+    A run with no partition has no side to check, and it says so rather than checking two empty
     counters — which would flag every class of every unpartitioned run as below the minimum, i.e. a
     finding produced by the absence of a partition rather than by the corpus.
     """
     buildable = {archetype.doc_type for archetype in ARCHETYPES.values()}
     counts: Counter[DocType] = Counter(document.doc_type for document in dataset.documents)
     total = sum(counts.values())
-    # A side EXISTS when personas were assigned to it, not when documents landed on it: a side
+    # A side exists when personas were assigned to it, not when documents landed on it: a side
     # holding no document of a class is precisely the shortfall being looked for, while a side
     # nobody was assigned to is a property of the run's size and is reported by `_split_lines`.
     sides = [
@@ -1898,10 +1895,10 @@ def _document_class_lines(dataset: Dataset) -> list[str]:
 def _value_dimension_lines(dataset: Dataset, title: str, of) -> list[str]:
     """One flat dimension of the corpus — currency, language — with its denominator.
 
-    🔴 A DIMENSION WITH ONE VALUE IS SAID TO HAVE ONE VALUE. Printing `UAH 100.0%` and stopping
+    🔴 A dimension with one value is said to have one value. Printing `UAH 100.0%` and stopping
     reads as a balanced distribution that happens to have one member, which is exactly the
     reassuring shape this report is not allowed to take: a corpus of a single currency does not
-    EXERCISE the currency dimension at all, and a consumer reporting per-currency accuracy on it
+    exercise the currency dimension at all, and a consumer reporting per-currency accuracy on it
     would be reporting the corpus average under another name.
 
     An empty corpus is reported as having no documents rather than as a distribution over nothing.
@@ -1927,14 +1924,14 @@ def _value_dimension_lines(dataset: Dataset, title: str, of) -> list[str]:
 
 
 def _split_lines(dataset: Dataset) -> list[str]:
-    """The train / validation partition, and WHAT EACH SIDE IS MISSING.
+    """The train / validation partition, and what each side is missing.
 
     The sizes alone would be the reassuring half. The half that matters is the last one: any
     verdict or document class the corpus contains and a side does not. The partition is by persona
-    and is NOT stratified — see `schemas.Split` — so on a small run a whole verdict can land on one
+    and is not stratified — see `schemas.Split` — so on a small run a whole verdict can land on one
     side, and nothing else in this report would say so.
 
-    ⚠️ AN EMPTY SIDE IS DECLARED AS EMPTY, not printed as 0.0%. A run of one persona has no
+    ⚠️ an empty side is declared as empty, not printed as 0.0%. A run of one persona has no
     validation set at all; that is a property of the run's size, and a percentage would present it
     as a partition that happens to be lopsided.
     """
@@ -1987,22 +1984,22 @@ def _split_lines(dataset: Dataset) -> list[str]:
 
 
 def _capture_lines(dataset: Dataset) -> list[str]:
-    """How the corpus is split across the capture channels, AND WITH WHAT DENOMINATOR EACH
-    CHANNEL COULD CARRY A CHARACTER ERROR RATE.
+    """How the corpus is split across the capture channels, and with what denominator each
+    channel could carry a character error rate.
 
-    🔴 A CHANNEL THAT PRODUCED NO DOCUMENT IS REPORTED ABSENT, NEVER AS ZERO. The two are
+    🔴 A channel that produced no document is reported absent, never as zero. The two are
     different statements and only one of them can be true at a time: `0.0%` complete says a
     measurement was taken and came out at nothing, while absence says no measurement exists.
     Folding the first into the second is how an empty cell becomes a data point in somebody's
     table, and nobody re-derives it afterwards.
 
-    🔴 AND THE SUBSET IS PART OF THE RESULT. `reference_text` is the reference side of a
+    🔴 and the subset is part of the result. `reference_text` is the reference side of a
     character error rate, and that rate is only defined where the text it references is
     actually in the picture. "CER on photo = X" is not a result; "CER on the N of M photos
     whose content survived" is. So this block prints the denominator beside the share, because
     a consumer that reads only the metric will never learn it anywhere else.
 
-    ⚠️ Complete here means THE TEXT survived — see `DocGroundTruth.content_complete`. A capture
+    ⚠️ Complete here means the text survived — see `DocGroundTruth.content_complete`. A capture
     that cut off a QR code while keeping every character is counted complete, and truthfully.
     """
     by_channel: Counter[Capture] = Counter(doc.capture for doc in dataset.documents)
@@ -2022,7 +2019,7 @@ def _capture_lines(dataset: Dataset) -> list[str]:
     for channel in Capture:
         count = by_channel[channel]
         if not count:
-            # ABSENT, not zero — see the docstring. There is no denominator here, so there is
+            # Absent, not zero — see the docstring. There is no denominator here, so there is
             # no share and no completeness figure to print.
             lines.append(
                 f"  {channel.value:<12}    0         ABSENT — no document of this run took this "
@@ -2082,12 +2079,12 @@ def _cause_lines(dataset: Dataset) -> list[str]:
     target. Which of the two "really" caused it is not something policy.yaml answers, and
     picking one would be an invented tie-break sitting inside a report about balance.
 
-    🔴 AND THE SHARE THE TARGET SIZES IS THE DRAWN BUCKET'S, NOT THE REALIZED ONE — the same
+    🔴 and the share the target sizes is the drawn bucket's, not the realized one — the same
     defect as above, one level out, and it is the reason the drawn column exists. The realized
     bucket is not the population `partially_covered_causes` splits: the oracle moves a claim drawn
     as `covered` into it whenever an annual limit binds, and every such claim arrives carrying
     `limit_exhausted`. On the production run that was 95 of 231, which pulls the realized split to
-    36 / 54 against a declared 65 / 35 while the DRAWN split sits on 65.0%. A target column beside
+    36 / 54 against a declared 65 / 35 while the drawn split sits on 65.0%. A target column beside
     a share computed on another population reads as a miss, and no run of any size closes it.
 
     The realized counts stay, and stay first: they are what the corpus contains, which is what a
@@ -2104,7 +2101,7 @@ def _cause_lines(dataset: Dataset) -> list[str]:
     del counts[()]  # claims with no cause are not in the partially_covered bucket
     total = sum(counts.values())
 
-    # The population the declared shares size: the claims AIMED at this verdict, by the cause
+    # The population the declared shares size: the claims aimed at this verdict, by the cause
     # they were aimed through. A claim that was aimed here and came out `covered` stays in this
     # denominator — it is a draw that happened, and `_drift_lines` reports it as a shortfall.
     drawn: Counter[str] = Counter()
@@ -2151,10 +2148,10 @@ def _cause_lines(dataset: Dataset) -> list[str]:
 def _absence_probability(
     cause_share: float, run_size: int, verdict: Verdict = Verdict.INSUFFICIENT_EVIDENCE
 ) -> float:
-    """P(a cause or route declared at `cause_share` of `verdict` is realized ZERO times in
+    """P(a cause or route declared at `cause_share` of `verdict` is realized zero times in
     `run_size` built claims), under the declared shares.
 
-    🔴 THE SAME ARITHMETIC policy.yaml DERIVES `insufficient_evidence_causes_min_run_size` BY, and
+    🔴 the same arithmetic policy.yaml derives `insufficient_evidence_causes_min_run_size` by, and
     that is the whole reason it exists here rather than a sentence someone wrote once: a cause is
     drawn at `verdict_mix[insufficient_evidence]` renormalized over the realizable subset, times
     its own share of that bucket, and is absent from N independent draws with probability
@@ -2162,13 +2159,13 @@ def _absence_probability(
     the report's finding and the file's threshold can never disagree — a run at the guideline says
     "a 5% event", and one at twice it says so too, with the right number.
 
-    ⚠️ IT IS THE DECLARED RATE AND NOT THE REALIZED ONE, deliberately and like the guideline. The
+    ⚠️ it is the declared rate and not the realized one, deliberately and like the guideline. The
     draw is narrowed per persona (`claim_planner.realizable_verdicts_for`), so the rate a
     particular run actually drew at is lower and unknown to this function. A figure computed from
     what a run realized would answer "was this run unlucky given what it did", which is the
     question the count itself already answers.
 
-    A verdict declared with NO share contributes nothing to the denominator — the same treatment
+    A verdict declared with no share contributes nothing to the denominator — the same treatment
     `balance_report` gives it — and a rate of zero returns 1.0 rather than dividing by it: a cause
     nothing can draw is absent with certainty, which is a true statement and not an error.
     """
@@ -2187,7 +2184,7 @@ def _absence_probability(
 
 
 def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
-    """`insufficient_evidence` by cause, and WHAT THE CORPUS DOES NOT CONTAIN.
+    """`insufficient_evidence` by cause, and what the corpus does not contain.
 
     A second cause block rather than a generalization of the one above, because the two verdicts
     differ in the thing that matters here: `partially_covered`'s causes can occur together on one
@@ -2196,7 +2193,7 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     disagrees about the amount, or one dated backwards, or one naming a different party, and the
     planner draws one of the four.
 
-    🔴 EVERY CAUSE IS NOW DRAWN, so this block no longer prints any of them as an absence.
+    🔴 every cause is now drawn, so this block no longer prints any of them as an absence.
     `subject_not_evidenced` carries a share in policy.yaml since the planner gained
     `EvidenceIntent.EVIDENCE_GAP`, and `counterparty_mismatch` since the payment could be made to a
     seller the subject document does not name (`_payee_the_payment_names`) — which means the loop
@@ -2212,9 +2209,9 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
     investigating as a defect. `run_size` is built claims, matching what the guideline was
     derived against: the per-claim probability of drawing either cause at all.
 
-    🔴 EACH FINDING PRINTS THE PROBABILITY IT RESTS ON, AND THE ONE ABOVE THE GUIDELINE USED TO
-    OVERSTATE ITS CASE. It read "LIKELY A DESIGN/MECHANISM DEFECT", which asserts better than even
-    odds — while the guideline is derived at the 95% level, so a zero AT the guideline is a ~5%
+    🔴 each finding prints the probability it rests on, and the one above the guideline used to
+    overstate its case. It read "LIKELY A DESIGN/MECHANISM DEFECT", which asserts better than even
+    odds — while the guideline is derived at the 95% level, so a zero at the guideline is a ~5%
     event and "likely" is off by an order of magnitude in the direction that costs an investigation.
     The number is now computed per row from the declared shares, by the same arithmetic the
     guideline itself is derived by, and printed beside the finding: a reader calibrates against a
@@ -2261,17 +2258,17 @@ def _insufficient_evidence_cause_lines(dataset: Dataset) -> list[str]:
 def _rejected_route_lines(dataset: Dataset) -> list[str]:
     """`rejected` by route, attributed off the label the way a consumer would have to.
 
-    🔴 A ROUTE IS NOT A CAUSE, AND THE ATTRIBUTION RULE IS THE LABEL'S OWN: policy.yaml gives
-    the zero-coverage route NO cause — the verdict is the whole of what it says — so a
+    🔴 A route is not a cause, and the attribution rule is the label's own: policy.yaml gives
+    the zero-coverage route no cause — the verdict is the whole of what it says — so a
     `rejected` claim carrying `outside_period` came by the period route and one carrying
     nothing came by the basket. Until the second route existed, every `rejected` claim was an
     out-of-period one and the payment date predicted the verdict; this block is what says
-    whether a particular run exercises both routes, which a reader needs BEFORE quoting any
+    whether a particular run exercises both routes, which a reader needs before quoting any
     false-approval figure on `rejected` — a run where one route is absent is measuring the
     other rule alone.
 
     A route realizing zero prints the probability of that zero under the declared shares, by
-    the same arithmetic as the cause block above. ⛔ NO run-size guideline is printed beside
+    the same arithmetic as the cause block above. ⛔ no run-size guideline is printed beside
     it: policy.yaml deliberately declares no `min_run_size` key for the routes — the
     derivation lives as a comment beside the shares, and a key without a reader rots — so the
     report states the figure and leaves the reading to the reader rather than inventing a

@@ -33,7 +33,7 @@ _LOCALES: dict[Country, tuple[str, str, str]] = {
     Country.ES: ("es_ES", "EUR", "es"),
 }
 
-# The age band a claimant of a workplace benefit is drawn from. Nothing PRINTS an age; the band
+# The age band a claimant of a workplace benefit is drawn from. Nothing prints an age; the band
 # exists so that the birth date the РНОКПП encodes belongs to a working-age adult rather than to
 # an arbitrary point in the century the identifier can express.
 _MIN_AGE_YEARS, _MAX_AGE_YEARS = 22, 60
@@ -45,18 +45,18 @@ _DAYS_PER_YEAR = 365.2425
 
 
 def _draw_birth_date(rng: random.Random, reference: date) -> date:
-    """A birth date in the age band, drawn from the SEEDED generator and anchored on `reference`.
+    """A birth date in the age band, drawn from the seeded generator and anchored on `reference`.
 
-    🔴 ANCHORED ON THE BENEFIT PERIOD, NEVER ON THE CLOCK, AND THAT IS THE WHOLE POINT OF THIS
-    FUNCTION. It replaces `Faker.date_of_birth(minimum_age=…, maximum_age=…)`, which draws its
-    OFFSET from the seeded instance and takes its ANCHOR from `datetime.now()` — so the same
+    🔴 anchored on the benefit period, never on the clock, and that is the whole point of this
+    function. It replaces `Faker.date_of_birth(minimum_age=…, maximum_age=…)`, which draws its
+    offset from the seeded instance and takes its anchor from `datetime.now()` — so the same
     command at the same seed produced a different corpus on a different calendar day. Measured
     rather than argued: two production runs of the identical command, two hours apart across
     midnight, moved 36 of 96 personas' `tax_id` and 352 of 1141 images. The corpus was a function
-    of the seed AND of the day, and `corpus_identity` in the labelling contract — three sha256
+    of the seed and of the day, and `corpus_identity` in the labelling contract — three sha256
     digests a consumer checks its directory against — cannot survive that.
 
-    ⚠️ THE ANCHOR IS `policy.yaml`'s BENEFIT PERIOD, which is the frame every other date in this
+    ⚠️ the anchor is `policy.yaml`'s benefit period, which is the frame every other date in this
     dataset already lives in: a claim is in or out of the period, a payment precedes or follows an
     invoice. Anchoring the one remaining date on the same declared window is what makes the whole
     corpus a function of the configuration plus the seed, with nothing left over.
@@ -103,11 +103,13 @@ def generate_persona(
     # Faker carries its own generator, so it is seeded from ours rather than left to
     # start from a clock.
     #
-    # ⚠️ SEEDING THE INSTANCE IS NOT THE WHOLE OF DETERMINISM, and this comment used to claim it
-    # was — "everything below is then a function of the incoming seed" was false for four months,
-    # falsified by the line that drew the birth date. A seeded Faker provider still reads the
-    # CLOCK for anything defined relative to now, so what a seed fixes is the offset and not the
-    # date. See `_draw_birth_date`.
+    # ⚠️ Seeding the instance is not the whole of determinism. A seeded Faker provider still
+    # reads the clock for anything defined relative to now, so a seed fixes the offset and not
+    # the date. See `_draw_birth_date`.
+    #
+    # ⛔ "Everything below is then a function of the incoming seed" is the summary to avoid. It is
+    # false, it is the obvious thing to write here, and it stood in this comment for four months —
+    # the line drawing the birth date is what falsifies it.
     fake = Faker(locale)
     fake.seed_instance(rng.getrandbits(64))
 
@@ -115,12 +117,12 @@ def generate_persona(
 
     # Composed here rather than taken whole from `fake.name_*()`, because the surname comes
     # from `content_builder.personal_surname` — the same narrowed pool a printed sole trader
-    # is drawn from. The persona's own name IS printed — as the buyer on an invoice, as the
+    # is drawn from. The persona's own name is printed — as the buyer on an invoice, as the
     # payer on a payment confirmation, as the account holder on a bank statement — so it
     # carries the same exposure as a sole trader's name and gets the same mechanism rather
     # than a second one.
     #
-    # Composing costs the locale's own name FORMAT, which for some locales is more than a
+    # Composing costs the locale's own name format, which for some locales is more than a
     # given name and one surname — a Spanish full name carries two. Whoever adds the first
     # non-UA template decides what that jurisdiction prints; nothing renders a persona name
     # yet, so nothing is misprinted in the meantime.

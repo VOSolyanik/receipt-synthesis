@@ -1,6 +1,6 @@
 """The platform receipt — the corpus's first English document and its first euro one.
 
-The class's whole point is a pairing nothing else in the corpus has: it establishes BOTH
+The class's whole point is a pairing nothing else in the corpus has: it establishes both
 facts of `document_evidence` while carrying no fiscal identity of any jurisdiction, in a
 currency the limits are not stated in. So the assertions below fall into three groups —
 what the page deliberately lacks (the Article 226 absences, checked on the markup), what
@@ -81,7 +81,7 @@ def seed_in_form(form: str) -> int:
 
 
 def without_a_tax_row(document):
-    """The same receipt FORCED into the out-of-scope form — for the controlled comparisons
+    """The same receipt forced into the out-of-scope form — for the controlled comparisons
     below, which are about the class pair and must not depend on which form a seed drew."""
     return replace(
         document,
@@ -137,7 +137,7 @@ def test_the_blast_radius_is_one_category_and_the_seller_pool_is_the_eu_one():
 
 
 def test_every_eur_range_nests_inside_its_uah_sibling_at_the_vendored_rate():
-    """🔴 THE ARITHMETIC THE PLANNER LEANS ON, pinned so an edit to either side goes red.
+    """🔴 the arithmetic the planner leans on, pinned so an edit to either side goes red.
 
     `claim_planner` sizes a limit-exhausting basket with `estimated_line_value`, which
     reads the UAH ranges — it runs before a vendor or an archetype is chosen, so it
@@ -188,8 +188,8 @@ def test_the_page_carries_none_of_the_particulars_it_disclaims(rendered):
     """📄 Article 226 of Directive 2006/112/EC read backwards, the non-fiscal slip's own
     method: a document declaring itself not a VAT invoice may lack the supplier's address
     and both parties' VAT identification numbers — and this one lacks exactly those, at
-    EVERY drawn tax form. ⚠️ A tax ROW stopped being on this list the day the tax-on-top
-    forms landed; what stays absent is the CONTAINED-tax row (`vat_amount`), which is the
+    every drawn tax form. ⚠️ A tax row stopped being on this list the day the tax-on-top
+    forms landed; what stays absent is the contained-tax row (`vat_amount`), which is the
     Ukrainian variant's requisite. Checked on the collected fields, not on the content
     object."""
     fields = set(rendered.field_bboxes)
@@ -200,7 +200,7 @@ def test_the_page_carries_none_of_the_particulars_it_disclaims(rendered):
 
 
 def test_the_page_declares_itself_not_a_vat_invoice(rendered):
-    """🔴 The negative marker is a STRING WITH A POSITION — the other half of RC-08's
+    """🔴 The negative marker is a string with a position — the other half of RC-08's
     argument, where the Ukrainian slip's marker was an absence."""
     assert "This is not a VAT invoice." in rendered.reference_text
     assert "not_a_tax_invoice_note" in rendered.field_bboxes
@@ -229,7 +229,7 @@ def test_the_money_on_the_page_is_the_money_in_the_label(rendered):
 
 def test_all_three_tax_forms_are_reachable_and_the_marker_survives_each():
     """The same drawn `TaxTreatment` the cross-border invoice takes, applied through the shared
-    body — and the not-a-tax-invoice declaration stays put on EVERY form, because it is a claim
+    body — and the not-a-tax-invoice declaration stays put on every form, because it is a claim
     about the document while the row is a claim about the tax. 👁 Real receipts carry both at
     once, which is exactly the pairing a consumer classifying on a tax block must survive."""
     seen = set()
@@ -300,7 +300,7 @@ def test_the_label_is_english_and_euro_and_fiscal_like_nothing():
 
 
 def test_the_label_amount_is_the_printed_total_and_the_tax_is_labelled_apart():
-    """`amount` is what the page says was PAID — the total with any tax on top — and `tax` is
+    """`amount` is what the page says was paid — the total with any tax on top — and `tax` is
     the row, labelled apart so `amount = Σ line items + tax` is checkable on every form. The
     claim this class carries alone therefore converts the figure the buyer actually paid."""
     for form in ("tax_on_top", "out_of_scope", "reverse_charge"):
@@ -369,9 +369,9 @@ def test_the_domestic_variant_is_registered_beside_its_twin():
 
 
 def test_the_domestic_page_prints_the_requisites_the_eu_page_disclaims():
-    """The third axis of the pair is LAW: the Ukrainian seller is a domestic company, so
+    """The third axis of the pair is law: the Ukrainian seller is a domestic company, so
     its legal name, address, identification code, ПН and the contained-VAT row are
-    ordinary — each the exact particular the English page's footer licenses ITSELF to
+    ordinary — each the exact particular the English page's footer licenses itself to
     omit. One shared body, so the comparison is controlled by construction."""
     document = make_ua()
     context = document.render_context()
@@ -387,7 +387,7 @@ def test_the_domestic_page_prints_the_requisites_the_eu_page_disclaims():
 
 
 def test_the_domestic_vat_row_states_the_tax_contained_in_the_gross():
-    """📄 «У т.ч. ПДВ» is the tax CONTAINED in a gross price, never added on top —
+    """📄 «У т.ч. ПДВ» is the tax contained in a gross price, never added on top —
     gross × 20 / 120, exactly as the invoice states it. Known answer, computed on
     paper from the document's own total."""
     document = make_ua()
@@ -405,7 +405,7 @@ def test_the_domestic_label_is_ukrainian_and_hryvnia():
     assert truth.currency == "UAH"
     assert truth.counterparty == "Prometheus"
     assert all(line.vat_letter is None for line in truth.line_items)
-    # ⛔ The contained-VAT row is NOT the `tax` field: it states the tax inside a gross price
+    # ⛔ The contained-VAT row is not the `tax` field: it states the tax inside a gross price
     # and moves no total, so carrying it there would give one key two meanings.
     assert document.vat_amount is not None
     assert truth.tax is None
@@ -418,7 +418,7 @@ def test_the_two_variants_share_one_field_set_plus_the_lawful_extras(renderer, t
     VAT row; less the note only the English page prints. Field-set equality is what makes
     the pair a controlled comparison rather than two templates that resemble each other.
 
-    Compared on the out-of-scope FORM — forced, not drawn — because the comparison is about
+    Compared on the out-of-scope form — forced, not drawn — because the comparison is about
     the class pair, and the EU page's drawn tax row is its own axis: it adds `tax_amount`
     (and `vat_note` on the reverse-charge form) to the English side and nothing to the
     Ukrainian one, which the second half asserts."""

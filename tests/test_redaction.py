@@ -70,7 +70,7 @@ def test_it_reports_every_occurrence_not_just_the_first(tmp_path):
 
 def test_a_planted_term_makes_the_gate_fail(tmp_path, monkeypatch, capsys):
     """End to end, through `main`, so the exit code is what is asserted — that is what a
-    hook or a CI step reads."""
+    hook or a ci step reads."""
     planted = tmp_path / "leak.md"
     planted.write_text("mentions a confidential arrangement\n", encoding="utf-8")
 

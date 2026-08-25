@@ -1,30 +1,30 @@
-"""One file holding BOTH documents of one claim — the composition, its geometry and its labels.
+"""One file holding both documents of one claim — the composition, its geometry and its labels.
 
-🔴 WHY THIS FILE EXISTS. `tests/test_statement_pagination.py` breaks «one page is one document» in
+🔴 why this file exists. `tests/test_statement_pagination.py` breaks «one page is one document» in
 one direction: one document across two sheets. This is the other direction — two documents in one
 file. A step that splits a submitted file into logical documents scores a perfect result on a
 corpus where every file holds exactly one, because every cut it needs to make is a cut it never
-has to refuse, and running a document onto MORE pages never asks it to cut either. Both
+has to refuse, and running a document onto more pages never asks it to cut either. Both
 directions, or a segmentation figure is not a figure.
 
-⛔ ONLY THE DOCUMENTS OF ONE CLAIM ARE EVER BUNDLED. Documents of DIFFERENT claims in one file is
+⛔ only the documents of one claim are ever bundled. Documents of different claims in one file is
 a deliberately unsupported pattern — see `assembler.documents_share_one_file`. Nothing here
 exercises it, and nothing should be added that does.
 
-WHAT IS ASSERTED, and each is a different way the composition could be right in the picture and
+What is asserted, and each is a different way the composition could be right in the picture and
 wrong in the label:
 
-  * the DECISION — off at a share of nought, on for every eligible claim at one, never for a
+  * the decision — off at a share of nought, on for every eligible claim at one, never for a
     claim of a single document whatever the share, and a function of the seed alone;
-  * the EMBEDDING is 1:1 — a region's box is the size of the image inside it, so a scale drift
+  * the embedding is 1:1 — a region's box is the size of the image inside it, so a scale drift
     cannot silently multiply every coordinate downstream of it;
-  * the OFFSET — a document's boxes move into the file's coordinates by its region's origin;
-  * the CARRY — the regions and the offset field boxes go through ONE degrader call and ONE
+  * the offset — a document's boxes move into the file's coordinates by its region's origin;
+  * the carry — the regions and the offset field boxes go through one degrader call and one
     transform, which is the failure that is invisible in every other measurement;
-  * the LABELS — one file name shared by both documents, no per-document image left behind, and
-    NOTHING but carriage different from the same claim built unbundled at the same seed.
+  * the labels — one file name shared by both documents, no per-document image left behind, and
+    nothing but carriage different from the same claim built unbundled at the same seed.
 
-⚠️ NO MODULE-SCOPED `Renderer` HERE, deliberately: several tests below drive `generate_dataset`,
+⚠️ no module-scoped `Renderer` here, deliberately: several tests below drive `generate_dataset`,
 which opens a browser of its own, and Playwright's sync API refuses two live instances in one
 process (see the same warning in tests/test_render_regions.py). The fixture is function-scoped so
 that no renderer of this module is ever alive while a run is going on.
@@ -92,7 +92,7 @@ def renderer():
 
 
 def test_the_share_of_nought_bundles_nothing(monkeypatch):
-    """The knob has to be able to turn the case OFF completely: a run reproducing an earlier
+    """The knob has to be able to turn the case off completely: a run reproducing an earlier
     corpus needs a way back to the composition that corpus had."""
     monkeypatch.setattr(assembler, "file_composition_share", lambda name: 0.0)
 
@@ -115,7 +115,7 @@ def test_the_share_of_one_bundles_every_claim_that_has_two_documents(monkeypatch
 
 def test_a_claim_of_one_document_never_bundles_however_high_the_share(monkeypatch):
     """A file holding one document is not a bundle of one. ⛔ And the other way of giving such a
-    claim a companion — a file holding a document of ANOTHER claim — is the pattern this
+    claim a companion — a file holding a document of another claim — is the pattern this
     generator deliberately does not produce."""
     monkeypatch.setattr(assembler, "file_composition_share", lambda name: 1.0)
 
@@ -128,7 +128,7 @@ def test_a_claim_of_one_document_never_bundles_however_high_the_share(monkeypatc
 def test_the_declared_share_leaves_the_single_document_file_the_strong_majority():
     """The composition decision itself, asserted rather than left to the file. Every
     classification and extraction figure this corpus has produced was measured on files holding
-    ONE document, and a share that made the bundle common would change what those numbers describe
+    one document, and a share that made the bundle common would change what those numbers describe
     without anybody editing them."""
     bundled = [
         documents_share_one_file(seed=SEED, claim_id=f"p001_c{n}", document_count=2)
@@ -165,11 +165,11 @@ def test_the_decision_is_a_function_of_the_seed_and_the_claim_alone():
 
 
 def test_the_bundle_template_marks_one_region_per_document_and_labels_nothing():
-    """One `data-document` root for the FILE and one `data-region` per sheet, named in claim order
+    """One `data-document` root for the file and one `data-region` per sheet, named in claim order
     — and no `data-field` anywhere: the fields of a bundled document are inside the embedded
     image, and a marker here would add a second box under a name that document already uses.
 
-    Asserted on the RENDERED markup rather than on the file, for the reason
+    Asserted on the rendered markup rather than on the file, for the reason
     `test_renderer.template_source` gives for stripping Jinja comments: a rule quoted in a comment
     is not markup, and the region names are a loop variable until something renders them.
     ⚠️ `build_html` needs no browser — it is Jinja and a stylesheet — so this costs no session.
@@ -212,12 +212,12 @@ def solid_sheet(path: Path, *, width: int, height: int, colour) -> RenderedDocum
 def test_each_document_is_embedded_at_natural_size_and_is_really_on_the_page(
     renderer, tmp_path
 ):
-    """🔴 THE 1:1 ASSERTION, MEASURED RATHER THAN TRUSTED. Every coordinate a bundled label
+    """🔴 the 1:1 assertion, measured rather than trusted. Every coordinate a bundled label
     carries is a per-document coordinate plus its region's origin, which holds only while the
     embedded image is drawn at its own size. A scale drift would leave every box in the file
     plausible and wrong.
 
-    The COLOURS are the second half of it: an `<img>` that failed to load keeps whatever box its
+    The colours are the second half of it: an `<img>` that failed to load keeps whatever box its
     width and height attributes give it, so the size of a region cannot by itself tell a missing
     document from a present one. The pixel in the middle of it can.
     """
@@ -256,7 +256,7 @@ def test_the_regions_are_in_claim_order_and_do_not_overlap(renderer, tmp_path):
 def test_a_sheet_that_did_not_come_out_at_natural_size_is_refused(
     renderer, tmp_path, monkeypatch
 ):
-    """⛔ NO SILENT RESCALE. The refusal is what makes 1:1 a guarantee rather than a hope: a
+    """⛔ no silent rescale. The refusal is what makes 1:1 a guarantee rather than a hope: a
     stylesheet that one day gave `.doc` a width of its own would otherwise multiply every
     coordinate of every bundled document by a factor nothing in the label records."""
     sheets = [solid_sheet(tmp_path / "doc_1.png", width=300, height=200, colour=(0, 0, 255))]
@@ -277,7 +277,7 @@ def test_a_sheet_that_did_not_come_out_at_natural_size_is_refused(
 
 # The known-answer fixture of tests/test_bbox_gate.py, reused for the reason
 # tests/test_statement_pagination.py reuses it: the claim here is that a `file_region`, a page
-# region and an offset field box go through the SAME arithmetic, so all three have to be measured
+# region and an offset field box go through the same arithmetic, so all three have to be measured
 # with the same rectangle against the same hand-computed answer.
 WIDTH, HEIGHT = 200, 100
 MARKER = (20.0, 30.0, 40.0, 10.0)
@@ -302,12 +302,12 @@ def test_a_documents_boxes_are_moved_by_its_regions_origin():
 
 
 def test_a_file_region_moves_exactly_as_the_boxes_inside_it_do():
-    """🔴 THE FAILURE THIS TEST EXISTS FOR IS INVISIBLE EVERYWHERE ELSE. Every capture channel
-    that has geometry DRAWS it, so a region moved by a second call to the degrader is moved by a
+    """🔴 the failure this test exists for is invisible everywhere else. Every capture channel
+    that has geometry draws it, so a region moved by a second call to the degrader is moved by a
     second draw and lands somewhere plausible and wrong — which reads downstream as a poor
     segmenter and never as a coordinate defect.
 
-    HAND-COMPUTED, from tests/test_bbox_gate.py's own geometry: a horizontal flip of a 200-wide
+    Hand-computed, from tests/test_bbox_gate.py's own geometry: a horizontal flip of a 200-wide
     image maps column c to 199 - c, so the marker's columns 20 … 59 become 140 … 179 —
 
         (20, 30, 40, 10)  ->  (140, 30, 40, 10)
@@ -340,7 +340,7 @@ def test_a_file_region_moves_exactly_as_the_boxes_inside_it_do():
 
 
 def test_two_documents_naming_the_same_field_keep_their_own_boxes():
-    """🔴 TWO DOCUMENTS OF ONE CLAIM PRINT THE SAME FIELD NAMES — both carry an `amount` — and
+    """🔴 two documents of one claim print the same field names — both carry an `amount` — and
     both have to survive one merged call. A flat merge would leave the file with a single
     `amount` box, silently, and the label of whichever document lost would point at the other's
     ink."""
@@ -362,7 +362,7 @@ def test_two_documents_naming_the_same_field_keep_their_own_boxes():
 
 
 def test_no_reserved_key_of_the_bundle_reaches_a_label():
-    """⚠️ THE MERGE ADDS TWO MORE RESERVED NAMES to the two `tracked_boxes` already carries, and
+    """⚠️ the merge adds two more reserved names to the two `tracked_boxes` already carries, and
     a key this split forgot would reach a consumer as a `data-field` called `__doc_1__amount` — a
     field no template prints and no requirement names."""
     merged = bundled_boxes(
@@ -387,7 +387,7 @@ def test_no_reserved_key_of_the_bundle_reaches_a_label():
 
 
 def test_the_split_refuses_a_document_the_merge_never_carried():
-    """⛔ NO SILENT EMPTY DOCUMENT. A file whose second region never reached the degrader would
+    """⛔ no silent empty document. A file whose second region never reached the degrader would
     otherwise be labelled as a document with no boxes at all — a record that looks like a page
     nothing was extracted from rather than like the defect it is."""
     merged = bundled_boxes([(WHOLE_IMAGE, {"amount": MARKER, assembler._CONTENT_BBOX_KEY: MARKER})])
@@ -457,7 +457,7 @@ def test_both_documents_of_a_bundled_claim_name_one_file_that_exists(bundled_run
 
 
 def test_no_per_document_image_of_a_bundled_claim_survives(bundled_run):
-    """The clean render of each document is an INTERMEDIATE. A per-document PNG left in `images/`
+    """The clean render of each document is an intermediate. A per-document PNG left in `images/`
     would be a second file carrying the same document, with the label pointing at neither."""
     dataset, out = bundled_run
 
@@ -470,7 +470,7 @@ def test_no_per_document_image_of_a_bundled_claim_survives(bundled_run):
 
 
 def test_every_field_box_lies_inside_its_own_documents_region(bundled_run):
-    """🔴 THE OFFSET, MEASURED ON THE SHIPPED LABEL. Each document's boxes were rendered in its
+    """🔴 the offset, measured on the shipped label. Each document's boxes were rendered in its
     own coordinates and moved into the file's; one that stayed behind would point into the other
     document, and every extraction figure taken from it would be wrong in a way that reads as a
     bad extractor."""
@@ -484,11 +484,11 @@ def test_every_field_box_lies_inside_its_own_documents_region(bundled_run):
 
 
 def test_the_regions_of_one_file_stay_in_claim_order_and_barely_touch(bundled_run):
-    """The first document of the claim above the second, on the SHIPPED label — and each region
+    """The first document of the claim above the second, on the shipped label — and each region
     still a rectangle with area, somewhere on the file.
 
-    ⚠️ NOT «DISJOINT», AND THE CAVEAT IS THE DEGRADER'S RATHER THAN THIS PATH'S. A region is
-    carried through the capture as four corners and rebuilt as their axis-aligned HULL
+    ⚠️ not «DISJOINT», and the caveat is the degrader's rather than this path's. A region is
+    carried through the capture as four corners and rebuilt as their axis-aligned hull
     (`degrader.carry_boxes`), so a rotation of a degree or two makes every box a little larger
     than the ink it covers and two stacked sheets can overlap by a few pixels. The composed file
     itself has no overlap at all — asserted above, before any capture — so what is bounded here is
@@ -511,7 +511,7 @@ def test_the_regions_of_one_file_stay_in_claim_order_and_barely_touch(bundled_ru
 
 
 def test_a_bundled_claim_label_is_shaped_exactly_as_an_unbundled_one(bundled_run, single_run):
-    """The claim record is about EVIDENCE, not about files: the same claim carries the same
+    """The claim record is about evidence, not about files: the same claim carries the same
     documents in the same order however they were carried."""
     bundled, _ = bundled_run
     single, _ = single_run
@@ -536,8 +536,8 @@ _CARRIAGE = {
 
 
 def test_bundling_changes_nothing_but_carriage(bundled_run, single_run):
-    """🔴 THE LABEL INTEGRITY CLAIM, AND THE REASON THE DECISION IS SEEDED INDEPENDENTLY.
-    Bundling is a decision about CARRIAGE: at one seed the same documents are produced — the same
+    """🔴 the label integrity claim, and the reason the decision is seeded independently.
+    Bundling is a decision about carriage: at one seed the same documents are produced — the same
     amounts, dates, parties, verdicts and causes — whether they are carried in one file or two.
     The comparison is possible at all only because the decision takes nothing out of the
     generator's draw stream."""
@@ -601,12 +601,12 @@ def test_a_bundled_run_is_reproducible_to_the_byte(tmp_path):
 
 
 def test_a_paginated_document_inside_a_bundle_carries_both_relations(renderer, tmp_path):
-    """🔴 THE TWO RELATIONS ARE INDEPENDENT, AND THE COMBINATION HAS TO WORK. A statement that
+    """🔴 the two relations are independent, and the combination has to work. A statement that
     runs onto a second sheet, bundled with the invoice it settles, carries a `file_region` saying
-    where the document is in the file AND `page_regions` saying where each of its sheets is —
+    where the document is in the file and `page_regions` saying where each of its sheets is —
     both in file coordinates, both moved by the one transform.
 
-    FORCED RATHER THAN SEED-HUNTED. The pagination draw and the bundling decision are
+    Forced rather than seed-hunted. The pagination draw and the bundling decision are
     independent, so a seed producing both is a coincidence a test would then depend on; the two
     documents are built here exactly as the assembler builds them and handed to the same
     bundling step.
@@ -672,7 +672,7 @@ def test_a_paginated_document_inside_a_bundle_carries_both_relations(renderer, t
 
 
 def test_a_run_that_paginates_and_bundles_everything_labels_both_relations(tmp_path):
-    """The same combination THROUGH THE PIPELINE, because the hand-built one above cannot see the
+    """The same combination through the pipeline, because the hand-built one above cannot see the
     loop that leads to it — and the loop is where it broke: the amount a payment settles is read
     off the subject's record, and asking every bundled document for a record instead of only the
     subject refuses on the first paginated statement. Every test above stayed green; this one is

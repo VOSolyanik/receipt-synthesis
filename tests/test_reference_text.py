@@ -1,15 +1,15 @@
 """`reference_text`: every printed character, in reading order, from before rasterization.
 
-🔴 WHY IT IS NOT THE FIELD BOXES, which is the property this whole module is about. `field_bboxes`
-covers the LABELLED fields; `reference_text` covers ALL printed text. A document whose every
+🔴 why it is not the field boxes, which is the property this whole module is about. `field_bboxes`
+covers the labelled fields; `reference_text` covers all printed text. A document whose every
 labelled field survived a crop while the footer carrying the fiscal wording was lost would report
 as complete measured on the fields alone — and would then hand a system a falsely low character
 error rate for text it never read.
 
-GROUND TRUTH BY CONSTRUCTION, NOT BY ANNOTATION. It is read from the layout engine that produced
+Ground truth by construction, not by annotation. It is read from the layout engine that produced
 the image, in the same pass, before the screenshot. Nothing here was transcribed from a picture.
 
-`content_bbox` is its geometric counterpart: where that text IS. ⚠️ Text and only text — a QR, a
+`content_bbox` is its geometric counterpart: where that text is. ⚠️ Text and only text — a QR, a
 stamp and a signature are ink it does not cover — so the two describe the same thing and a later
 measurement can use them together without one covering more than the other.
 """
@@ -29,15 +29,15 @@ from receipt_synth.content_builder import draw_party_identity
 from receipt_synth.renderer import Renderer
 from test_renderer import REGISTERED_SLUGS, context_for
 
-# Every field marker a template can carry that is NOT text — a QR is a picture and a stamp is drawn
+# Every field marker a template can carry that is not text — a QR is a picture and a stamp is drawn
 # geometry. `content_bbox` covers text, so these are the boxes it is not required to contain, and
 # naming them is what keeps the containment assertion below honest rather than loose.
 NON_TEXT_FIELDS = frozenset({"qr", "stamp"})
 
-# HOW FAR A FIELD'S BOX MAY FALL OUTSIDE THE CONTENT EXTENT AND STILL BE INSIDE THE TEXT, in
-# pixels. It absorbs a real and bounded difference of MEASUREMENT rather than an error: a field box
-# is an ELEMENT's border box (`getBoundingClientRect`, rounded), while the extent is the union of
-# TEXT-RANGE rects (floored and ceiled) — and an element's line box is a shade taller than the
+# How far a field's box may fall outside the content extent and still be inside the text, in
+# pixels. It absorbs a real and bounded difference of measurement rather than an error: a field box
+# is an element's border box (`getBoundingClientRect`, rounded), while the extent is the union of
+# text-range rects (floored and ceiled) — and an element's line box is a shade taller than the
 # glyphs inside it, so the lowest field on any page ends a pixel or two below the last glyph. Two
 # pixels covers both the line-box leading and the rounding on either side at the 10-13 px type
 # these templates set; it is far below anything a crop measurement turns on, which is what the
@@ -65,10 +65,10 @@ def rendered(renderer, tmp_path_factory):
 def printed_values(markup: str) -> list[str]:
     """The inner text of every marked field, as a reader would see it.
 
-    ⚠️ ENTITIES ARE UNESCAPED, and the first version of this helper did not: Jinja autoescapes, so
-    an apostrophe reaches the markup as `&#39;` while `innerText` returns the character. Comparing
-    the two raw made this file report a generator defect that was its own — the amount in words
-    was "missing" from the page it is printed on.
+    ⚠️ entities are unescaped. Jinja autoescapes, so an apostrophe reaches the markup as `&#39;`
+    while `innerText` returns the character; comparing the two raw makes this file report a
+    generator defect that is its own — the amount in words "missing" from the page it is
+    printed on.
     """
     return [
         unescape(re.sub(r"<[^>]+>", "", body)).strip()
@@ -93,7 +93,7 @@ def test_every_archetype_carries_its_text(slug, rendered):
 def test_the_confirmations_amount_in_words_caption_reaches_the_reference_text(rendered):
     """`test_renderer.make_confirmation`'s default seed (20260417) draws an amount-in-words line —
     verified once at `content_builder.build_payment_confirmation` — so its caption, one of the two
-    `amount_in_words_captions` in config/fiscal-rules.yaml, must be legible IN THE REFERENCE TEXT
+    `amount_in_words_captions` in config/fiscal-rules.yaml, must be legible in the reference text
     and not only as a labelled field. This is the same class of gap a stylesheet `content:`
     pseudo-element opened: text a reader sees on the page but that `reference_text`, sourced from
     the DOM's own `innerText`, would silently miss if the caption were ever painted from CSS
@@ -106,22 +106,22 @@ def test_the_confirmations_amount_in_words_caption_reaches_the_reference_text(re
 
 @pytest.mark.parametrize("slug", REGISTERED_SLUGS)
 def test_the_text_is_what_a_reader_sees_and_not_the_markup(slug, rendered):
-    """🔴 `innerText`, NOT `textContent`, and the difference is measurable rather than stylistic.
+    """🔴 `innerText`, not `textContent`, and the difference is measurable rather than stylistic.
 
     `textContent` returns the source order of every node, including whitespace the markup is
     indented with and elements CSS never paints. `innerText` is what the layout engine decided a
-    reader sees. Since the premise of this dataset is that the label describes the IMAGE, the text
+    reader sees. Since the premise of this dataset is that the label describes the image, the text
     has to come from the same authority that produced the image.
 
-    MEASURED ON ONE RECEIPT, which is where these bounds come from: `innerText` gave 536 characters
-    over 39 lines with ZERO runs of four spaces and ZERO indented lines; `textContent` gave 1243
+    Measured on one receipt, which is where these bounds come from: `innerText` gave 536 characters
+    over 39 lines with zero runs of four spaces and zero indented lines; `textContent` gave 1243
     characters over 134 lines with 102 and 121 of them. A mutation swapping the two survived a test
     that only asked whether a newline appeared anywhere.
 
-    ⚠️ BLANK LINES ARE NOT ONE OF THE SIGNALS, and the first version of this test used them. The
-    bank statement's `innerText` legitimately carries 18 — its table has empty cells, and an empty
+    ⚠️ blank lines are not one of the signals. The bank statement's `innerText` legitimately
+    carries 18 — its table has empty cells, and an empty
     cell is an empty line to a reader. Measured across the registry: 0 blank lines on five
-    archetypes and 18 on the statement, against 0 four-space runs and 0 indented lines on ALL SIX.
+    archetypes and 18 on the statement, against 0 four-space runs and 0 indented lines on all six.
     A signal that fires on a correct document is not a signal.
     """
     text = rendered[slug].reference_text
@@ -134,7 +134,7 @@ def test_the_text_is_what_a_reader_sees_and_not_the_markup(slug, rendered):
 
 @pytest.mark.parametrize("slug", REGISTERED_SLUGS)
 def test_the_text_covers_more_than_the_labelled_fields(slug, rendered):
-    """🔴 THE PROPERTY THE FIELD BOXES CANNOT GIVE. Every archetype prints text that no `data-field`
+    """🔴 the property the field boxes cannot give. Every archetype prints text that no `data-field`
     marks — captions, headings, the fiscal wording, a footer — and that text is exactly what a
     crop-detection measurement would otherwise miss.
 
@@ -155,7 +155,7 @@ def test_the_text_covers_more_than_the_labelled_fields(slug, rendered):
 
 @pytest.mark.parametrize("slug", REGISTERED_SLUGS)
 def test_every_printed_field_value_appears_in_the_text(slug, renderer, rendered):
-    """The text is the WHOLE page, so every value a field marks has to be in it. Checked against the
+    """The text is the whole page, so every value a field marks has to be in it. Checked against the
     markup rather than against the label, so it compares two independent renderings of the same
     document rather than the label with itself."""
     html = renderer.build_html(slug, context_for(slug))
@@ -175,7 +175,7 @@ def test_every_printed_field_value_appears_in_the_text(slug, renderer, rendered)
 
 @pytest.mark.parametrize("slug", REGISTERED_SLUGS)
 def test_the_content_extent_is_inside_the_page_and_not_the_page(slug, rendered):
-    """It is the extent of the INK, not of the paper. A box equal to the image would be useless to
+    """It is the extent of the ink, not of the paper. A box equal to the image would be useless to
     a crop measurement — every capture would contain it — so the assertion is that it is strictly
     smaller in at least one direction, which is true of any real document with a margin."""
     result = rendered[slug]
@@ -191,13 +191,13 @@ def test_the_content_extent_is_inside_the_page_and_not_the_page(slug, rendered):
 
 @pytest.mark.parametrize("slug", REGISTERED_SLUGS)
 def test_the_content_extent_contains_every_text_field(slug, rendered):
-    """The two describe the same thing, so the box that covers all text covers every TEXT field.
+    """The two describe the same thing, so the box that covers all text covers every text field.
 
-    ⚠️ NON-TEXT MARKERS ARE EXCLUDED BY NAME rather than by a tolerance: a QR is a picture and a
+    ⚠️ non-text markers are excluded by name rather than by a tolerance: a QR is a picture and a
     stamp is drawn geometry, and neither is text. Listing them is what makes this assertion strict
     for everything else instead of loose for everything.
 
-    ⚠️ AND THE SLACK IS `LINE_BOX_SLACK_PX`, WHICH IS NOT A FUDGE FACTOR — see the constant. The
+    ⚠️ and the Slack is `LINE_BOX_SLACK_PX`, which is not a fudge factor — see the constant. The
     two quantities are measured differently by the renderer, and the difference is bounded and
     small; it was 1 while every archetype's lowest field happened to land inside 1, and the
     товарний чек's landed 2 below. Nothing about that page is unusual: its last line is a footer
@@ -218,7 +218,7 @@ def test_the_content_extent_contains_every_text_field(slug, rendered):
 
 
 def test_a_non_text_marker_really_is_outside_the_text_extent(renderer, tmp_path):
-    """The exclusion above must EXCLUDE something, or it is a list that weakens an assertion for no
+    """The exclusion above must exclude something, or it is a list that weakens an assertion for no
     reason. The confirmation's QR sits below its last line of text, so its box genuinely falls
     outside — which is why the exemption exists rather than being defensive."""
     from receipt_synth.content_builder import (
@@ -265,7 +265,7 @@ def a_document(**overrides):
     """A minimal `DocGroundTruth`, for the completeness derivation only.
 
     Built directly rather than through the pipeline: the property under test is arithmetic on two
-    fields of the model, and rendering a page to reach it would make the test slow AND make a
+    fields of the model, and rendering a page to reach it would make the test slow and make a
     failure ambiguous between the model and the renderer.
     """
     from receipt_synth.schemas import Capture, DocGroundTruth, DocType
@@ -292,7 +292,7 @@ def test_a_document_that_lost_an_edge_is_not_complete():
 
 
 def test_a_document_with_no_content_extent_is_UNMEASURED_and_not_incomplete():
-    """🔴 `None` IS NOT `False`, and the two are different statements about the world. Without an
+    """🔴 `None` is not `False`, and the two are different statements about the world. Without an
     extent there is nothing to compare against a frame, so nothing is known. `False` would put a
     fabricated measurement into a metric and `True` an unearned one."""
     assert a_document(content_bbox=None).content_complete is None
@@ -300,10 +300,10 @@ def test_a_document_with_no_content_extent_is_UNMEASURED_and_not_incomplete():
 
 
 def test_the_completeness_measurement_is_taken_against_the_DEGRADED_image():
-    """🔴 A POSITIONAL QUESTION, ANSWERED WITH `ast` RATHER THAN BY RUNNING ANYTHING — the same
+    """🔴 A positional question, answered with `ast` rather than by running anything — the same
     instrument, and for the same reason, as the extent's own provenance test below.
 
-    The frame the content extent is compared against must be the DEGRADED image's, because that is
+    The frame the content extent is compared against must be the degraded image's, because that is
     the file a consumer receives. Two of the three channels change the image's size — `photo` and
     `scan` both pad — so measuring against the clean render's dimensions would compare a moved box
     with a frame it was never in. On `screenshot` the two are identical, so a version that used the
@@ -351,7 +351,7 @@ def test_the_same_document_yields_the_same_text(renderer, tmp_path):
 
 
 def test_the_reserved_key_cannot_collide_with_a_field(renderer, tmp_path):
-    """The content extent rides through the degrader under a reserved key so it gets the SAME
+    """The content extent rides through the degrader under a reserved key so it gets the same
     geometric transform as the field boxes. If a template ever marked a field by that name the two
     would silently merge, and the label would carry a field box in place of the extent."""
     from receipt_synth import assembler
@@ -362,16 +362,16 @@ def test_the_reserved_key_cannot_collide_with_a_field(renderer, tmp_path):
 
 
 def test_the_content_extent_comes_from_the_degrader_and_not_from_the_clean_render():
-    """🔴 A POSITIONAL QUESTION, ANSWERED WITH `ast` RATHER THAN BY RUNNING ANYTHING.
+    """🔴 A positional question, answered with `ast` rather than by running anything.
 
     The extent must travel through the degrader's geometry with the field boxes, or it will drift
-    from them the moment a real geometric step arrives. TODAY IT CANNOT BE OBSERVED IN OUTPUT: the
+    from them the moment a real geometric step arrives. Today it cannot be observed in output: the
     only calibrated capture channel is `screenshot`, which applies no geometry, so a version that
     took the box straight from the clean render produces identical labels — a mutation doing
     exactly that survived every behavioural test, and it survived for that reason rather than for a
     weak assertion.
 
-    So the property is asserted where it is decided: `content_bbox` is bound from the DEGRADED
+    So the property is asserted where it is decided: `content_bbox` is bound from the degraded
     result, and never from `clean`. Reading the source is the only instrument that can see this
     while the difference is invisible at runtime — the same reasoning `lessons.md` records for
     questions about where something lives.
@@ -408,7 +408,7 @@ def test_the_label_carries_both_and_they_survive_the_degrader(renderer, tmp_path
     """End to end: what the renderer read reaches the label, and the extent comes back from the
     degrader's geometry pipeline rather than bypassing it.
 
-    The channel is now DRAWN rather than fixed, so this no longer pins one — pinning it would make
+    The channel is now drawn rather than fixed, so this no longer pins one — pinning it would make
     the test a statement about which channel a seed happens to pick. What it pins instead is that
     the drawn one is a real channel and that the completeness measurement was taken: with three
     channels live, two of them apply geometry, so a bypass of the transform would show up as a box

@@ -6,7 +6,7 @@ produce. Where a published algorithm has a published example (ISO 13616 for the 
 card number) the example is the oracle, because a checksum verified against its own implementation
 verifies nothing.
 
-WHAT THIS MODULE IS MOSTLY ABOUT is the three ways this class can be quietly wrong:
+What this module is mostly about is the three ways this class can be quietly wrong:
 
 * the amount. Three amounts are printed, 📄 the norm names the smallest of the three as the amount
   of the operation, and 👁 the largest is the one in the biggest type. A generator that labelled
@@ -14,7 +14,7 @@ WHAT THIS MODULE IS MOSTLY ABOUT is the three ways this class can be quietly wro
 * the date. Six concepts appear under ten captions on real documents, and three of them mean
   something other than the moment of debit. The contract says which are readable; these tests hold
   the generator to it, so the two files cannot drift apart.
-* the fields that are NOT on it. RRN and the payment form were in an earlier field list, 👁 0 of 8
+* the fields that are not on it. RRN and the payment form were in an earlier field list, 👁 0 of 8
   documents carry either, and an absence is the one thing a rendering test cannot notice unless it
   is asked.
 """
@@ -57,7 +57,7 @@ SLUG = "ua_bank_payment_confirmation"
 BLOCK = jurisdiction("UA")["payment_confirmation"]
 
 # A registered company and a sole trader. The payee's legal form decides which register its code
-# comes from, and ⚠️ a sole trader's is TEN digits — the length follows the kind of code and not
+# comes from, and ⚠️ a sole trader's is ten digits — the length follows the kind of code and not
 # the kind of party, which is the rule 👁 a sole-trader payee with a ten-digit code refuted the
 # other reading of.
 COMPANY = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
@@ -77,9 +77,9 @@ def make(seed: int = 20260417, vendor: dict = COMPANY, initiation: str | None = 
         payer_name="Ковальчук Олена Петрівна",
         payer_tax_id="2345678901",
         initiation=initiation,
-        # RENAMED FROM `transfer=` when the invoice landed: every payment-proving builder now takes
+        # Renamed from `transfer=` when the invoice landed: every payment-proving builder now takes
         # the claim's amount under the same keyword, so the assembler can hand it to whichever
-        # archetype the plan chose. The dataclass FIELD is still `transfer` — the distinction
+        # archetype the plan chose. The dataclass field is still `transfer` — the distinction
         # between the amount of the operation and the total charged is the point of this class.
         amount=transfer,
         **kwargs,
@@ -87,15 +87,15 @@ def make(seed: int = 20260417, vendor: dict = COMPANY, initiation: str | None = 
 
 
 def test_the_label_carries_the_payees_bare_trade_name_and_the_page_prints_its_legal_form():
-    """🔴 THE LABEL AND THE PRINTED FORM ARE NOT THE SAME STRING, and this class had them the same.
+    """🔴 the label and the printed form are not the same string, and this class had them the same.
 
-    config/labelling-schema.yaml makes the BARE trading name authoritative under
+    config/labelling-schema.yaml makes the bare trading name authoritative under
     `normalization.party_name` — "this file makes the bare name authoritative" — because a legal
     form is a property of the seller's registration rather than of the merchant identity a claim is
-    about. This class labelled the PRINTED form, «ТОВ «Аптека АНЦ»», while a fiscal receipt of the
+    about. This class labelled the printed form, «ТОВ «Аптека АНЦ»», while a fiscal receipt of the
     same seller labelled «Аптека АНЦ».
 
-    NOTHING COULD SEE IT. The contract's comparison strips the legal form, so both strings compare
+    Nothing could see it. The contract's comparison strips the legal form, so both strings compare
     equal to any consumer; it took a cross-document test asking whether one claim agrees with itself
     to find two names for one merchant. Asserted here, on the class, so the fix has a guard of its
     own rather than depending on which document types a pipeline fixture happens to draw.
@@ -129,7 +129,7 @@ def truth(confirmation, doc_id: str = "p001_c1_d1"):
 
 def test_the_labelled_amount_is_the_transfer_and_not_what_the_payer_paid():
     """📄 The National Bank's instruction on non-cash settlements makes the amount of the payment
-    OPERATION a requisite and does not name the fee at all, so the amount of this document is the
+    operation a requisite and does not name the fee at all, so the amount of this document is the
     transfer. A fee buys a banking service, which no benefit category covers.
 
     Asserted on a document whose fee is non-zero, because the two amounts coincide when it is
@@ -145,7 +145,7 @@ def test_the_labelled_amount_is_the_transfer_and_not_what_the_payer_paid():
 
 
 def test_the_total_is_derived_from_the_transfer_and_the_fee():
-    """Three amounts, ONE of which is stored twice nowhere. `total_charged` is a property rather
+    """Three amounts, one of which is stored twice nowhere. `total_charged` is a property rather
     than a field so the three cannot drift; this exercises the arithmetic at a fee it was not
     drawn with, since every generated fee is a two-decimal value in a narrow band and the
     derivation would look right for the wrong reason at any of them."""
@@ -162,9 +162,9 @@ def test_the_fee_is_non_zero_at_about_the_observed_rate():
     discriminates nothing, and it would hide the divergence between the norm's amount and the
     salient one, which is the whole reason this class is worth generating.
 
-    THE BAND IS A SANITY CHECK ON A DRAW, NOT A MEASUREMENT, and it is wide on purpose: over 400
+    The band is a sanity check on a draw, not a measurement, and it is wide on purpose: over 400
     documents at a declared rate of 0.37 the binomial standard deviation is about 2.4 points, so
-    0.30 to 0.45 is roughly ±3 sd. What is load-bearing is the FIRST assertion — that some fee is
+    0.30 to 0.45 is roughly ±3 sd. What is load-bearing is the first assertion — that some fee is
     non-zero at all.
     """
     fees = [c.fee for c in many()]
@@ -175,7 +175,7 @@ def test_the_fee_is_non_zero_at_about_the_observed_rate():
 
 
 def test_the_amount_in_words_states_the_transfer():
-    """👁 5 of 8 print the amount in words. It spells the TRANSFER, which is 📄 the amount of the
+    """👁 5 of 8 print the amount in words. It spells the transfer, which is 📄 the amount of the
     operation — the same requisite written twice rather than a second number."""
     spelled = next(c for c in many() if c.amount_in_words is not None and c.fee > 0)
 
@@ -184,9 +184,9 @@ def test_the_amount_in_words_states_the_transfer():
 
 
 def test_the_printed_total_is_the_largest_type_on_the_page(tmp_path):
-    """🔴 THE SALIENCE TRAP, ASSERTED ON THE RENDERED PAGE. 👁 On the one observed document that
+    """🔴 the salience trap, asserted on the rendered page. 👁 On the one observed document that
     prints all three amounts the total is in the largest type — and 📄 it is not the amount of the
-    operation. The divergence has to be VISIBLE, or an extractor that follows salience is being
+    operation. The divergence has to be visible, or an extractor that follows salience is being
     scored on a page where salience happens to agree with the norm.
 
     Measured as box height rather than as a font size in the stylesheet: what matters is what the
@@ -208,7 +208,7 @@ def contract_captions() -> tuple[list[str], list[str]]:
     """The captions the labelling contract accepts as the payment date, and those it refuses.
 
     Read from config/labelling-schema.yaml — the other side of the split that names the payment
-    date. config/policy.yaml holds the CONCEPT and this file holds the mapping, and a generator
+    date. config/policy.yaml holds the concept and this file holds the mapping, and a generator
     printing a refused caption would be printing a document whose payment date the contract says
     cannot be read.
     """
@@ -222,7 +222,7 @@ def contract_captions() -> tuple[list[str], list[str]]:
 
 
 def test_every_printed_date_caption_is_one_the_contract_can_read():
-    """THE JOIN BETWEEN THE TWO COMMITS OF THIS STEP, and neither file can hold it alone.
+    """the join between the two commits of this step, and neither file can hold it alone.
 
     The contract's preference order exists so two implementations do not read two different dates
     off one document. That is worth nothing if the generator prints a caption the contract refuses:
@@ -242,7 +242,7 @@ def test_every_printed_date_caption_is_one_the_contract_can_read():
 
 def test_the_configured_captions_are_exactly_the_ones_the_contract_accepts():
     """The other direction, and it catches the case the sweep above cannot: a generator printing
-    only ONE accepted caption satisfies that test while two thirds of the contract's order is
+    only one accepted caption satisfies that test while two thirds of the contract's order is
     never exercised by any image. 👁 All three are observed on real documents."""
     accept, _ = contract_captions()
 
@@ -250,7 +250,7 @@ def test_the_configured_captions_are_exactly_the_ones_the_contract_accepts():
 
 
 def test_the_time_is_written_with_colons_and_not_the_receipt_dashes():
-    """The jurisdiction's `time_format` separates with DASHES, and that entry is 👁 an observation
+    """The jurisdiction's `time_format` separates with dashes, and that entry is 👁 an observation
     about ПРРО receipts — a till-printer quirk recorded under `verified_against_own_receipts`. A
     bank writes a time with colons. Inheriting the receipt's format put `11-03-09` on a bank
     document, which is the kind of defect that sits on every image of a class and no label
@@ -268,11 +268,11 @@ def test_the_time_is_written_with_colons_and_not_the_receipt_dashes():
 
 @pytest.mark.parametrize("mode", sorted(BLOCK["initiation"]))
 def test_each_initiation_mode_prints_exactly_the_fields_it_declares(mode):
-    """ONE TEMPLATE WITH A CONDITIONAL BLOCK, NOT TWO ARCHETYPES — asserted against the field sets
+    """one template with a conditional block, not two archetypes — asserted against the field sets
     config/fiscal-rules.yaml declares rather than against a list restated here, so the code and the
     configuration cannot drift.
 
-    👁 3 of 8 real documents carry a masked card AND an authorization code AND a payment purpose at
+    👁 3 of 8 real documents carry a masked card and an authorization code and a payment purpose at
     once, which is what refuted the earlier split into a quittance and a card slip. The axis that
     does vary is how the payment was initiated.
     """
@@ -285,7 +285,7 @@ def test_each_initiation_mode_prints_exactly_the_fields_it_declares(mode):
     if declared["identifies_payer"]:
         assert confirmation.payer.code is not None and confirmation.payer.account is not None
     else:
-        # THE FIRST FORM OF EMPTINESS: a hyphen printed AS the value. An extractor returns the
+        # The first form of emptiness: a hyphen printed as the value. An extractor returns the
         # string, so the label carries it — telling it apart from a field that is simply absent is
         # the difference between two mechanisms a single "missing" label would merge.
         assert confirmation.payer.name == BLOCK["parties"]["empty_value"]
@@ -302,7 +302,7 @@ def test_the_card_bearing_mode_carries_a_purpose_and_an_authorization_code_toget
 
 def test_an_authorization_code_is_six_digits():
     """👁 4 of 4 card operations print six digits, which agrees with 📄 the published cashier's
-    instruction. ⚠️ It is NOT a deduplication key at that width — six digits is a space of a
+    instruction. ⚠️ It is not a deduplication key at that width — six digits is a space of a
     million, unique only within an issuer and a window — and the document number is."""
     for confirmation in many(120, initiation="card"):
         assert re.fullmatch(r"[0-9]{6}", confirmation.auth_code)
@@ -316,7 +316,7 @@ def test_every_initiation_mode_is_drawn_when_none_is_named():
     assert drawn == set(initiation_shares()) == set(BLOCK["initiation"])
 
 
-# ======================================= what is NOT on this document ======
+# ======================================= what is not on this document ======
 
 
 def test_the_label_carries_no_line_items():
@@ -327,8 +327,8 @@ def test_the_label_carries_no_line_items():
 
 
 def test_neither_an_rrn_nor_a_payment_form_appears_anywhere_on_this_class():
-    """👁 0 of 8 — BOTH WERE IN AN EARLIER FIELD LIST FOR THIS TYPE AND NEITHER IS ON THE DOCUMENT.
-    An RRN is a requisite of the card operation as printed inside a FISCAL RECEIPT, where this
+    """👁 0 of 8 — both were in an earlier field list for this type and neither is on the document.
+    An RRN is a requisite of the card operation as printed inside a fiscal receipt, where this
     repository does print it; a payment form (cash / card) is a receipt requisite too. Both were
     carried over by mistake, and an absence is the one thing a rendering test cannot notice unless
     it is asked for.
@@ -348,12 +348,12 @@ def test_neither_an_rrn_nor_a_payment_form_appears_anywhere_on_this_class():
 
 
 def test_a_qr_on_this_class_is_never_fiscal():
-    """👁 2 of 8 carry a QR and BOTH are marketing — an invitation to install an application. 👁 0
+    """👁 2 of 8 carry a QR and both are marketing — an invitation to install an application. 👁 0
     of 8 carry a verification QR; a document is checked by its code as text. ✅ So this class is a
     stronger refutation of "a QR means the document is fiscal" than the fiscal case, where the QR
     at least addresses the tax service.
 
-    Asserted over a document that HAS one, or the flag would be false for want of a QR.
+    Asserted over a document that has one, or the flag would be false for want of a QR.
     """
     with_qr = next(c for c in many() if c.qr_payload is not None)
     label = truth(with_qr)
@@ -375,7 +375,7 @@ def test_the_verification_footer_is_not_a_constant():
 
 
 def test_the_iban_check_digits_match_the_published_example():
-    """📄 ISO 13616's own example — GB82 WEST 1234 5698 7654 32 — is the oracle. Verifying a
+    """📄 ISO 13616's own example — gb82 west 1234 5698 7654 32 — is the oracle. Verifying a
     checksum against this repository's own implementation of it verifies nothing, which is the
     lesson the ЄДРПОУ check digit cost a day to learn."""
     assert iban_check_digits("GB", "WEST12345698765432") == "82"
@@ -400,13 +400,13 @@ def test_every_generated_iban_passes_its_own_checksum_and_carries_the_bank_code(
 
 
 def test_a_printed_card_number_could_not_be_an_issued_card():
-    """🔴 PUBLICATION, NOT REALISM. 👁 One observed document prints a recipient's card UNMASKED, so
+    """🔴 publication, not realism. 👁 One observed document prints a recipient's card unmasked, so
     this generator must be able to print sixteen visible digits — and sixteen digits drawn freely
     satisfy the Luhn checksum one time in ten, at which point a published image carries a string
     that could be somebody's card. Failing a published checksum makes "this is not a card number" a
     property anyone can verify.
 
-    The Luhn implementation is checked against a PUBLISHED test number first, or "nothing passes"
+    The Luhn implementation is checked against a published test number first, or "nothing passes"
     would be satisfied by a checker that rejects everything.
     """
     assert passes_luhn("4111111111111111"), "the published test number should pass Luhn"
@@ -418,7 +418,7 @@ def test_a_printed_card_number_could_not_be_an_issued_card():
 
 
 def test_card_masking_varies_over_the_declared_schemes():
-    """👁 SIX SCHEMES OVER SIX DOCUMENTS, and ⛔ no norm was found for masking — the observed
+    """👁 six schemes over six documents, and ⛔ no norm was found for masking — the observed
     spread is what confirms the absence. A consumer whose pattern is "six digits, asterisks, four"
     matches a minority of the field, and a generator printing one scheme would teach the pattern.
 
@@ -436,8 +436,8 @@ def test_card_masking_varies_over_the_declared_schemes():
 
 
 def test_the_payees_code_comes_from_the_register_its_legal_form_belongs_to():
-    """⚠️ THE LENGTH FOLLOWS THE KIND OF CODE, NOT THE KIND OF PARTY. A company's ЄДРПОУ is eight
-    digits and a sole trader's РНОКПП is ten — and a sole trader IS a business, so a rule reading
+    """⚠️ the length follows the kind of code, not the kind of party. A company's ЄДРПОУ is eight
+    digits and a sole trader's РНОКПП is ten — and a sole trader is a business, so a rule reading
     "ten digits, therefore a private individual" is false. 👁 A sole-trader payee with a ten-digit
     code was observed."""
     assert is_valid_edrpou(make(vendor=COMPANY).payee.code)
@@ -445,12 +445,12 @@ def test_the_payees_code_comes_from_the_register_its_legal_form_belongs_to():
 
 
 def test_a_captioned_field_can_be_empty_without_its_caption_disappearing(tmp_path):
-    """👁 THE SECOND FORM OF EMPTINESS — a caption printed with nothing under it, observed on the
+    """👁 the second form of emptiness — a caption printed with nothing under it, observed on the
     recipient's bank among three such fields on one document. It is mechanically different from the
     hyphen: OCR returns nothing here and the string "-" there, so a label carrying only "field
     missing" would make accuracy on empty fields unmeasurable.
 
-    The caption stays on the page and the VALUE element goes, so no bounding box points at nothing.
+    The caption stays on the page and the value element goes, so no bounding box points at nothing.
     """
     empty = next(c for c in many() if c.payee.bank is None)
     with Renderer() as renderer:
@@ -465,7 +465,7 @@ def test_a_captioned_field_can_be_empty_without_its_caption_disappearing(tmp_pat
 
 
 def test_the_type_proves_the_payment_and_not_the_subject():
-    """CONFIRMED, NOT CHANGED. 👁 0 of 7 payment purposes name what was bought — they name an
+    """confirmed, not changed. 👁 0 of 7 payment purposes name what was bought — they name an
     invoice, a delivery note or nothing but the movement of money — which is the strongest
     confirmation in this repository of the entry policy.yaml already carries. The dominant pair
     follows from it: an invoice proves the subject, this proves the payment."""
@@ -477,7 +477,7 @@ def test_the_type_proves_the_payment_and_not_the_subject():
 def test_the_archetype_is_registered_with_its_type_default_and_no_override():
     """No archetype-level evidence override exists, and this is the guard on that. An archetype
     whose evidence differed from its type's default could not be labelled correctly — the engine
-    sees a document's TYPE and not the archetype that produced it — so it must not be registered.
+    sees a document's type and not the archetype that produced it — so it must not be registered.
     """
     archetype = ARCHETYPES[SLUG]
 
@@ -486,7 +486,7 @@ def test_the_archetype_is_registered_with_its_type_default_and_no_override():
 
 
 def test_the_archetype_carries_every_category_the_policy_declares():
-    """A document that lists NOTHING cannot contradict any category, so this archetype carries all
+    """A document that lists nothing cannot contradict any category, so this archetype carries all
     of them — unlike a pharmacy receipt, which cannot print a gym membership. Checked against
     policy.yaml rather than against the literal tuple, so a category added to the policy cannot
     silently drop out of the registry."""
@@ -496,7 +496,7 @@ def test_the_archetype_carries_every_category_the_policy_declares():
 
 
 def test_the_purpose_names_a_document_and_never_the_subject_of_the_expense():
-    """👁 0 of 7. The purpose names an INVOICE by number, a generic category, or the movement of
+    """👁 0 of 7. The purpose names an invoice by number, a generic category, or the movement of
     money itself. That is what `proves_subject: false` rests on, so it has to be true of what is
     printed and not only of what was observed elsewhere.
 
@@ -521,7 +521,7 @@ def test_the_purpose_names_a_document_and_never_the_subject_of_the_expense():
 
 
 def test_no_purpose_asserts_a_transfer_between_the_payers_own_accounts():
-    """Every confirmation this generator builds pays a NAMED FIRM — the payee block prints
+    """Every confirmation this generator builds pays a named firm — the payee block prints
     the vendor's name, code and IBAN — so a purpose saying «Переказ власних коштів», a
     transfer between the payer's own accounts, contradicts the page it is printed on.
 
@@ -529,10 +529,10 @@ def test_no_purpose_asserts_a_transfer_between_the_payers_own_accounts():
     printing a purpose carried exactly that formula — 55% of the "cites nothing" bucket —
     and `docs/cross-document-fields.md` blocked the `cites_subject_document` contract
     field on those 54, because the flag would have certified them as legitimately
-    non-citing. The wording legitimately survives in ONE place, the bank statement's
+    non-citing. The wording legitimately survives in one place, the bank statement's
     `credit_from_self` pool, whose counterparty is the holder.
 
-    Pinned at the pool AND on built documents: the pool is what the repair edited, the
+    Pinned at the pool and on built documents: the pool is what the repair edited, the
     documents are what the defect was measured on.
     """
     for formula in payment_purposes("uk"):
@@ -627,13 +627,13 @@ def test_the_signature_is_drawn_per_document():
 
 
 def test_the_page_is_the_a4_sheet_the_configuration_declares(tmp_path):
-    """📄 A4 IS 210 × 297 mm (ISO 216), stated in `payment_confirmation.page` and rendered at
+    """📄 A4 is 210 × 297 mm (ISO 216), stated in `payment_confirmation.page` and rendered at
     96 dpi — the resolution a page is shown at on a screen, which is how such a document reaches a
     claimant. This is the counterpart of the receipts' width test, and it has to be a separate one:
-    `receipt.widths_mm` lists the widths a thermal ROLL is sold in, and adding 210 to that list to
+    `receipt.widths_mm` lists the widths a thermal roll is sold in, and adding 210 to that list to
     make one test cover both classes would be a false statement about till rolls.
 
-    Asserted on the RENDERED image and not only on the stylesheet, so a width that reached the page
+    Asserted on the rendered image and not only on the stylesheet, so a width that reached the page
     through a different rule than the one this reads still has to come out A4.
     """
     page = BLOCK["page"]

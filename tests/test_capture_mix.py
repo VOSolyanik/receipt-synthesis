@@ -1,13 +1,13 @@
 """The capture channel follows the class's declared mix, and the degrader honours the channel.
 
-Two families of guard, and every statistical one is SIZED FROM THE CONFIG VALUE IT GUARDS rather
-than from "the event occurs at least once" — the S11 lesson: a test must be sized so THE MUTATION
+Two families of guard, and every statistical one is sized from the config value it guards rather
+than from "the event occurs at least once" — the S11 lesson: a test must be sized so the mutation
 it exists for would be seen, and re-sized automatically when the config moves.
 
-* the DRAW: a zero-weight channel never comes out, every non-zero one does, the realized shares
+* the draw: a zero-weight channel never comes out, every non-zero one does, the realized shares
   match the declared weights, and a screen-born archetype is a screenshot without consuming the
   stream;
-* the RECIPES: `digital_pdf` is the identity, a screenshot has no paper or sensor phase, and the
+* the recipes: `digital_pdf` is the identity, a screenshot has no paper or sensor phase, and the
   heavy photo/scan artefacts fire at the rate config/generation.yaml declares.
 """
 
@@ -49,10 +49,10 @@ def test_every_registered_class_declares_a_mix():
 
 @pytest.mark.parametrize("doc_type", MIXED_CLASSES, ids=lambda t: t.value)
 def test_a_zero_weight_channel_is_never_drawn(doc_type):
-    """⛔ WEIGHT ZERO MEANS NEVER, not rarely: `digital_pdf` on a till roll would be an undamaged
+    """⛔ weight zero means never, not rarely: `digital_pdf` on a till roll would be an undamaged
     electronic original of a document that has none.
 
-    SIZED AGAINST THE MUTATION, which is the draw losing its conditioning and falling back to a
+    Sized against the mutation, which is the draw losing its conditioning and falling back to a
     uniform over the enum. Under it a forbidden channel comes out at 1/len(Capture) per draw, so
     `draws` is chosen to see that at least once with probability 1 - 1e-6 — and it re-derives
     itself when the enum grows.
@@ -74,7 +74,7 @@ def test_a_zero_weight_channel_is_never_drawn(doc_type):
 @pytest.mark.parametrize("doc_type", MIXED_CLASSES, ids=lambda t: t.value)
 def test_every_nonzero_channel_is_reachable(doc_type):
     """The dual of the zero-weight guard: a declared channel that never occurs is a label value
-    the contract promises and no corpus contains. `draws` is sized from the THINNEST non-zero
+    the contract promises and no corpus contains. `draws` is sized from the thinnest non-zero
     weight in the config, so re-balancing the mix re-sizes the test."""
     mix = capture_mix(doc_type.value)
     expected = {channel for channel, weight in mix.items() if weight > 0.0}
@@ -88,7 +88,7 @@ def test_every_nonzero_channel_is_reachable(doc_type):
 
 @pytest.mark.parametrize("doc_type", MIXED_CLASSES, ids=lambda t: t.value)
 def test_realized_shares_match_the_declared_mix(doc_type):
-    """The walk over cumulative weights realizes the DECLARED distribution — a guard against an
+    """The walk over cumulative weights realizes the declared distribution — a guard against an
     off-by-one in the cumulation, which would shift every share while every channel still
     appears. Three-sigma binomial bounds per channel at n = 4000."""
     mix = capture_mix(doc_type.value)
@@ -106,7 +106,7 @@ def test_realized_shares_match_the_declared_mix(doc_type):
 
 
 def test_a_screen_native_archetype_is_a_screenshot_and_consumes_no_randomness():
-    """🔴 THE CHANNEL IS A FACT, NOT A DRAW, for a page that exists only on a screen — and the
+    """🔴 the channel is a fact, not a draw, for a page that exists only on a screen — and the
     stream must not move: a constant that burned a uniform would shift every draw after it, which
     is exactly the kind of silent reordering seeded generation exists to forbid."""
     assert SCREEN_NATIVE, "the registry lost its screen-native archetypes; update this test"
@@ -125,7 +125,7 @@ def _page(seed: int = 3) -> np.ndarray:
 
 
 def test_digital_pdf_is_the_identity():
-    """🔴 THE CHANNEL'S WHOLE MEANING: the consumer receives the file the generator wrote. Same
+    """🔴 the channel's whole meaning: the consumer receives the file the generator wrote. Same
     pixels, same boxes — not "close", equal."""
     image = _page()
     boxes = {"total": (30.0, 50.0, 60.0, 20.0), "date": (10.0, 10.0, 40.0, 12.0)}
@@ -135,7 +135,7 @@ def test_digital_pdf_is_the_identity():
 
 
 def test_a_screenshot_has_no_paper_and_no_sensor_phase():
-    """⛔ A SCREENSHOT'S PIXELS WERE NEVER LIGHT ON PAPER AND NEVER CROSSED A SENSOR, so its
+    """⛔ A screenshot's pixels were never light on paper and never crossed a sensor, so its
     recipe holds no Augraphy phase at all — compression is its one loss, and it rides the
     geometry pipeline."""
     assert _paper_pipeline(Capture.SCREENSHOT, 42) is None
@@ -153,9 +153,9 @@ def test_a_screenshot_has_no_paper_and_no_sensor_phase():
     ],
 )
 def test_heavy_artefacts_fire_at_the_declared_rate(channel, effect, augmentation):
-    """The per-effect probability is the CONFIG'S, not 1.0 and not 0.0.
+    """The per-effect probability is the config's, not 1.0 and not 0.0.
 
-    SIZED FROM THE CONFIG VALUE: the two mutations this guards are "p ignored, always on" and
+    Sized from the config value: the two mutations this guards are "p ignored, always on" and
     "always off", and under either the realized count leaves the three-sigma band around p long
     before n = 600 — while at the declared p the band holds. Inclusion is read off the built
     pipeline's own phase list, which is what the degrader actually runs.
@@ -189,14 +189,14 @@ def test_the_inclusion_draw_is_deterministic_per_seed():
 
 
 def test_an_app_screen_document_in_a_run_is_always_a_screenshot(multi_claim_dataset_capture):
-    """The integration half of the screen-native guard: through the WHOLE assembler path, a
+    """The integration half of the screen-native guard: through the whole assembler path, a
     document whose box vocabulary is the app's (`merchant_descriptor` / `screen_title`) carries
     `capture: screenshot`. A unit test on `draw_capture` cannot see an assembler that stopped
     calling it.
 
-    ⚠️ UNBUNDLED DOCUMENTS ONLY (`file_region is None`), by the v29 rule this test must not
-    fight: a FILE is captured once, so an app screen bundled under an invoice inherits the
-    FILE's channel — a screenshot pasted into the claimant's merged submission, which is the
+    ⚠️ unbundled documents only (`file_region is None`), by the v29 rule this test must not
+    fight: a file is captured once, so an app screen bundled under an invoice inherits the
+    file's channel — a screenshot pasted into the claimant's merged submission, which is the
     composite's carriage and not the screen's own.
     """
     result, _ = multi_claim_dataset_capture
@@ -226,7 +226,7 @@ def test_paper_classes_in_a_run_never_arrive_as_digital_pdf(multi_claim_dataset_
 @pytest.fixture(scope="module")
 def multi_claim_dataset_capture(tmp_path_factory):
     """A run of its own rather than test_pipeline's fixture: module-scoped reuse keeps the two
-    integration guards to one render, and the seed is fixed apart from SEED so a change there
+    integration guards to one render, and the seed is fixed apart from seed so a change there
     does not silently re-size these tests."""
     from receipt_synth.assembler import generate_dataset
 

@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
 """Render the mock-up archetypes to PNGs, so they can be looked at.
 
-    uv run python tools/render_mockups.py [--out DIR] [--seed N]
+    uv run python tools/render_mockups.py [--out dir] [--seed N]
 
-WHY THIS IS A SCRIPT AND NOT PART OF THE PIPELINE. Every template it renders is a MOCK-UP:
+why this is a script and not part of the pipeline. Every template it renders is a mock-up:
 none is registered in `claim_planner.ARCHETYPES`, none has a builder in
 `assembler._BUILDERS`, and none reaches a dataset. So there is no place in the pipeline for them,
 and inventing one would be a connection nobody has decided to make. See templates/README.md.
 
-⚠️ SIX MOCK-UPS HAVE LEFT THIS SCRIPT BY BEING CONNECTED, and the rule was the same every time:
+⚠️ six mock-ups have left this script by being connected, and the rule was the same every time:
 a second, script-only way of building a shipped page drifts from the pipeline the moment either
 changes. `ua_non_fiscal_receipt`, the two platform receipts and the two phone carriers are
 registered, built by their builders and rendered by runs — their strings live in
 config/fiscal-rules.yaml (`receipt.non_fiscal`, `platform_receipt`, `bank_app`), which is what
 this file's own comments always said would happen to them. `ua_claim_bundle` is the composition
 template `assembler._compose_bundle` renders at `file_composition.bundle_share`. What remains
-below is ONE mock-up: the insurance contract, blocked on RC-14, the author's open decision.
+below is one mock-up: the insurance contract, blocked on RC-14, the author's open decision.
 
-THE OUTPUT GOES OUTSIDE THE REPOSITORY by default, for the same reason `out/` is gitignored:
+The output goes outside the repository by default, for the same reason `out/` is gitignored:
 rendered images are not what this repository ships. `--out` overrides it, and a path inside
 the repository is refused rather than quietly written.
 
-NOTHING HERE PRODUCES A LABEL. No `data-field` attribute exists in any of the templates,
+Nothing here produces a label. No `data-field` attribute exists in any of the templates,
 so `RenderedDocument.field_bboxes` comes back empty by construction, and this script writes no
 JSON beside the images. That is the boundary the branch was given: labels and boxes arrive with
 the connection, not with the layout.
 
-DETERMINISM. One seed, one set of images. Every draw goes through the `random.Random` created
+Determinism. One seed, one set of images. Every draw goes through the `random.Random` created
 here.
 """
 
@@ -60,11 +60,11 @@ ISSUED_AT = datetime(2026, 3, 17, 13, 52, 41)
 # The multi-page contract — the control for «one page = one document».
 #
 # 📄 Every caption below is an item of Article 89(2) of the law on insurance (№ 1909-IX), which
-# lists NINETEEN particulars an insurance contract must contain. The clause headings follow the
+# lists nineteen particulars an insurance contract must contain. The clause headings follow the
 # same list. That is what makes three pages evidenced rather than chosen.
 # ---------------------------------------------------------------------------
 
-# 📄 Article 979 of the Civil Code makes the CONTRACT the thing and lets it be issued as a
+# 📄 Article 979 of the Civil Code makes the contract the thing and lets it be issued as a
 # поліс or сертифікат — the поліс is a form of the contract, not a class of its own. So the
 # document is titled as a contract and the word «поліс» appears nowhere on it: printing both
 # would suggest the corpus holds two classes where the law holds one.
@@ -97,15 +97,15 @@ INSURANCE_SUBJECT = "Майнові інтереси, пов'язані зі з�
 INSURANCE_OBJECT = "Здоров'я Застрахованої особи"
 INSURANCE_TERRITORY = "Україна, крім тимчасово окупованих територій"
 
-# ⚠️ THE CLAUSE PROSE IS INVENTED AND SHORT, and both halves of that are deliberate. Invented is
+# ⚠️ The clause prose is invented and short, and both halves of that are deliberate. Invented is
 # safe — a contract clause is a text, not a mark under which a firm trades, and no real document
 # was read to produce any of it. Short is a declared limit: what this archetype models is the
-# PAGE STRUCTURE and where the required particulars fall, which is what a segmenter and a
+# page structure and where the required particulars fall, which is what a segmenter and a
 # classifier read. Padding it to a realistic length would mean inventing legal text at length to
 # no measurable end.
 #
-# 🔴 WHICH SECTION LANDS ON WHICH PAGE IS DECIDED HERE, not by the stylesheet: a sheet has a
-# fixed height and clips rather than reflowing, because a page is a rectangle. So this tuple IS
+# 🔴 Which section lands on which page is decided here, not by the stylesheet: a sheet has a
+# fixed height and clips rather than reflowing, because a page is a rectangle. So this tuple is
 # the pagination, and a section that grows has to be looked at in the render.
 INSURANCE_PAGES = (
     (
@@ -234,12 +234,12 @@ def _amount(value: Decimal, country: str = "UA") -> str:
     """An amount printed the way a jurisdiction writes one.
 
     Both separators come from `number_format` in config/fiscal-rules.yaml rather than from
-    literals here — UA groups thousands with a NO-BREAK SPACE and the EU block with a comma, and
+    literals here — UA groups thousands with a no-break space and the EU block with a comma, and
     the decimal separator goes the other way round. Two currencies in one corpus is exactly the
     condition under which a hard-coded separator starts printing one jurisdiction's number in
     another's dress, with nothing downstream to report it.
 
-    UA declares TWO decimal separators and the last is taken. The contract says real ПРРО
+    UA declares two decimal separators and the last is taken. The contract says real ПРРО
     vendors print both and that the choice is drawn per document; drawing it here would make a
     mock-up's pixels depend on where in the run it was built, and these documents exist to be
     compared with each other.
@@ -260,18 +260,18 @@ def _amount(value: Decimal, country: str = "UA") -> str:
 def insurance_contract_context(rng: random.Random) -> dict:
     """A three-page voluntary health insurance contract — the control for «page = document».
 
-    🔴 THE PAGE COUNT IS EVIDENCED, NOT CHOSEN. 📄 Article 89(2) of the law on insurance
-    (№ 1909-IX) lists NINETEEN particulars such a contract must contain, including the list of
+    🔴 the page count is evidenced, not chosen. 📄 Article 89(2) of the law on insurance
+    (№ 1909-IX) lists nineteen particulars such a contract must contain, including the list of
     risks, the list of exclusions, the payout procedure, the grounds for refusal, the parties'
     rights and obligations, the amendment procedure and the dispute-resolution procedure. Three
     sheets is what those come to. A one-page insurance contract would be the invention.
 
-    ⛔ NOT EVIDENCE OF ANYTHING. `medical_insurance` in config/policy.yaml says a claim of this
+    ⛔ not evidence of anything. `medical_insurance` in config/policy.yaml says a claim of this
     category is proven by a bank payment confirmation naming the policy, and that «the policy
     document itself is out of scope and is never parsed». This archetype exists to be segmented
     and classified, never read for a verdict.
 
-    THE SPLIT ACROSS SHEETS IS DECIDED HERE, not by the stylesheet: a sheet has a fixed height and
+    The split across sheets is decided here, not by the stylesheet: a sheet has a fixed height and
     clips, because a page is a rectangle. Which section lands on which page is therefore a
     property of this function, and the render has to be looked at when a section changes length.
     """
@@ -317,7 +317,7 @@ def insurance_contract_context(rng: random.Random) -> dict:
             "address": "м. Київ, вул. Січових Стрільців, 17, кв. 4",
             "tax_id": "2345678901",
         },
-        # `mono` marks a value as a FIGURE or a DATE. Three of the required particulars are
+        # `mono` marks a value as a figure or a date. Three of the required particulars are
         # sentences, and a sentence set in a monospaced face flush right reads as data.
         "facts": [
             {"label": INSURANCE_LABELS["subject"], "value": INSURANCE_SUBJECT,
@@ -373,7 +373,7 @@ def render_all(out_dir: Path, seed: int) -> list[Path]:
         # One generator for the whole run, so the images are a function of the seed alone.
         rng = random.Random(seed)
 
-        # ONE MOCK-UP LEFT. This script once drew seven; six have been connected and each
+        # One mock-up left. This script once drew seven; six have been connected and each
         # took its strings into config and its rendering into the pipeline as it went —
         # the same migration every time, recorded per archetype in templates/README.md.
         for slug, build_context in (

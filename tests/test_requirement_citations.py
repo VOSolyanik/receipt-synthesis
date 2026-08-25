@@ -14,10 +14,10 @@ stops asking what the rule actually says. The address buys the reader's attentio
 hands back a dead end.
 
 The second failure is rot, and it takes a different shape for each form. A requirement
-identifier rots SILENTLY: renumber the document and the citation still parses, still looks
+identifier rots silently: renumber the document and the citation still parses, still looks
 authoritative, and now points at a different requirement — the file starts lying without
 anything about it looking wrong, which is exactly the class of mistake `tasks/lessons.md`
-exists to stop. A section reference rots LOUDLY, since a reorganized document is more
+exists to stop. A section reference rots loudly, since a reorganized document is more
 likely to lose the section than to renumber it into something else. That difference
 weakens one argument against section references and leaves the first one — unresolvable to
 every reader outside the document — untouched. Restating a requirement in substance, on
@@ -28,7 +28,7 @@ naturally cites its addresses back into whatever it writes, so they return unles
 fails the build when they do. This gate caught a citation introduced by the repository's
 own owner within a day of being written; the discipline it replaces would not have.
 
-Deliberately NOT part of the redaction gate (`tools/check_redaction.py`,
+Deliberately not part of the redaction gate (`tools/check_redaction.py`,
 `tests/test_redaction.py`). That gate fails because something must never be published;
 this one fails because a citation cannot be resolved by whoever reads it. They are
 different problems with different fixes — redact versus restate — and putting both behind
@@ -43,7 +43,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# Both patterns are assembled from code points rather than written out, so that THIS FILE
+# Both patterns are assembled from code points rather than written out, so that this file
 # contains no text matching its own patterns and can be scanned along with every other
 # file. The obvious alternative — excluding this path from the scan — would make the one
 # file nobody checks the one file that talks about requirement and section numbers.
@@ -51,11 +51,11 @@ ADDRESSES = (
     # U+0424 CYRILLIC CAPITAL LETTER EF, the prefix every requirement identifier carries.
     re.compile(chr(0x0424) + r"-\d"),
     # U+00A7 SECTION SIGN followed by a number. Deliberately not narrowed any further: the
-    # sign does not appear anywhere in this repository's prose about its OWN sections, so
+    # sign does not appear anywhere in this repository's prose about its own sections, so
     # there is nothing legitimate for a narrower pattern to spare. Public statute would be
     # the one real exception, and this tree does not cite it that way either — see
     # `config/fiscal-rules.yaml`, which writes "Tax Code art. 193.1". A future jurisdiction
-    # whose law is conventionally cited with the sign (German UStG, say) will trip this
+    # whose law is conventionally cited with the sign (German ustG, say) will trip this
     # gate; the fix then is to spell the statute out the way fiscal-rules.yaml already
     # does, which is what an outside reader can resolve anyway.
     re.compile(chr(0x00A7) + r"\s*\d"),

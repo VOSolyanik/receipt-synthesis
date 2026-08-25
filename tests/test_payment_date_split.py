@@ -1,24 +1,24 @@
-"""The payment date is defined by two files, and the BOUNDARY between them is the property.
+"""The payment date is defined by two files, and the boundary between them is the property.
 
-`config/policy.yaml` names the CONCEPT — the date the funds left the payer's account — and no
+`config/policy.yaml` names the concept — the date the funds left the payer's account — and no
 printed caption. `config/labelling-schema.yaml` maps the printed captions onto that concept and
 defines no concept of its own. Each half is inert without the other, which is exactly why the
 split needs a guard: nothing inside either file reveals that the other one moved.
 
-WHY IT IS WORTH A TEST RATHER THAN A CONVENTION. A downstream consumer builds its own verdict
+Why it is worth a test rather than a convention. A downstream consumer builds its own verdict
 engine against policy.yaml. Were the concept unnamed there, two independent and equally correct
-engines would pick different printed dates LEGITIMATELY — and since the benefit period is checked
-on this value and on no other, they would disagree about the VERDICT while every field either one
-extracted looked correct. A caption drifting INTO policy.yaml is the same defect from the other
+engines would pick different printed dates legitimately — and since the benefit period is checked
+on this value and on no other, they would disagree about the verdict while every field either one
+extracted looked correct. A caption drifting into policy.yaml is the same defect from the other
 side: the policy would then carry a fact about one bank's layout, and a consumer would have two
 places to read the answer from, which is one place too many.
 
-WHAT THIS FILE DOES NOT CLAIM. It checks that the two halves are on the right sides and that the
+What this file does not claim. It checks that the two halves are on the right sides and that the
 refused captions each carry a reason of their own. It cannot check that the order of preference is
-CORRECT — that is a judgement about the meaning of the terms, argued in the contract itself, and
+correct — that is a judgement about the meaning of the terms, argued in the contract itself, and
 the only thing a test can do about it is make a silent change to it impossible.
 
-THE ONE TEST THAT READS THE CONTRACT. No code in `src/` reads config/labelling-schema.yaml, and
+The one test that reads the contract. No code in `src/` reads config/labelling-schema.yaml, and
 adding a loader there would be inventing a caller. This file reads it because the property under
 test lives in neither file alone; it is not a loader and no pipeline stage calls it. The head of
 the contract says so too.
@@ -65,7 +65,7 @@ def declared_captions() -> list[str]:
 
 
 def test_the_policy_names_the_payment_date_concept():
-    """`period.payment_date` exists and says WHOSE account the funds left.
+    """`period.payment_date` exists and says whose account the funds left.
 
     Both halves are load-bearing. Without the key, "the payment date" is undefined and two
     engines may differ. With the key naming the wrong end of the transfer — the date the
@@ -85,7 +85,7 @@ def test_the_policy_names_the_payment_date_concept():
 def test_the_policy_names_no_printed_caption():
     """No caption from the contract's mapping appears anywhere in policy.yaml.
 
-    The captions are derived FROM THE CONTRACT rather than listed here, so the sweep covers
+    The captions are derived from the contract rather than listed here, so the sweep covers
     whatever the mapping currently names and cannot fall behind it. Its denominator is asserted
     first: were the mapping block emptied, an absence check over nothing would pass.
     """

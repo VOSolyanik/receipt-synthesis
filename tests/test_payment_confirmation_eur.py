@@ -1,13 +1,13 @@
 """The euro payment confirmation — the domestic form with one axis moved.
 
-WHY THE ARCHETYPE EXISTS, stated once here because every assertion below serves it: the corpus
+Why the archetype exists, stated once here because every assertion below serves it: the corpus
 had euros on `platform_receipt` alone, and that class proves both facts, so every euro document
 was the whole of its claim. The conversion the oracle performs was therefore never exercised
-across a PAIR, and never on a class a consumer extracts. This document is the payment half of a
+across a pair, and never on a class a consumer extracts. This document is the payment half of a
 euro pair.
 
-The groups below are: what the page must SAY about its currency (a label recording EUR has to be
-readable off the image), what the form does NOT grow to accommodate a foreign beneficiary, and
+The groups below are: what the page must say about its currency (a label recording EUR has to be
+readable off the image), what the form does not grow to accommodate a foreign beneficiary, and
 what the label carries.
 """
 
@@ -31,9 +31,9 @@ from receipt_synth.renderer import Renderer
 from receipt_synth.schemas import Capture, DocType
 
 SLUG = "ua_bank_payment_confirmation_eur"
-# 🔴 THE CATEGORY IS THE PLANNER'S CHOICE, NOT COMMERCE'S. `professional_development` — where the
-# `EU` sellers already were — carries the platform receipts, which prove BOTH facts, so
-# `_select_documents` gives a claim there ONE self-contained document and never draws a pair. A
+# 🔴 The category is the planner's choice, not commerce's. `professional_development` — where the
+# `EU` sellers already were — carries the platform receipts, which prove both facts, so
+# `_select_documents` gives a claim there one self-contained document and never draws a pair. A
 # euro pair registered in that category would render in a test and never once in a corpus.
 CATEGORY = "language_courses"
 BLOCK = jurisdiction("UA")["payment_confirmation"]
@@ -80,10 +80,10 @@ def rendered(renderer, tmp_path_factory):
 
 
 def test_it_is_the_payment_half_of_a_euro_pair_and_takes_nothing_out_of_the_hryvnia_one():
-    """🔴 THE BLAST-RADIUS QUESTION, ANSWERED THE OTHER WAY ROUND FROM THE PLATFORM RECEIPT.
-    That archetype proves BOTH facts, so every category it carried lost its invoice-plus-payment
+    """🔴 the blast-radius question, answered the other way round from the platform receipt.
+    That archetype proves both facts, so every category it carried lost its invoice-plus-payment
     pair — `_select_documents` prefers a self-contained document. This one proves the payment
-    ALONE: it joins the payment pool of one category and removes nothing from it."""
+    alone: it joins the payment pool of one category and removes nothing from it."""
     archetype = ARCHETYPES[SLUG]
 
     assert archetype.doc_type is DocType.PAYMENT_CONFIRMATION
@@ -100,7 +100,7 @@ def test_it_is_the_payment_half_of_a_euro_pair_and_takes_nothing_out_of_the_hryv
 
 
 def test_the_caption_names_the_currency_the_label_records(rendered):
-    """⛔ A BARE FIGURE WOULD MAKE THE LABEL UNREADABLE FROM THE IMAGE. Every other document of
+    """⛔ A bare figure would make the label unreadable from the image. Every other document of
     this corpus prints one currency, so a number needs no code; this one does. The form is the
     observed «Сума (грн)» with the code that applies."""
     document = make()
@@ -126,7 +126,7 @@ def test_the_words_spell_euros_and_state_the_same_number(rendered):
 
 
 def test_a_caption_naming_hryvnias_is_never_drawn():
-    """The two observed captions that name the domestic currency are a STATEMENT about the
+    """The two observed captions that name the domestic currency are a statement about the
     figure beside them, so a euro page cannot print either — at any seed."""
     domestic = set(BLOCK["captions_naming_the_domestic_currency"])
 
@@ -136,7 +136,7 @@ def test_a_caption_naming_hryvnias_is_never_drawn():
         assert document.fee_caption not in domestic
 
 
-# ============================================ what the form does NOT grow, and what it drops ==
+# ============================================ what the form does not grow, and what it drops ==
 
 
 def test_a_card_operation_in_a_foreign_currency_is_refused_rather_than_rendered():
@@ -163,7 +163,7 @@ def test_the_foreign_beneficiarys_bank_carries_no_domestic_bank_code(rendered):
 
 
 def test_the_page_prints_no_requisite_that_was_never_observed(rendered):
-    """⛔ THE DECLARED NARROWING. A cross-border instruction adds a BIC, a correspondent bank and
+    """⛔ the declared narrowing. A cross-border instruction adds a bic, a correspondent bank and
     a charge option, and no such document was observed here — so the form prints the requisites
     it has evidence for and stops. This is what makes that a choice rather than an omission."""
     for absent in ("BIC", "SWIFT", "OUR", "SHA", "BEN", "Кореспондент"):

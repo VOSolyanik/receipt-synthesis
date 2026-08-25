@@ -1,9 +1,9 @@
 """The bank statement: one label for one row of a many-row document.
 
-🔴 THE PROPERTY THIS FILE EXISTS FOR is that the label describes ONE TRANSACTION and says WHICH
+🔴 the property this file exists for is that the label describes one transaction and says which
 one, while the document's own four turnover totals are printed and never labelled. Everything a
 consumer scores comes off one row, so two things have to be true and neither is obvious from
-reading the template: the labelled values are that row's, and the labelled BOXES are that row's
+reading the template: the labelled values are that row's, and the labelled boxes are that row's
 cells. The second is checked by geometry — box containment in the row's own rect — because "the
 boxes point at the right row" is exactly the kind of claim that reads as verified and is not.
 
@@ -57,15 +57,15 @@ def _px(key: str) -> int:
     """A declared paper dimension in millimetres, as the rendered pixel count.
 
     Rounded rather than truncated, which is what the browser does with a fractional CSS pixel:
-    297 mm is 1122.5 px and the page is 1123 px wide. Truncating gave 1122 and the first version of
-    the page-size test failed on its own arithmetic rather than on the render.
+    297 mm is 1122.5 px and the page is 1123 px wide. Truncating gives 1122, and the page-size
+    test then fails on its own arithmetic rather than on the render.
     """
     return round(Decimal(BLOCK["page"][key]) * DPI / MM_PER_INCH)
 
 
 PAYER = {"name": "Аптека АНЦ", "legal_form": "TOV", "profile": "pharmacy", "vat_payer": True}
 HOLDER_NAME = "Ковальчук Олена Петрівна"
-# A CHECKSUM-CORRECT РНОКПП, generated rather than typed. It is not decoration: on an own-account
+# A checksum-correct РНОКПП, generated rather than typed. It is not decoration: on an own-account
 # transfer the holder is the row's counterparty, so this value is swept by the checksum test below,
 # and a hand-typed ten-digit string failed it — the fixture's defect, not the generator's.
 HOLDER_CODE = generate_rnokpp(random.Random(3))
@@ -145,7 +145,7 @@ def rendered(renderer, tmp_path_factory):
 
 def test_the_label_carries_the_relevant_row_and_not_the_document():
     """🔴 The whole shape of the class. `amount`, `date`, `counterparty`, `payment_purpose` and
-    `direction` are the values of ONE row, and `relevant_transaction` names it.
+    `direction` are the values of one row, and `relevant_transaction` names it.
 
     The document's own summary is not in the record at all — checked in the test below rather than
     here, because "these five fields are the row's" and "the totals are nowhere" are two claims.
@@ -165,7 +165,7 @@ def test_the_label_carries_the_relevant_row_and_not_the_document():
 
 
 def test_the_four_turnover_totals_reach_no_label_field():
-    """🔴 PRINTED AND NEVER LABELLED. The four most prominent numbers on the page are the opening
+    """🔴 printed and never labelled. The four most prominent numbers on the page are the opening
     and closing balances and the two turnovers, and no field of the record carries any of them.
 
     Stated as "no money field equals any of the four" rather than as "these fields are None",
@@ -200,7 +200,7 @@ def test_the_label_states_no_line_items_and_no_fiscal_marker():
 
 
 def test_the_holder_is_the_claimant_and_the_counterparty_is_the_payee():
-    """⚠️ THE ACCOUNT IS THE CLAIMANT'S. A statement of anybody else's account evidences nothing
+    """⚠️ the account is the claimant's. A statement of anybody else's account evidences nothing
     about this claimant's money, which is why the header names the persona and not a company —
     even though the observed document was a company's."""
     statement = make_statement()
@@ -208,8 +208,8 @@ def test_the_holder_is_the_claimant_and_the_counterparty_is_the_payee():
 
     assert record.payer == HOLDER_NAME
     assert statement.holder_code == HOLDER_CODE
-    # 🔴 THE BARE TRADE NAME, NOT THE PRINTED ONE. config/labelling-schema.yaml makes the bare name
-    # authoritative; the ROW prints «ТОВ «Аптека АНЦ»» and the LABEL carries «Аптека АНЦ». This test
+    # 🔴 The bare trade name, not the printed one. config/labelling-schema.yaml makes the bare name
+    # authoritative; the row prints «ТОВ «Аптека АНЦ»» and the label carries «Аптека АНЦ». This test
     # asserted the printed form until commit B, when a cross-document check found the confirmation
     # and the statement labelling one thing and a receipt of the same seller another.
     assert record.counterparty == PAYER["name"]
@@ -220,7 +220,7 @@ def test_the_holder_is_the_claimant_and_the_counterparty_is_the_payee():
 
 # --------------------------------------- which printed date the label's `date` is --
 #
-# 🔴 THE ORACLE IS SILENT ABOUT THIS, which is why it is tested here and specified in the contract.
+# 🔴 The oracle is silent about this, which is why it is tested here and specified in the contract.
 # A date is a date: label the wrong one and every invariant in this repository still holds, every
 # verdict still computes, and the defect surfaces at the far end as low field accuracy on `date` in
 # a downstream scorecard — where it reads as an extraction error rather than as a specification gap.
@@ -239,9 +239,9 @@ def contract_statement_payment_date() -> dict:
 def test_the_caption_the_contract_accepts_is_the_caption_the_page_prints():
     """The mapping is worth nothing unless it names a caption the document actually carries.
 
-    TWO FILES, TWO SIDES, and that is what makes this a real check rather than a file compared
-    with itself: config/fiscal-rules.yaml states what the template PRINTS and
-    config/labelling-schema.yaml states what a consumer may READ AS THE PAYMENT DATE. Neither is
+    Two files, two sides, and that is what makes this a real check rather than a file compared
+    with itself: config/fiscal-rules.yaml states what the template prints and
+    config/labelling-schema.yaml states what a consumer may read as the payment date. Neither is
     derived from the other, so
     either one moving alone is the defect — the same property `tests/test_payment_date_split.py`
     holds between the policy and the contract for the confirmation.
@@ -283,9 +283,9 @@ def test_the_contract_refuses_the_three_document_level_dates_the_page_also_print
 
 @pytest.mark.parametrize("seed", range(12))
 def test_the_labelled_date_is_the_rows_and_never_the_documents_own(seed):
-    """The refusals, on the generator's side: the labelled `date` is the ROW's.
+    """The refusals, on the generator's side: the labelled `date` is the row's.
 
-    The production timestamp is the strong case and it is an INVARIANT — the statement is made after
+    The production timestamp is the strong case and it is an invariant — the statement is made after
     its period closes, 👁 the observed one the following morning, so it is strictly later than every
     operation on the page and can never be any row's date. A record dated by the document would be
     dated days after the money moved, and the period rule reads this value.
@@ -301,18 +301,18 @@ def test_the_labelled_date_is_the_rows_and_never_the_documents_own(seed):
 
 def test_the_last_operation_date_is_a_fact_about_the_table_and_not_about_the_claim():
     """«Дата останньої операції» is the header's most authoritative-looking date and is the wrong
-    answer — it is the date of the LAST row, while the labelled row is usually not the last.
+    answer — it is the date of the last row, while the labelled row is usually not the last.
 
-    ⚠️ AND THE MEASUREMENT CORRECTED THE CONTRACT. This test was written expecting the two dates to
-    coincide on SOME seeds — the labelled row being last, or another row falling on the same day —
+    ⚠️ and the measurement corrected the contract. This test was written expecting the two dates to
+    coincide on some seeds — the labelled row being last, or another row falling on the same day —
     and it found them distinct on 24 of 24. The reason is the trailing window: the period runs at
     least three days past the labelled transaction (`period_trail_days_range`), so with fifteen to
     twenty-five rows drawn across it, some row almost always falls later. The contract said "it may
     coincide" and now says what is true of this corpus instead.
 
-    SO THE DISTINCTNESS IS A PROPERTY OF A DRAW PARAMETER AND NOT AN INVARIANT, which is why the
+    So the distinctness is a property of a draw parameter and not an invariant, which is why the
     count is asserted with its denominator rather than turned into a rule: narrow the trailing
-    window and it stops holding, while the refusal in the contract — about WHICH FIELD IS READ —
+    window and it stops holding, while the refusal in the contract — about which field is read —
     does not depend on it either way.
     """
     seeds = list(range(24))
@@ -356,7 +356,7 @@ def test_the_four_totals_reconcile_with_the_printed_rows(seed):
 @pytest.mark.parametrize("seed", range(12))
 def test_neither_balance_is_negative(seed):
     """An account that ends a period overdrawn is a different document — one with a credit line —
-    and nothing observed supports it. The opening balance is DERIVED from the rows for exactly
+    and nothing observed supports it. The opening balance is derived from the rows for exactly
     this: drawn independently, it produced closing balances of −6117 and −41898 on the first two
     renders."""
     statement = make_statement(seed)
@@ -367,7 +367,7 @@ def test_neither_balance_is_negative(seed):
 
 @pytest.mark.parametrize("seed", range(12))
 def test_the_labelled_amount_appears_on_no_other_row(seed):
-    """What makes the label WELL-POSED, and a different decision from deferring decoys.
+    """What makes the label well-posed, and a different decision from deferring decoys.
 
     A consumer identifies the row from the claim's other document — an invoice naming a seller and
     a total — so two rows carrying that amount would leave the ground truth pointing at one of two
@@ -393,7 +393,7 @@ def test_every_statement_shows_both_directions(seed):
 @pytest.mark.parametrize("seed", range(12))
 def test_the_row_count_and_the_period_are_what_the_configuration_declares(seed):
     """The count comes from `bank_statement.row_count_range`, and every operation falls inside the
-    period the header prints — the period is DERIVED from the rows, so a row outside it would be a
+    period the header prints — the period is derived from the rows, so a row outside it would be a
     header contradicting its own table."""
     low, high = bank_statement_count_range("row_count")
     statement = make_statement(seed)
@@ -405,7 +405,7 @@ def test_the_row_count_and_the_period_are_what_the_configuration_declares(seed):
 
 @pytest.mark.parametrize("seed", range(12))
 def test_the_operations_are_printed_in_the_order_they_happened(seed):
-    """👁 A statement is a chronological extract. It also decides WHERE the labelled row lands:
+    """👁 A statement is a chronological extract. It also decides where the labelled row lands:
     ordering by time is what keeps it off the bottom of the page, together with the trailing days
     of the period."""
     statement = make_statement(seed)
@@ -416,7 +416,7 @@ def test_the_operations_are_printed_in_the_order_they_happened(seed):
 
 @pytest.mark.parametrize("seed", range(12))
 def test_the_pointer_is_the_printed_number_of_the_labelled_row_and_is_unique(seed):
-    """`relevant_transaction` is a POINTER INTO the document, not the identity OF one — which is
+    """`relevant_transaction` is a pointer into the document, not the identity of one — which is
     what distinguishes it from `document_code`, left `None` here because 👁 the observed header
     carries no number of its own. A number repeated on two rows would point at both."""
     statement = make_statement(seed)
@@ -505,9 +505,9 @@ def test_proves_payment_by_direction_admits_a_debit_and_refuses_a_credit():
 
 
 def test_two_operations_may_not_carry_the_same_number():
-    """The pointer has to point at ONE row. 👁 A drawn number repeated on two rows of one render
+    """The pointer has to point at one row. 👁 A drawn number repeated on two rows of one render
     before the numbering became a counter, and nothing else would have caught it: every labelled
-    VALUE was still the right row's and only `relevant_transaction` was ambiguous.
+    value was still the right row's and only `relevant_transaction` was ambiguous.
 
     Built by hand, because `_draw_operation_numbers` cannot produce a collision — the trailing
     digits are one counter across the page. The guard is here for what does not go through it.
@@ -531,7 +531,7 @@ def test_two_operations_may_not_carry_the_same_number():
 
 
 def test_a_statement_cannot_be_built_with_a_credit_as_its_labelled_transaction():
-    """The same invariant at construction. A credit is money ARRIVING — a refund, a reversal — and
+    """The same invariant at construction. A credit is money arriving — a refund, a reversal — and
     it evidences no expense whatever its amount, so a statement whose labelled row is a credit
     cannot support the claim it was built for.
 
@@ -594,7 +594,7 @@ def test_every_row_of_every_statement_fits_the_declared_sheet(renderer, tmp_path
     push the tallest statements onto a second sheet, which is the case a single render misses."""
     height = _px("height_mm")
     tallest = 0
-    # ⚠️ A LIST OF SEEDS IS A MEASUREMENT OF ONE DRAW STREAM, and it goes stale whenever the stream
+    # ⚠️ A list of seeds is a measurement of one draw stream, and it goes stale whenever the stream
     # moves. Re-picked when the seller's identity became a claim-level draw: the previous set had
     # stopped reaching 25 rows, and the assertion below is what said so rather than the test quietly
     # exercising 24 for ever.
@@ -609,14 +609,14 @@ def test_every_row_of_every_statement_fits_the_declared_sheet(renderer, tmp_path
 
 
 def test_the_labelled_boxes_fall_on_the_labelled_row_and_on_no_other(rendered):
-    """🔴 THE CLAIM THIS FILE MOST NEEDS TO PROVE, and it is proved by geometry rather than by
+    """🔴 the claim this file most needs to prove, and it is proved by geometry rather than by
     reading the template.
 
     Every `<tr>` carries an indexed box of its own — `operation_<i>` over the whole row rect — so
-    the labelled cells can be located INDEPENDENTLY of the mechanism that marked them: each
+    the labelled cells can be located independently of the mechanism that marked them: each
     labelled box must be contained in `operation_<k>` where k is the relevant index, and must not
     intersect any other row's rect. An off-by-one in `render_context` is exactly the defect that
-    would otherwise pass every other test in this file, since the VALUES would still be the right
+    would otherwise pass every other test in this file, since the values would still be the right
     row's.
     """
     statement, result = rendered
@@ -625,7 +625,7 @@ def test_the_labelled_boxes_fall_on_the_labelled_row_and_on_no_other(rendered):
 
     for name in ("relevant_transaction", "date", "amount", "counterparty", "payment_purpose"):
         box = result.field_bboxes[name]
-        # Contained horizontally and vertically, within ONE PIXEL. The slack is not measurement
+        # Contained horizontally and vertically, within one pixel. The slack is not measurement
         # error: every box is rounded to whole pixels independently, so a cell whose true top is
         # 473.6 and a row whose true top is 473.5 come back as 474 and 473. A tolerance wider than
         # the rounding would start admitting a genuinely wrong row, which is why the centre test
@@ -633,7 +633,7 @@ def test_the_labelled_boxes_fall_on_the_labelled_row_and_on_no_other(rendered):
         assert box[0] >= mine[0] - 1 and box[0] + box[2] <= mine[0] + mine[2] + 1, name
         assert box[1] >= mine[1] - 1 and box[1] + box[3] <= mine[1] + mine[3] + 1, name
 
-        # And the box's own centre is inside ITS row and inside no other. A row is over twenty
+        # And the box's own centre is inside its row and inside no other. A row is over twenty
         # pixels tall, so this cannot be satisfied by rounding — it is what makes the assertion
         # about the right row rather than about a plausible neighbourhood.
         centre = box[1] + box[3] / 2
@@ -644,7 +644,7 @@ def test_the_labelled_boxes_fall_on_the_labelled_row_and_on_no_other(rendered):
 
 
 def test_the_labelled_amount_sits_in_the_debit_column(rendered):
-    """Which of the two money columns the amount is in IS the direction — `direction` has no
+    """Which of the two money columns the amount is in is the direction — `direction` has no
     printed element of its own, so the two column headers carry boxes and the amount's own box is
     what a reader combines them with. A labelled amount in the credit column would be a page
     stating the opposite of the label."""
@@ -671,9 +671,9 @@ def test_the_four_totals_are_printed_and_carry_boxes(rendered):
 
 
 def test_moving_the_label_to_another_row_changes_not_one_pixel(renderer, tmp_path):
-    """⚠️ THE RELEVANT ROW MUST BE INDISTINGUISHABLE TO THE EYE, proved by rendering the same
-    statement twice with the label on two different rows and comparing the two images BYTE FOR
-    BYTE. If a stylesheet ever keyed on `data-field`, or the template gave the row a class, this
+    """⚠️ the relevant row must be indistinguishable to the eye, proved by rendering the same
+    statement twice with the label on two different rows and comparing the two images byte for
+    byte. If a stylesheet ever keyed on `data-field`, or the template gave the row a class, this
     goes red — and nothing else would notice, because every label would still be correct while the
     corpus measured "find the highlighted row".
     """
@@ -699,7 +699,7 @@ def test_moving_the_label_to_another_row_changes_not_one_pixel(renderer, tmp_pat
     second = renderer.render(SLUG, moved.render_context(), tmp_path / "b.png")
 
     assert first.image_path.read_bytes() == second.image_path.read_bytes()
-    # And the boxes DID move, so the test above is comparing two genuinely different labels
+    # And the boxes did move, so the test above is comparing two genuinely different labels
     # rather than two renders of the same one.
     assert first.field_bboxes["amount"] != second.field_bboxes["amount"]
 
@@ -753,11 +753,11 @@ def test_the_bank_charges_its_own_service_fee_on_every_statement():
     recurs monthly, so its presence within a period is expected, and ⛔ one document cannot give a
     rate. It also gives the page a debit that is not a payment to a vendor.
 
-    🔴 THE CODE, NOT ONLY THE NAME. This row used to draw its own МФО instead of printing the
-    header's, so a delivered statement could name «АТ «Сенс Банк», код 686743» in the header and
-    the same bank with code 399161 two lines later — three requisites of one bank on one page, two
-    of them disagreeing. `counterparty_code` and the МФО inside `counterparty_account` (an IBAN
-    carries it at `[4:10]`) both have to equal the document's own `bank_code`.
+    🔴 the code, not only the name. A row drawing its own МФО instead of printing the header's
+    lets a delivered statement name «АТ «Сенс Банк», код 686743» in the header and the same bank
+    with code 399161 two lines later — three requisites of one bank on one page, two of them
+    disagreeing. `counterparty_code` and the МФО inside `counterparty_account` (an IBAN carries it
+    at `[4:10]`) both have to equal the document's own `bank_code`.
     """
     fee_purpose = statement_purposes("uk", "service_fee")[0]
     for seed in range(12):
@@ -778,22 +778,21 @@ def test_the_bank_charges_its_own_service_fee_on_every_statement():
 
 def test_a_statement_purpose_is_filled_only_from_a_document_reference():
     """🔴 The mechanical half of what `proves_subject: false` rests on: a purpose line is filled
-    from an INVOICE NUMBER AND DATE and from nothing else — never from the placeholder vocabulary
+    from an invoice number and date and from nothing else — never from the placeholder vocabulary
     that prints merchandise on a receipt.
 
-    WHAT THIS TEST DOES NOT DO, said plainly because the first version of it did nothing at all.
-    "The purpose does not name the expense" is a property of the WORDS in config/generation.yaml,
-    and a test reading them to check a claim about them compares the file with itself —
-    the defect `lessons.md` records as moving the oracle and the subject together. The first version
-    asserted that no `item_kind` slug appeared in a Ukrainian sentence, which is true of every
-    Ukrainian sentence ever written, and would have passed whatever the pool said.
+    What this test does not do. "The purpose does not name the expense" is a property of the words
+    in config/generation.yaml, and a test reading them to check a claim about them compares the
+    file with itself — the defect `lessons.md` records as moving the oracle and the subject
+    together. Asserting that no `item_kind` slug appears in a Ukrainian sentence is true of every
+    Ukrainian sentence ever written, and passes whatever the pool says.
 
-    What IS checkable is the agreement between the two sides: every template's placeholder set
+    What is checkable is the agreement between the two sides: every template's placeholder set
     against the arguments `purpose_of` supplies. A template naming a fourth placeholder raises, and
     a builder that dropped one of the three raises — so the pool cannot start printing merchandise
     without this going red.
 
-    ⚠️ `delivery_note_no` JOINED THE SET, AND IT IS NOT A LOOSENING. It names a ВН, a delivery note,
+    ⚠️ `delivery_note_no` joined the set, and it is not a loosening. It names a ВН, a delivery note,
     which is a document class no claim holds — so it is filled from a draw while `invoice_no` on the
     labelled row is filled from the claim's own invoice. The two were one placeholder until the
     cross-document work, which meant a delivery note could be given an invoice's number; see
@@ -813,7 +812,7 @@ def test_a_statement_purpose_is_filled_only_from_a_document_reference():
 
 
 def test_the_document_states_the_period_and_the_last_operation_it_lists(rendered):
-    """👁 The header prints the period and «Дата останньої операції», and both are DERIVED from the
+    """👁 The header prints the period and «Дата останньої операції», and both are derived from the
     rows: a header stating a period its own table falls outside of is a contradiction a reader
     sees and no label records."""
     statement, _ = rendered

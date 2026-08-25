@@ -3,14 +3,14 @@
 
 The CLI says the seed "determines the whole run". That sentence was false once already:
 the persona date of birth was drawn from `datetime.now()`, so a corpus was a function of
-the seed AND the calendar day, and nothing in the test suite could notice — every test ran
+the seed and the calendar day, and nothing in the test suite could notice — every test ran
 on a single day, where the two are indistinguishable.
 
 This check makes them distinguishable. It generates the same seed twice under two time
-zones that are 26 hours apart, so their local dates ALWAYS differ no matter what hour the
+zones that are 26 hours apart, so their local dates always differ no matter what hour the
 check runs at, and then compares the corpora byte for byte:
 
-    Etc/GMT+12  is UTC-12   (the sign in these zone names is inverted, per POSIX)
+    Etc/GMT+12  is UTC-12   (the sign in these zone names is inverted, per posix)
     Etc/GMT-14  is UTC+14
 
 Two properties are asserted, and both are needed. Equality alone would also be satisfied
