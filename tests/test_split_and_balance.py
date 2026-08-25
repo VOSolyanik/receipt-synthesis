@@ -205,7 +205,7 @@ def test_the_guidance_on_what_to_pass_outlived_the_constant():
 
     The deleted `1 - default >= default` test held the property behind the digit: the measurement
     side never smaller than the development side, because nothing is trained on this dataset and a
-    per-class figure needs min_documents_per_target_class on the side it is measured on, so the
+    per-class figure needs `MIN_DOCUMENTS_PER_TARGET_CLASS` on the side it is measured on, so the
     thinnest class sets the floor. With no default there is no fraction of ours to hold that
     property against — the caller's is not ours to constrain, and a consumer that really does train
     has every reason to pass something else.
