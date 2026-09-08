@@ -9,7 +9,7 @@ document-understanding and reimbursement-verification systems.
 - **Standalone tool.** This repository contains only the generator, its configuration and its seed. It has no
   dependency on any consumer, and its public documentation must not assume one.
 - License: MIT. Private during development, **public later** — write every file as if it were already public.
-- Public design reference: [docs/architecture.md](../docs/architecture.md). Keep it accurate; it is what a
+- Public design reference: [docs/architecture.md](docs/architecture.md). Keep it accurate; it is what a
   stranger who clones this repo reads.
 
 ## HARD RULE — clean-room provenance
