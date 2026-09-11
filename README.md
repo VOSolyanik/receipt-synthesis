@@ -18,13 +18,15 @@ detection in multi-document files, deduplication, and reimbursement-decision log
 The Ukrainian side is built and produces delivered corpora; the European side is not started. The pipeline
 runs end to end, and the labelling contract (`config/labelling-schema.yaml`) is at **version 40**. See
 [docs/architecture.md](docs/architecture.md) for the full design.
+The current authoritative corpus profile is **v40-prod-r2** (seed 116); RP-07 (seed 42) is
+superseded by it.
 
 | Component | State |
 |---|---|
 | Configuration model — policy, fiscal rules, FX, vendors | in place |
 | Fonts, dependency pinning, reproducible environment | in place |
 | `persona_generator` → `claim_planner` → `content_builder` → `renderer` → `degrader` → `assembler` | in place, end to end |
-| Document archetypes | **11 registered** in `claim_planner.ARCHETYPES`, building **6 of the 8** `DocType` classes |
+| Document archetypes | **13 registered** in `claim_planner.ARCHETYPES`, building **6 of the 8** `DocType` classes |
 | Verdict space | all **6** `Verdict` labels reachable from the planner |
 | Multi-document files and multi-page documents | in place — a file may carry several documents, a statement several sheets |
 | Cross-document identity | in place, and audited from the rendered text by `tools/cross_document_audit.py` |
@@ -68,7 +70,7 @@ make check
 ## Usage
 
 ```bash
-uv run generate-dataset --seed 42 --personas 30 --claims-per-persona 5 --out out/
+uv run generate-dataset --seed 42 --split 0.5 --personas 30 --claims-per-persona 5 --out out/
 ```
 
 Every flag:
